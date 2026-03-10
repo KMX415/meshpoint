@@ -11,6 +11,7 @@ import websockets
 from websockets.exceptions import ConnectionClosed
 
 from src.config import UpstreamConfig
+from src.log_format import CYAN, DIM, GREEN, RED, RESET, YELLOW
 from src.models.device_identity import DeviceIdentity
 from src.models.packet import Packet
 from src.remote.command_handler import CommandHandler
@@ -66,13 +67,18 @@ class UpstreamClient:
 
     async def start(self) -> None:
         if not self._config.enabled:
-            logger.info("Upstream disabled in config")
+            logger.info(
+                f" {CYAN}--{RESET} {DIM}UPSTREAM{RESET}  disabled"
+            )
             return
         self._running = True
         self._task = asyncio.create_task(
             self._connection_loop(), name="upstream-ws"
         )
-        logger.info("Upstream client started -> %s", self._config.url)
+        logger.info(
+            f" {CYAN}--{RESET} {GREEN}UPSTREAM{RESET}  "
+            f"connecting to {self._config.url}"
+        )
 
     async def stop(self) -> None:
         self._running = False
@@ -84,7 +90,9 @@ class UpstreamClient:
                 await self._task
             except asyncio.CancelledError:
                 pass
-        logger.info("Upstream client stopped")
+        logger.info(
+            f" {CYAN}--{RESET} {DIM}UPSTREAM{RESET}  stopped"
+        )
 
     def send_packet(self, packet: Packet) -> None:
         """Queue a packet for upstream delivery."""
@@ -106,25 +114,32 @@ class UpstreamClient:
                 await self._connect_and_run()
                 backoff = self._reconnect_delay
             except ConnectionClosed:
-                logger.warning("Upstream connection closed")
+                logger.warning(
+                    f" {CYAN}--{RESET} {RED}UPSTREAM{RESET}  "
+                    f"connection closed"
+                )
             except Exception:
-                logger.exception("Upstream connection error")
+                logger.exception(
+                    f" {CYAN}--{RESET} {RED}UPSTREAM{RESET}  "
+                    f"connection error"
+                )
 
             self._connected = False
             if self._running:
                 logger.info(
-                    "Reconnecting in %ds (%d buffered)",
-                    backoff, len(self._buffer),
+                    f" {CYAN}--{RESET} {YELLOW}UPSTREAM{RESET}  "
+                    f"reconnecting in {backoff:.0f}s "
+                    f"{DIM}({len(self._buffer)} buffered){RESET}"
                 )
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 1.5, 60)
 
     async def _connect_and_run(self) -> None:
         headers = self._build_auth_headers()
+        auth_status = "present" if headers.get("Authorization") else "MISSING"
         logger.info(
-            "Connecting to %s (auth=%s)",
-            self._config.url,
-            "present" if headers.get("Authorization") else "MISSING",
+            f" {CYAN}--{RESET} {GREEN}UPSTREAM{RESET}  "
+            f"connecting  {DIM}auth={auth_status}{RESET}"
         )
 
         async with websockets.connect(
@@ -136,7 +151,10 @@ class UpstreamClient:
         ) as ws:
             self._connection = ws
             self._connected = True
-            logger.info("Upstream connected to %s", self._config.url)
+            logger.info(
+                f" {CYAN}--{RESET} {GREEN}UPSTREAM{RESET}  "
+                f"connected to {self._config.url}"
+            )
 
             await self._send(self._build_registration())
             self._heartbeat_task = asyncio.create_task(

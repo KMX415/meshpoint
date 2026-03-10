@@ -7,28 +7,10 @@ import logging
 
 from src.config import load_config, validate_activation
 from src.coordinator import PipelineCoordinator
+from src.log_format import print_banner, print_packet, setup_logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+setup_logging()
 logger = logging.getLogger("concentrator")
-
-
-def build_pipeline(config_path: str | None = None) -> PipelineCoordinator:
-    """Build the full pipeline with configured capture sources."""
-    config = load_config(config_path)
-    validate_activation(config)
-    coordinator = PipelineCoordinator(config)
-
-    for source_name in config.capture.sources:
-        if source_name == "serial":
-            _add_serial_source(coordinator, config)
-        elif source_name == "concentrator":
-            _add_concentrator_source(coordinator, config)
-
-    return coordinator
 
 
 def _add_serial_source(coordinator: PipelineCoordinator, config) -> None:
@@ -61,20 +43,20 @@ def _add_concentrator_source(coordinator: PipelineCoordinator, config) -> None:
 
 async def run_standalone() -> None:
     """Run the pipeline without the web dashboard (CLI mode)."""
-    coordinator = build_pipeline()
+    config = load_config()
+    validate_activation(config)
+    coordinator = PipelineCoordinator(config)
 
-    def log_packet(packet):
-        logger.info(
-            "PKT [%s] %s -> %s | type=%s | rssi=%.1f",
-            packet.protocol.value,
-            packet.source_id,
-            packet.destination_id,
-            packet.packet_type.value,
-            packet.signal.rssi if packet.signal else 0,
-        )
+    for source_name in config.capture.sources:
+        if source_name == "serial":
+            _add_serial_source(coordinator, config)
+        elif source_name == "concentrator":
+            _add_concentrator_source(coordinator, config)
 
-    coordinator.on_packet(log_packet)
+    coordinator.on_packet(lambda pkt: print_packet(pkt))
     await coordinator.start()
+    print_banner(config)
+    logger.info("Standalone mode -- listening for packets")
 
     try:
         while True:

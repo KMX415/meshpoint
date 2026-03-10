@@ -22,7 +22,7 @@ def cmd_status(_args: argparse.Namespace) -> None:
 def cmd_logs(_args: argparse.Namespace) -> None:
     try:
         subprocess.run(
-            ["journalctl", "-u", "meshpoint", "-f", "--no-pager", "-n", "100"],
+            ["journalctl", "-u", "meshpoint", "-f", "--no-pager", "-n", "100", "-o", "cat"],
             check=False,
         )
     except KeyboardInterrupt:

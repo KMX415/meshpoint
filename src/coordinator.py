@@ -8,6 +8,7 @@ from src.capture.capture_coordinator import CaptureCoordinator
 from src.config import AppConfig
 from src.decode.crypto_service import CryptoService
 from src.decode.packet_router import PacketRouter
+from src.log_format import BRIGHT_GREEN, CYAN, DIM, GREEN, RED, RESET, YELLOW
 from src.models.packet import Packet, Protocol, RawCapture
 from src.relay.meshtastic_transmitter import MeshtasticTransmitter
 from src.relay.relay_manager import RelayManager
@@ -17,6 +18,12 @@ from src.storage.packet_repository import PacketRepository
 from src.storage.telemetry_repository import TelemetryRepository
 
 logger = logging.getLogger(__name__)
+
+_SOURCE_LABELS = {
+    "concentrator": "concentrator (8-ch SX1302)",
+    "serial": "serial radio",
+    "mock": "mock source",
+}
 
 
 class PipelineCoordinator:
@@ -95,7 +102,13 @@ class PipelineCoordinator:
         self._pipeline_task = asyncio.create_task(
             self._run_pipeline(), name="pipeline"
         )
-        logger.info("Pipeline coordinator started")
+        sources = ", ".join(
+            _SOURCE_LABELS.get(s, s) for s in self._config.capture.sources
+        )
+        logger.info(
+            f" {CYAN}--{RESET} {GREEN}PIPELINE{RESET}  started  "
+            f"{DIM}sources: {sources}{RESET}"
+        )
 
     async def stop(self) -> None:
         self._running = False
@@ -109,7 +122,9 @@ class PipelineCoordinator:
         if self._transmitter:
             self._transmitter.disconnect()
         await self._db.disconnect()
-        logger.info("Pipeline coordinator stopped")
+        logger.info(
+            f" {CYAN}--{RESET} {DIM}PIPELINE{RESET}  stopped"
+        )
 
     async def _run_pipeline(self) -> None:
         try:
@@ -171,13 +186,19 @@ class PipelineCoordinator:
 
     def _setup_relay_transmitter(self) -> None:
         if not self._config.relay.enabled:
-            logger.info("Relay disabled in config")
+            logger.info(
+                f" {CYAN}--{RESET} {DIM}RELAY{RESET}    disabled"
+            )
             return
 
         self._transmitter = MeshtasticTransmitter(self._config.relay)
         self._transmitter.connect()
         self._relay.set_transmit_function(self._transmitter.transmit)
-        logger.info("Relay transmitter wired to RelayManager")
+        logger.info(
+            f" {CYAN}--{RESET} {GREEN}RELAY{RESET}    "
+            f"transmitter ready  "
+            f"{DIM}max {self._config.relay.max_relay_per_minute}/min{RESET}"
+        )
 
     def _setup_channel_keys(self) -> None:
         for name, key in self._config.meshtastic.channel_keys.items():

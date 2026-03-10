@@ -15,15 +15,11 @@ from src.api.upstream_client import UpstreamClient
 from src.api.websocket_manager import WebSocketManager
 from src.config import AppConfig, load_config, validate_activation
 from src.coordinator import PipelineCoordinator
+from src.log_format import print_banner, print_packet, setup_logging
 from src.models.device_identity import DeviceIdentity, _stable_device_id
 from src.models.packet import Packet
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(levelname)s %(name)s: %(message)s",
-    force=True,
-)
-logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+setup_logging()
 logger = logging.getLogger(__name__)
 
 ws_manager = WebSocketManager()
@@ -50,6 +46,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         )
         pipeline = _build_pipeline(config)
         pipeline.on_packet(_on_packet_received)
+        pipeline.on_packet(lambda pkt: print_packet(pkt))
         await pipeline.start()
 
         upstream = UpstreamClient(config.upstream, identity)
@@ -57,7 +54,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         await upstream.start()
 
         _init_routes(pipeline, config, identity)
-        logger.info("Mesh Point started")
+        print_banner(config)
+        logger.info("Mesh Point started -- listening for packets")
         yield
         await upstream.stop()
         await pipeline.stop()
