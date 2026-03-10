@@ -181,13 +181,18 @@ def print_packet(packet: Packet) -> None:
 # ── Startup banner ──────────────────────────────────────────────────
 
 def _local_ip() -> str:
-    """Get the LAN IP by briefly opening a UDP socket."""
+    """Get the primary LAN IP via hostname -I (Linux)."""
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(("8.8.8.8", 80))
-            return s.getsockname()[0]
+        import subprocess
+        result = subprocess.run(
+            ["hostname", "-I"], capture_output=True, text=True, timeout=2,
+        )
+        ips = result.stdout.strip().split()
+        if ips:
+            return ips[0]
     except Exception:
-        return "127.0.0.1"
+        pass
+    return "127.0.0.1"
 
 
 _BANNER_ART = r"""
