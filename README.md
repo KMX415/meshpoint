@@ -31,6 +31,8 @@ It captures packets, decrypts them, stores them locally, shows them on a real-ti
 
 ## Hardware (~$85)
 
+> **Requirements:** Raspberry Pi 4, 64-bit Raspberry Pi OS, Python 3.13. The compiled core modules are aarch64 binaries -- other platforms (Pi 3, x86, 32-bit OS) are not currently supported.
+
 | Component | Price |
 |-----------|-------|
 | Raspberry Pi 4 (1GB+) | $35 |
