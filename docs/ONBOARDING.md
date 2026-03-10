@@ -101,16 +101,6 @@ The install script handles everything: system packages, SPI/UART/GPS kernel conf
 
 This takes 5-15 minutes depending on your internet speed and Pi model.
 
-### Step 5b: Install Core Modules
-
-The concentrator capture and protocol decoding modules are distributed separately as compiled binaries. You need to install them before the Mesh Point can operate:
-
-```bash
-sudo /opt/meshpoint/scripts/install_core.sh /path/to/meshpoint-core.tar.gz
-```
-
-> **Note:** Core modules are provided when you purchase a Mesh Point or request access through [meshradar.io](https://meshradar.io). Pre-provisioned devices ship with core modules already installed.
-
 ### Step 6: Reboot
 
 The SPI and UART kernel changes require a reboot:
