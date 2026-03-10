@@ -180,6 +180,16 @@ def print_packet(packet: Packet) -> None:
 
 # ── Startup banner ──────────────────────────────────────────────────
 
+def _local_ip() -> str:
+    """Get the LAN IP by briefly opening a UDP socket."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+    except Exception:
+        return "127.0.0.1"
+
+
 _BANNER_ART = r"""
   {c}┌──────────────────────────────────────────────┐{r}
   {c}│{r}  {g}╔╦╗╔═╗╔═╗╦ ╦  ╔═╗╔═╗╦╔╗╔╔╦╗{r}              {c}│{r}
@@ -211,11 +221,7 @@ def print_banner(config: AppConfig) -> None:
         info_lines.append(("Upstream", upstream.url))
     else:
         info_lines.append(("Upstream", f"{DIM}disabled{RESET}"))
-    try:
-        host = socket.gethostbyname(socket.gethostname())
-    except socket.gaierror:
-        host = "127.0.0.1"
-    info_lines.append(("Dashboard", f"http://{host}:{dashboard.port}"))
+    info_lines.append(("Dashboard", f"http://{_local_ip()}:{dashboard.port}"))
 
     for label, value in info_lines:
         print(f"   {DIM}{label:<12}{RESET} {value}")
