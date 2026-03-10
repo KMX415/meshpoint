@@ -29,9 +29,21 @@ It captures packets, decrypts them, stores them locally, shows them on a real-ti
 
 ---
 
-## Hardware (~$85)
+## Hardware
 
 > **Requirements:** Raspberry Pi 4, 64-bit Raspberry Pi OS, Python 3.13. The compiled core modules are aarch64 binaries -- other platforms (Pi 3, x86, 32-bit OS) are not currently supported.
+
+### Option A: Buy a RAK Hotspot V2 (~$60, recommended)
+
+The easiest path. RAK/MNTD Hotspot V2 miners (model **RAK7248**) include a Pi 4, RAK2287, Pi HAT, metal enclosure, antenna, and power supply -- everything you need. Helium's IoT network didn't pan out, so these are all over eBay for $40-70.
+
+Search: [`RAK Hotspot V2 / MNTD` on eBay ($30-80)](https://www.ebay.com/sch/i.html?_nkw=RAK%20Hotspot%20V2%20%2F%20MNTD&_sacat=0&_from=R40&rt=nc&_udlo=30&_udhi=80)
+
+<img src="rak7248.png" width="360" alt="RAK7248 Hotspot V2">
+
+Just flash a new SD card with Raspberry Pi OS 64-bit, run the install script, and you have a Mesh Point in a nice aluminum enclosure.
+
+### Option B: Build your own (~$85)
 
 | Component | Price |
 |-----------|-------|
@@ -41,7 +53,7 @@ It captures packets, decrypts them, stores them locally, shows them on a real-ti
 | MicroSD card (16GB+) | $10 |
 | USB-C power supply (5V 3A) | $10 |
 
-*\*Helium's IoT network left a surplus of RAK2287 concentrators and Pi HATs on eBay. You can regularly find both for around $20 combined.*
+*\*Helium's surplus means RAK2287 concentrators and Pi HATs go for ~$20 combined on eBay.*
 
 **Assembly:** Seat the RAK2287 on the Pi HAT, mount the HAT on the Pi GPIO header, connect the antenna. Always connect the antenna before powering on.
 
