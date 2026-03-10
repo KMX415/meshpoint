@@ -1,0 +1,10 @@
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+aiosqlite>=0.20.0
+meshtastic>=2.3.0
+pycryptodome>=3.20.0
+protobuf>=4.25.0
+pyyaml>=6.0
+websockets>=12.0
+psutil>=5.9.0
+urllib3>=2.6.3

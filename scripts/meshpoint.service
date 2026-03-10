@@ -1,0 +1,29 @@
+[Unit]
+Description=Mesh Radar - Mesh Point
+Documentation=https://github.com/KMX415/Mesh-Radar
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=meshpoint
+Group=meshpoint
+WorkingDirectory=/opt/meshpoint
+ExecStartPre=/bin/bash /opt/meshpoint/scripts/reset_concentrator.sh
+ExecStart=/opt/meshpoint/venv/bin/python -m uvicorn src.api.server:create_app --factory --host 0.0.0.0 --port 8080
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=meshpoint
+
+Environment=CONCENTRATOR_CONFIG=/opt/meshpoint/config/local.yaml
+Environment=PYTHONUNBUFFERED=1
+
+# Hardening
+NoNewPrivileges=false
+ProtectSystem=false
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,56 @@
+radio:
+  frequency_mhz: 906.875
+  spreading_factor: 11
+  bandwidth_khz: 250.0
+  coding_rate: "4/8"
+  sync_word: 0x2B
+  preamble_length: 16
+  tx_power_dbm: 22
+
+meshtastic:
+  default_key_b64: "AQ=="
+  channel_keys: {}
+
+meshcore:
+  default_key_b64: ""
+  channel_keys: {}
+
+capture:
+  sources: []
+  serial_port: null
+  serial_baud: 115200
+  concentrator_spi_device: "/dev/spidev0.0"
+
+storage:
+  database_path: "data/concentrator.db"
+  max_packets_retained: 100000
+  cleanup_interval_seconds: 3600
+
+dashboard:
+  host: "0.0.0.0"
+  port: 8080
+  static_dir: "frontend"
+
+device:
+  device_name: "Mesh Point Alpha"
+  latitude: 42.3601
+  longitude: -71.0589
+  altitude: 25
+  hardware_description: "RAK2287 + Raspberry Pi 4"
+  firmware_version: "0.2.0"
+
+relay:
+  enabled: false
+  serial_port: null       # SX1262 relay radio, e.g. "/dev/ttyACM1"
+  serial_baud: 115200
+  max_relay_per_minute: 20
+  burst_size: 5
+  min_relay_rssi: -110.0
+  max_relay_rssi: -50.0
+
+upstream:
+  enabled: true
+  url: "wss://api.meshradar.io"
+  reconnect_interval_seconds: 10
+  buffer_max_size: 5000
+  auth_token: null

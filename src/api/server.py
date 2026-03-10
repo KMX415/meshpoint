@@ -1,0 +1,155 @@
+from __future__ import annotations
+
+import logging
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
+
+from src.analytics.network_mapper import NetworkMapper
+from src.analytics.signal_analyzer import SignalAnalyzer
+from src.analytics.traffic_monitor import TrafficMonitor
+from src.api.routes import analytics, device, nodes, packets, system_metrics
+from src.api.upstream_client import UpstreamClient
+from src.api.websocket_manager import WebSocketManager
+from src.config import AppConfig, load_config, validate_activation
+from src.coordinator import PipelineCoordinator
+from src.models.device_identity import DeviceIdentity, _stable_device_id
+from src.models.packet import Packet
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s %(name)s: %(message)s",
+    force=True,
+)
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+logger = logging.getLogger(__name__)
+
+ws_manager = WebSocketManager()
+pipeline: PipelineCoordinator | None = None
+upstream: UpstreamClient | None = None
+
+
+def create_app(config: AppConfig | None = None) -> FastAPI:
+    if config is None:
+        config = load_config()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        global pipeline, upstream
+        validate_activation(config)
+        identity = DeviceIdentity(
+            device_id=_stable_device_id(config.device.device_id),
+            device_name=config.device.device_name,
+            latitude=config.device.latitude,
+            longitude=config.device.longitude,
+            altitude=config.device.altitude,
+            hardware_description=config.device.hardware_description,
+            firmware_version=config.device.firmware_version,
+        )
+        pipeline = _build_pipeline(config)
+        pipeline.on_packet(_on_packet_received)
+        await pipeline.start()
+
+        upstream = UpstreamClient(config.upstream, identity)
+        pipeline.on_packet(upstream.send_packet)
+        await upstream.start()
+
+        _init_routes(pipeline, config, identity)
+        logger.info("Mesh Point started")
+        yield
+        await upstream.stop()
+        await pipeline.stop()
+        logger.info("Mesh Point stopped")
+
+    app = FastAPI(
+        title="Mesh Radar - Mesh Point",
+        version="0.1.0",
+        lifespan=lifespan,
+    )
+
+    app.include_router(nodes.router)
+    app.include_router(packets.router)
+    app.include_router(analytics.router)
+    app.include_router(device.router)
+    app.include_router(system_metrics.router)
+
+    @app.websocket("/ws")
+    async def websocket_endpoint(websocket: WebSocket):
+        await ws_manager.connect(websocket)
+        try:
+            while True:
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            await ws_manager.disconnect(websocket)
+
+    static_dir = Path(config.dashboard.static_dir)
+    if static_dir.exists():
+        app.mount("/", StaticFiles(directory=str(static_dir), html=True))
+
+    return app
+
+
+def _build_pipeline(config: AppConfig) -> PipelineCoordinator:
+    coordinator = PipelineCoordinator(config)
+
+    for source_name in config.capture.sources:
+        if source_name == "serial":
+            _add_serial_source(coordinator, config)
+        elif source_name == "concentrator":
+            _add_concentrator_source(coordinator, config)
+
+    return coordinator
+
+
+def _add_serial_source(coordinator: PipelineCoordinator, config: AppConfig):
+    try:
+        from src.capture.serial_source import SerialCaptureSource
+        coordinator.capture_coordinator.add_source(
+            SerialCaptureSource(
+                port=config.capture.serial_port,
+                baud=config.capture.serial_baud,
+            )
+        )
+    except ImportError:
+        logger.warning("Serial capture unavailable")
+
+
+def _add_concentrator_source(
+    coordinator: PipelineCoordinator, config: AppConfig
+):
+    try:
+        from src.capture.concentrator_source import ConcentratorCaptureSource
+        coordinator.capture_coordinator.add_source(
+            ConcentratorCaptureSource(
+                spi_path=config.capture.concentrator_spi_device,
+                syncword=config.radio.sync_word,
+            )
+        )
+    except Exception:
+        logger.exception("Concentrator source unavailable")
+
+
+def _init_routes(
+    coord: PipelineCoordinator,
+    config: AppConfig,
+    identity: DeviceIdentity,
+) -> None:
+    network_mapper = NetworkMapper(coord.node_repo)
+    signal_analyzer = SignalAnalyzer(coord.packet_repo)
+    traffic_monitor = TrafficMonitor(coord.packet_repo)
+
+    nodes.init_routes(coord.node_repo, network_mapper)
+    packets.init_routes(coord.packet_repo)
+    analytics.init_routes(signal_analyzer, traffic_monitor)
+    device.init_routes(identity, ws_manager, coord.relay_manager)
+
+
+def _on_packet_received(packet: Packet) -> None:
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(ws_manager.broadcast("packet", packet.to_dict()))
+    except RuntimeError:
+        pass

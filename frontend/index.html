@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mesh Radar - Mesh Point</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/css/dashboard.css" />
+</head>
+<body>
+    <header class="top-bar">
+        <div class="top-bar__brand">
+            <span class="top-bar__icon">&#9783;</span>
+            <h1>Mesh Radar <span style="font-weight:400;color:var(--text-muted)">/ Mesh Point</span></h1>
+        </div>
+        <div class="top-bar__status">
+            <span id="ws-status" class="status-dot status-dot--disconnected"></span>
+            <span id="ws-label">Disconnected</span>
+            <span class="divider">|</span>
+            <span id="node-count-badge">0 nodes</span>
+            <span class="divider">|</span>
+            <span id="packet-count-badge">0 packets</span>
+            <span class="divider">|</span>
+            <span id="version-badge">--</span>
+        </div>
+    </header>
+
+    <main class="dashboard">
+        <section class="dashboard__stats">
+            <div class="stat-card" id="stat-nodes">
+                <div class="stat-card__label">Nodes Discovered</div>
+                <div class="stat-card__value" id="stat-nodes-val">--</div>
+            </div>
+            <div class="stat-card" id="stat-packets">
+                <div class="stat-card__label">Total Packets</div>
+                <div class="stat-card__value" id="stat-packets-val">--</div>
+            </div>
+            <div class="stat-card" id="stat-rate">
+                <div class="stat-card__label">Packets / Min</div>
+                <div class="stat-card__value" id="stat-rate-val">--</div>
+            </div>
+            <div class="stat-card" id="stat-rssi">
+                <div class="stat-card__label">Avg RSSI</div>
+                <div class="stat-card__value" id="stat-rssi-val">--</div>
+            </div>
+            <div class="stat-card stat-card--relay" id="stat-relay">
+                <div class="stat-card__label">Packets Relayed</div>
+                <div class="stat-card__value" id="stat-relay-val">--</div>
+                <div class="stat-card__sub" id="stat-relay-sub"></div>
+            </div>
+            <div class="stat-card" id="stat-uptime">
+                <div class="stat-card__label">Uptime</div>
+                <div class="stat-card__value" id="stat-uptime-val">--</div>
+            </div>
+            <div class="stat-card stat-card--system" id="stat-cpu">
+                <div class="stat-card__label">CPU</div>
+                <div class="stat-card__value" id="stat-cpu-val">--</div>
+            </div>
+            <div class="stat-card stat-card--system" id="stat-ram">
+                <div class="stat-card__label">RAM</div>
+                <div class="stat-card__value" id="stat-ram-val">--</div>
+                <div class="stat-card__sub" id="stat-ram-sub"></div>
+            </div>
+            <div class="stat-card stat-card--system" id="stat-disk">
+                <div class="stat-card__label">Disk</div>
+                <div class="stat-card__value" id="stat-disk-val">--</div>
+                <div class="stat-card__sub" id="stat-disk-sub"></div>
+            </div>
+            <div class="stat-card stat-card--system" id="stat-temp">
+                <div class="stat-card__label">CPU Temp</div>
+                <div class="stat-card__value" id="stat-temp-val">--</div>
+            </div>
+        </section>
+
+        <section class="dashboard__main">
+            <div class="panel panel--map">
+                <div class="panel__header">Node Map</div>
+                <div id="map" class="panel__body"></div>
+            </div>
+
+            <div class="panel panel--charts">
+                <div class="panel__header">Signal & Traffic</div>
+                <div class="panel__body charts-grid">
+                    <div class="chart-container">
+                        <canvas id="chart-traffic"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="chart-rssi"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="dashboard__bottom">
+            <div class="panel panel--packets">
+                <div class="panel__header">
+                    Live Packet Feed
+                    <span class="packet-count-live" id="live-count">0</span>
+                </div>
+                <div class="panel__body">
+                    <table class="packet-table" id="packet-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Protocol</th>
+                                <th>Source</th>
+                                <th>Dest</th>
+                                <th>Type</th>
+                                <th>RSSI</th>
+                                <th>SNR</th>
+                                <th>Hops</th>
+                            </tr>
+                        </thead>
+                        <tbody id="packet-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="panel panel--nodes">
+                <div class="panel__header">Discovered Nodes</div>
+                <div class="panel__body" id="node-list"></div>
+            </div>
+        </section>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="/js/websocket_client.js"></script>
+    <script src="/js/map.js"></script>
+    <script src="/js/charts.js"></script>
+    <script src="/js/nodes.js"></script>
+    <script src="/js/packets.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>

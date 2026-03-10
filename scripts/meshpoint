@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+#
+# Mesh Point CLI entry point.
+# Installed to /usr/local/bin/meshpoint by install.sh.
+#
+# Activates the Python venv and dispatches to the CLI module.
+#
+
+MESHPOINT_DIR="/opt/meshpoint"
+VENV_PYTHON="${MESHPOINT_DIR}/venv/bin/python"
+
+# Fall back to local dev layout if not installed system-wide
+if [ ! -f "$VENV_PYTHON" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    MESHPOINT_DIR="$SCRIPT_DIR"
+
+    if [ -f "${MESHPOINT_DIR}/venv/bin/python" ]; then
+        VENV_PYTHON="${MESHPOINT_DIR}/venv/bin/python"
+    else
+        VENV_PYTHON="python3"
+    fi
+fi
+
+cd "$MESHPOINT_DIR"
+exec "$VENV_PYTHON" -m src.cli.main "$@"
