@@ -41,15 +41,19 @@ class PacketFeed {
             ? `${packet.hop_start - packet.hop_limit}/${packet.hop_start}`
             : '--';
 
+        const detail = this._payloadSummary(packet);
+        const typeCls = `type-${this._safeClass(packet.packet_type)}`;
+
         const cells = [
             { text: time },
             { text: packet.protocol, cls: `protocol-${this._safeClass(packet.protocol)}` },
             { text: this._shortId(packet.source_id) },
             { text: this._shortId(packet.destination_id) },
-            { text: packet.packet_type, cls: `type-${this._safeClass(packet.packet_type)}` },
+            { text: packet.packet_type, cls: typeCls },
             { text: rssi },
             { text: snr },
             { text: hops },
+            { text: detail, cls: `packet-detail ${typeCls}` },
         ];
         cells.forEach(({ text, cls }) => {
             const td = document.createElement('td');
@@ -58,6 +62,34 @@ class PacketFeed {
             row.appendChild(td);
         });
         return row;
+    }
+
+    _payloadSummary(packet) {
+        const payload = packet.decoded_payload;
+        if (!payload) return '';
+        const ptype = packet.packet_type;
+        const parts = [];
+
+        if (ptype === 'text') {
+            const text = payload.text || '';
+            if (text) parts.push(text.length > 60 ? text.slice(0, 60) + '…' : text);
+        } else if (ptype === 'position') {
+            const lat = payload.latitude ?? payload.lat;
+            const lon = payload.longitude ?? payload.lon;
+            if (lat != null && lon != null) {
+                parts.push(`${lat.toFixed(4)}, ${lon.toFixed(4)}`);
+            }
+            const alt = payload.altitude ?? payload.alt;
+            if (alt != null) parts.push(`alt ${Math.round(alt)}m`);
+        } else if (ptype === 'telemetry') {
+            const batt = payload.battery_level ?? payload.voltage;
+            if (batt != null) parts.push(`batt ${batt}`);
+            if (payload.temperature != null) parts.push(`${payload.temperature}°C`);
+        } else if (ptype === 'nodeinfo') {
+            const name = payload.long_name || payload.short_name;
+            if (name) parts.push(name);
+        }
+        return parts.join('  ');
     }
 
     _safeClass(str) {

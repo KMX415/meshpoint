@@ -237,6 +237,15 @@ body {
 .packet-table .type-telemetry { color: var(--accent-cyan); }
 .packet-table .type-nodeinfo { color: var(--accent-purple); }
 
+.packet-detail {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.85;
+}
+
 .packet-count-live {
     font-family: var(--font-mono);
     font-size: 0.75rem;
