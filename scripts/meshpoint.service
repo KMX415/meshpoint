@@ -19,6 +19,7 @@ SyslogIdentifier=meshpoint
 
 Environment=CONCENTRATOR_CONFIG=/opt/meshpoint/config/local.yaml
 Environment=PYTHONUNBUFFERED=1
+Environment=FORCE_COLOR=1
 
 # Hardening
 NoNewPrivileges=false

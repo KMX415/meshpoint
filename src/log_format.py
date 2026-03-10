@@ -7,6 +7,8 @@ banner, and a compact packet display with RSSI signal bars.
 from __future__ import annotations
 
 import logging
+import os
+import socket
 import sys
 from typing import TYPE_CHECKING
 
@@ -14,7 +16,10 @@ if TYPE_CHECKING:
     from src.config import AppConfig
     from src.models.packet import Packet
 
-_USE_COLOR = hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
+_USE_COLOR = (
+    os.environ.get("FORCE_COLOR", "") == "1"
+    or (hasattr(sys.stdout, "isatty") and sys.stdout.isatty())
+)
 
 # ── ANSI escape codes ────────────────────────────────────────────────
 
@@ -206,7 +211,8 @@ def print_banner(config: AppConfig) -> None:
         info_lines.append(("Upstream", upstream.url))
     else:
         info_lines.append(("Upstream", f"{DIM}disabled{RESET}"))
-    info_lines.append(("Dashboard", f"http://0.0.0.0:{dashboard.port}"))
+    host = socket.gethostname() or "localhost"
+    info_lines.append(("Dashboard", f"http://{host}:{dashboard.port}"))
 
     for label, value in info_lines:
         print(f"   {DIM}{label:<12}{RESET} {value}")
