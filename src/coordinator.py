@@ -8,7 +8,7 @@ from src.capture.capture_coordinator import CaptureCoordinator
 from src.config import AppConfig
 from src.decode.crypto_service import CryptoService
 from src.decode.packet_router import PacketRouter
-from src.log_format import BRIGHT_GREEN, CYAN, DIM, GREEN, RED, RESET, YELLOW
+from src.log_format import CYAN, DIM, GREEN, RESET
 from src.models.packet import Packet, Protocol, RawCapture
 from src.relay.meshtastic_transmitter import MeshtasticTransmitter
 from src.relay.relay_manager import RelayManager
