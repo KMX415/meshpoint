@@ -211,7 +211,10 @@ def print_banner(config: AppConfig) -> None:
         info_lines.append(("Upstream", upstream.url))
     else:
         info_lines.append(("Upstream", f"{DIM}disabled{RESET}"))
-    host = socket.gethostname() or "localhost"
+    try:
+        host = socket.gethostbyname(socket.gethostname())
+    except socket.gaierror:
+        host = "127.0.0.1"
     info_lines.append(("Dashboard", f"http://{host}:{dashboard.port}"))
 
     for label, value in info_lines:
