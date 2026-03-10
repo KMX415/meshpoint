@@ -53,6 +53,7 @@ class PipelineCoordinator:
         self._on_packet_callbacks: list[Callable[[Packet], None]] = []
         self._running = False
         self._pipeline_task: Optional[asyncio.Task] = None
+        self._cleanup_task: Optional[asyncio.Task] = None
 
     @property
     def database(self) -> DatabaseManager:
@@ -102,6 +103,9 @@ class PipelineCoordinator:
         self._pipeline_task = asyncio.create_task(
             self._run_pipeline(), name="pipeline"
         )
+        self._cleanup_task = asyncio.create_task(
+            self._cleanup_loop(), name="db-cleanup"
+        )
         sources = ", ".join(
             _SOURCE_LABELS.get(s, s) for s in self._config.capture.sources
         )
@@ -113,18 +117,38 @@ class PipelineCoordinator:
     async def stop(self) -> None:
         self._running = False
         await self._capture.stop()
-        if self._pipeline_task:
-            self._pipeline_task.cancel()
-            try:
-                await self._pipeline_task
-            except asyncio.CancelledError:
-                pass
+        for task in (self._pipeline_task, self._cleanup_task):
+            if task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
         if self._transmitter:
             self._transmitter.disconnect()
         await self._db.disconnect()
         logger.info(
             f" {CYAN}--{RESET} {DIM}PIPELINE{RESET}  stopped"
         )
+
+    async def _cleanup_loop(self) -> None:
+        """Periodically prune old packets to keep the DB from growing unbounded."""
+        interval = self._config.storage.cleanup_interval_seconds
+        max_retained = self._config.storage.max_packets_retained
+        try:
+            while self._running:
+                await asyncio.sleep(interval)
+                removed = await self._packet_repo.cleanup_old(max_retained)
+                if removed:
+                    logger.info(
+                        f" {CYAN}--{RESET} {DIM}CLEANUP{RESET}  "
+                        f"pruned {removed} old packets  "
+                        f"{DIM}(max {max_retained}){RESET}"
+                    )
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.exception("Cleanup loop error")
 
     async def _run_pipeline(self) -> None:
         try:

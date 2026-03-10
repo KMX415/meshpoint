@@ -14,6 +14,7 @@ from src.config import UpstreamConfig
 from src.log_format import CYAN, DIM, GREEN, RED, RESET, YELLOW
 from src.models.device_identity import DeviceIdentity
 from src.models.packet import Packet
+from src.relay.rate_limiter import RateLimiter
 from src.remote.command_handler import CommandHandler
 from src.remote.executors import (
     execute_apply_update,
@@ -38,6 +39,8 @@ class UpstreamClient:
     """
 
     HEARTBEAT_INTERVAL_SECONDS = 300  # 5 minutes
+    UPSTREAM_MAX_PACKETS_PER_MINUTE = 120
+    UPSTREAM_BURST_SIZE = 20
 
     def __init__(
         self,
@@ -56,6 +59,11 @@ class UpstreamClient:
         self._command_handler = self._build_command_handler()
         self._listener_task: Optional[asyncio.Task] = None
         self._send_lock = asyncio.Lock()
+        self._rate_limiter = RateLimiter(
+            max_per_minute=self.UPSTREAM_MAX_PACKETS_PER_MINUTE,
+            burst_size=self.UPSTREAM_BURST_SIZE,
+        )
+        self._dropped_count = 0
 
     @property
     def is_connected(self) -> bool:
@@ -95,8 +103,16 @@ class UpstreamClient:
         )
 
     def send_packet(self, packet: Packet) -> None:
-        """Queue a packet for upstream delivery."""
+        """Queue a packet for upstream delivery (rate-limited)."""
         if not self._config.enabled:
+            return
+        if not self._rate_limiter.allow():
+            self._dropped_count += 1
+            if self._dropped_count % 50 == 1:
+                logger.warning(
+                    f" {CYAN}--{RESET} {YELLOW}UPSTREAM{RESET}  "
+                    f"rate limited -- {self._dropped_count} packets dropped"
+                )
             return
         message = {
             "type": "packet",
