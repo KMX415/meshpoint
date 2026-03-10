@@ -1,10 +1,8 @@
 """ctypes wrapper for the Semtech SX1302 HAL (libloragw).
 
-This is a stub module. The compiled core module (.so) overrides this
-at runtime when meshpoint-core is installed. If you see an error from
-this file, run the core installer:
-
-    sudo /opt/meshpoint/scripts/install_core.sh
+This is a stub module. The compiled core module (.so) shipped alongside
+this file overrides it at runtime. If you see an error from this file,
+the .so binary may be missing -- reinstall from the meshpoint release.
 """
 
 from __future__ import annotations
