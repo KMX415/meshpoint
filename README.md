@@ -8,6 +8,8 @@
 
 ![Mesh Radar Dashboard](dashboard.png)
 
+![Mesh Point Terminal](docs/meshpoint-terminal-banner.png)
+
 ---
 
 ## What Is This?

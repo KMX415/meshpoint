@@ -1,6 +1,6 @@
 [Unit]
 Description=Mesh Radar - Mesh Point
-Documentation=https://github.com/KMX415/Mesh-Radar
+Documentation=https://github.com/KMX415/meshpoint
 After=network-online.target
 Wants=network-online.target
 
