@@ -23,6 +23,12 @@ class PacketType(str, Enum):
     ADMIN = "admin"
     TRACEROUTE = "traceroute"
     NEIGHBORINFO = "neighborinfo"
+    WAYPOINT = "waypoint"
+    RANGE_TEST = "range_test"
+    STORE_FORWARD = "store_forward"
+    DETECTION_SENSOR = "detection_sensor"
+    PAXCOUNTER = "paxcounter"
+    MAP_REPORT = "map_report"
     UNKNOWN = "unknown"
 
 

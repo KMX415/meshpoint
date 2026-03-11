@@ -21,9 +21,15 @@ PORTNUM_MAP = {
     "position": 3,
     "nodeinfo": 4,
     "routing": 5,
+    "waypoint": 8,
+    "detection_sensor": 10,
+    "paxcounter": 34,
+    "store_forward": 65,
+    "range_test": 66,
     "telemetry": 67,
     "traceroute": 70,
     "neighborinfo": 71,
+    "map_report": 73,
 }
 
 

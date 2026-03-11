@@ -88,6 +88,25 @@ class PacketFeed {
         } else if (ptype === 'nodeinfo') {
             const name = payload.long_name || payload.short_name;
             if (name) parts.push(name);
+        } else if (ptype === 'waypoint') {
+            if (payload.name) parts.push(payload.name);
+            const lat = payload.latitude;
+            const lon = payload.longitude;
+            if (lat != null && lon != null) parts.push(`${lat.toFixed(4)}, ${lon.toFixed(4)}`);
+        } else if (ptype === 'range_test') {
+            if (payload.text) parts.push(`seq ${payload.text}`);
+        } else if (ptype === 'store_forward') {
+            if (payload.rr != null) parts.push(`rr=${payload.rr}`);
+            if (payload.messages_total != null) parts.push(`msgs ${payload.messages_total}`);
+        } else if (ptype === 'detection_sensor') {
+            if (payload.text) parts.push(payload.text.length > 60 ? payload.text.slice(0, 60) + '…' : payload.text);
+        } else if (ptype === 'paxcounter') {
+            if (payload.wifi != null) parts.push(`wifi ${payload.wifi}`);
+            if (payload.ble != null) parts.push(`ble ${payload.ble}`);
+        } else if (ptype === 'map_report') {
+            const name = payload.long_name || payload.short_name;
+            if (name) parts.push(name);
+            if (payload.firmware_version) parts.push(`fw ${payload.firmware_version}`);
         }
         return parts.join('  ');
     }

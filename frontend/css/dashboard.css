@@ -236,6 +236,12 @@ body {
 .packet-table .type-position { color: var(--accent-amber); }
 .packet-table .type-telemetry { color: var(--accent-cyan); }
 .packet-table .type-nodeinfo { color: var(--accent-purple); }
+.packet-table .type-waypoint { color: var(--accent-amber); }
+.packet-table .type-range_test { color: var(--accent-green); }
+.packet-table .type-store_forward { color: var(--text-secondary); }
+.packet-table .type-detection_sensor { color: var(--accent-red); }
+.packet-table .type-paxcounter { color: var(--accent-cyan); }
+.packet-table .type-map_report { color: var(--accent-blue); }
 
 .packet-detail {
     font-family: var(--font-mono);

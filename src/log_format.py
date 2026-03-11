@@ -146,6 +146,43 @@ def _payload_summary(packet: Packet) -> str:
         name = payload.get("long_name") or payload.get("short_name")
         if name:
             parts.append(f'"{name}"')
+    elif ptype == "waypoint":
+        name = payload.get("name")
+        if name:
+            parts.append(f'"{name}"')
+        lat = payload.get("latitude")
+        lon = payload.get("longitude")
+        if lat is not None and lon is not None:
+            parts.append(f"lat={lat:.4f} lon={lon:.4f}")
+    elif ptype == "range_test":
+        text = payload.get("text", "")
+        if text:
+            parts.append(f"seq={text}")
+    elif ptype == "store_forward":
+        rr = payload.get("rr")
+        if rr is not None:
+            parts.append(f"rr={rr}")
+        total = payload.get("messages_total")
+        if total is not None:
+            parts.append(f"msgs={total}")
+    elif ptype == "detection_sensor":
+        text = payload.get("text", "")
+        if text:
+            parts.append(text[:60])
+    elif ptype == "paxcounter":
+        wifi = payload.get("wifi")
+        ble = payload.get("ble")
+        if wifi is not None:
+            parts.append(f"wifi={wifi}")
+        if ble is not None:
+            parts.append(f"ble={ble}")
+    elif ptype == "map_report":
+        name = payload.get("long_name") or payload.get("short_name")
+        if name:
+            parts.append(f'"{name}"')
+        fw = payload.get("firmware_version")
+        if fw:
+            parts.append(f"fw={fw}")
 
     return " ".join(parts)
 
