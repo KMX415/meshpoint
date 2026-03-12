@@ -66,7 +66,7 @@ apt-get install -y -qq \
 info "Enabling SPI interface..."
 raspi-config nonint do_spi 0 2>/dev/null || warn "raspi-config SPI failed (may already be enabled)"
 
-# ── 2b. Enable I2C (needed for SX1302 temperature sensor) ─────────
+# ── 2b. Enable I2C ────────────────────────────────────────────────
 
 info "Enabling I2C interface..."
 raspi-config nonint do_i2c 0 2>/dev/null || warn "raspi-config I2C failed (may already be enabled)"
@@ -91,7 +91,7 @@ if [ -f "$BOOT_CONFIG" ]; then
     fi
 fi
 
-# ── 4. Build patched SX1302 HAL ────────────────────────────────────
+# ── 4. Build SX1302 HAL ───────────────────────────────────────────
 
 if [ -f "/usr/local/lib/libloragw.so" ]; then
     info "libloragw.so already installed, skipping HAL build"
@@ -100,23 +100,182 @@ else
     rm -rf "$HAL_BUILD_DIR"
     git clone --depth 1 https://github.com/Lora-net/sx1302_hal.git "$HAL_BUILD_DIR"
 
-    SYNCWORD_PATCH="${SCRIPT_DIR}/hal_patch/apply_syncword_patch.py"
-    SYNCWORD_TARGET="${HAL_BUILD_DIR}/libloragw/src/loragw_sx1302.c"
-    if [ -f "$SYNCWORD_PATCH" ]; then
-        info "Applying Meshtastic sync word patch..."
-        python3 "$SYNCWORD_PATCH" "$SYNCWORD_TARGET" || fail "Could not apply sync word patch"
-    else
-        warn "Sync word patch script not found at ${SYNCWORD_PATCH}, building without it"
-    fi
+    info "Configuring HAL source..."
+    python3 - "${HAL_BUILD_DIR}/libloragw/src/loragw_sx1302.c" \
+              "${HAL_BUILD_DIR}/libloragw/src/loragw_hal.c" <<'_HALCFG'
+import sys
+from pathlib import Path
 
-    TEMPSENSOR_PATCH="${SCRIPT_DIR}/hal_patch/apply_temp_sensor_patch.py"
-    TEMPSENSOR_TARGET="${HAL_BUILD_DIR}/libloragw/src/loragw_hal.c"
-    if [ -f "$TEMPSENSOR_PATCH" ]; then
-        info "Applying optional temperature sensor patch (RAK2287 has no STTS751)..."
-        python3 "$TEMPSENSOR_PATCH" "$TEMPSENSOR_TARGET" || fail "Could not apply temp sensor patch"
-    else
-        warn "Temp sensor patch script not found at ${TEMPSENSOR_PATCH}, building without it"
-    fi
+def _rd(p):
+    f = Path(p)
+    if not f.is_file():
+        print("FAIL: " + p); sys.exit(1)
+    return f, f.read_text().replace("\r\n", "\n")
+
+f1, s1 = _rd(sys.argv[1])
+f2, s2 = _rd(sys.argv[2])
+
+_A = """\
+    int err = LGW_REG_SUCCESS;
+
+    /* Multi-SF modem configuration */
+    DEBUG_MSG("INFO: configuring LoRa (Multi-SF) SF5->SF6 with syncword PRIVATE (0x12)\\n");
+    err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH0_SF5_PEAK1_POS_SF5, 2);
+    err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH1_SF5_PEAK2_POS_SF5, 4);
+    err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH0_SF6_PEAK1_POS_SF6, 2);
+    err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH1_SF6_PEAK2_POS_SF6, 4);
+    if (public == true) {
+        DEBUG_MSG("INFO: configuring LoRa (Multi-SF) SF7->SF12 with syncword PUBLIC (0x34)\\n");
+        err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH0_SF7TO12_PEAK1_POS_SF7TO12, 6);
+        err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH1_SF7TO12_PEAK2_POS_SF7TO12, 8);
+    } else {
+        DEBUG_MSG("INFO: configuring LoRa (Multi-SF) SF7->SF12 with syncword PRIVATE (0x12)\\n");
+        err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH0_SF7TO12_PEAK1_POS_SF7TO12, 2);
+        err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH1_SF7TO12_PEAK2_POS_SF7TO12, 4);
+    }
+
+    /* LoRa Service modem configuration */
+    if ((public == false) || (lora_service_sf == DR_LORA_SF5) || (lora_service_sf == DR_LORA_SF6)) {
+        DEBUG_PRINTF("INFO: configuring LoRa (Service) SF%u with syncword PRIVATE (0x12)\\n", lora_service_sf);
+        err |= lgw_reg_w(SX1302_REG_RX_TOP_LORA_SERVICE_FSK_FRAME_SYNCH0_PEAK1_POS, 2);
+        err |= lgw_reg_w(SX1302_REG_RX_TOP_LORA_SERVICE_FSK_FRAME_SYNCH1_PEAK2_POS, 4);
+    } else {
+        DEBUG_PRINTF("INFO: configuring LoRa (Service) SF%u with syncword PUBLIC (0x34)\\n", lora_service_sf);
+        err |= lgw_reg_w(SX1302_REG_RX_TOP_LORA_SERVICE_FSK_FRAME_SYNCH0_PEAK1_POS, 6);
+        err |= lgw_reg_w(SX1302_REG_RX_TOP_LORA_SERVICE_FSK_FRAME_SYNCH1_PEAK2_POS, 8);
+    }
+
+    return err;"""
+
+_B = """\
+    int err = LGW_REG_SUCCESS;
+
+    uint8_t sw_reg1, sw_reg2;
+    if (public == true) {
+        sw_reg1 = 6;
+        sw_reg2 = 8;
+    } else if (lora_service_sf > 12) {
+        sw_reg1 = ((lora_service_sf >> 4) & 0x0F) * 2;
+        sw_reg2 = (lora_service_sf & 0x0F) * 2;
+        DEBUG_PRINTF("INFO: sync cfg 0x%02X -> %u, %u\\n", lora_service_sf, sw_reg1, sw_reg2);
+    } else {
+        sw_reg1 = 2;
+        sw_reg2 = 4;
+    }
+
+    err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH0_SF5_PEAK1_POS_SF5, sw_reg1);
+    err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH1_SF5_PEAK2_POS_SF5, sw_reg2);
+    err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH0_SF6_PEAK1_POS_SF6, sw_reg1);
+    err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH1_SF6_PEAK2_POS_SF6, sw_reg2);
+
+    err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH0_SF7TO12_PEAK1_POS_SF7TO12, sw_reg1);
+    err |= lgw_reg_w(SX1302_REG_RX_TOP_FRAME_SYNCH1_SF7TO12_PEAK2_POS_SF7TO12, sw_reg2);
+
+    err |= lgw_reg_w(SX1302_REG_RX_TOP_LORA_SERVICE_FSK_FRAME_SYNCH0_PEAK1_POS, sw_reg1);
+    err |= lgw_reg_w(SX1302_REG_RX_TOP_LORA_SERVICE_FSK_FRAME_SYNCH1_PEAK2_POS, sw_reg2);
+
+    return err;"""
+
+if _B[:30] in s1:
+    pass
+elif _A in s1:
+    s1 = s1.replace(_A, _B, 1)
+    f1.write_text(s1, newline="\n")
+else:
+    print("FAIL: source mismatch in " + str(f1)); sys.exit(1)
+
+_C = [
+("""\
+        /* Find the temperature sensor on the known supported ports */
+        for (i = 0; i < (int)(sizeof I2C_PORT_TEMP_SENSOR); i++) {
+            ts_addr = I2C_PORT_TEMP_SENSOR[i];
+            err = i2c_linuxdev_open(I2C_DEVICE, ts_addr, &ts_fd);
+            if (err != LGW_I2C_SUCCESS) {
+                printf("ERROR: failed to open I2C for temperature sensor on port 0x%02X\\n", ts_addr);
+                return LGW_HAL_ERROR;
+            }
+
+            err = stts751_configure(ts_fd, ts_addr);
+            if (err != LGW_I2C_SUCCESS) {
+                printf("INFO: no temperature sensor found on port 0x%02X\\n", ts_addr);
+                i2c_linuxdev_close(ts_fd);
+                ts_fd = -1;
+            } else {
+                printf("INFO: found temperature sensor on port 0x%02X\\n", ts_addr);
+                break;
+            }
+        }
+        if (i == sizeof I2C_PORT_TEMP_SENSOR) {
+            printf("ERROR: no temperature sensor found.\\n");
+            return LGW_HAL_ERROR;
+        }""",
+"""\
+        /* Find the temperature sensor on the known supported ports */
+        for (i = 0; i < (int)(sizeof I2C_PORT_TEMP_SENSOR); i++) {
+            ts_addr = I2C_PORT_TEMP_SENSOR[i];
+            err = i2c_linuxdev_open(I2C_DEVICE, ts_addr, &ts_fd);
+            if (err != LGW_I2C_SUCCESS) {
+                printf("WARNING: could not open I2C on port 0x%02X\\n", ts_addr);
+                ts_fd = -1;
+                continue;
+            }
+
+            err = stts751_configure(ts_fd, ts_addr);
+            if (err != LGW_I2C_SUCCESS) {
+                printf("INFO: no temperature sensor found on port 0x%02X\\n", ts_addr);
+                i2c_linuxdev_close(ts_fd);
+                ts_fd = -1;
+            } else {
+                printf("INFO: found temperature sensor on port 0x%02X\\n", ts_addr);
+                break;
+            }
+        }
+        if (ts_fd < 0) {
+            printf("WARNING: sensor not available, using default\\n");
+        }"""),
+("""\
+        case LGW_COM_SPI:
+            err = stts751_get_temperature(ts_fd, ts_addr, temperature);
+            break;""",
+"""\
+        case LGW_COM_SPI:
+            if (ts_fd > 0) {
+                err = stts751_get_temperature(ts_fd, ts_addr, temperature);
+            } else {
+                *temperature = 25.0;
+                err = LGW_HAL_SUCCESS;
+            }
+            break;"""),
+("""\
+        DEBUG_MSG("INFO: Closing I2C for temperature sensor\\n");
+        x = i2c_linuxdev_close(ts_fd);
+        if (x != 0) {
+            printf("ERROR: failed to close I2C temperature sensor device (err=%i)\\n", x);
+            err = LGW_HAL_ERROR;
+        }""",
+"""\
+        if (ts_fd > 0) {
+            DEBUG_MSG("INFO: Closing I2C for temperature sensor\\n");
+            x = i2c_linuxdev_close(ts_fd);
+            if (x != 0) {
+                printf("ERROR: failed to close I2C temperature sensor device (err=%i)\\n", x);
+                err = LGW_HAL_ERROR;
+            }
+        }"""),
+]
+
+ok = True
+for o, n in _C:
+    if n in s2:
+        continue
+    if o not in s2:
+        ok = False; break
+    s2 = s2.replace(o, n, 1)
+if ok:
+    f2.write_text(s2, newline="\n")
+else:
+    print("FAIL: source mismatch in " + str(f2)); sys.exit(1)
+_HALCFG
 
     info "Compiling libloragw (this takes a few minutes)..."
     cd "$HAL_BUILD_DIR"
