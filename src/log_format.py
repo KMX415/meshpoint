@@ -146,6 +146,9 @@ def _payload_summary(packet: Packet) -> str:
         name = payload.get("long_name") or payload.get("short_name")
         if name:
             parts.append(f'"{name}"')
+        role = payload.get("role")
+        if role:
+            parts.append(f"role={role}")
     elif ptype == "waypoint":
         name = payload.get("name")
         if name:
@@ -183,6 +186,13 @@ def _payload_summary(packet: Packet) -> str:
         fw = payload.get("firmware_version")
         if fw:
             parts.append(f"fw={fw}")
+    elif ptype == "encrypted":
+        size = payload.get("payload_size")
+        if size is not None:
+            parts.append(f"{size} bytes")
+        ch = payload.get("channel_hash")
+        if ch is not None:
+            parts.append(f"ch=0x{ch:02x}")
 
     return " ".join(parts)
 

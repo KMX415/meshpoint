@@ -29,6 +29,7 @@ class PacketType(str, Enum):
     DETECTION_SENSOR = "detection_sensor"
     PAXCOUNTER = "paxcounter"
     MAP_REPORT = "map_report"
+    ENCRYPTED = "encrypted"
     UNKNOWN = "unknown"
 
 

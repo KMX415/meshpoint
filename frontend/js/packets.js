@@ -88,6 +88,7 @@ class PacketFeed {
         } else if (ptype === 'nodeinfo') {
             const name = payload.long_name || payload.short_name;
             if (name) parts.push(name);
+            if (payload.role) parts.push(`role: ${payload.role}`);
         } else if (ptype === 'waypoint') {
             if (payload.name) parts.push(payload.name);
             const lat = payload.latitude;
@@ -107,6 +108,9 @@ class PacketFeed {
             const name = payload.long_name || payload.short_name;
             if (name) parts.push(name);
             if (payload.firmware_version) parts.push(`fw ${payload.firmware_version}`);
+        } else if (ptype === 'encrypted') {
+            if (payload.payload_size != null) parts.push(`${payload.payload_size} bytes`);
+            if (payload.channel_hash != null) parts.push(`ch 0x${payload.channel_hash.toString(16).padStart(2, '0')}`);
         }
         return parts.join('  ');
     }

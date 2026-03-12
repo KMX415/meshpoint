@@ -242,6 +242,7 @@ body {
 .packet-table .type-detection_sensor { color: var(--accent-red); }
 .packet-table .type-paxcounter { color: var(--accent-cyan); }
 .packet-table .type-map_report { color: var(--accent-blue); }
+.packet-table .type-encrypted { color: var(--accent-red); }
 
 .packet-detail {
     font-family: var(--font-mono);
