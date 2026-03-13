@@ -69,6 +69,8 @@ Remove the 2 screws on the back panel (the side without the Ethernet/antenna por
 
 **Assembly:** Seat the RAK2287 on the Pi HAT, mount the HAT on the Pi GPIO header, connect the antenna. Always connect the antenna before powering on.
 
+> **Full step-by-step guide:** See the [Onboarding Guide](docs/ONBOARDING.md) for detailed instructions covering flashing, assembly, installation, and troubleshooting for all hardware options.
+
 ---
 
 ## Install
