@@ -190,6 +190,8 @@ class PipelineCoordinator:
         node_update = decoder.extract_node_update(packet)
         if node_update:
             await self._node_repo.upsert(node_update)
+        elif packet.source_id:
+            await self._node_repo.increment_packet_count(packet.source_id)
 
     async def _store_telemetry(self, packet: Packet) -> None:
         decoder = (
