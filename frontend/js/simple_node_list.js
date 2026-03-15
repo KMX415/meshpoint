@@ -26,7 +26,12 @@ class SimpleNodeList {
     }
 
     loadNodes(nodes) {
-        this._nodes = nodes.sort((a, b) => {
+        this._nodes = nodes.map(n => ({
+            ...n,
+            rssi: n.rssi ?? n.latest_rssi ?? null,
+            snr: n.snr ?? n.latest_snr ?? null,
+        }));
+        this._nodes.sort((a, b) => {
             const aTime = a.last_heard || a.last_seen || '';
             const bTime = b.last_heard || b.last_seen || '';
             return bTime.localeCompare(aTime);
@@ -83,18 +88,22 @@ class SimpleNodeList {
         }
 
         this._container.innerHTML = filtered.map(n => {
-            const name = this._esc(n.long_name || n.name || n.node_id || '--');
+            const name = this._esc(n.display_name || n.long_name || n.name || n.node_id || '--');
             const proto = n.protocol || 'meshtastic';
-            const rssi = n.rssi != null ? `${n.rssi} dBm` : '--';
+            const rssi = n.rssi != null ? `${Number(n.rssi).toFixed(0)} dBm` : '';
             const heard = n.last_heard || n.last_seen;
-            const ago = heard ? this._timeAgo(heard) : '--';
+            const ago = heard ? this._timeAgo(heard) : '';
+            const metaParts = [rssi, ago].filter(Boolean).join(' · ');
 
             return `<div class="node-item">
-                <div>
+                <div class="node-item__top">
                     <span class="node-item__name">${name}</span>
-                    <span class="node-item__proto node-item__proto--${proto}">${proto}</span>
+                    <span class="node-item__ago">${ago || '--'}</span>
                 </div>
-                <div class="node-item__meta">${rssi} &middot; ${ago}</div>
+                <div class="node-item__bottom">
+                    <span class="node-item__proto node-item__proto--${proto}">${proto}</span>
+                    <span class="node-item__rssi">${rssi || '--'}</span>
+                </div>
             </div>`;
         }).join('');
     }
