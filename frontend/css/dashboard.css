@@ -178,7 +178,7 @@ body {
     grid-template-columns: 2fr 1fr;
     gap: 0.75rem;
     flex: 1;
-    min-height: 420px;
+    min-height: 55vh;
 }
 
 .dashboard__map { min-height: 0; }
