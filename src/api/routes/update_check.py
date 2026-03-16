@@ -8,7 +8,6 @@ import time
 
 import asyncio
 import urllib.request
-from functools import partial
 
 from fastapi import APIRouter
 
