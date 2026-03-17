@@ -37,6 +37,8 @@ def run_setup() -> None:
 
     report = _step_hardware_detect()
     _step_capture_source(config, report)
+    _step_protocol(config)
+    _step_region(config)
     _step_api_key(config)
     _step_device_name(config)
     _step_location(config, report)
@@ -57,7 +59,7 @@ def _print_banner() -> None:
 
 def _step_hardware_detect() -> HardwareReport:
     """Probe for all available hardware."""
-    print("  [1/7] Detecting hardware...")
+    print("  [1/9] Detecting hardware...")
     report = detect_all()
     print_report(report)
     return report
@@ -65,7 +67,7 @@ def _step_hardware_detect() -> HardwareReport:
 
 def _step_capture_source(config: dict, report: HardwareReport) -> None:
     """Choose the LoRa capture source based on detected hardware."""
-    print("  [2/7] Capture source")
+    print("  [2/9] Capture source")
 
     if report.concentrator_available:
         print(f"        Concentrator detected on {report.spi_devices[0]}")
@@ -94,11 +96,109 @@ def _step_capture_source(config: dict, report: HardwareReport) -> None:
         config["capture"] = {"sources": []}
 
 
+_SUPPORTED_PROTOCOLS = ["meshtastic", "meshcore"]
+
+_PROTOCOL_DESCRIPTIONS = {
+    "meshtastic": "Meshtastic LoRa mesh (sync word 0x2B)",
+    "meshcore": "Meshcore LoRa mesh (sync word 0x12)",
+}
+
+_SUPPORTED_REGIONS = ["US915", "ANZ915", "EU868"]
+
+_REGION_DEFAULTS: dict[tuple[str, str], dict] = {
+    ("meshtastic", "US915"): {
+        "frequency_mhz": 906.875, "bandwidth_khz": 250.0,
+        "spreading_factor": 11, "coding_rate": "4/8", "sync_word": 0x2B,
+    },
+    ("meshtastic", "ANZ915"): {
+        "frequency_mhz": 917.375, "bandwidth_khz": 62.5,
+        "spreading_factor": 7, "coding_rate": "4/5", "sync_word": 0x2B,
+    },
+    ("meshtastic", "EU868"): {
+        "frequency_mhz": 869.525, "bandwidth_khz": 250.0,
+        "spreading_factor": 11, "coding_rate": "4/8", "sync_word": 0x2B,
+    },
+    ("meshcore", "US915"): {
+        "frequency_mhz": 910.525, "bandwidth_khz": 62.5,
+        "spreading_factor": 7, "coding_rate": "4/5", "sync_word": 0x12,
+    },
+    ("meshcore", "ANZ915"): {
+        "frequency_mhz": 917.375, "bandwidth_khz": 62.5,
+        "spreading_factor": 7, "coding_rate": "4/5", "sync_word": 0x12,
+    },
+    ("meshcore", "EU868"): {
+        "frequency_mhz": 869.525, "bandwidth_khz": 62.5,
+        "spreading_factor": 8, "coding_rate": "4/8", "sync_word": 0x12,
+    },
+}
+
+
+def _region_description(protocol: str, region: str) -> str:
+    defaults = _REGION_DEFAULTS[(protocol, region)]
+    return (
+        f"{defaults['frequency_mhz']} MHz, "
+        f"{defaults['bandwidth_khz']}kHz BW, "
+        f"SF{defaults['spreading_factor']}"
+    )
+
+
+def _step_protocol(config: dict) -> None:
+    """Select the LoRa mesh protocol to monitor."""
+    print("  [3/9] Protocol")
+    print("        Which LoRa mesh protocol will this Mesh Point monitor?")
+    print()
+    for i, proto in enumerate(_SUPPORTED_PROTOCOLS, 1):
+        print(f"          {i}. {_PROTOCOL_DESCRIPTIONS[proto]}")
+
+    while True:
+        raw = _prompt(f"Choice [1-{len(_SUPPORTED_PROTOCOLS)}]:").strip()
+        try:
+            idx = int(raw) - 1
+            if 0 <= idx < len(_SUPPORTED_PROTOCOLS):
+                break
+        except ValueError:
+            pass
+        print(f"          Please enter 1 or {len(_SUPPORTED_PROTOCOLS)}.")
+
+    protocol = _SUPPORTED_PROTOCOLS[idx]
+    config.setdefault("radio", {})["protocol"] = protocol
+    print(f"        Protocol set to {protocol}")
+    print()
+
+
+def _step_region(config: dict) -> None:
+    """Select the LoRa frequency region."""
+    protocol = config.get("radio", {}).get("protocol", "meshtastic")
+    print("  [4/9] Frequency region")
+    print()
+    for i, region in enumerate(_SUPPORTED_REGIONS, 1):
+        desc = _region_description(protocol, region)
+        print(f"          {i}. {region} -- {desc}")
+
+    while True:
+        raw = _prompt(f"Choice [1-{len(_SUPPORTED_REGIONS)}]:").strip()
+        try:
+            idx = int(raw) - 1
+            if 0 <= idx < len(_SUPPORTED_REGIONS):
+                break
+        except ValueError:
+            pass
+        print(f"          Please enter a number between 1 and {len(_SUPPORTED_REGIONS)}.")
+
+    region = _SUPPORTED_REGIONS[idx]
+    radio = config.setdefault("radio", {})
+    radio["region"] = region
+    radio.update(_REGION_DEFAULTS[(protocol, region)])
+    desc = _region_description(protocol, region)
+    print(f"        Region set to {region} ({desc})")
+    print()
+
+
 def _step_api_key(config: dict) -> None:
     """Prompt for the Mesh Radar API key (required, signature-verified)."""
     from src.activation import verify_license_key
 
-    print("  [3/7] API key")
+    print("  [5/9] API key")
     print()
     print("        An API key is required to activate this Mesh Point.")
     print(f"        Get a free key at {CLOUD_URL}")
@@ -130,7 +230,7 @@ def _step_api_key(config: dict) -> None:
 
 def _step_device_name(config: dict) -> None:
     """Choose a name for this Mesh Point."""
-    print("  [4/7] Device name")
+    print("  [6/9] Device name")
     default_name = _default_device_name()
     name = _prompt(f"Device name [{default_name}]:").strip()
     if not name:
@@ -143,7 +243,7 @@ def _step_device_name(config: dict) -> None:
 
 def _step_location(config: dict, report: HardwareReport) -> None:
     """Set device GPS coordinates."""
-    print("  [5/7] Location")
+    print("  [7/9] Location")
 
     gps = report.gps
     if gps.got_fix:
@@ -181,7 +281,7 @@ def _step_location(config: dict, report: HardwareReport) -> None:
 
 def _step_relay(config: dict, report: HardwareReport) -> None:
     """Configure the optional SX1262 relay radio."""
-    print("  [6/7] Relay radio (optional)")
+    print("  [8/9] Relay radio (optional)")
 
     capture_port = config.get("capture", {}).get("serial_port")
     available_ports = [
@@ -217,7 +317,7 @@ def _step_device_id(config: dict) -> None:
     """Generate a stable, persistent device ID."""
     device_id = str(uuid.uuid4())
     config.setdefault("device", {})["device_id"] = device_id
-    print(f"  [7/7] Device ID: {device_id}")
+    print(f"  [9/9] Device ID: {device_id}")
     print()
 
 

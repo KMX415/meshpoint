@@ -13,6 +13,8 @@ from src.version import __version__
 
 @dataclass
 class RadioConfig:
+    protocol: str = "meshtastic"
+    region: str = "US915"
     frequency_mhz: float = 906.875
     spreading_factor: int = 11
     bandwidth_khz: float = 250.0

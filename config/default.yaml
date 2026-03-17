@@ -1,4 +1,6 @@
 radio:
+  protocol: meshtastic      # meshtastic | meshcore
+  region: US915              # US915 | ANZ915 | EU868
   frequency_mhz: 906.875
   spreading_factor: 11
   bandwidth_khz: 250.0

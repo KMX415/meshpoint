@@ -121,10 +121,15 @@ def _add_concentrator_source(
 ):
     try:
         from src.capture.concentrator_source import ConcentratorCaptureSource
+        from src.hal.concentrator_config import ConcentratorChannelPlan
+        channel_plan = ConcentratorChannelPlan.for_config(
+            config.radio.region, config.radio.protocol,
+        )
         coordinator.capture_coordinator.add_source(
             ConcentratorCaptureSource(
                 spi_path=config.capture.concentrator_spi_device,
                 syncword=config.radio.sync_word,
+                channel_plan=channel_plan,
             )
         )
     except Exception:

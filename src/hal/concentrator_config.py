@@ -14,6 +14,9 @@ _CORE_MISSING = (
     "See README.md for installation instructions."
 )
 
+MESHTASTIC_SYNC_WORD = 0x2B
+MESHCORE_SYNC_WORD = 0x12
+
 
 @dataclass
 class ChannelConfig:
@@ -34,6 +37,30 @@ class ConcentratorChannelPlan:
 
     @staticmethod
     def meshtastic_us915_default() -> ConcentratorChannelPlan:
+        raise RuntimeError(_CORE_MISSING)
+
+    @staticmethod
+    def meshtastic_anz915_default() -> ConcentratorChannelPlan:
+        raise RuntimeError(_CORE_MISSING)
+
+    @staticmethod
+    def meshtastic_eu868_default() -> ConcentratorChannelPlan:
+        raise RuntimeError(_CORE_MISSING)
+
+    @staticmethod
+    def meshcore_us915_default() -> ConcentratorChannelPlan:
+        raise RuntimeError(_CORE_MISSING)
+
+    @staticmethod
+    def meshcore_anz915_default() -> ConcentratorChannelPlan:
+        raise RuntimeError(_CORE_MISSING)
+
+    @staticmethod
+    def meshcore_eu868_default() -> ConcentratorChannelPlan:
+        raise RuntimeError(_CORE_MISSING)
+
+    @staticmethod
+    def for_config(region: str, protocol: str) -> ConcentratorChannelPlan:
         raise RuntimeError(_CORE_MISSING)
 
     def to_hal_config(self) -> dict:

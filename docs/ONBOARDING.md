@@ -146,15 +146,17 @@ sudo meshpoint setup
 
 > **Note:** `sudo` is required — the wizard writes to `/opt/meshpoint/config/local.yaml` which is owned by root.
 
-The wizard walks you through 7 steps:
+The wizard walks you through 9 steps:
 
 1. **Hardware Detection** -- probes for concentrator, carrier board, GPS, serial radios
 2. **Capture Source** -- auto-selects concentrator, serial, or mock
-3. **API Key** -- paste your Mesh Radar API key
-4. **Device Name** -- give it a recognizable name (e.g. "Mesh Point Rooftop")
-5. **Location** -- use GPS fix or enter lat/lng manually (right-click Google Maps to copy)
-6. **Relay Radio** -- configure optional SX1262 relay
-7. **Device ID** -- auto-generated unique identifier
+3. **Protocol** -- select Meshtastic or Meshcore
+4. **Frequency Region** -- select your LoRa region (US915, ANZ915, or EU868)
+5. **API Key** -- paste your Mesh Radar API key
+6. **Device Name** -- give it a recognizable name (e.g. "Mesh Point Rooftop")
+7. **Location** -- use GPS fix or enter lat/lng manually (right-click Google Maps to copy)
+8. **Relay Radio** -- configure optional SX1262 relay
+9. **Device ID** -- auto-generated unique identifier
 
 The wizard writes `config/local.yaml` and offers to start the service.
 

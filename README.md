@@ -139,7 +139,9 @@ All settings live in `config/default.yaml` with user overrides in `config/local.
 
 ```yaml
 radio:
-  frequency_mhz: 906.875      # US915 Meshtastic default
+  protocol: meshtastic         # meshtastic | meshcore
+  region: US915                # US915 | ANZ915 | EU868
+  frequency_mhz: 906.875      # auto-set by protocol + region during setup
   spreading_factor: 11         # SF11 (LongFast)
   bandwidth_khz: 250.0
 
