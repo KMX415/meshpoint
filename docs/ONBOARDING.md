@@ -193,6 +193,8 @@ If you received a pre-built Mesh Point, all the software is already configured. 
 
 The device will boot in about 60 seconds and start capturing LoRa packets automatically.
 
+> **Shutting down:** If you ever need to unplug the device, **always** run `sudo poweroff` first (via SSH) and wait for the green LED to stop blinking. Never yank the power cable while the Pi is running -- this can corrupt the SD card and permanently damage the concentrator radio.
+
 ### Accessing Your Local Dashboard
 
 Once the device is on your network, open a browser and go to:
@@ -232,6 +234,9 @@ The device also sends data to the Mesh Radar cloud platform. Your device operato
 | `meshpoint stop` | Stop the service |
 | `sudo meshpoint setup` | Re-run the setup wizard (overwrites config) |
 | `meshpoint version` | Print firmware version |
+| `sudo poweroff` | **Shut down safely before unplugging power** |
+
+> **Never yank the USB/power cable without shutting down first.** Always run `sudo poweroff` and wait for the green LED to stop blinking before unplugging. Pulling power while the Pi is running can corrupt the SD card and permanently damage the RAK2287 concentrator.
 
 ### Editing Configuration
 
