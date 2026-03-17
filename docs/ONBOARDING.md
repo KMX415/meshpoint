@@ -35,7 +35,7 @@ You need a Raspberry Pi 4 with an SX1302 or SX1303 LoRa concentrator. The easies
 | **RAK Hotspot V2** (RAK7248) | RAK2287 (SX1302) | $30-70 on eBay | Pi 4 + metal enclosure + antenna |
 | **SenseCap M1** | WM1303 (SX1303) | $30-60 on eBay | Pi 4 + metal enclosure + antenna, may include 64GB SD card |
 
-> **RAK2287 vs SenseCap M1 — important difference for remote deployments:** The RAK2287's SPI bus can latch in a stuck state after a service restart or unexpected power loss. When this happens, the concentrator will not reinitialize and **a clean `sudo reboot` will not fix it** — only a full power unplug (10+ seconds) clears the SPI bus. Repeated SPI latch events (from frequent power outages or hard shutdowns) can permanently damage the SX1250 radio front-end — the concentrator may start but silently fail to receive packets. The SenseCap M1 does not have this issue and handles service restarts and power loss cleanly. If you are deploying a Mesh Point in a location where you cannot physically access it (rooftop, remote site) or where power is unreliable, the **SenseCap M1 is strongly recommended**.
+> **RAK2287 vs SenseCap M1:** The RAK2287's SPI bus can latch if power is cut while the concentrator is active. The Meshpoint service includes a GPIO reset script that holds the concentrator in reset during shutdown, making `sudo reboot` and `sudo systemctl restart meshpoint` safe. However, hard power loss (yanked cable, power outage) can still latch the SPI bus — requiring a full power unplug (10+ seconds) to clear. Repeated hard power loss can permanently damage the SX1250 radio. The SenseCap M1 does not have this issue. For deployments with unreliable power, the **SenseCap M1 is recommended**, or add a small UPS (PiSugar, USB battery with passthrough).
 
 RAK Hotspot V2: remove 4 bottom screws to access the SD card. SenseCap M1: remove 2 screws on the back panel (opposite the Ethernet/antenna ports) -- the SD card may be held down with kapton tape.
 
@@ -234,9 +234,9 @@ The device also sends data to the Mesh Radar cloud platform. Your device operato
 | `meshpoint stop` | Stop the service |
 | `sudo meshpoint setup` | Re-run the setup wizard (overwrites config) |
 | `meshpoint version` | Print firmware version |
-| `sudo poweroff` | **Shut down safely before unplugging power** |
+| `sudo poweroff` | Shut down safely before unplugging power |
 
-> **Never yank the USB/power cable without shutting down first.** Always run `sudo poweroff` and wait for the green LED to stop blinking before unplugging. Pulling power while the Pi is running can corrupt the SD card and permanently damage the RAK2287 concentrator.
+> **Always shut down before unplugging.** Run `sudo poweroff` and wait for the green LED to stop before pulling the cable. Reboots (`sudo reboot`) are safe.
 
 ### Editing Configuration
 
@@ -256,20 +256,17 @@ sudo /opt/meshpoint/venv/bin/pip install -r requirements.txt
 sudo systemctl restart meshpoint
 ```
 
-**RAK2287 units (RAK Hotspot V2, DIY builds with 2287):** After restarting the service, the concentrator may fail to initialize with `lgw_start() failed` or `Failed to set SX1250_0 in STANDBY_RC mode`. The 2287's SPI bus latches in a stuck state and **cannot be cleared by `sudo reboot`** — only a full power unplug resets it. If you see this error:
+Service restarts (`meshpoint restart`) and reboots (`sudo reboot`) are safe — the systemd service holds the concentrator in reset during shutdown to prevent SPI bus latch.
 
-1. Try restarting the service once more: `sudo systemctl restart meshpoint` (occasionally clears on a second GPIO reset)
-2. If it still fails, do a **clean shutdown** before power cycling:
-   ```bash
-   sudo systemctl stop meshpoint
-   sync
-   sudo poweroff
-   ```
-3. Wait for the **green LED to stop blinking**, then unplug for 10+ seconds and plug back in.
+**If the concentrator fails to start** with `lgw_start() failed` or `Failed to set SX1250_0 in STANDBY_RC mode`, the SPI bus latched due to a hard power cut. Fix it with a full power cycle:
 
-**SenseCap M1 units:** Service restarts work cleanly without any power cycling. The M1's WM1303 concentrator handles SPI stop/start gracefully. These units are safe for remote updates.
+```bash
+sudo poweroff
+```
 
-**Important:** Never just yank the power cable while the Pi is running. Hard power cuts cause two problems: (1) the SD card has no write cache protection — pulling power during writes can corrupt files, the git repo, or the database, and (2) on RAK2287 units, killing power while the SPI bus is active can latch the bus or damage the SX1250 radio. Repeated power loss events (storms, UPS failures, tripped breakers) can permanently degrade the concentrator's receive sensitivity. Always `sudo poweroff` first and wait for the LED to go dark. Consider a small UPS (e.g. PiSugar or USB battery with passthrough) for deployments where power is unreliable.
+Wait for the green LED to stop blinking, then unplug for 10+ seconds and plug back in.
+
+**Important:** Always shut down gracefully with `sudo poweroff` before unplugging. Hard power cuts (yanked cable, power outage) can corrupt the SD card and latch the RAK2287's SPI bus. Repeated hard power loss can permanently damage the SX1250 radio.
 
 ### Recovering from a Corrupted Install
 
@@ -323,13 +320,11 @@ Common issues:
 
 If logs show `lgw_start() failed` or `Failed to set SX1250_0 in STANDBY_RC mode`:
 
-**RAK2287 units:** The 2287's SPI bus holds state through reboots. `sudo reboot` will **not** fix it. You must do a full power cycle:
+The SPI bus latched due to a hard power cut. `sudo reboot` and `meshpoint restart` normally prevent this, but a hard power loss (yanked cable, outage) can still cause it. Do a full power cycle:
 
 1. `sudo poweroff`
 2. Wait for the green LED to stop blinking
 3. Unplug power for 10+ seconds, then plug back in
-
-**SenseCap M1 units:** Try `sudo systemctl restart meshpoint` — the M1 handles this cleanly and should not require a power cycle.
 
 ### Database errors after update
 

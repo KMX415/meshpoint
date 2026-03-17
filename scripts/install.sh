@@ -308,7 +308,7 @@ fi
 
 # ── 5. Install Mesh Point application ──────────────────────────────
 
-info "Installing Mesh Point to ${MESHPOINT_DIR}..."
+info "Installing Meshpoint to ${MESHPOINT_DIR}..."
 mkdir -p "$MESHPOINT_DIR"
 
 rsync -a --exclude='venv' \
