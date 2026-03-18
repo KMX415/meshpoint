@@ -15,6 +15,14 @@ meshcore:
   default_key_b64: ""
   channel_keys: {}
 
+meshcore_radio:
+  enabled: false
+  frequency_mhz: 910.525
+  spreading_factor: 7
+  bandwidth_khz: 62.5
+  coding_rate: "4/5"
+  sync_word: 0x12
+
 capture:
   sources: []
   serial_port: null

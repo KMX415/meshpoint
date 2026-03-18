@@ -29,6 +29,18 @@ class MeshtasticConfig:
 
 
 @dataclass
+class MeshcoreRadioConfig:
+    """Radio parameters for MeshCore reception on the SX1302 service channel."""
+
+    enabled: bool = False
+    frequency_mhz: float = 910.525
+    spreading_factor: int = 7
+    bandwidth_khz: float = 62.5
+    coding_rate: str = "4/5"
+    sync_word: int = 0x12
+
+
+@dataclass
 class MeshcoreConfig:
     default_key_b64: str = ""
     channel_keys: dict[str, str] = field(default_factory=dict)
@@ -92,6 +104,7 @@ class AppConfig:
     radio: RadioConfig = field(default_factory=RadioConfig)
     meshtastic: MeshtasticConfig = field(default_factory=MeshtasticConfig)
     meshcore: MeshcoreConfig = field(default_factory=MeshcoreConfig)
+    meshcore_radio: MeshcoreRadioConfig = field(default_factory=MeshcoreRadioConfig)
     capture: CaptureConfig = field(default_factory=CaptureConfig)
     storage: StorageConfig = field(default_factory=StorageConfig)
     dashboard: DashboardConfig = field(default_factory=DashboardConfig)
@@ -119,6 +132,7 @@ def _apply_yaml(cfg: AppConfig, path: Path) -> None:
         "radio": cfg.radio,
         "meshtastic": cfg.meshtastic,
         "meshcore": cfg.meshcore,
+        "meshcore_radio": cfg.meshcore_radio,
         "capture": cfg.capture,
         "storage": cfg.storage,
         "dashboard": cfg.dashboard,
