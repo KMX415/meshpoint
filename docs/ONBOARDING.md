@@ -156,6 +156,8 @@ The wizard walks you through 7 steps:
 6. **Relay Radio** -- configure optional SX1262 relay
 7. **Device ID** -- auto-generated unique identifier
 
+> **Optional Waveshare SX1262:** You can stack a Waveshare SX1262 HAT (Pi → Waveshare → concentrator) for an additional SPI capture path. It is **not** required if you only want Meshtastic via the concentrator or USB serial. Enable it by adding `sx1262_spi` to `capture.sources` and setting `capture.sx1262_spi` GPIO values in `config/local.yaml` for your wiring.
+
 The wizard writes `config/local.yaml` and offers to start the service.
 
 ### Step 9: Verify It's Working

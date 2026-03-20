@@ -13,6 +13,7 @@ from src.analytics.traffic_monitor import TrafficMonitor
 from src.api.routes import analytics, device, nodes, packets, system_metrics, telemetry, update_check
 from src.api.upstream_client import UpstreamClient
 from src.api.websocket_manager import WebSocketManager
+from src.capture.source_registry import register_capture_sources
 from src.config import AppConfig, load_config, validate_activation
 from src.coordinator import PipelineCoordinator
 from src.log_format import print_banner, print_packet, setup_logging
@@ -93,42 +94,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
 def _build_pipeline(config: AppConfig) -> PipelineCoordinator:
     coordinator = PipelineCoordinator(config)
-
-    for source_name in config.capture.sources:
-        if source_name == "serial":
-            _add_serial_source(coordinator, config)
-        elif source_name == "concentrator":
-            _add_concentrator_source(coordinator, config)
-
+    register_capture_sources(coordinator, config)
     return coordinator
-
-
-def _add_serial_source(coordinator: PipelineCoordinator, config: AppConfig):
-    try:
-        from src.capture.serial_source import SerialCaptureSource
-        coordinator.capture_coordinator.add_source(
-            SerialCaptureSource(
-                port=config.capture.serial_port,
-                baud=config.capture.serial_baud,
-            )
-        )
-    except ImportError:
-        logger.warning("Serial capture unavailable")
-
-
-def _add_concentrator_source(
-    coordinator: PipelineCoordinator, config: AppConfig
-):
-    try:
-        from src.capture.concentrator_source import ConcentratorCaptureSource
-        coordinator.capture_coordinator.add_source(
-            ConcentratorCaptureSource(
-                spi_path=config.capture.concentrator_spi_device,
-                syncword=config.radio.sync_word,
-            )
-        )
-    except Exception:
-        logger.exception("Concentrator source unavailable")
 
 
 def _init_routes(

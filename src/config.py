@@ -35,11 +35,25 @@ class MeshcoreConfig:
 
 
 @dataclass
+class Sx1262SpiConfig:
+    """Waveshare SX1262 HAT (SPI) — opt-in; only used when `sx1262_spi` is listed."""
+
+    spi_device: str = "/dev/spidev0.0"
+    gpio_cs_bcm: Optional[int] = None
+    gpio_reset_bcm: Optional[int] = None
+    gpio_busy_bcm: Optional[int] = None
+    gpio_dio1_bcm: Optional[int] = None
+    gpio_txen_bcm: Optional[int] = None
+    busy_timeout_seconds: float = 5.0
+
+
+@dataclass
 class CaptureConfig:
     sources: list[str] = field(default_factory=lambda: ["mock"])
     serial_port: Optional[str] = None
     serial_baud: int = 115200
     concentrator_spi_device: str = "/dev/spidev0.0"
+    sx1262_spi: Sx1262SpiConfig = field(default_factory=Sx1262SpiConfig)
 
 
 @dataclass
@@ -128,8 +142,17 @@ def _apply_yaml(cfg: AppConfig, path: Path) -> None:
     }
 
     for section_name, section_instance in section_map.items():
-        if section_name in raw:
-            _merge_dataclass(section_instance, raw[section_name])
+        if section_name not in raw:
+            continue
+        data = raw[section_name]
+        if not isinstance(data, dict):
+            continue
+        if section_name == "capture":
+            nested = data.get("sx1262_spi")
+            if isinstance(nested, dict):
+                _merge_dataclass(cfg.capture.sx1262_spi, nested)
+            data = {k: v for k, v in data.items() if k != "sx1262_spi"}
+        _merge_dataclass(section_instance, data)
 
 
 _VALID_CONFIG_EXTENSIONS = {".yaml", ".yml"}

@@ -20,6 +20,15 @@ capture:
   serial_port: null
   serial_baud: 115200
   concentrator_spi_device: "/dev/spidev0.0"
+  # Opt-in Waveshare SX1262 (Pi > Waveshare > RAK). Shared SPI bus, manual CS.
+  sx1262_spi:
+    spi_device: "/dev/spidev0.0"
+    gpio_cs_bcm: 21
+    gpio_reset_bcm: 18
+    gpio_busy_bcm: 20
+    gpio_dio1_bcm: 16
+    gpio_txen_bcm: 6
+    busy_timeout_seconds: 5.0
 
 storage:
   database_path: "data/concentrator.db"

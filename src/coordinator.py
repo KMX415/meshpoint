@@ -23,6 +23,7 @@ _SOURCE_LABELS = {
     "concentrator": "concentrator (8-ch SX1302)",
     "serial": "serial radio",
     "mock": "mock source",
+    "sx1262_spi": "Waveshare SX1262 SPI (MeshCore RX)",
 }
 
 
