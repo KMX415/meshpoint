@@ -4,6 +4,9 @@ Connects to a MeshCore companion radio via USB serial using the
 ``meshcore`` Python library, subscribes to incoming events, and
 yields them as RawCapture objects for the pipeline.
 
+Includes auto-reconnect with exponential backoff and a periodic
+health check so the source self-heals after serial disconnects.
+
 Events are JSON-serialised and decoded downstream by
 ``meshcore_event_adapter.adapt_event``.
 """
@@ -26,6 +29,10 @@ _EMPTY_SIGNAL = SignalMetrics(
     spreading_factor=0, bandwidth_khz=0.0, coding_rate="N/A",
 )
 
+_HEALTH_CHECK_INTERVAL_SECONDS = 120
+_RECONNECT_BASE_DELAY_SECONDS = 5
+_RECONNECT_MAX_DELAY_SECONDS = 60
+
 
 class MeshcoreUsbCaptureSource(CaptureSource):
     """Receives packets from a MeshCore device connected via USB serial."""
@@ -42,8 +49,10 @@ class MeshcoreUsbCaptureSource(CaptureSource):
         self._meshcore = None
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=500)
         self._running = False
+        self._connected = False
         self._subscriptions: list = []
         self._resolved_port: Optional[str] = None
+        self._health_task: Optional[asyncio.Task] = None
 
     @property
     def name(self) -> str:
@@ -61,14 +70,49 @@ class MeshcoreUsbCaptureSource(CaptureSource):
             )
             return
 
+        self._resolved_port = port
+        self._running = True
+        await self._connect(port)
+
+        if self._connected:
+            self._health_task = asyncio.create_task(
+                self._health_check_loop(), name="meshcore-health"
+            )
+
+    async def stop(self) -> None:
+        self._running = False
+        if self._health_task:
+            self._health_task.cancel()
+            try:
+                await self._health_task
+            except asyncio.CancelledError:
+                pass
+            self._health_task = None
+        await self._disconnect()
+        logger.info("MeshCore USB source stopped")
+
+    async def packets(self) -> AsyncIterator[RawCapture]:
+        if not self._running:
+            return
+        while self._running:
+            try:
+                event = await asyncio.wait_for(
+                    self._queue.get(), timeout=1.0
+                )
+                raw = self._wrap_event(event)
+                if raw is not None:
+                    yield raw
+            except asyncio.TimeoutError:
+                continue
+
+    async def _connect(self, port: str) -> None:
         try:
             from meshcore import MeshCore, EventType
 
             self._meshcore = await MeshCore.create_serial(
                 port, self._baud_rate
             )
-            self._resolved_port = port
-            self._running = True
+            self._connected = True
 
             for event_type in (
                 EventType.CONTACT_MSG_RECV,
@@ -85,11 +129,13 @@ class MeshcoreUsbCaptureSource(CaptureSource):
                 port, self._baud_rate,
             )
         except Exception:
-            logger.exception("Failed to start MeshCore USB source on %s", port)
-            self._running = False
+            logger.exception(
+                "Failed to start MeshCore USB source on %s", port
+            )
+            self._connected = False
 
-    async def stop(self) -> None:
-        self._running = False
+    async def _disconnect(self) -> None:
+        self._connected = False
         if self._meshcore:
             for sub in self._subscriptions:
                 self._meshcore.unsubscribe(sub)
@@ -103,21 +149,58 @@ class MeshcoreUsbCaptureSource(CaptureSource):
             except Exception:
                 pass
             self._meshcore = None
-        logger.info("MeshCore USB source stopped")
 
-    async def packets(self) -> AsyncIterator[RawCapture]:
-        if not self._running:
-            return
+    async def _reconnect(self) -> None:
+        """Disconnect, wait with backoff, and reconnect."""
+        await self._disconnect()
+        delay = _RECONNECT_BASE_DELAY_SECONDS
+
         while self._running:
-            try:
-                event = await asyncio.wait_for(
-                    self._queue.get(), timeout=1.0
-                )
-                raw = self._wrap_event(event)
-                if raw is not None:
-                    yield raw
-            except asyncio.TimeoutError:
-                continue
+            logger.info(
+                "MeshCore USB reconnecting in %ds...", delay
+            )
+            await asyncio.sleep(delay)
+            if not self._running:
+                return
+
+            await self._connect(self._resolved_port)
+            if self._connected:
+                logger.info("MeshCore USB reconnected successfully")
+                return
+
+            delay = min(delay * 2, _RECONNECT_MAX_DELAY_SECONDS)
+
+    async def _health_check_loop(self) -> None:
+        """Periodically verify the serial companion is still responding."""
+        try:
+            while self._running and self._connected:
+                await asyncio.sleep(_HEALTH_CHECK_INTERVAL_SECONDS)
+                if not self._running:
+                    return
+                if not await self._check_health():
+                    logger.warning(
+                        "MeshCore USB health check failed -- reconnecting"
+                    )
+                    await self._reconnect()
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.exception("MeshCore USB health check loop error")
+
+    async def _check_health(self) -> bool:
+        """Send a device query and verify we get a response."""
+        if not self._meshcore:
+            return False
+        try:
+            from meshcore import EventType
+
+            result = await asyncio.wait_for(
+                self._meshcore.commands.send_device_query(),
+                timeout=10.0,
+            )
+            return result.type != EventType.ERROR
+        except Exception:
+            return False
 
     async def _on_event(self, event) -> None:
         if not self._running:
