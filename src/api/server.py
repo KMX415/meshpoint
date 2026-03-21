@@ -125,6 +125,7 @@ def _add_concentrator_source(
             ConcentratorCaptureSource(
                 spi_path=config.capture.concentrator_spi_device,
                 syncword=config.radio.sync_word,
+                radio_config=config.radio,
             )
         )
     except Exception:
