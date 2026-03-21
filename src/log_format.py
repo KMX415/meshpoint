@@ -249,6 +249,27 @@ _BANNER_ART = r"""
   {c}└──────────────────────────────────────────────┘{r}"""
 
 
+_SOURCE_DESCRIPTIONS = {
+    "concentrator": "concentrator (SX1302 8-ch)",
+    "serial": "serial radio",
+    "meshcore_usb": "MeshCore USB node",
+    "mock": "mock source",
+}
+
+
+def _describe_sources(config: AppConfig) -> str:
+    """Build a human-readable source list for the startup banner."""
+    parts = [
+        _SOURCE_DESCRIPTIONS.get(s, s) for s in config.capture.sources
+    ]
+    if (
+        "meshcore_usb" not in config.capture.sources
+        and config.capture.meshcore_usb.auto_detect
+    ):
+        parts.append("MeshCore USB (auto-detect)")
+    return ", ".join(parts) or "none"
+
+
 def print_banner(config: AppConfig) -> None:
     """Print the ASCII art startup banner with live config values."""
     from src.version import __version__
@@ -260,12 +281,12 @@ def print_banner(config: AppConfig) -> None:
     device = config.device
     upstream = config.upstream
     dashboard = config.dashboard
-    sources = ", ".join(config.capture.sources)
+    source_desc = _describe_sources(config)
 
     info_lines = [
         ("Device", f"{device.device_name} ({device.device_id or 'unset'})"),
         ("Version", __version__),
-        ("Source", f"{sources} (SX1302 8-ch)"),
+        ("Source", source_desc),
         ("Frequency", f"{radio.frequency_mhz} MHz / SF{radio.spreading_factor} / BW{radio.bandwidth_khz:.0f}"),
     ]
     if upstream.enabled:
