@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 _SOURCE_LABELS = {
     "concentrator": "concentrator (8-ch SX1302)",
     "serial": "serial radio",
+    "meshcore_usb": "MeshCore USB node",
     "mock": "mock source",
 }
 
@@ -106,9 +107,10 @@ class PipelineCoordinator:
         self._cleanup_task = asyncio.create_task(
             self._cleanup_loop(), name="db-cleanup"
         )
+        registered = [src.name for src in self._capture._sources]
         sources = ", ".join(
-            _SOURCE_LABELS.get(s, s) for s in self._config.capture.sources
-        )
+            _SOURCE_LABELS.get(s, s) for s in registered
+        ) or "none"
         logger.info(
             f" {CYAN}--{RESET} {GREEN}PIPELINE{RESET}  started  "
             f"{DIM}sources: {sources}{RESET}"
@@ -162,9 +164,12 @@ class PipelineCoordinator:
             logger.exception("Pipeline error")
 
     async def _process_capture(self, raw: RawCapture) -> None:
-        packet = self._router.decode(
-            raw.payload, signal=raw.signal, protocol_hint=raw.protocol_hint
-        )
+        if raw.capture_source == "meshcore_usb":
+            packet = self._adapt_meshcore_usb(raw)
+        else:
+            packet = self._router.decode(
+                raw.payload, signal=raw.signal, protocol_hint=raw.protocol_hint
+            )
         if packet is None:
             return
 
@@ -172,6 +177,11 @@ class PipelineCoordinator:
         await self._store_packet(packet)
         await self._relay.process_packet(packet)
         self._notify_callbacks(packet)
+
+    @staticmethod
+    def _adapt_meshcore_usb(raw: RawCapture) -> Optional[Packet]:
+        from src.decode.meshcore_event_adapter import adapt_event
+        return adapt_event(raw.payload, signal=raw.signal)
 
     async def _store_packet(self, packet: Packet) -> None:
         try:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import os
 import sys
 from dataclasses import dataclass, field
@@ -35,11 +36,21 @@ class MeshcoreConfig:
 
 
 @dataclass
+class MeshcoreUsbConfig:
+    """MeshCore USB node monitoring -- auto-detected at startup when enabled."""
+
+    serial_port: Optional[str] = None
+    baud_rate: int = 115200
+    auto_detect: bool = True
+
+
+@dataclass
 class CaptureConfig:
     sources: list[str] = field(default_factory=lambda: ["mock"])
     serial_port: Optional[str] = None
     serial_baud: int = 115200
     concentrator_spi_device: str = "/dev/spidev0.0"
+    meshcore_usb: MeshcoreUsbConfig = field(default_factory=MeshcoreUsbConfig)
 
 
 @dataclass
@@ -101,9 +112,14 @@ class AppConfig:
 
 
 def _merge_dataclass(instance, overrides: dict):
-    """Apply dict overrides onto a dataclass instance."""
+    """Apply dict overrides onto a dataclass instance, merging nested dataclasses."""
     for key, value in overrides.items():
-        if hasattr(instance, key):
+        if not hasattr(instance, key):
+            continue
+        current = getattr(instance, key)
+        if dataclasses.is_dataclass(current) and isinstance(value, dict):
+            _merge_dataclass(current, value)
+        else:
             setattr(instance, key, value)
 
 

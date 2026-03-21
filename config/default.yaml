@@ -20,6 +20,10 @@ capture:
   serial_port: null
   serial_baud: 115200
   concentrator_spi_device: "/dev/spidev0.0"
+  meshcore_usb:
+    serial_port: null
+    baud_rate: 115200
+    auto_detect: true
 
 storage:
   database_path: "data/concentrator.db"

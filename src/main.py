@@ -41,6 +41,23 @@ def _add_concentrator_source(coordinator: PipelineCoordinator, config) -> None:
         logger.exception("Concentrator source unavailable")
 
 
+def _add_meshcore_usb_source(coordinator: PipelineCoordinator, config) -> None:
+    try:
+        from src.capture.meshcore_usb_source import MeshcoreUsbCaptureSource
+        usb_cfg = config.capture.meshcore_usb
+        coordinator.capture_coordinator.add_source(
+            MeshcoreUsbCaptureSource(
+                serial_port=usb_cfg.serial_port,
+                baud_rate=usb_cfg.baud_rate,
+                auto_detect=usb_cfg.auto_detect,
+            )
+        )
+    except ImportError:
+        logger.warning(
+            "MeshCore USB unavailable -- meshcore package not installed"
+        )
+
+
 async def run_standalone() -> None:
     """Run the pipeline without the web dashboard (CLI mode)."""
     config = load_config()
@@ -52,6 +69,14 @@ async def run_standalone() -> None:
             _add_serial_source(coordinator, config)
         elif source_name == "concentrator":
             _add_concentrator_source(coordinator, config)
+        elif source_name == "meshcore_usb":
+            _add_meshcore_usb_source(coordinator, config)
+
+    if (
+        "meshcore_usb" not in config.capture.sources
+        and config.capture.meshcore_usb.auto_detect
+    ):
+        _add_meshcore_usb_source(coordinator, config)
 
     coordinator.on_packet(lambda pkt: print_packet(pkt))
     await coordinator.start()

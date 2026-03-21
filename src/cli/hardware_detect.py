@@ -40,6 +40,7 @@ class GpsProbeResult:
 class HardwareReport:
     spi_devices: list[str] = field(default_factory=list)
     serial_ports: list[str] = field(default_factory=list)
+    meshcore_usb_candidates: list[str] = field(default_factory=list)
     gps: GpsProbeResult = field(default_factory=GpsProbeResult)
     concentrator_available: bool = False
     libloragw_installed: bool = False
@@ -52,6 +53,7 @@ def detect_all() -> HardwareReport:
     report = HardwareReport()
     report.spi_devices = detect_spi_devices()
     report.serial_ports = detect_serial_ports()
+    report.meshcore_usb_candidates = detect_meshcore_usb_candidates()
     report.libloragw_installed = check_libloragw()
     report.concentrator_available = (
         len(report.spi_devices) > 0 and report.libloragw_installed
@@ -97,6 +99,18 @@ def detect_serial_ports() -> list[str]:
     """Find USB serial devices likely to be Meshtastic radios."""
     candidates = []
     for pattern in ["/dev/ttyACM*", "/dev/ttyUSB*"]:
+        candidates.extend(glob.glob(pattern))
+    return sorted(candidates)
+
+
+def detect_meshcore_usb_candidates() -> list[str]:
+    """Find USB serial ports that could be MeshCore devices.
+
+    Returns all ttyUSB/ttyACM ports.  Actual MeshCore verification
+    happens at runtime when the capture source connects.
+    """
+    candidates = []
+    for pattern in ["/dev/ttyUSB*", "/dev/ttyACM*"]:
         candidates.extend(glob.glob(pattern))
     return sorted(candidates)
 
@@ -206,6 +220,11 @@ def print_report(report: HardwareReport) -> None:
         print(f"  Serial ports:    {', '.join(report.serial_ports)}")
     else:
         print("  Serial ports:    none found")
+
+    if report.meshcore_usb_candidates:
+        print(f"  USB candidates:  {', '.join(report.meshcore_usb_candidates)}")
+    else:
+        print("  USB candidates:  none (MeshCore USB auto-detect disabled)")
 
     gps = report.gps
     if gps.available:

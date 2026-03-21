@@ -93,6 +93,8 @@ def _step_capture_source(config: dict, report: HardwareReport) -> None:
         print("        and re-run 'meshpoint setup'.")
         config["capture"] = {"sources": []}
 
+    _maybe_add_meshcore_usb(config, report)
+
 
 def _step_api_key(config: dict) -> None:
     """Prompt for the Mesh Radar API key (required, signature-verified)."""
@@ -269,6 +271,51 @@ def _step_start_service() -> None:
 
     print()
     print("  Setup complete!")
+    print()
+
+
+def _maybe_add_meshcore_usb(config: dict, report: HardwareReport) -> None:
+    """Offer to enable MeshCore USB monitoring if USB serial ports exist."""
+    capture_port = config.get("capture", {}).get("serial_port")
+    candidates = [
+        p for p in report.meshcore_usb_candidates if p != capture_port
+    ]
+
+    if not candidates:
+        return
+
+    print()
+    print("        USB serial port(s) detected that could be a MeshCore node:")
+    for port in candidates:
+        print(f"          - {port}")
+    print()
+    print("        If you have a MeshCore device (Heltec, T-Beam, etc.) plugged")
+    print("        in via USB, Mesh Point can monitor its traffic automatically.")
+    print()
+
+    if not _confirm("Enable MeshCore USB monitoring?"):
+        config.setdefault("capture", {}).setdefault(
+            "meshcore_usb", {}
+        )["auto_detect"] = False
+        print("        MeshCore USB disabled.")
+        print()
+        return
+
+    sources = config.setdefault("capture", {}).setdefault("sources", [])
+    if "meshcore_usb" not in sources:
+        sources.append("meshcore_usb")
+
+    if len(candidates) == 1:
+        chosen_port = candidates[0]
+    else:
+        chosen_port = _choose_from_list(
+            "Select MeshCore USB port:", candidates
+        )
+
+    config["capture"].setdefault("meshcore_usb", {})["serial_port"] = (
+        chosen_port
+    )
+    print(f"        MeshCore USB enabled on {chosen_port}")
     print()
 
 
