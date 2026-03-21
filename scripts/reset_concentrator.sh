@@ -14,6 +14,7 @@
 #   reset_concentrator.sh --hold   Assert reset and hold -- ExecStopPost
 
 RESET_PINS="${RESET_GPIO:-17 25}"
+SPI_DESELECT_PINS="21"
 HOLD_MODE=false
 
 for arg in "$@"; do
@@ -34,6 +35,10 @@ else
     echo "WARNING: no GPIO tool found (pinctrl or gpioset)" >&2
     exit 1
 fi
+
+for pin in $SPI_DESELECT_PINS; do
+    _pin_high "$pin" 2>/dev/null
+done
 
 for pin in $RESET_PINS; do
     _pin_high "$pin"
