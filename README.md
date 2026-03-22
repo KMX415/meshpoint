@@ -203,12 +203,19 @@ sudo meshpoint setup # re-run config wizard
 
 ### March 2026
 
+#### Early March
 - **Real-time packet streaming** — Cloud dashboard receives packets instantly via WebSocket. Live animated lines trace packets from source nodes to your Meshpoint on the map as they arrive.
 - **Cloud map overhaul** — Marker clustering, signal heatmap layer, topology lines from neighborinfo data, and a live Recent Packets ticker panel.
 - **SenseCap M1 support** — Auto-detects SenseCap M1 carrier board via I2C probe during setup. Flash an SD card and go.
 - **14 Meshtastic portnums decoded** — TEXT, POSITION, NODEINFO, TELEMETRY, ROUTING, ADMIN, WAYPOINT, DETECTION_SENSOR, PAXCOUNTER, STORE_FORWARD, RANGE_TEST, TRACEROUTE, NEIGHBORINFO, MAP_REPORT — plus encrypted packet tracking.
 - **Device role extraction** — Node table shows CLIENT, ROUTER, REPEATER, TRACKER, SENSOR, and other roles from NodeInfo packets.
 - **Smart relay engine** — Deduplication, token-bucket rate limiting, hop/type/signal filtering, independent SX1262 TX path.
+
+#### Late March
+- **Live dashboard UX** — Color-coded packet feed, decoded payload contents, 24h active node counts, version-based update indicator, and enlarged map view.
+- **Cloud dashboard tabs** — Tabbed layout with fleet view, interactive map controls, device-scoped filters, unified packet cards with signal strength bars, and public activity stream for visitors.
+- **MeshCore USB capture** — New capture source for USB-connected MeshCore nodes with auto-reconnect and health monitoring. Startup banner shows all active sources.
+- **Custom frequency tuning** — Configurable SX1302 channel plan via local.yaml. Validated on live hardware with LongFast (SF11/BW250). Dual-protocol HAL patch for simultaneous Meshtastic and MeshCore sync words.
 
 ---
 
