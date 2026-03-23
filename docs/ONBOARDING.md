@@ -8,7 +8,8 @@ Step-by-step instructions for building and deploying a Mesh Point -- from an emp
 
 A **Mesh Point** is an edge device that:
 
-- Listens to LoRa traffic from Meshtastic and Meshcore networks using an SX1302/SX1303 concentrator
+- Listens to **Meshtastic** traffic on 8 LoRa channels simultaneously via an SX1302/SX1303 concentrator
+- Optionally monitors **MeshCore** traffic via a USB companion radio
 - Decodes, stores, and visualizes packets on a local dashboard
 - Optionally relays packets back onto the mesh via a separate SX1262 radio
 - Ships data upstream to the Mesh Radar cloud platform for regional mesh intelligence
@@ -26,6 +27,7 @@ You need a Raspberry Pi 4 with an SX1302 or SX1303 LoRa concentrator. The easies
 | **USB-C power supply** (5V 3A) | Power | Official Pi PSU recommended |
 | **LoRa antenna** (906 MHz) | Reception | 10 dBi gain recommended for US915 band |
 | **Ethernet cable or WiFi** | Network connectivity | Needed for cloud uplink |
+| **Optional: MeshCore USB companion** | MeshCore traffic monitor | Heltec V3/V4 or T-Beam with [USB companion firmware](https://flasher.meshcore.co.uk/) |
 | **Optional: SX1262 radio** | Relay transmitter | T-Beam, Heltec V3, or RAK4631 running Meshtastic firmware |
 
 ### Supported Pre-Built Units
@@ -148,8 +150,8 @@ sudo meshpoint setup
 
 The wizard walks you through 7 steps:
 
-1. **Hardware Detection** -- probes for concentrator, carrier board, GPS, serial radios
-2. **Capture Source** -- auto-selects concentrator, serial, or mock
+1. **Hardware Detection** -- probes for concentrator, carrier board, GPS, serial radios, USB MeshCore devices
+2. **Capture Source** -- auto-selects concentrator, serial, or mock. If a MeshCore USB companion is detected, offers to enable it and configure its radio frequency for your region (US/EU/ANZ presets or custom)
 3. **API Key** -- paste your Mesh Radar API key
 4. **Device Name** -- give it a recognizable name (e.g. "Mesh Point Rooftop")
 5. **Location** -- use GPS fix or enter lat/lng manually (right-click Google Maps to copy)
@@ -171,6 +173,91 @@ Check the local dashboard at `http://<your-pi-ip>:8080`. You should see:
 - CPU, RAM, disk, and temperature metrics
 
 Check the cloud dashboard at [meshradar.io](https://meshradar.io). Your Mesh Point should appear as a green dot in the fleet view within a minute.
+
+---
+
+## Adding a MeshCore Companion (Optional)
+
+A MeshCore USB companion gives your Mesh Point the ability to monitor MeshCore mesh traffic alongside Meshtastic. It's a single-channel radio that listens on one frequency -- all standard MeshCore traffic in your region uses the same frequency, so the regional preset covers everything.
+
+### What You Need
+
+A Heltec or T-Beam board flashed with **USB Serial Companion** firmware. Supported devices include:
+
+| Device | Notes |
+|--------|-------|
+| Heltec LoRa V3 | ESP32-S3, common and inexpensive |
+| Heltec LoRa V4 / V4 OLED | ESP32-S3, latest Heltec revision |
+| LilyGo T-Beam | ESP32, includes GPS |
+| Heltec Wireless Tracker | ESP32-S3, includes GPS and display |
+
+### Step 1: Flash USB Companion Firmware
+
+1. Go to [flasher.meshcore.co.uk](https://flasher.meshcore.co.uk/) in a Chrome or Edge browser
+2. Select your device model
+3. Choose the **`companion_radio_usb`** firmware variant (not BLE)
+4. Connect the device via USB and click Flash
+
+> **Important:** The USB companion firmware disables Bluetooth. Radio parameters (frequency, bandwidth, etc.) can only be configured over serial -- either through the Mesh Point setup wizard or manually via Python. The setup wizard handles this automatically.
+
+### Step 2: Plug Into the Pi and Run Setup
+
+1. Connect the flashed device to any USB port on the Raspberry Pi
+2. Run the setup wizard:
+
+```bash
+sudo meshpoint setup
+```
+
+3. The wizard detects the MeshCore device and asks if you want to enable monitoring
+4. When prompted, select your region (US, EU, or ANZ) to configure the companion's radio frequency:
+
+| Region | Frequency | BW | SF | CR |
+|--------|-----------|-----|-----|-----|
+| US | 910.525 MHz | 62.5 kHz | 7 | 5 |
+| EU | 869.525 MHz | 62.5 kHz | 7 | 5 |
+| ANZ | 915.525 MHz | 62.5 kHz | 7 | 5 |
+
+5. The wizard sets the radio parameters, reboots the companion, and verifies the new settings
+
+After setup, both capture sources start automatically on boot. You'll see them in the startup banner:
+
+```
+Source  concentrator (SX1302 8-ch), MeshCore USB node
+```
+
+### Manual Radio Configuration (Fallback)
+
+If you need to configure the companion outside the setup wizard (e.g., from a PC before plugging into the Pi):
+
+```bash
+pip install meshcore
+```
+
+```python
+import asyncio
+from meshcore import MeshCore
+
+async def configure():
+    mc = await MeshCore.create_serial("/dev/ttyACM0", 115200)  # or COM port on Windows
+    await mc.commands.set_radio(910.525, 62.5, 7, 5)           # US preset
+    await mc.commands.reboot()
+    await mc.disconnect()
+
+asyncio.run(configure())
+```
+
+Replace the frequency and parameters with your region's values from the table above.
+
+### How It Differs from the Concentrator
+
+| | SX1302/SX1303 Concentrator | MeshCore USB Companion |
+|---|---|---|
+| **Protocol** | Meshtastic | MeshCore |
+| **Channels** | 8 simultaneous | 1 |
+| **Spreading factors** | SF7-SF12 all at once | Fixed (SF7 default) |
+| **Connection** | SPI (internal HAT) | USB serial |
+| **Configuration** | Automatic via HAL | Region preset via wizard |
 
 ---
 
@@ -354,6 +441,14 @@ The SX1250's digital SPI interface can recover while the RF receive path remains
 - Check that there are Meshtastic/Meshcore devices transmitting in your area
 - Verify the antenna is connected
 
+### MeshCore companion not receiving packets
+
+- Verify the device is detected: `ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null`
+- Check that the companion is running USB companion firmware (not BLE)
+- Verify radio frequency matches your region -- re-run `sudo meshpoint setup` to reconfigure
+- Check logs: `meshpoint logs | grep -i meshcore`
+- If the device was recently plugged in, unplug and re-plug to reset the serial connection
+
 ### Not appearing on cloud dashboard
 
 1. Check that `upstream.enabled` is `true` in your local config
@@ -373,27 +468,29 @@ The SX1250's digital SPI interface can recover while the RF receive path remains
 
 ```
    Your Mesh Point (Raspberry Pi)
-   ┌──────────────────────────────┐
-   │  SX1302/SX1303 (SPI)          │
-   │    └─ Multi-channel RX       │
-   │  SX1262 Radio (USB serial)   │
-   │    └─ Relay TX               │
-   │  ZOE-M8Q GPS (UART)          │
-   │    └─ Device positioning     │
-   │                              │
-   │  Mesh Point Software         │
-   │    ├─ Packet capture         │
-   │    ├─ Protocol decoding      │
-   │    ├─ Local SQLite storage   │
-   │    ├─ Relay decision engine  │
-   │    ├─ Local web dashboard    │
-   │    └─ WebSocket upstream ────┼──── meshradar.io
-   └──────────────────────────────┘        │
-                                           ▼
-                                    Cloud Dashboard
-                                    (all Mesh Points
-                                     aggregated on
-                                     a shared map)
+   ┌──────────────────────────────────┐
+   │  SX1302/SX1303 (SPI)              │
+   │    └─ Meshtastic 8-ch RX         │
+   │  MeshCore companion (USB serial)  │
+   │    └─ MeshCore single-ch RX      │
+   │  SX1262 Radio (USB serial)       │
+   │    └─ Relay TX                   │
+   │  ZOE-M8Q GPS (UART)              │
+   │    └─ Device positioning         │
+   │                                  │
+   │  Mesh Point Software             │
+   │    ├─ Dual-protocol capture      │
+   │    ├─ Protocol decoding          │
+   │    ├─ Local SQLite storage       │
+   │    ├─ Relay decision engine      │
+   │    ├─ Local web dashboard        │
+   │    └─ WebSocket upstream ────────┼── meshradar.io
+   └──────────────────────────────────┘       │
+                                              ▼
+                                       Cloud Dashboard
+                                       (all Mesh Points
+                                        aggregated on
+                                        a shared map)
 ```
 
 Each Mesh Point operates independently with its own local dashboard. When connected to the cloud, all Mesh Points contribute to a shared regional view where you can see every node and Mesh Point across the network.

@@ -4,7 +4,7 @@
 
 <h1 align="center">Meshpoint</h1>
 
-<p align="center"><strong>Open-source LoRa packet intelligence for Meshtastic mesh networks.</strong><br>Currently supports US915 only. Meshcore and additional regions (EU868, ANZ915) are in development.</p>
+<p align="center"><strong>Open-source LoRa packet intelligence for Meshtastic and MeshCore mesh networks.</strong><br>Currently supports US915. EU868 and ANZ915 regions in development.</p>
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-green.svg)](https://www.python.org/)
@@ -19,7 +19,7 @@
 
 ## What Is This?
 
-A Raspberry Pi + SX1302/SX1303 concentrator that listens on **8 LoRa channels simultaneously** and decodes everything it hears. Not a node on the mesh — a passive observer that sees all traffic across all spreading factors at once.
+A Raspberry Pi-based LoRa listener that captures traffic from **Meshtastic** and **MeshCore** mesh networks simultaneously. The SX1302/SX1303 concentrator listens on **8 LoRa channels** across all spreading factors at once, while an optional MeshCore USB companion monitors MeshCore traffic on its own frequency.
 
 Packets are captured, decrypted, stored locally, and shown on a real-time dashboard. Optionally, everything syncs upstream to [Meshradar](https://meshradar.io) for aggregated city-wide mesh intelligence.
 
@@ -74,7 +74,11 @@ Remove the 2 screws on the back panel (the side without the Ethernet/antenna por
 
 **Assembly:** Seat the RAK2287 on the Pi HAT, mount the HAT on the Pi GPIO header, connect the antenna. Always connect the antenna before powering on.
 
-> **Full step-by-step guide:** See the [Onboarding Guide](docs/ONBOARDING.md) for detailed instructions covering flashing, assembly, installation, and troubleshooting for all hardware options.
+### Optional: MeshCore USB Companion
+
+Add a Heltec V3/V4 or T-Beam running [MeshCore USB companion firmware](https://flasher.meshcore.co.uk/) to monitor MeshCore traffic alongside Meshtastic. Plug it into any USB port on the Pi -- the setup wizard auto-detects the device and configures its radio frequency for your region.
+
+> **Full step-by-step guide:** See the [Onboarding Guide](docs/ONBOARDING.md) for detailed instructions covering flashing, assembly, installation, MeshCore setup, and troubleshooting for all hardware options.
 
 ---
 
@@ -107,18 +111,21 @@ Open `http://<pi-ip>:8080` for the local dashboard.
                                              │ WebSocket
                                              │
 ┌──────────┐    ┌──────────┐    ┌────────────┴────────────┐
-│  LoRa    │    │ SX1302/  │    │    Meshpoint (Pi 4)      │
-│ Packets  │───▶│ SX1303   │───▶│                          │
+│Meshtastic│    │ SX1302/  │    │    Meshpoint (Pi 4)      │
+│ packets  │───▶│ SX1303   │───▶│                          │
 │ (OTA)    │    │ 8-ch RX  │    │  Capture → Decode → API  │
 └──────────┘    └──────────┘    │              │           │
                                 │           Dashboard     │
-                                │          (port 8080)    │
-                                └─────────────────────────┘
+┌──────────┐    ┌──────────┐    │          (port 8080)    │
+│ MeshCore │    │  Heltec  │    │                          │
+│ packets  │───▶│  USB     │───▶│                          │
+│ (OTA)    │    │companion │    │                          │
+└──────────┘    └──────────┘    └─────────────────────────┘
 ```
 
-**Capture** — SX1302 HAL receives on 8 channels across SF7-SF12 simultaneously.
+**Capture** — SX1302 HAL receives Meshtastic on 8 channels across SF7-SF12. A USB MeshCore companion (optional) receives MeshCore traffic on its configured frequency.
 
-**Decode** — Packets decrypted and parsed. Positions, text messages, telemetry, node info, routing data — all extracted and stored.
+**Decode** — Packets from both protocols decrypted and parsed. Positions, text messages, telemetry, node info, advertisements, routing data — all extracted and stored.
 
 **Dashboard** — Local web UI with a live map, packet feed with decoded contents, traffic charts, and signal analytics.
 
@@ -150,6 +157,9 @@ radio:
 capture:
   sources:
     - concentrator
+    - meshcore_usb
+  meshcore_usb:
+    auto_detect: true          # scans /dev/ttyUSB* and /dev/ttyACM*
 
 relay:
   enabled: false
@@ -214,7 +224,7 @@ sudo meshpoint setup # re-run config wizard
 #### Late March
 - **Live dashboard UX** — Color-coded packet feed, decoded payload contents, 24h active node counts, version-based update indicator, and enlarged map view.
 - **Cloud dashboard tabs** — Tabbed layout with fleet view, interactive map controls, device-scoped filters, unified packet cards with signal strength bars, and public activity stream for visitors.
-- **MeshCore USB capture** — New capture source for USB-connected MeshCore nodes with auto-reconnect and health monitoring. Startup banner shows all active sources.
+- **MeshCore USB capture** — New capture source for USB-connected MeshCore companion nodes. Auto-detects the device, configures radio frequency via the setup wizard (US/EU/ANZ presets or custom), with auto-reconnect and health monitoring. Startup banner shows all active sources.
 - **Custom frequency tuning** — Configurable SX1302 channel plan via local.yaml. Validated on live hardware with LongFast (SF11/BW250). Dual-protocol HAL patch for simultaneous Meshtastic and MeshCore sync words.
 
 ---

@@ -318,6 +318,100 @@ def _maybe_add_meshcore_usb(config: dict, report: HardwareReport) -> None:
     print(f"        MeshCore USB enabled on {chosen_port}")
     print()
 
+    _configure_meshcore_radio(chosen_port)
+
+
+def _configure_meshcore_radio(port: str) -> None:
+    """Offer to configure the MeshCore companion's radio frequency."""
+    import time
+
+    from src.cli.meshcore_radio_config import (
+        REGION_PRESETS,
+        configure_radio,
+        query_radio,
+        verify_radio,
+    )
+
+    print("        Querying companion radio settings...")
+    status = query_radio(port)
+
+    if status:
+        model_str = f" ({status.model})" if status.model else ""
+        print(f"        Device: {status.name}{model_str}")
+        print(f"        Current: {status.summary()}")
+    else:
+        print("        Could not read current radio settings.")
+
+    print()
+    print("        The companion must be on the correct frequency for")
+    print("        your region to hear MeshCore traffic.")
+    print()
+
+    options = list(REGION_PRESETS.keys()) + ["Custom", "Skip"]
+    labels = [
+        REGION_PRESETS[k].label if k in REGION_PRESETS else k
+        for k in options
+    ]
+
+    print("        Configure radio for your region?")
+    for i, label in enumerate(labels, 1):
+        print(f"          {i}. {label}")
+
+    while True:
+        raw = _prompt(f"Choice [1-{len(options)}]:").strip()
+        try:
+            idx = int(raw) - 1
+            if 0 <= idx < len(options):
+                break
+        except ValueError:
+            pass
+        print(f"          Please enter a number between 1 and {len(options)}.")
+
+    choice = options[idx]
+
+    if choice == "Skip":
+        print("        Keeping current radio settings.")
+        print()
+        return
+
+    if choice == "Custom":
+        freq = _prompt_float("Frequency MHz (e.g. 910.525):")
+        bw = _prompt_float("Bandwidth kHz (e.g. 62.5):")
+        sf_val = _prompt_float("Spreading factor (e.g. 7):")
+        cr_val = _prompt_float("Coding rate (e.g. 5):")
+        if None in (freq, bw, sf_val, cr_val):
+            print("        Invalid input. Skipping radio configuration.")
+            print()
+            return
+        sf = int(sf_val)
+        cr = int(cr_val)
+    else:
+        preset = REGION_PRESETS[choice]
+        freq = preset.frequency_mhz
+        bw = preset.bandwidth_khz
+        sf = preset.spreading_factor
+        cr = preset.coding_rate
+
+    print(f"        Setting radio to {freq} MHz / BW{bw} / SF{sf} / CR{cr}...")
+
+    ok = configure_radio(port, freq, bw, sf, cr)
+    if not ok:
+        print("        Failed to configure radio. Check the device and retry.")
+        print()
+        return
+
+    print("        Radio configured. Companion is rebooting...")
+    time.sleep(4)
+
+    verified = verify_radio(port)
+    if verified:
+        print(f"        Verified: {verified.summary()}")
+    else:
+        print("        Could not verify (device may still be rebooting).")
+        print("        The settings will apply on next power cycle.")
+
+    print()
+
 
 # ── Helpers ─────────────────────────────────────────────────────────
 
