@@ -87,13 +87,24 @@ def _build_advertisement(
 ) -> Packet:
     pubkey = payload.get("public_key", payload.get("pubkey", "unknown"))
     source_id = pubkey[:12] if len(pubkey) >= 12 else pubkey
+    decoded = {
+        "long_name": payload.get("adv_name", source_id),
+        "short_name": payload.get("adv_name", source_id)[:4],
+        "public_key": pubkey,
+        "advertisement": payload,
+    }
+    lat = payload.get("adv_lat")
+    lon = payload.get("adv_lon")
+    if lat and lon:
+        decoded["latitude"] = lat
+        decoded["longitude"] = lon
     return Packet(
         packet_id=_generate_id(),
         source_id=source_id,
         destination_id="broadcast",
         protocol=Protocol.MESHCORE,
         packet_type=PacketType.NODEINFO,
-        decoded_payload={"advertisement": payload},
+        decoded_payload=decoded,
         signal=signal,
         timestamp=_parse_timestamp(payload.get("timestamp")),
     )

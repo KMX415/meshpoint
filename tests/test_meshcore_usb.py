@@ -56,12 +56,30 @@ class TestMeshcoreEventAdapter(unittest.TestCase):
     def test_advertisement(self):
         raw = self._make_envelope("advertisement", {
             "public_key": "abcdef1234567890abcdef",
+            "adv_name": "TestNode",
+            "adv_lat": 43.9091,
+            "adv_lon": -72.2207,
         })
         pkt = adapt_event(raw)
         self.assertIsNotNone(pkt)
         self.assertEqual(pkt.packet_type, PacketType.NODEINFO)
         self.assertEqual(pkt.source_id, "abcdef123456")
         self.assertEqual(pkt.destination_id, "broadcast")
+        self.assertEqual(pkt.decoded_payload["long_name"], "TestNode")
+        self.assertEqual(pkt.decoded_payload["short_name"], "Test")
+        self.assertAlmostEqual(pkt.decoded_payload["latitude"], 43.9091)
+        self.assertAlmostEqual(pkt.decoded_payload["longitude"], -72.2207)
+
+    def test_advertisement_no_coords(self):
+        raw = self._make_envelope("advertisement", {
+            "public_key": "abcdef1234567890abcdef",
+            "adv_lat": 0.0,
+            "adv_lon": 0.0,
+        })
+        pkt = adapt_event(raw)
+        self.assertIsNotNone(pkt)
+        self.assertNotIn("latitude", pkt.decoded_payload)
+        self.assertNotIn("longitude", pkt.decoded_payload)
 
     def test_raw_data(self):
         raw = self._make_envelope("raw_data", {
