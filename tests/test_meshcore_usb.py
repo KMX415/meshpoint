@@ -74,6 +74,33 @@ class TestMeshcoreEventAdapter(unittest.TestCase):
         self.assertEqual(pkt.packet_type, PacketType.UNKNOWN)
         self.assertEqual(pkt.decoded_payload["raw_hex"], "deadbeef")
 
+    def test_rx_log_data(self):
+        raw = self._make_envelope("rx_log_data", {
+            "snr": 9.5,
+            "rssi": -72.0,
+            "payload": "f593010380abcdef",
+            "payload_length": 32,
+        })
+        pkt = adapt_event(raw)
+        self.assertIsNotNone(pkt)
+        self.assertEqual(pkt.protocol, Protocol.MESHCORE)
+        self.assertEqual(pkt.packet_type, PacketType.UNKNOWN)
+        self.assertEqual(pkt.decoded_payload["raw_hex"], "f593010380abcdef")
+        self.assertEqual(pkt.decoded_payload["payload_length"], 32)
+        self.assertEqual(pkt.signal.rssi, -72.0)
+        self.assertEqual(pkt.signal.snr, 9.5)
+        self.assertEqual(pkt.source_id, "rf_log")
+
+    def test_rx_log_data_raw_hex_fallback(self):
+        raw = self._make_envelope("rx_log_data", {
+            "snr": 5.0,
+            "rssi": -90.0,
+            "raw_hex": "aabb001122",
+        })
+        pkt = adapt_event(raw)
+        self.assertIsNotNone(pkt)
+        self.assertEqual(pkt.decoded_payload["raw_hex"], "aabb001122")
+
     def test_unknown_event_returns_none(self):
         raw = self._make_envelope("battery_info", {"level": 85})
         pkt = adapt_event(raw)

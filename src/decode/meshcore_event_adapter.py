@@ -21,6 +21,7 @@ _EVENT_TYPE_MAP: dict[str, PacketType] = {
     "channel_message": PacketType.TEXT,
     "advertisement": PacketType.NODEINFO,
     "raw_data": PacketType.UNKNOWN,
+    "rx_log_data": PacketType.UNKNOWN,
 }
 
 
@@ -113,11 +114,51 @@ def _build_raw_data(
     )
 
 
+def _build_rx_log_data(
+    payload: dict, signal: Optional[SignalMetrics]
+) -> Packet:
+    """Build a Packet from an RX_LOG_DATA event (raw RF frame with signal)."""
+    raw_hex = payload.get("payload", payload.get("raw_hex", ""))
+    rf_signal = _rf_signal_from_payload(payload, signal)
+    return Packet(
+        packet_id=_generate_id(),
+        source_id="rf_log",
+        destination_id="unknown",
+        protocol=Protocol.MESHCORE,
+        packet_type=PacketType.UNKNOWN,
+        decoded_payload={
+            "raw_hex": raw_hex,
+            "payload_length": payload.get("payload_length"),
+        },
+        signal=rf_signal,
+        timestamp=_parse_timestamp(payload.get("timestamp")),
+    )
+
+
+def _rf_signal_from_payload(
+    payload: dict, fallback: Optional[SignalMetrics]
+) -> Optional[SignalMetrics]:
+    """Extract signal metrics from an RF log payload, preferring its values."""
+    rssi = payload.get("rssi")
+    snr = payload.get("snr")
+    if rssi is None and snr is None:
+        return fallback
+    return SignalMetrics(
+        rssi=float(rssi) if rssi is not None else -120.0,
+        snr=float(snr) if snr is not None else 0.0,
+        frequency_mhz=0.0,
+        spreading_factor=0,
+        bandwidth_khz=0.0,
+        coding_rate="N/A",
+    )
+
+
 _BUILDERS = {
     "contact_message": _build_contact_message,
     "channel_message": _build_channel_message,
     "advertisement": _build_advertisement,
     "raw_data": _build_raw_data,
+    "rx_log_data": _build_rx_log_data,
 }
 
 

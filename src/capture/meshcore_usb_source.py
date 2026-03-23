@@ -115,10 +115,12 @@ class MeshcoreUsbCaptureSource(CaptureSource):
             self._connected = True
 
             for event_type in (
+                EventType.RX_LOG_DATA,
+                EventType.RAW_DATA,
                 EventType.CONTACT_MSG_RECV,
                 EventType.CHANNEL_MSG_RECV,
                 EventType.ADVERTISEMENT,
-                EventType.RAW_DATA,
+                EventType.DISCONNECTED,
             ):
                 sub = self._meshcore.subscribe(event_type, self._on_event)
                 self._subscriptions.append(sub)
