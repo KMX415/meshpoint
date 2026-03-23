@@ -140,7 +140,7 @@ async function _checkForUpdate() {
         if (!badge) return;
         if (data.update_available) {
             badge.classList.remove('hidden');
-            badge.title = `Update available (local: ${data.local_sha}, remote: ${data.remote_sha})`;
+            badge.title = `Update available (local: ${data.local_version}, remote: ${data.remote_version})`;
         } else {
             badge.classList.add('hidden');
         }

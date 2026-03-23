@@ -113,7 +113,8 @@ body {
 .update-badge {
     color: var(--accent-amber);
     font-size: 1.1rem;
-    cursor: help;
+    cursor: pointer;
+    text-decoration: none;
     animation: updatePulse 2s ease-in-out infinite;
 }
 
