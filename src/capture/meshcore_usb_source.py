@@ -242,8 +242,8 @@ class MeshcoreUsbCaptureSource(CaptureSource):
 
 
 def _extract_signal(payload: dict) -> SignalMetrics:
-    rssi = payload.get("rssi")
-    snr = payload.get("snr")
+    rssi = payload.get("rssi", payload.get("RSSI"))
+    snr = payload.get("snr", payload.get("SNR"))
     if rssi is None and snr is None:
         return _EMPTY_SIGNAL
     return SignalMetrics(
