@@ -235,10 +235,25 @@ def _write_config(config: dict) -> None:
 
 
 def _step_start_service() -> None:
-    """Offer to start the meshpoint systemd service."""
+    """Offer to start or reboot depending on system state."""
     if not _is_systemd():
         print("  systemd not detected. Start manually with:")
         print("    python -m uvicorn src.api.server:create_app --factory --host 0.0.0.0 --port 8080")
+        print()
+        return
+
+    if _reboot_recommended():
+        print("  A reboot is required for hardware changes to take effect.")
+        print()
+        if _confirm("Reboot now?", default_yes=True):
+            print("  Rebooting...")
+            import subprocess
+            subprocess.run(["sudo", "reboot"], check=False)
+        else:
+            print("  Run 'sudo reboot' when ready. The service starts")
+            print("  automatically on boot.")
+        print()
+        print("  Setup complete!")
         print()
         return
 
@@ -472,3 +487,19 @@ def _default_device_name() -> str:
 def _is_systemd() -> bool:
     """Check if we're running on a systemd-based system."""
     return os.path.isdir("/run/systemd/system")
+
+
+def _reboot_recommended() -> bool:
+    """Detect if a reboot is needed for kernel/hardware changes.
+
+    Returns True when the meshpoint service has never successfully
+    started (first-time setup after install.sh).
+    """
+    import subprocess
+
+    result = subprocess.run(
+        ["systemctl", "show", "meshpoint", "--property=ActiveEnterTimestamp"],
+        capture_output=True, text=True,
+    )
+    timestamp = result.stdout.strip().split("=", 1)[-1].strip()
+    return not timestamp
