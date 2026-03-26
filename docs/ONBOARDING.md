@@ -148,15 +148,16 @@ sudo meshpoint setup
 
 > **Note:** `sudo` is required — the wizard writes to `/opt/meshpoint/config/local.yaml` which is owned by root.
 
-The wizard walks you through 7 steps:
+The wizard walks you through 8 steps:
 
 1. **Hardware Detection** -- probes for concentrator, carrier board, GPS, serial radios, USB MeshCore devices
-2. **Capture Source** -- auto-selects concentrator, serial, or mock. If a MeshCore USB companion is detected, offers to enable it and configure its radio frequency for your region (US/EU/ANZ presets or custom)
-3. **API Key** -- paste your Mesh Radar API key
-4. **Device Name** -- give it a recognizable name (e.g. "Mesh Point Rooftop")
-5. **Location** -- use GPS fix or enter lat/lng manually (right-click Google Maps to copy)
-6. **Relay Radio** -- configure optional SX1262 relay
-7. **Device ID** -- auto-generated unique identifier
+2. **Frequency Region** -- select your Meshtastic region (US, EU_868, ANZ, IN, KR, SG_923). The concentrator auto-tunes to the correct frequency
+3. **Capture Source** -- auto-selects concentrator, serial, or mock. If a MeshCore USB companion is detected, offers to enable it and configure its radio frequency to match your region
+4. **API Key** -- paste your Mesh Radar API key
+5. **Device Name** -- give it a recognizable name (e.g. "Mesh Point Rooftop")
+6. **Location** -- use GPS fix or enter lat/lng manually (right-click Google Maps to copy)
+7. **Relay Radio** -- configure optional SX1262 relay
+8. **Device ID** -- auto-generated unique identifier
 
 The wizard writes `config/local.yaml` and offers to start the service.
 
@@ -210,13 +211,15 @@ sudo meshpoint setup
 ```
 
 3. The wizard detects the MeshCore device and asks if you want to enable monitoring
-4. When prompted, select your region (US, EU, or ANZ) to configure the companion's radio frequency:
+4. The wizard auto-configures the companion's radio frequency based on your selected region:
 
 | Region | Frequency | BW | SF | CR |
 |--------|-----------|-----|-----|-----|
 | US | 910.525 MHz | 62.5 kHz | 7 | 5 |
-| EU | 869.525 MHz | 62.5 kHz | 7 | 5 |
-| ANZ | 915.525 MHz | 62.5 kHz | 7 | 5 |
+| EU | 869.618 MHz | 62.5 kHz | 8 | 8 |
+| ANZ | 916.575 MHz | 62.5 kHz | 7 | 8 |
+
+Other regions prompt for custom frequency entry. You can also change the MeshCore radio frequency anytime with `meshpoint meshcore-radio`.
 
 5. The wizard sets the radio parameters, reboots the companion, and verifies the new settings
 
@@ -226,28 +229,17 @@ After setup, both capture sources start automatically on boot. You'll see them i
 Source  concentrator (SX1302 8-ch), MeshCore USB node
 ```
 
-### Manual Radio Configuration (Fallback)
+### Changing MeshCore Radio Frequency
 
-If you need to configure the companion outside the setup wizard (e.g., from a PC before plugging into the Pi):
+To switch the MeshCore companion to a different region without re-running the full setup wizard:
 
 ```bash
-pip install meshcore
+meshpoint meshcore-radio         # interactive menu (US, EU, ANZ, Custom)
+meshpoint meshcore-radio EU      # apply EU preset directly
+meshpoint meshcore-radio custom  # enter manual frequency/BW/SF/CR
 ```
 
-```python
-import asyncio
-from meshcore import MeshCore
-
-async def configure():
-    mc = await MeshCore.create_serial("/dev/ttyACM0", 115200)  # or COM port on Windows
-    await mc.commands.set_radio(910.525, 62.5, 7, 5)           # US preset
-    await mc.commands.reboot()
-    await mc.disconnect()
-
-asyncio.run(configure())
-```
-
-Replace the frequency and parameters with your region's values from the table above.
+The command auto-detects the USB port, stops the service, configures the radio, waits for the companion to reboot, updates the config if the USB port changed, and restarts the service.
 
 ### How It Differs from the Concentrator
 
@@ -319,6 +311,7 @@ The device also sends data to the Mesh Radar cloud platform. Your device operato
 | `meshpoint logs` | Tail the live service logs |
 | `meshpoint restart` | Restart the service (applies config changes) |
 | `meshpoint stop` | Stop the service |
+| `meshpoint meshcore-radio` | Configure MeshCore companion radio frequency |
 | `sudo meshpoint setup` | Re-run the setup wizard (overwrites config) |
 | `meshpoint version` | Print firmware version |
 | `sudo poweroff` | Shut down safely before unplugging power |

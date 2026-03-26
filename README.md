@@ -251,6 +251,18 @@ sudo meshpoint setup     # re-run config wizard
 
 ---
 
+## Updating
+
+```bash
+cd /opt/meshpoint && sudo git pull origin main && sudo systemctl restart meshpoint
+```
+
+The local dashboard shows an orange update indicator when a new version is available. After updating, verify the new version in the startup banner or with `meshpoint version`.
+
+If you're updating to a version that changes your region support, re-run `sudo meshpoint setup` to select your frequency region.
+
+---
+
 ## Community
 
 - **Discord:** [discord.gg/Cfuc6Cp4wM](https://discord.gg/Cfuc6Cp4wM)
