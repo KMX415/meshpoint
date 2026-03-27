@@ -33,6 +33,20 @@ class ConcentratorChannelPlan:
     radio_1_freq_hz: int = 0
 
     @classmethod
+    def from_radio_config(
+        cls,
+        region: str,
+        frequency_mhz: float,
+        spreading_factor: int = 11,
+        bandwidth_khz: float = 250.0,
+    ) -> ConcentratorChannelPlan:
+        raise RuntimeError(_CORE_MISSING)
+
+    @staticmethod
+    def default_frequency_hz(region: str) -> int | None:
+        raise RuntimeError(_CORE_MISSING)
+
+    @classmethod
     def for_region(cls, region: str) -> ConcentratorChannelPlan:
         raise RuntimeError(_CORE_MISSING)
 

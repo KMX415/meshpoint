@@ -114,6 +114,8 @@ class AppConfig:
 
 def _merge_dataclass(instance, overrides: dict):
     """Apply dict overrides onto a dataclass instance, merging nested dataclasses."""
+    if not overrides:
+        return
     for key, value in overrides.items():
         if not hasattr(instance, key):
             continue

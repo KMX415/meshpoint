@@ -271,19 +271,24 @@ def _describe_sources(config: AppConfig) -> str:
 
 
 def _region_frequency_line(config: AppConfig) -> str:
-    """Resolve the actual primary frequency from the region channel plan."""
-    region = config.radio.region
+    """Resolve the actual primary frequency from the radio config."""
+    radio = config.radio
     try:
         from src.hal.concentrator_config import ConcentratorChannelPlan
-        plan = ConcentratorChannelPlan.for_region(region)
+        plan = ConcentratorChannelPlan.from_radio_config(
+            region=radio.region,
+            frequency_mhz=radio.frequency_mhz,
+            spreading_factor=radio.spreading_factor,
+            bandwidth_khz=radio.bandwidth_khz,
+        )
         if plan.single_sf_channel:
             freq = plan.single_sf_channel.frequency_hz / 1_000_000
             sf = plan.single_sf_channel.spreading_factor
             bw = plan.single_sf_channel.bandwidth_khz
-            return f"{freq:.3f} MHz / SF{sf} / BW{bw:.0f} ({region})"
+            region_tag = f" ({radio.region})" if radio.region else ""
+            return f"{freq:.3f} MHz / SF{sf} / BW{bw:.0f}{region_tag}"
     except Exception:
         pass
-    radio = config.radio
     return f"{radio.frequency_mhz} MHz / SF{radio.spreading_factor} / BW{radio.bandwidth_khz:.0f}"
 
 
