@@ -1,3 +1,3 @@
 """Single source of truth for Mesh Point software version."""
 
-__version__ = "0.5.1"
+__version__ = "0.5.2"
