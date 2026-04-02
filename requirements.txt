@@ -9,3 +9,4 @@ websockets>=12.0
 psutil>=5.9.0
 urllib3>=2.6.3
 meshcore>=2.1.0
+paho-mqtt>=2.1.0

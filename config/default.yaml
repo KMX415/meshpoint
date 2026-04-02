@@ -45,7 +45,7 @@ device:
   longitude: 0.0
   altitude: 25
   hardware_description: "RAK2287 + Raspberry Pi 4"
-  firmware_version: "0.5.3"
+  firmware_version: "0.5.4"
 
 relay:
   enabled: false
@@ -62,3 +62,18 @@ upstream:
   reconnect_interval_seconds: 10
   buffer_max_size: 5000
   auth_token: null
+
+mqtt:
+  enabled: false
+  broker: "mqtt.meshtastic.org"
+  port: 1883
+  username: "meshdev"
+  password: "large4cats"
+  topic_root: "msh"
+  region: "US"
+  publish_channels:
+    - "LongFast"
+    - "MeshCore"
+  publish_json: false
+  location_precision: "exact"
+  homeassistant_discovery: false

@@ -169,6 +169,100 @@ Set during the setup wizard. The coordinates are used for map placement on the M
 
 ---
 
+## MQTT Feed
+
+Publish captured packets to community MQTT brokers (meshmap.net, NHmesh.live, etc.) and Home Assistant. The Meshpoint acts as a dual-protocol MQTT gateway: both Meshtastic and MeshCore traffic can be published from a single device.
+
+### Privacy: Two-Gate Safety Model
+
+MQTT publishing uses two independent safety gates to prevent accidental exposure of private data:
+
+**Gate 1: Global kill switch.** MQTT is off by default. You must explicitly set `mqtt.enabled: true` to activate publishing. Nothing is ever sent to any MQTT broker unless you opt in.
+
+**Gate 2: Channel allowlist.** Only packets from channels listed in `publish_channels` are published. The default list contains only `LongFast` (the standard Meshtastic public channel). Private channels, custom PSK channels, and encrypted packets are never published unless you deliberately add that channel name to the list.
+
+Both gates must pass for any packet to leave the device via MQTT. Encrypted packets (those the Meshpoint could not decrypt) are always blocked regardless of channel configuration.
+
+This two-gate approach is informed by active community discussion around MQTT privacy, including the need for explicit opt-in controls ([meshtastic/firmware#5507](https://github.com/meshtastic/firmware/issues/5507)), concerns about private channel data leaking via MQTT gateways ([meshtastic/firmware#5404](https://github.com/meshtastic/firmware/issues/5404)), and the broader push for user-controlled MQTT publishing ([meshtastic/firmware#3549](https://github.com/meshtastic/firmware/issues/3549)).
+
+### Basic Setup
+
+```yaml
+mqtt:
+  enabled: true
+  broker: "mqtt.meshtastic.org"
+  port: 1883
+  username: "meshdev"
+  password: "large4cats"
+  region: "US"
+  publish_channels:
+    - "LongFast"
+```
+
+This publishes standard Meshtastic and MeshCore traffic to the community broker. Your Meshpoint appears on community maps with the gateway ID `!meshpoint-<device-name>`.
+
+### Configuration Options
+
+```yaml
+mqtt:
+  enabled: false                 # Gate 1: must be true to publish
+  broker: "mqtt.meshtastic.org"  # broker hostname
+  port: 1883                     # broker port
+  username: "meshdev"            # broker credentials
+  password: "large4cats"
+  topic_root: "msh"             # MQTT topic prefix
+  region: "US"                   # used in topic path
+  publish_channels:              # Gate 2: only these channels are published
+    - "LongFast"
+  publish_json: false            # also publish JSON on /json/ topic
+  location_precision: "exact"    # exact | approximate | none
+  homeassistant_discovery: false # publish HA auto-discovery configs
+```
+
+### Location Precision
+
+Control how much location detail leaves the device via MQTT:
+
+| Value | Behavior |
+|---|---|
+| `exact` | Full GPS coordinates (default) |
+| `approximate` | Rounded to ~1.1km precision (2 decimal places) |
+| `none` | Location stripped entirely from MQTT messages |
+
+Full-precision location data is always available on the [Meshradar](https://meshradar.io) dashboard regardless of this setting.
+
+### Home Assistant Integration
+
+Enable JSON publishing and HA auto-discovery to automatically create sensors in Home Assistant for battery level, temperature, and GPS position of mesh nodes:
+
+```yaml
+mqtt:
+  enabled: true
+  publish_json: true
+  homeassistant_discovery: true
+```
+
+HA sensors appear as `sensor.meshpoint_<node_id>_battery`, `sensor.meshpoint_<node_id>_temperature`, and `device_tracker.meshpoint_<node_id>`.
+
+### Publishing Private Channels
+
+If you want to publish traffic from a private channel (for example, to feed it into your own HA instance on a local broker), add the channel name to `publish_channels` and point the broker to your local MQTT server:
+
+```yaml
+mqtt:
+  enabled: true
+  broker: "192.168.1.100"        # your local broker
+  username: ""
+  password: ""
+  publish_channels:
+    - "LongFast"
+    - "MyPrivateChannel"         # explicitly opted in
+```
+
+Never add private channel names when publishing to a public broker.
+
+---
+
 ## Full Default Config
 
 See [config/default.yaml](../config/default.yaml) for all available settings and their defaults.

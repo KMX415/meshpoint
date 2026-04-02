@@ -1,5 +1,11 @@
 # Changelog
 
+### v0.5.4 (March 30, 2026)
+
+- **MQTT gateway:** dual-protocol MQTT publishing for Meshtastic (protobuf ServiceEnvelope) and MeshCore (JSON). Publishes to community maps (meshmap.net, NHmesh.live) and Home Assistant. Two-gate privacy model: MQTT is off by default, and only public channel traffic is published unless you explicitly allowlist a private channel. Gateway ID branding (`!meshpoint-<name>`) attributes all data to your Meshpoint. Optional JSON mirror for HA/Node-RED, auto-discovery sensor configs, and configurable location precision.
+- **Packet type filter (cloud):** filter the Meshradar cloud packet feed by type (traceroute, position, text, etc.) and protocol (Meshtastic/MeshCore). Dropdown filters in the packets tab header.
+- **Setup wizard MQTT step:** `meshpoint setup` now includes an MQTT opt-in prompt with broker selection and HA integration toggle.
+
 ### v0.5.3 (March 31, 2026)
 
 - **Multi-key decryption:** packets on private Meshtastic channels now decrypt when channel keys are configured in `local.yaml`. Previously only the default key was tried. ([#5](https://github.com/KMX415/meshpoint/issues/5))
