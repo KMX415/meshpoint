@@ -245,9 +245,11 @@ def save_section_to_yaml(section: str, values: dict) -> None:
         with open(path, "w") as fh:
             yaml.dump(existing, fh, default_flow_style=False, sort_keys=False)
     except PermissionError:
+        import getpass
+        hint_user = getpass.getuser() or "meshpoint"
         raise PermissionError(
             f"Cannot write to {path}. "
-            f"Fix with: sudo chown pi:pi {path}"
+            f"Fix with: sudo chown {hint_user}:{hint_user} {path}"
         )
 
 
