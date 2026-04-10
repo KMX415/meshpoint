@@ -1,3 +1,9 @@
-# Allow the meshpoint service user to restart/stop its own service
+# Service management
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart meshpoint
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop meshpoint
+meshpoint ALL=(ALL) NOPASSWD: /usr/bin/systemctl daemon-reload
+
+# Self-update (git pull + pip install + post-update migrations)
+meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git pull origin main
+meshpoint ALL=(ALL) NOPASSWD: /opt/meshpoint/venv/bin/pip install *
+meshpoint ALL=(ALL) NOPASSWD: /bin/bash /opt/meshpoint/scripts/post_update.sh

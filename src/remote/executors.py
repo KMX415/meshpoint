@@ -113,6 +113,8 @@ async def execute_apply_update(params: dict[str, Any]) -> dict[str, Any]:
         )
         await proc.communicate()
 
+        migration_output = await _run_post_update()
+
         subprocess.Popen(
             ["sudo", "systemctl", "restart", MESHPOINT_SERVICE],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -122,10 +124,36 @@ async def execute_apply_update(params: dict[str, Any]) -> dict[str, Any]:
             "message": "Update applied, restarting",
             "previous_version": __version__,
             "git_output": pull_output,
+            "migrations": migration_output,
         }
     except Exception as exc:
         logger.exception("Update failed")
         return {"error": str(exc)}
+
+
+async def _run_post_update() -> str:
+    """Run idempotent post-update migrations (sudoers, service file, HAL patch)."""
+    script = f"{MESHPOINT_DIR}/scripts/post_update.sh"
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "sudo", "bash", script,
+            cwd=MESHPOINT_DIR,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+        output = stdout.decode().strip()
+        if proc.returncode != 0:
+            logger.error("post_update.sh failed: %s", stderr.decode().strip())
+            return f"migration error: {stderr.decode().strip()}"
+        logger.info("Post-update migrations: %s", output)
+        return output
+    except asyncio.TimeoutError:
+        logger.error("post_update.sh timed out after 300s")
+        return "migration timed out"
+    except FileNotFoundError:
+        logger.debug("post_update.sh not found, skipping migrations")
+        return "no migration script"
 
 
 def _read_uptime() -> float:
