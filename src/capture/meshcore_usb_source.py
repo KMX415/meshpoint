@@ -208,7 +208,6 @@ class MeshcoreUsbCaptureSource(CaptureSource):
     async def _on_event(self, event) -> None:
         if not self._running:
             return
-        etype = event.type.value if hasattr(event.type, "value") else str(event.type)
         try:
             self._queue.put_nowait(event)
         except asyncio.QueueFull:

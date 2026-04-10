@@ -51,7 +51,7 @@ def _fetch_all() -> ReportData | None:
     data.status = _get("/api/device/status")
     if not data.status:
         print(f"\n  {_RED}Meshpoint service is not running or unreachable.{_RESET}")
-        print(f"  Start it with: sudo systemctl start meshpoint\n")
+        print("  Start it with: sudo systemctl start meshpoint\n")
         return None
 
     data.device = _get("/api/device") or {}

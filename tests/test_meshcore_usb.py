@@ -50,10 +50,44 @@ class TestMeshcoreEventAdapter(unittest.TestCase):
         pkt = adapt_event(raw)
         self.assertIsNotNone(pkt)
         self.assertEqual(pkt.packet_type, PacketType.TEXT)
-        self.assertEqual(pkt.destination_id, "channel:2")
+        self.assertEqual(pkt.destination_id, "broadcast")
         self.assertEqual(pkt.channel_hash, 2)
         self.assertEqual(pkt.decoded_payload["channel"], 2)
         self.assertEqual(pkt.signal.snr, 11.25)
+
+    def test_channel_message_parses_sender_from_text(self):
+        raw = self._make_envelope("channel_message", {
+            "text": "Alice: Hello everyone",
+            "channel_idx": 0,
+            "timestamp": 1700000000,
+        })
+        pkt = adapt_event(raw)
+        self.assertIsNotNone(pkt)
+        self.assertEqual(pkt.decoded_payload["text"], "Hello everyone")
+        self.assertEqual(pkt.decoded_payload["long_name"], "Alice")
+        self.assertEqual(pkt.source_id, "mc:Alice")
+        self.assertEqual(pkt.destination_id, "broadcast")
+
+    def test_channel_message_with_sender_name_field(self):
+        raw = self._make_envelope("channel_message", {
+            "sender_name": "Bob",
+            "text": "Some message",
+            "channel_idx": 1,
+        })
+        pkt = adapt_event(raw)
+        self.assertIsNotNone(pkt)
+        self.assertEqual(pkt.decoded_payload["long_name"], "Bob")
+        self.assertEqual(pkt.source_id, "mc:Bob")
+
+    def test_contact_message_has_long_name(self):
+        raw = self._make_envelope("contact_message", {
+            "pubkey_prefix": "aabb1122",
+            "contact_name": "Charlie",
+            "text": "DM text",
+        })
+        pkt = adapt_event(raw)
+        self.assertIsNotNone(pkt)
+        self.assertEqual(pkt.decoded_payload["long_name"], "Charlie")
 
     def test_advertisement(self):
         raw = self._make_envelope("advertisement", {

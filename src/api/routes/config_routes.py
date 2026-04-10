@@ -65,7 +65,6 @@ async def get_config():
         if mc_tx and mc_tx.connected:
             mc_status["connected"] = True
             try:
-                import asyncio
                 radio_info = await mc_tx.get_radio_info()
                 if radio_info:
                     mc_status["companion_name"] = radio_info.name

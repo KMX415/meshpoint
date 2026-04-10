@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from src.cli.hardware_detect import HardwareReport
 
 
