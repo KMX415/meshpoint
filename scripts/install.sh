@@ -342,14 +342,12 @@ _HALCFG
     info "libloragw.so installed to /usr/local/lib/"
 fi
 
-# ── 4b. Verify TX sync word patch ────────────────────────────────
+# ── 4b. Apply TX sync word patch ─────────────────────────────────
 
 HAL_SRC="${HAL_BUILD_DIR}/libloragw/src/loragw_sx1302.c"
-if [ -f "$HAL_SRC" ] && ! grep -q "sx1302_tx_sw_peak1" "$HAL_SRC"; then
-    info "TX sync word patch not found — applying and recompiling HAL..."
+if [ -f "$HAL_SRC" ]; then
+    info "Applying TX sync word patch..."
     bash "${SCRIPT_DIR}/scripts/patch_hal.sh"
-elif [ -f "$HAL_SRC" ]; then
-    info "TX sync word patch verified"
 fi
 
 # ── 5. Install Mesh Point application ──────────────────────────────
