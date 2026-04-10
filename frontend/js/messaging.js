@@ -86,6 +86,11 @@ class MessagingPanel {
     }
 
     _onConversationSelected(convo) {
+        if (!convo) {
+            this._activeConvo = null;
+            this._chat.clearChat();
+            return;
+        }
         this._activeConvo = convo;
         this._chat.setConversation(convo);
         this._contacts.setActive(convo.node_id);
@@ -146,6 +151,8 @@ class MessagingPanel {
             }
 
             if (this._activeConvo && data.node_id === this._activeConvo.node_id) {
+                const chParts = (data.node_id || '').split(':');
+                const chIdx = chParts.length >= 3 ? parseInt(chParts[2], 10) || 0 : 0;
                 const msg = {
                     id: Date.now(),
                     direction: data.direction || 'received',
@@ -153,7 +160,7 @@ class MessagingPanel {
                     node_id: data.node_id,
                     node_name: data.node_name || '',
                     protocol: data.protocol || 'meshtastic',
-                    channel: 0,
+                    channel: chIdx,
                     timestamp: new Date().toISOString(),
                     status: 'delivered',
                     packet_id: data.packet_id || '',

@@ -187,8 +187,8 @@ class RadioSettings {
                     </select>
                 </div>
                 <div class="radio-field">
-                    <label class="radio-label">Frequency</label>
-                    <span class="radio-value" id="radio-freq">${radio.frequency_mhz} MHz</span>
+                    <label class="radio-label">Frequency (MHz)</label>
+                    <input type="number" class="radio-input radio-input--narrow" id="radio-freq" value="${radio.frequency_mhz}" step="0.001" min="100" max="1000">
                 </div>
                 <div class="radio-field">
                     <label class="radio-label">Spreading Factor</label>
@@ -236,7 +236,7 @@ class RadioSettings {
         const regionSelect = document.getElementById('radio-region');
         regionSelect.addEventListener('change', () => {
             const r = regions.find(x => x.id === regionSelect.value);
-            if (r) document.getElementById('radio-freq').textContent = `${r.frequency_mhz} MHz`;
+            if (r) document.getElementById('radio-freq').value = r.frequency_mhz;
         });
 
         document.getElementById('radio-save-config').addEventListener('click', async () => {
@@ -247,6 +247,11 @@ class RadioSettings {
             const selectedPreset = presetSelect.value;
             if (selectedPreset !== 'CUSTOM') {
                 radioPayload.preset = selectedPreset;
+            }
+
+            const freqVal = parseFloat(document.getElementById('radio-freq').value);
+            if (!isNaN(freqVal) && freqVal !== radio.frequency_mhz) {
+                radioPayload.frequency_mhz = freqVal;
             }
 
             const txPower = parseInt(document.getElementById('radio-tx-power').value);

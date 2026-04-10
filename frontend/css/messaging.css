@@ -199,6 +199,20 @@
     margin-top: 0.2rem;
 }
 
+.msg-convo__delete {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--text-muted, #888);
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 0 0.2rem;
+    line-height: 1;
+    margin-top: 0.15rem;
+}
+.msg-convo__delete:hover { color: #e74c3c; }
+.msg-convo:hover .msg-convo__delete { display: inline-block; }
+
 /* ── Chat area ──────────────────────────────────────────────────── */
 
 .msg-chat {

@@ -347,7 +347,29 @@ def _setup_message_interception(
     our_node_id = config.transmit.node_id
     our_node_hex = f"{our_node_id:08x}" if our_node_id else ""
 
-    mc_contact_cache: dict[str, str] = {}
+    mc_name_cache: dict[str, str] = {}
+    mc_pubkey_canon: dict[str, str] = {}
+
+    channel_hash_map: dict[int, int] = {}
+    try:
+        crypto = coord._crypto
+        all_keys = crypto.get_all_keys()
+        from src.transmit.tx_service import PRESET_DISPLAY_NAMES
+        sf = config.radio.spreading_factor
+        bw = int(config.radio.bandwidth_khz)
+        default_name = PRESET_DISPLAY_NAMES.get((sf, bw), "LongFast")
+        if all_keys:
+            h = crypto.compute_channel_hash(default_name, all_keys[0])
+            channel_hash_map[h] = 0
+        for i, (ch_name, _) in enumerate(
+            config.meshtastic.channel_keys.items(), start=1
+        ):
+            if i < len(all_keys):
+                h = crypto.compute_channel_hash(ch_name, all_keys[i])
+                channel_hash_map[h] = i
+        logger.info("Channel hash map: %s", channel_hash_map)
+    except Exception:
+        logger.debug("Failed to build channel hash map", exc_info=True)
 
     async def _refresh_mc_contacts() -> None:
         if not meshcore_tx or not meshcore_tx.connected:
@@ -358,24 +380,47 @@ def _setup_message_interception(
             for c in contacts:
                 pk = c.get("public_key", "")
                 name = c.get("name", "")
-                if pk and name:
-                    for prefix_len in (8, 12, 16, len(pk)):
-                        mc_contact_cache[pk[:prefix_len].lower()] = name
-            logger.debug("MC contact cache refreshed: %d entries", len(mc_contact_cache))
+                if not pk:
+                    continue
+                canonical = pk[:12].lower() if len(pk) >= 12 else pk.lower()
+                for prefix_len in (8, 10, 12, 16, len(pk)):
+                    prefix = pk[:prefix_len].lower()
+                    mc_pubkey_canon[prefix] = canonical
+                    if name:
+                        mc_name_cache[prefix] = name
+            logger.debug(
+                "MC contact cache refreshed: %d name, %d pubkey entries",
+                len(mc_name_cache), len(mc_pubkey_canon),
+            )
         except Exception:
             logger.debug("MC contact cache refresh failed", exc_info=True)
 
-    def _resolve_mc_node_id(source: str, payload: dict) -> tuple[str, str]:
-        """Resolve a MeshCore source to (node_id, display_name)."""
+    def _is_hex_only(s: str) -> bool:
+        try:
+            int(s, 16)
+            return len(s) >= 6
+        except ValueError:
+            return False
+
+    def _resolve_mc_display_name(source: str, payload: dict) -> str:
         src_lower = source.lower()
         for length in (len(src_lower), 12, 8, 16):
-            cached = mc_contact_cache.get(src_lower[:length], "")
-            if cached:
-                return f"mc:{cached}", cached
+            cached = mc_name_cache.get(src_lower[:length], "")
+            if cached and not _is_hex_only(cached):
+                return cached
         name = payload.get("long_name", "")
-        if name:
-            return f"mc:{name}", name
-        return source, ""
+        if name and not _is_hex_only(name):
+            return name
+        return ""
+
+    def _normalize_mc_node_id(source: str) -> str:
+        """Map any pubkey prefix to the canonical 12-char lowercase form."""
+        src_lower = source.lower()
+        for length in (len(src_lower), 12, 8, 16):
+            canon = mc_pubkey_canon.get(src_lower[:length], "")
+            if canon:
+                return canon
+        return src_lower
 
     def on_text_packet(packet: Packet) -> None:
         if packet.packet_type != PacketType.TEXT:
@@ -397,7 +442,8 @@ def _setup_message_interception(
         if is_broadcast:
             if our_node_hex and source == our_node_hex:
                 return
-            node_id = f"broadcast:{packet.protocol.value}:0"
+            ch_idx = channel_hash_map.get(packet.channel_hash, 0)
+            node_id = f"broadcast:{packet.protocol.value}:{ch_idx}"
             direction = "received"
         elif is_for_us:
             node_id = packet.source_id or "unknown"
@@ -429,13 +475,67 @@ def _setup_message_interception(
             if is_mc_dm:
                 if meshcore_tx:
                     await _refresh_mc_contacts()
-                node_id, resolved_name = _resolve_mc_node_id(
+                resolved_name = _resolve_mc_display_name(
                     node_id, packet.decoded_payload or {}
                 )
                 if resolved_name and not node_name:
                     node_name = resolved_name
+                node_id = _normalize_mc_node_id(node_id)
             if is_broadcast and packet.protocol == Protocol.MESHCORE:
                 node_name = (packet.decoded_payload or {}).get("long_name", "")
+
+            if packet.protocol == Protocol.MESHCORE and not is_broadcast:
+                payload_name = (packet.decoded_payload or {}).get("long_name", "")
+                if payload_name and not _is_hex_only(payload_name):
+                    node_name = payload_name
+
+            if (
+                packet.protocol == Protocol.MESHCORE
+                and node_name
+                and not _is_hex_only(node_name)
+            ):
+                src = (packet.source_id or "").lower()
+                if src and src != node_name.lower():
+                    await coord.node_repo._db.execute(
+                        "UPDATE nodes SET long_name = ? "
+                        "WHERE LOWER(node_id) LIKE ? AND protocol = 'meshcore'",
+                        (node_name, src[:8] + "%"),
+                    )
+                    await coord.node_repo._db.commit()
+
+            if not node_name or _is_hex_only(node_name):
+                row = await coord.node_repo._db.fetch_one(
+                    "SELECT long_name FROM nodes "
+                    "WHERE LOWER(node_id) LIKE ? AND protocol = 'meshcore' "
+                    "AND long_name IS NOT NULL AND long_name != ''",
+                    (node_id[:8] + "%",),
+                )
+                if row:
+                    rn = row["long_name"] or ""
+                    if rn and not _is_hex_only(rn):
+                        node_name = rn
+
+            # MeshCore companions don't include friendly names in DM events
+            # or pubkeys in channel messages. The mc:{name} node entries
+            # created by channel messages are the only source of friendly
+            # names. This fallback finds them and writes back to the pubkey
+            # node entry. Requires at least one prior public channel message
+            # from the contact.
+            if not node_name or _is_hex_only(node_name):
+                mc_row = await coord.node_repo._db.fetch_one(
+                    "SELECT node_id, long_name FROM nodes "
+                    "WHERE node_id LIKE 'mc:%' AND protocol = 'meshcore' "
+                    "AND node_id NOT IN ('mc:channel')",
+                )
+                if mc_row:
+                    rn = mc_row["long_name"] or mc_row["node_id"][3:]
+                    if rn and not _is_hex_only(rn):
+                        node_name = rn
+                        await coord.node_repo._db.execute(
+                            "UPDATE nodes SET long_name = ? WHERE node_id = ?",
+                            (rn, node_id),
+                        )
+                        await coord.node_repo._db.commit()
             row_id, is_dup = await message_repo.save_received(
                 text=text,
                 node_id=node_id,

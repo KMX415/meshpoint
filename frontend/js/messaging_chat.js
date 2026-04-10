@@ -14,6 +14,15 @@ class MessagingChat {
         this._build();
     }
 
+    clearChat() {
+        this._conversation = null;
+        this._messages = [];
+        this._allLoaded = false;
+        this._messagesEl.innerHTML = '<div class="msg-chat__empty">Select a conversation</div>';
+        this._headerName.textContent = '';
+        this._headerBadge.textContent = '';
+    }
+
     setConversation(convo) {
         this._conversation = convo;
         this._messages = [];

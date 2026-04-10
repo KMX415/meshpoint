@@ -237,6 +237,29 @@ class MessageRepository:
         )
         await self._db.commit()
 
+    async def delete_conversation(self, node_id: str) -> int:
+        """Delete all messages in a conversation. Returns deleted count."""
+        row = await self._db.fetch_one(
+            "SELECT COUNT(*) as count FROM messages WHERE node_id = ?",
+            (node_id,),
+        )
+        count = row["count"] if row else 0
+        await self._db.execute(
+            "DELETE FROM messages WHERE node_id = ?", (node_id,)
+        )
+        await self._db.commit()
+        return count
+
+    async def delete_all_messages(self) -> int:
+        """Delete all messages. Returns deleted count."""
+        row = await self._db.fetch_one(
+            "SELECT COUNT(*) as count FROM messages"
+        )
+        count = row["count"] if row else 0
+        await self._db.execute("DELETE FROM messages")
+        await self._db.commit()
+        return count
+
     async def get_message_count(self) -> int:
         row = await self._db.fetch_one(
             "SELECT COUNT(*) as count FROM messages"

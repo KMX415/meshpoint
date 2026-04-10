@@ -207,6 +207,7 @@ async def update_identity(req: IdentityUpdate):
 class RadioUpdate(BaseModel):
     region: Optional[str] = None
     preset: Optional[str] = None
+    frequency_mhz: Optional[float] = None
     spreading_factor: Optional[int] = None
     bandwidth_khz: Optional[float] = None
     coding_rate: Optional[str] = None
@@ -259,7 +260,11 @@ async def update_radio(req: RadioUpdate):
                 restart_needed = True
             updates["coding_rate"] = req.coding_rate
 
-    if req.region and req.region in REGION_DEFAULTS and "frequency_mhz" not in updates:
+    if req.frequency_mhz is not None:
+        if req.frequency_mhz != radio.frequency_mhz:
+            restart_needed = True
+        updates["frequency_mhz"] = req.frequency_mhz
+    elif req.region and req.region in REGION_DEFAULTS and "frequency_mhz" not in updates:
         updates["frequency_mhz"] = REGION_DEFAULTS[req.region]["frequency_mhz"]
 
     if updates:
@@ -329,12 +334,23 @@ async def restart_service():
 
 def _build_channel_list(mt_config) -> list[dict]:
     """Build the channel list from config + crypto state."""
+    ch0_display = "Default"
+    ch0_hash_name = ""
+    if _config and _config.radio:
+        from src.transmit.tx_service import PRESET_DISPLAY_NAMES
+        sf = _config.radio.spreading_factor
+        bw = int(_config.radio.bandwidth_khz)
+        firmware_name = PRESET_DISPLAY_NAMES.get((sf, bw))
+        if firmware_name:
+            ch0_display = firmware_name
+            ch0_hash_name = firmware_name
+
     channels = [
         {
             "index": 0,
-            "name": "Default",
+            "name": ch0_display,
             "psk_b64": mt_config.default_key_b64,
-            "hash": _compute_hash_safe("", mt_config.default_key_b64),
+            "hash": _compute_hash_safe(ch0_hash_name, mt_config.default_key_b64),
             "enabled": True,
         }
     ]

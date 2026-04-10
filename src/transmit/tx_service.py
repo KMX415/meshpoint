@@ -131,13 +131,14 @@ class TxService:
 
         dest_int = self._resolve_destination(destination, Protocol.MESHTASTIC)
         packet_id = self._next_packet_id()
-        channel_hash = self._compute_channel_hash(channel)
+        channel_hash, channel_key = self._resolve_channel(channel)
 
         packet_bytes = builder.build_text_message(
             text=text,
             dest=dest_int,
             source_id=self._source_node_id,
             packet_id=packet_id,
+            channel_key=channel_key,
             channel_hash=channel_hash,
             hop_limit=3,
             hop_start=3,
@@ -326,14 +327,14 @@ class TxService:
             return self._config.node_id
         return random.randint(0x01000000, 0xFFFFFFFE)
 
-    def _compute_channel_hash(self, channel: int) -> int:
-        """Compute channel hash matching the Meshtastic firmware.
+    def _resolve_channel(self, channel: int) -> tuple[int, bytes | None]:
+        """Resolve channel index to (hash, encryption_key).
 
-        The firmware uses the modem preset display name (e.g. "LongFast")
-        as the channel name when the default channel has no custom name.
+        Returns the correct hash and key for the given channel so TX
+        packets are encrypted with the right PSK.
         """
         if self._crypto is None:
-            return 0x08
+            return 0x08, None
         try:
             keys = self._crypto.get_all_keys()
             if channel == 0:
@@ -350,10 +351,10 @@ class TxService:
 
             h = self._crypto.compute_channel_hash(name, key)
             logger.info("Channel %d hash: 0x%02X (name=%s)", channel, h, name)
-            return h
+            return h, key
         except (IndexError, Exception):
             logger.debug("Channel hash fallback to 0x08", exc_info=True)
-            return 0x08
+            return 0x08, None
 
     def _get_preset_name(self) -> str:
         """Derive the Meshtastic modem preset display name from radio params."""

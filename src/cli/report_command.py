@@ -221,7 +221,7 @@ def _print_radio_section(d: ReportData) -> None:
     if radio:
         _kv("Region", radio.get("region", "--"))
         _kv("Frequency", f"{radio.get('frequency_mhz', '--')} MHz")
-        _kv("Preset", radio.get("modem_preset", "--"))
+        _kv("Preset", radio.get("current_preset", "--"))
         _kv("SF/BW/CR", (
             f"SF{radio.get('spreading_factor', '--')} / "
             f"BW{radio.get('bandwidth_khz', '--')} / "
@@ -242,9 +242,10 @@ def _print_radio_section(d: ReportData) -> None:
 
     mc = cfg.get("meshcore", {})
     if mc:
-        mc_status = mc.get("status", "disconnected")
-        color = _GREEN if mc_status == "connected" else _DIM
-        _kv("MeshCore", f"{color}{mc_status}{_RESET}")
+        mc_connected = mc.get("connected", False)
+        mc_label = "connected" if mc_connected else "disconnected"
+        color = _GREEN if mc_connected else _DIM
+        _kv("MeshCore", f"{color}{mc_label}{_RESET}")
 
     _sep()
 

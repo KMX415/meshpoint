@@ -168,8 +168,14 @@ class MessagingContacts {
             <div class="msg-convo__meta">
                 <div class="msg-convo__time">${timeStr}</div>
                 ${convo.unread_count > 0 ? `<div class="msg-convo__unread">${convo.unread_count}</div>` : ''}
+                <button class="msg-convo__delete" title="Delete conversation">&times;</button>
             </div>
         `;
+
+        el.querySelector('.msg-convo__delete').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._deleteConversation(convo);
+        });
 
         el.addEventListener('click', () => {
             this.setActive(convo.node_id);
@@ -231,6 +237,23 @@ class MessagingContacts {
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
         search.focus();
+    }
+
+    async _deleteConversation(convo) {
+        try {
+            const res = await fetch(`/api/messages/conversation/${encodeURIComponent(convo.node_id)}`, {
+                method: 'DELETE',
+            });
+            if (!res.ok) return;
+            this._conversations = this._conversations.filter(c => c.node_id !== convo.node_id);
+            if (this._activeNodeId === convo.node_id) {
+                this._activeNodeId = null;
+                this._onSelect(null);
+            }
+            this.render();
+        } catch (e) {
+            console.error('Failed to delete conversation:', e);
+        }
     }
 
     _sortByRecent() {
