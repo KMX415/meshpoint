@@ -17,6 +17,8 @@
 
 ![Meshradar Dashboard](dashboard-v3.png)
 
+![Messaging UI](MessagingUI.png)
+
 ![Meshpoint Log](MP%20Log.png)
 
 ---
