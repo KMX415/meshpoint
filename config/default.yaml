@@ -10,6 +10,7 @@ radio:
 
 meshtastic:
   default_key_b64: "AQ=="
+  primary_channel_name: ""
   # channel_keys:
   #   MyChannel: "base64encodedPSK=="
   #   SecretChat: "anotherBase64PSK=="

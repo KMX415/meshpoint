@@ -27,6 +27,7 @@ class RadioConfig:
 @dataclass
 class MeshtasticConfig:
     default_key_b64: str = "AQ=="
+    primary_channel_name: str = ""
     channel_keys: dict[str, str] = field(default_factory=dict)
 
 

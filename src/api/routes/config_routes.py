@@ -281,8 +281,9 @@ async def update_radio(req: RadioUpdate):
 
 
 class ChannelEntry(BaseModel):
-    name: str
-    psk_b64: str
+    index: int = -1
+    name: str = ""
+    psk_b64: str = ""
     enabled: bool = True
 
 
@@ -298,7 +299,17 @@ async def update_channels(req: ChannelsUpdate):
 
     channel_keys = {}
     for ch in req.channels:
-        if ch.enabled and ch.psk_b64 and ch.name:
+        if ch.index == 0:
+            _config.meshtastic.primary_channel_name = ch.name
+            try:
+                save_section_to_yaml(
+                    "meshtastic", {"primary_channel_name": ch.name}
+                )
+            except PermissionError as exc:
+                raise HTTPException(403, str(exc))
+            continue
+
+        if ch.enabled and ch.psk_b64:
             channel_keys[ch.name] = ch.psk_b64
 
     _config.meshtastic.channel_keys = channel_keys
@@ -314,7 +325,7 @@ async def update_channels(req: ChannelsUpdate):
     return {
         "saved": True,
         "restart_required": False,
-        "channel_count": len(channel_keys),
+        "channel_count": len(channel_keys) + 1,
     }
 
 
@@ -334,23 +345,23 @@ async def restart_service():
 
 def _build_channel_list(mt_config) -> list[dict]:
     """Build the channel list from config + crypto state."""
-    ch0_display = "Default"
-    ch0_hash_name = ""
-    if _config and _config.radio:
+    ch0_name = mt_config.primary_channel_name
+    ch0_display = ch0_name
+    if not ch0_display and _config and _config.radio:
         from src.transmit.tx_service import PRESET_DISPLAY_NAMES
         sf = _config.radio.spreading_factor
         bw = int(_config.radio.bandwidth_khz)
-        firmware_name = PRESET_DISPLAY_NAMES.get((sf, bw))
-        if firmware_name:
-            ch0_display = firmware_name
-            ch0_hash_name = firmware_name
+        preset = PRESET_DISPLAY_NAMES.get((sf, bw))
+        if preset:
+            ch0_display = f"Primary ({preset})"
 
     channels = [
         {
             "index": 0,
-            "name": ch0_display,
+            "name": ch0_display or "Primary",
+            "hash_name": ch0_name,
             "psk_b64": mt_config.default_key_b64,
-            "hash": _compute_hash_safe(ch0_hash_name, mt_config.default_key_b64),
+            "hash": _compute_hash_safe(ch0_name, mt_config.default_key_b64),
             "enabled": True,
         }
     ]

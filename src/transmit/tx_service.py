@@ -58,6 +58,7 @@ class TxService:
         meshcore_tx=None,
         duty_tracker: Optional[DutyCycleTracker] = None,
         radio_config=None,
+        primary_channel_name: str = "",
     ):
         self._wrapper = wrapper
         self._crypto = crypto
@@ -66,6 +67,7 @@ class TxService:
         self._meshcore_tx = meshcore_tx
         self._duty = duty_tracker
         self._radio_config = radio_config
+        self._primary_channel_name = primary_channel_name
         self._builder = None
         self._packet_counter = random.randint(1, 0xFFFF)
         self._source_node_id = self._resolve_node_id()
@@ -339,7 +341,7 @@ class TxService:
             keys = self._crypto.get_all_keys()
             if channel == 0:
                 key = keys[0]
-                name = self._get_preset_name()
+                name = self._primary_channel_name
             else:
                 channel_keys = list(self._crypto._keys.items())
                 if channel - 1 < len(channel_keys):
@@ -347,7 +349,7 @@ class TxService:
                     name = ch_name
                 else:
                     key = keys[0]
-                    name = self._get_preset_name()
+                    name = self._primary_channel_name
 
             h = self._crypto.compute_channel_hash(name, key)
             logger.info("Channel %d hash: 0x%02X (name=%s)", channel, h, name)

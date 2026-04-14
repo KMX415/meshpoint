@@ -219,6 +219,7 @@ def _build_tx_service(
         meshcore_tx=meshcore_tx,
         duty_tracker=duty,
         radio_config=config.radio,
+        primary_channel_name=config.meshtastic.primary_channel_name,
     )
     logger.info(
         "Transmit service ready: MT=%s MC=%s",
@@ -358,12 +359,9 @@ def _setup_message_interception(
     try:
         crypto = coord._crypto
         all_keys = crypto.get_all_keys()
-        from src.transmit.tx_service import PRESET_DISPLAY_NAMES
-        sf = config.radio.spreading_factor
-        bw = int(config.radio.bandwidth_khz)
-        default_name = PRESET_DISPLAY_NAMES.get((sf, bw), "LongFast")
+        primary_name = config.meshtastic.primary_channel_name
         if all_keys:
-            h = crypto.compute_channel_hash(default_name, all_keys[0])
+            h = crypto.compute_channel_hash(primary_name, all_keys[0])
             channel_hash_map[h] = 0
         for i, (ch_name, _) in enumerate(
             config.meshtastic.channel_keys.items(), start=1
