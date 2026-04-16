@@ -60,6 +60,19 @@ The setup wizard configures sources automatically. To add or remove a MeshCore c
 
 ---
 
+## Primary Channel Name
+
+The primary (channel 0) name is used to compute the Meshtastic channel hash on transmitted packets. It must match the primary channel name on your mesh for outgoing messages to be heard.
+
+```yaml
+meshtastic:
+  primary_channel_name: "LongFast"
+```
+
+The default is `LongFast` (Meshtastic's standard public channel). Change it only if your mesh uses a custom primary channel name. You can also edit this from the dashboard: open the **Radio** tab, edit **Channel 0**, and save. The Radio and Messages tabs reflect the same value.
+
+---
+
 ## Private Channel Monitoring
 
 By default, the Meshpoint decrypts traffic on the standard Meshtastic default key (`AQ==`). To also decode packets on your private channels, add the channel keys to `local.yaml`:
@@ -104,6 +117,37 @@ relay:
 ```
 
 The relay path is independent from RX: transmission never blocks packet reception. Packets are deduplicated by ID, rate-limited, and filtered by signal strength before relay.
+
+---
+
+## Transmit (Native Messaging)
+
+Enable the Meshpoint to send messages directly through the onboard SX1302 concentrator (Meshtastic) and the MeshCore USB companion (MeshCore). This powers the Messages tab on the local dashboard.
+
+```yaml
+transmit:
+  enabled: false               # opt-in
+  node_id: null                # auto-generated 4-byte Meshtastic node ID
+  tx_power_dbm: 14             # conservative default (dBm)
+  max_duty_cycle_percent: 1.0  # EU-safe default
+  long_name: "Mesh Point"
+  short_name: "MPNT"
+  hop_limit: 3
+```
+
+**`enabled`**: must be `true` to send from the Messages tab. Disabled by default.
+
+**`node_id`**: leave as `null` to auto-generate. Once set, do not change it: your node identity is what other nodes see and cache in their contact lists.
+
+**`tx_power_dbm`**: 14 dBm is conservative and compliant in most regions. Raise carefully; check your regional ISM band limits before increasing.
+
+**`max_duty_cycle_percent`**: airtime limit as a percent of wall clock. 1.0 is EU-safe (ETSI 1% duty cycle). US users with a FCC station can raise this, but sensible defaults protect the mesh from one Meshpoint hogging the channel.
+
+**`long_name` / `short_name`**: shown to other nodes (long name in node lists, short name on compact displays). Match your naming convention.
+
+**`hop_limit`**: initial hop count on outgoing Meshtastic messages. 3 is typical; higher values mean more relays and more airtime.
+
+MeshCore transmission uses the USB companion node: configure its serial port under `capture.meshcore_usb` (see Capture Sources above). The companion handles encryption and RF timing; the Meshpoint sends serial commands.
 
 ---
 
@@ -165,7 +209,28 @@ device:
   altitude: 25
 ```
 
-Set during the setup wizard. The coordinates are used for map placement on the Meshradar cloud dashboard.
+Set during the setup wizard. The coordinates are used for map placement on the local dashboard and the Meshradar cloud dashboard, and as the reference point for "farthest direct node" distance.
+
+### Updating Location
+
+Two options:
+
+1. Edit `local.yaml` directly (fastest):
+
+   ```bash
+   sudo nano /opt/meshpoint/config/local.yaml
+   # change device.latitude / device.longitude / device.altitude
+   sudo systemctl restart meshpoint
+   ```
+
+2. Re-run the setup wizard and press Enter through steps you want to keep:
+
+   ```bash
+   sudo /opt/meshpoint/venv/bin/python -m src.cli setup
+   sudo systemctl restart meshpoint
+   ```
+
+**Tip**: in Google Maps, right-click any location and click the coordinates at the top of the menu to copy them in decimal format (e.g. `42.3601, -71.0589`).
 
 ---
 
