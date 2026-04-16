@@ -78,11 +78,11 @@ class TestChannelHashDifference(unittest.TestCase):
 
 
 class TestMeshtasticConfigDefault(unittest.TestCase):
-    """MeshtasticConfig defaults to blank primary channel name."""
+    """MeshtasticConfig defaults to LongFast primary channel name."""
 
-    def test_default_is_blank(self):
+    def test_default_is_longfast(self):
         cfg = MeshtasticConfig()
-        self.assertEqual(cfg.primary_channel_name, "")
+        self.assertEqual(cfg.primary_channel_name, "LongFast")
 
     def test_custom_name_preserved(self):
         cfg = MeshtasticConfig(primary_channel_name="BayMesh")
@@ -102,23 +102,18 @@ class TestTxServicePrimaryChannelName(unittest.TestCase):
         crypto.compute_channel_hash.side_effect = _compute_channel_hash
         return crypto, expanded
 
-    def test_blank_name_hash(self):
+    def test_blank_name_hashes_blank(self):
         crypto, expanded = self._make_crypto()
         svc = TxService(crypto=crypto, primary_channel_name="")
         h, _ = svc._resolve_channel(0)
         expected = _compute_channel_hash("", expanded)
         self.assertEqual(h, expected)
 
-    def test_preset_name_not_used(self):
+    def test_longfast_default_produces_0x08(self):
         crypto, expanded = self._make_crypto()
-        svc = TxService(
-            crypto=crypto,
-            primary_channel_name="",
-            radio_config=RadioConfig(spreading_factor=9, bandwidth_khz=250),
-        )
+        svc = TxService(crypto=crypto, primary_channel_name="LongFast")
         h, _ = svc._resolve_channel(0)
-        mediumfast_hash = _compute_channel_hash("MediumFast", expanded)
-        self.assertNotEqual(h, mediumfast_hash)
+        self.assertEqual(h, 0x08)
 
     def test_custom_name_hash(self):
         crypto, expanded = self._make_crypto()
@@ -131,7 +126,7 @@ class TestTxServicePrimaryChannelName(unittest.TestCase):
 class TestBuildChannelList(unittest.TestCase):
     """_build_channel_list uses primary_channel_name for hash."""
 
-    def test_blank_name_shows_preset_hint(self):
+    def test_blank_name_derives_from_preset(self):
         from src.api.routes.config_routes import _build_channel_list
 
         mt = MeshtasticConfig(primary_channel_name="")
@@ -145,8 +140,8 @@ class TestBuildChannelList(unittest.TestCase):
                 channels = _build_channel_list(mt)
 
         ch0 = channels[0]
-        self.assertIn("MediumFast", ch0["name"])
-        self.assertEqual(ch0["hash_name"], "")
+        self.assertEqual(ch0["name"], "MediumFast")
+        self.assertEqual(ch0["hash_name"], "MediumFast")
 
     def test_custom_name_used_directly(self):
         from src.api.routes.config_routes import _build_channel_list

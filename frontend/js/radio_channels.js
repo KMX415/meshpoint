@@ -125,10 +125,13 @@ class RadioChannels {
         const channels = [];
 
         rows.forEach((row, i) => {
-            if (i === 0) return;
             const name = row.querySelector('.radio-ch__name').value.trim();
             const psk = row.querySelector('.radio-ch__psk').value.trim();
             const enabled = row.querySelector('.radio-ch__enabled').checked;
+            if (i === 0) {
+                channels.push({ index: 0, name, psk_b64: psk, enabled });
+                return;
+            }
             if (name || psk) {
                 channels.push({ name, psk_b64: psk, enabled });
             }

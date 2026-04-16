@@ -346,19 +346,18 @@ async def restart_service():
 def _build_channel_list(mt_config) -> list[dict]:
     """Build the channel list from config + crypto state."""
     ch0_name = mt_config.primary_channel_name
-    ch0_display = ch0_name
-    if not ch0_display and _config and _config.radio:
+    if not ch0_name and _config and _config.radio:
         from src.transmit.tx_service import PRESET_DISPLAY_NAMES
         sf = _config.radio.spreading_factor
         bw = int(_config.radio.bandwidth_khz)
-        preset = PRESET_DISPLAY_NAMES.get((sf, bw))
-        if preset:
-            ch0_display = f"Primary ({preset})"
+        ch0_name = PRESET_DISPLAY_NAMES.get((sf, bw), "LongFast")
+
+    ch0_name = ch0_name or "LongFast"
 
     channels = [
         {
             "index": 0,
-            "name": ch0_display or "Primary",
+            "name": ch0_name,
             "hash_name": ch0_name,
             "psk_b64": mt_config.default_key_b64,
             "hash": _compute_hash_safe(ch0_name, mt_config.default_key_b64),

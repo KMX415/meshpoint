@@ -1,5 +1,11 @@
 # Changelog
 
+### v0.6.3 (April 16, 2026)
+
+- **TX channel hash fix:** messages sent from the dashboard were going out with hash 0x02 (invisible to the mesh) instead of the correct 0x08. The primary channel name defaulted to blank, producing the wrong hash. Now defaults to "LongFast" matching Meshtastic firmware. ([#21](https://github.com/KMX415/meshpoint/issues/21))
+- **Primary channel editable:** channel 0 can now be renamed and saved from the Radio settings page. Previously edits reverted on refresh. ([#13](https://github.com/KMX415/meshpoint/issues/13))
+- **Channel display cleanup:** Radio settings shows the actual channel name (e.g. "LongFast") instead of "Primary (LongFast)".
+
 ### v0.6.2 (April 16, 2026)
 
 - **MQTT channel name fix:** MQTT topics now use the actual channel name (LongFast, MediumFast, ShortFast, etc.) instead of `chXX` hashes. New `ChannelResolver` maps all 8 standard Meshtastic presets and supports user-configured channel keys. ([#20](https://github.com/KMX415/meshpoint/issues/20))
