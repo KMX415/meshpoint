@@ -96,6 +96,7 @@ async def get_config():
             "sync_word": f"0x{radio.sync_word:02X}",
             "preamble_length": radio.preamble_length,
             "current_preset": current_preset,
+            "concentrator_slots": radio.concentrator_slots,
         },
         "transmit": {
             "enabled": tx.enabled,
@@ -285,10 +286,22 @@ class ChannelEntry(BaseModel):
     name: str = ""
     psk_b64: str = ""
     enabled: bool = True
+    concentrator_slot: Optional[int] = None
 
 
 class ChannelsUpdate(BaseModel):
     channels: list[ChannelEntry]
+
+
+class ConcentratorSlotEntry(BaseModel):
+    slot_index: int
+    preset: str
+    frequency_slot: int
+    enabled: bool = True
+
+
+class ConcentratorSlotsUpdate(BaseModel):
+    slots: list[ConcentratorSlotEntry]
 
 
 @router.put("/channels")
@@ -298,6 +311,7 @@ async def update_channels(req: ChannelsUpdate):
         raise HTTPException(503, "Config not loaded")
 
     channel_keys = {}
+    channel_slots = {}
     for ch in req.channels:
         if ch.index == 0:
             _config.meshtastic.primary_channel_name = ch.name
@@ -311,10 +325,16 @@ async def update_channels(req: ChannelsUpdate):
 
         if ch.enabled and ch.psk_b64:
             channel_keys[ch.name] = ch.psk_b64
+            if ch.concentrator_slot is not None:
+                channel_slots[ch.name] = ch.concentrator_slot
 
     _config.meshtastic.channel_keys = channel_keys
+    _config.meshtastic.channel_slots = channel_slots
     try:
-        save_section_to_yaml("meshtastic", {"channel_keys": channel_keys})
+        save_section_to_yaml("meshtastic", {
+            "channel_keys": channel_keys,
+            "channel_slots": channel_slots,
+        })
     except PermissionError as exc:
         raise HTTPException(403, str(exc))
 
@@ -327,6 +347,37 @@ async def update_channels(req: ChannelsUpdate):
         "restart_required": False,
         "channel_count": len(channel_keys) + 1,
     }
+
+
+@router.put("/concentrator-slots")
+async def update_concentrator_slots(req: ConcentratorSlotsUpdate):
+    """Update per-IF-chain concentrator slot configuration. Requires restart."""
+    if _config is None:
+        raise HTTPException(503, "Config not loaded")
+
+    valid_presets = {p["name"] for p in all_presets_list()}
+    slots = []
+    for s in req.slots:
+        if not 0 <= s.slot_index <= 7:
+            raise HTTPException(400, f"slot_index must be 0–7, got {s.slot_index}")
+        if s.preset not in valid_presets:
+            raise HTTPException(400, f"Unknown preset: {s.preset}")
+        if s.frequency_slot < 0:
+            raise HTTPException(400, "frequency_slot must be >= 0")
+        slots.append({
+            "slot_index": s.slot_index,
+            "preset": s.preset,
+            "frequency_slot": s.frequency_slot,
+            "enabled": s.enabled,
+        })
+
+    _config.radio.concentrator_slots = slots
+    try:
+        save_section_to_yaml("radio", {"concentrator_slots": slots})
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc))
+
+    return {"saved": True, "restart_required": True, "slot_count": len(slots)}
 
 
 @router.post("/restart")
@@ -372,6 +423,7 @@ def _build_channel_list(mt_config) -> list[dict]:
             "psk_b64": key_b64,
             "hash": _compute_hash_safe(name, key_b64),
             "enabled": True,
+            "concentrator_slot": mt_config.channel_slots.get(name),
         })
 
     return channels

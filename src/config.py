@@ -22,6 +22,7 @@ class RadioConfig:
     sync_word: int = 0x2B
     preamble_length: int = 16
     tx_power_dbm: int = 22
+    concentrator_slots: list = field(default_factory=list)
 
 
 @dataclass
@@ -29,6 +30,7 @@ class MeshtasticConfig:
     default_key_b64: str = "AQ=="
     primary_channel_name: str = "LongFast"
     channel_keys: dict[str, str] = field(default_factory=dict)
+    channel_slots: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass

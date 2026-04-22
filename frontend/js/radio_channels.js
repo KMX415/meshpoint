@@ -1,29 +1,23 @@
 /**
  * Channel configuration component for the Radio tab.
  * Renders a table of Meshtastic channels with name, PSK,
- * computed hash preview, and enable/disable toggles.
+ * computed hash preview, enable/disable toggles, concentrator
+ * slot assignment, and per-row delete (except the primary channel).
  */
 class RadioChannels {
     constructor(containerEl) {
         this._container = containerEl;
         this._channels = [];
+        this._slots = [];
+        this._presets = [];
     }
 
-    render(channels) {
+    render(channels, slots, presets) {
         this._channels = channels || [];
+        this._slots = slots || [];
+        this._presets = presets || [];
 
-        const rows = this._channels.map((ch, i) => `
-            <tr class="radio-ch__row" data-index="${i}">
-                <td class="radio-ch__idx">${ch.index}</td>
-                <td><input class="radio-input radio-ch__name" value="${this._esc(ch.name || '')}" placeholder="Channel name" data-field="name"></td>
-                <td class="radio-ch__psk-cell">
-                    <input class="radio-input radio-input--mono radio-ch__psk" type="password" value="${this._esc(ch.psk_b64 || '')}" placeholder="Base64 PSK" data-field="psk_b64">
-                    <button class="radio-ch__reveal" data-index="${i}" title="Show/hide key">&#128065;</button>
-                </td>
-                <td class="radio-ch__hash radio-value--mono">${ch.hash || '--'}</td>
-                <td><input type="checkbox" class="radio-ch__enabled" data-field="enabled" ${ch.enabled ? 'checked' : ''}></td>
-            </tr>
-        `).join('');
+        const rows = this._channels.map((ch, i) => this._buildRow(ch, i)).join('');
 
         this._container.innerHTML = `
             <h3 class="radio-card__title">Channels</h3>
@@ -34,7 +28,9 @@ class RadioChannels {
                         <th>Name</th>
                         <th>PSK (Base64)</th>
                         <th>Hash</th>
+                        <th>Slot</th>
                         <th>On</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody id="radio-ch-body">${rows}</tbody>
@@ -45,35 +41,7 @@ class RadioChannels {
             </div>
         `;
 
-        this._container.querySelectorAll('.radio-ch__reveal').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const row = btn.closest('tr');
-                const input = row.querySelector('.radio-ch__psk');
-                input.type = input.type === 'password' ? 'text' : 'password';
-            });
-        });
-
-        this._container.querySelectorAll('.radio-ch__psk').forEach(input => {
-            input.addEventListener('input', () => {
-                const row = input.closest('tr');
-                const hashCell = row.querySelector('.radio-ch__hash');
-                const nameInput = row.querySelector('.radio-ch__name');
-                hashCell.textContent = this._computeHash(
-                    nameInput.value, input.value
-                );
-            });
-        });
-
-        this._container.querySelectorAll('.radio-ch__name').forEach(input => {
-            input.addEventListener('input', () => {
-                const row = input.closest('tr');
-                const hashCell = row.querySelector('.radio-ch__hash');
-                const pskInput = row.querySelector('.radio-ch__psk');
-                hashCell.textContent = this._computeHash(
-                    input.value, pskInput.value
-                );
-            });
-        });
+        this._bindRowEvents(this._container.querySelectorAll('.radio-ch__row'));
 
         document.getElementById('radio-ch-add').addEventListener('click', () => {
             this._addEmptyRow();
@@ -84,12 +52,74 @@ class RadioChannels {
         });
     }
 
+    _buildRow(ch, i) {
+        const isPrimary = ch.index === 0;
+        const slotOpts = this._slotOptions(ch.concentrator_slot);
+        const delCell = isPrimary
+            ? '<td></td>'
+            : `<td><button class="radio-ch__del" title="Delete channel">&times;</button></td>`;
+
+        return `
+            <tr class="radio-ch__row" data-index="${i}" data-ch-index="${ch.index}">
+                <td class="radio-ch__idx">${ch.index}</td>
+                <td><input class="radio-input radio-ch__name" value="${this._esc(ch.name || '')}" placeholder="Channel name" data-field="name"></td>
+                <td class="radio-ch__psk-cell">
+                    <input class="radio-input radio-input--mono radio-ch__psk" type="password" value="${this._esc(ch.psk_b64 || '')}" placeholder="Base64 PSK" data-field="psk_b64">
+                    <button class="radio-ch__reveal" title="Show/hide key">&#128065;</button>
+                </td>
+                <td class="radio-ch__hash radio-value--mono">${ch.hash || '--'}</td>
+                <td><select class="radio-ch__slot" ${isPrimary ? 'disabled' : ''}>${slotOpts}</select></td>
+                <td><input type="checkbox" class="radio-ch__enabled" data-field="enabled" ${ch.enabled ? 'checked' : ''}></td>
+                ${delCell}
+            </tr>
+        `;
+    }
+
+    _slotOptions(selectedSlot) {
+        const noneSelected = selectedSlot == null ? 'selected' : '';
+        let opts = `<option value="" ${noneSelected}>—</option>`;
+        for (const s of this._slots) {
+            if (!s.enabled) continue;
+            const preset = this._presets.find(p => p.name === s.preset);
+            const label = `IF ${s.slot_index} — ${preset ? preset.display_name : s.preset} @ ${s.frequency_slot}`;
+            const sel = selectedSlot === s.slot_index ? 'selected' : '';
+            opts += `<option value="${s.slot_index}" ${sel}>${label}</option>`;
+        }
+        return opts;
+    }
+
+    _bindRowEvents(rows) {
+        rows.forEach(row => {
+            const pskInput = row.querySelector('.radio-ch__psk');
+            const nameInput = row.querySelector('.radio-ch__name');
+            const hashCell = row.querySelector('.radio-ch__hash');
+            const revealBtn = row.querySelector('.radio-ch__reveal');
+            const delBtn = row.querySelector('.radio-ch__del');
+
+            revealBtn && revealBtn.addEventListener('click', () => {
+                pskInput.type = pskInput.type === 'password' ? 'text' : 'password';
+            });
+
+            pskInput && pskInput.addEventListener('input', () => {
+                hashCell.textContent = this._computeHash(nameInput.value, pskInput.value);
+            });
+
+            nameInput && nameInput.addEventListener('input', () => {
+                hashCell.textContent = this._computeHash(nameInput.value, pskInput.value);
+            });
+
+            delBtn && delBtn.addEventListener('click', () => row.remove());
+        });
+    }
+
     _addEmptyRow() {
         const tbody = document.getElementById('radio-ch-body');
         const newIndex = tbody.querySelectorAll('tr').length;
         const tr = document.createElement('tr');
         tr.className = 'radio-ch__row';
         tr.dataset.index = newIndex;
+        tr.dataset.chIndex = newIndex;
+
         tr.innerHTML = `
             <td class="radio-ch__idx">${newIndex}</td>
             <td><input class="radio-input radio-ch__name" value="" placeholder="Channel name" data-field="name"></td>
@@ -98,25 +128,12 @@ class RadioChannels {
                 <button class="radio-ch__reveal" title="Show/hide key">&#128065;</button>
             </td>
             <td class="radio-ch__hash radio-value--mono">--</td>
+            <td><select class="radio-ch__slot">${this._slotOptions(null)}</select></td>
             <td><input type="checkbox" class="radio-ch__enabled" data-field="enabled" checked></td>
+            <td><button class="radio-ch__del" title="Delete channel">&times;</button></td>
         `;
 
-        tr.querySelector('.radio-ch__reveal').addEventListener('click', () => {
-            const input = tr.querySelector('.radio-ch__psk');
-            input.type = input.type === 'password' ? 'text' : 'password';
-        });
-
-        const pskInput = tr.querySelector('.radio-ch__psk');
-        const nameInput = tr.querySelector('.radio-ch__name');
-        const hashCell = tr.querySelector('.radio-ch__hash');
-
-        pskInput.addEventListener('input', () => {
-            hashCell.textContent = this._computeHash(nameInput.value, pskInput.value);
-        });
-        nameInput.addEventListener('input', () => {
-            hashCell.textContent = this._computeHash(nameInput.value, pskInput.value);
-        });
-
+        this._bindRowEvents([tr]);
         tbody.appendChild(tr);
     }
 
@@ -124,16 +141,20 @@ class RadioChannels {
         const rows = document.querySelectorAll('#radio-ch-body .radio-ch__row');
         const channels = [];
 
-        rows.forEach((row, i) => {
+        rows.forEach(row => {
+            const chIndex = parseInt(row.dataset.chIndex);
             const name = row.querySelector('.radio-ch__name').value.trim();
             const psk = row.querySelector('.radio-ch__psk').value.trim();
             const enabled = row.querySelector('.radio-ch__enabled').checked;
-            if (i === 0) {
-                channels.push({ index: 0, name, psk_b64: psk, enabled });
+            const slotEl = row.querySelector('.radio-ch__slot');
+            const slotVal = slotEl && slotEl.value !== '' ? parseInt(slotEl.value) : null;
+
+            if (chIndex === 0) {
+                channels.push({ index: 0, name, psk_b64: psk, enabled, concentrator_slot: null });
                 return;
             }
             if (name || psk) {
-                channels.push({ name, psk_b64: psk, enabled });
+                channels.push({ name, psk_b64: psk, enabled, concentrator_slot: slotVal });
             }
         });
 

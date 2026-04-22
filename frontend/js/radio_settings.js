@@ -30,6 +30,7 @@ class RadioSettings {
                     <div class="radio-card radio-card--identity" id="radio-identity"></div>
                 </div>
                 <div class="radio-card radio-card--config" id="radio-config"></div>
+                <div class="radio-card radio-card--slots" id="radio-slots-card"></div>
                 <div class="radio-card radio-card--channels" id="radio-channels-card"></div>
                 <div class="radio-card radio-card--companion" id="radio-companion"></div>
                 <div id="radio-restart-bar" class="radio-restart-bar" style="display:none">
@@ -72,9 +73,88 @@ class RadioSettings {
         this._renderTxStatus(c);
         this._renderIdentity(c);
         this._renderRadioConfig(c);
+        this._renderConcentratorSlots(c);
         this._renderCompanion(c);
         if (this._channels) {
-            this._channels.render(c.channels);
+            this._channels.render(c.channels, c.radio.concentrator_slots || [], c.presets || []);
+        }
+    }
+
+    _renderConcentratorSlots(c) {
+        const el = document.getElementById('radio-slots-card');
+        if (!el) return;
+        const savedSlots = c.radio.concentrator_slots || [];
+        const presets = c.presets || [];
+
+        const rows = Array.from({length: 8}, (_, i) => {
+            const slot = savedSlots.find(s => s.slot_index === i) || {
+                slot_index: i, preset: 'LONG_FAST', frequency_slot: 0, enabled: false,
+            };
+            const presetOpts = presets.map(p =>
+                `<option value="${p.name}" ${p.name === slot.preset ? 'selected' : ''}>${p.display_name}</option>`
+            ).join('');
+            return `
+                <tr class="radio-slots__row" data-slot="${i}">
+                    <td class="radio-ch__idx">${i}</td>
+                    <td><select class="radio-select radio-slots__preset">${presetOpts}</select></td>
+                    <td><input type="number" class="radio-input radio-input--narrow radio-slots__freqslot"
+                               value="${slot.frequency_slot}" min="0" max="999"></td>
+                    <td class="radio-ch__idx">
+                        <input type="checkbox" class="radio-slots__enabled" ${slot.enabled ? 'checked' : ''}>
+                    </td>
+                </tr>`;
+        }).join('');
+
+        el.innerHTML = `
+            <h3 class="radio-card__title">Concentrator Slots (IF Chains 0–7)</h3>
+            <table class="radio-ch__table">
+                <thead>
+                    <tr>
+                        <th>IF#</th>
+                        <th>Preset</th>
+                        <th>Freq Slot</th>
+                        <th>On</th>
+                    </tr>
+                </thead>
+                <tbody id="radio-slots-body">${rows}</tbody>
+            </table>
+            <div class="radio-ch__actions">
+                <button class="radio-save-btn" id="radio-slots-save">Save Slots</button>
+            </div>
+        `;
+
+        document.getElementById('radio-slots-save').addEventListener('click', async () => {
+            await this._saveSlots();
+        });
+    }
+
+    async _saveSlots() {
+        const rows = document.querySelectorAll('#radio-slots-body .radio-slots__row');
+        const slots = [];
+        rows.forEach(row => {
+            slots.push({
+                slot_index: parseInt(row.dataset.slot),
+                preset: row.querySelector('.radio-slots__preset').value,
+                frequency_slot: parseInt(row.querySelector('.radio-slots__freqslot').value) || 0,
+                enabled: row.querySelector('.radio-slots__enabled').checked,
+            });
+        });
+
+        try {
+            const res = await fetch('/api/config/concentrator-slots', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ slots }),
+            });
+            if (res.ok) {
+                this._showRestartBar();
+                this._showToast('Slots saved — restart required');
+            } else {
+                const err = await res.json().catch(() => ({}));
+                this._showToast(`Error: ${err.detail || res.status}`);
+            }
+        } catch (e) {
+            this._showToast('Save failed');
         }
     }
 
