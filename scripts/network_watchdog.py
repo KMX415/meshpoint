@@ -4,10 +4,11 @@ WiFi network watchdog for Mesh Point.
 
 Standalone service (no meshpoint imports, stdlib only) that:
   1. Disables WiFi power save on startup
-  2. Pings the default gateway every CHECK_INTERVAL seconds
+  2. Pings the default gateway every CHECK_INTERVAL seconds,
+     falling back to FALLBACK_PING_TARGET if the gateway does not reply
   3. Escalates recovery on consecutive failures:
      - Stage 1: restart the wlan interface
-     - Stage 2: full system reboot
+     - Stage 2: full system reboot (disabled by default)
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ import time
 WIFI_INTERFACE = "wlan0"
 CHECK_INTERVAL_SECONDS = 120
 RESTART_THRESHOLD = 3
-REBOOT_THRESHOLD = 6
+REBOOT_THRESHOLD = 0
 PING_TIMEOUT_SECONDS = 5
 FALLBACK_PING_TARGET = "8.8.8.8"
 
@@ -32,16 +33,21 @@ logger = logging.getLogger("network-watchdog")
 
 
 class ConnectivityProbe:
-    """Checks reachability of the default gateway via ICMP ping."""
+    """Checks network reachability via ICMP ping."""
 
     def __init__(self, timeout_seconds: int = PING_TIMEOUT_SECONDS) -> None:
         self._timeout = timeout_seconds
 
     def check(self) -> bool:
-        target = self._detect_gateway() or FALLBACK_PING_TARGET
-        return self._ping(target)
+        gateway = self._detect_gateway()
+        if gateway:
+            if self._ping(gateway):
+                return True
+            logger.debug("Gateway %s did not respond, trying fallback", gateway)
+        return self._ping(FALLBACK_PING_TARGET)
 
     def _ping(self, target: str) -> bool:
+        logger.debug("Pinging %s", target)
         try:
             result = subprocess.run(
                 ["ping", "-c", "1", "-W", str(self._timeout), target],
@@ -77,7 +83,12 @@ class NetworkWatchdog:
         self._consecutive_failures = 0
 
     def run(self) -> None:
-        logger.info("Starting network watchdog (interface=%s)", WIFI_INTERFACE)
+        logger.info(
+            "Starting network watchdog (interface=%s, restart=%d, reboot=%s)",
+            WIFI_INTERFACE,
+            RESTART_THRESHOLD,
+            REBOOT_THRESHOLD if REBOOT_THRESHOLD > 0 else "disabled",
+        )
         self._disable_power_save()
 
         while True:
@@ -99,7 +110,7 @@ class NetworkWatchdog:
             "Connectivity check failed (%d consecutive)", self._consecutive_failures
         )
 
-        if self._consecutive_failures >= REBOOT_THRESHOLD:
+        if REBOOT_THRESHOLD > 0 and self._consecutive_failures >= REBOOT_THRESHOLD:
             self._reboot()
         elif self._consecutive_failures >= RESTART_THRESHOLD:
             self._restart_interface()
