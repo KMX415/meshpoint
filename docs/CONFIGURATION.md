@@ -405,7 +405,7 @@ A flat overview of every top-level section in `local.yaml`. Use this as a checkl
 device:                # name, location, firmware version (mostly wizard-managed)
   device_id: null
   device_name: "My Meshpoint"
-  firmware_version: "0.6.4"
+  firmware_version: "0.6.5"
   latitude: null
   longitude: null
   altitude: null

@@ -1,9 +1,10 @@
 # Changelog
 
-### Unreleased (docs only)
+### v0.6.5 (April 22, 2026)
 
-- **Support documentation expansion:** new `docs/FAQ.md`, `docs/HARDWARE-MATRIX.md`, `docs/COMMON-ERRORS.md`, `docs/RADIO-CONFIG-EXPLAINED.md`, and `docs/MQTT-AND-MESHRADAR.md`. README "Support and documentation" section reorganized into Setup/When-something-goes-wrong/Project groups. No code changes, no version bump.
-- **SX1302 minimum bandwidth documented:** `docs/HARDWARE-MATRIX.md` and `docs/RADIO-CONFIG-EXPLAINED.md` now explain that the SX1302 concentrator cannot tune below 125 kHz, which is why MeshCore (62.5 kHz) requires a USB companion radio for RX. Closes a gap that previously had no documented answer.
+- **Network watchdog reliability fix:** the watchdog no longer triggers an infinite reboot loop on networks where the gateway blocks ICMP. Gateway pings now fall back to `8.8.8.8` before a check is counted as a failure, and **auto-reboot is disabled by default** (`REBOOT_THRESHOLD = 0`). Stage 1 recovery (interface restart at 3 consecutive failures) is unchanged. To re-enable automatic reboots, edit `scripts/network_watchdog.py` and set `REBOOT_THRESHOLD` back to `6`. Startup banner now logs the active thresholds so you can confirm the policy at a glance. Thanks to first-time contributor [@dotchance](https://github.com/dotchance) for catching this and shipping the fix. ([#27](https://github.com/KMX415/meshpoint/pull/27))
+- **Support documentation expansion:** new `docs/FAQ.md`, `docs/HARDWARE-MATRIX.md`, `docs/COMMON-ERRORS.md`, `docs/RADIO-CONFIG-EXPLAINED.md`, and `docs/MQTT-AND-MESHRADAR.md`. README "Support and documentation" section reorganized into Setup / When-something-goes-wrong / Project groups.
+- **SX1302 minimum bandwidth documented:** `docs/HARDWARE-MATRIX.md` and `docs/RADIO-CONFIG-EXPLAINED.md` now explain that the SX1302 concentrator cannot tune below 125 kHz, which is why MeshCore (62.5 kHz) requires a USB companion radio for RX.
 
 ### v0.6.4 (April 16, 2026)
 
