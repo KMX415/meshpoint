@@ -59,6 +59,7 @@ class TxService:
         duty_tracker: Optional[DutyCycleTracker] = None,
         radio_config=None,
         primary_channel_name: str = "",
+        sx1261_lock: Optional[asyncio.Lock] = None,
     ):
         self._wrapper = wrapper
         self._crypto = crypto
@@ -68,6 +69,7 @@ class TxService:
         self._duty = duty_tracker
         self._radio_config = radio_config
         self._primary_channel_name = primary_channel_name
+        self._sx1261_lock = sx1261_lock
         self._builder = None
         self._packet_counter = random.randint(1, 0xFFFF)
         self._source_node_id = self._resolve_node_id()
@@ -184,7 +186,11 @@ class TxService:
         pre_status = await asyncio.to_thread(self._wrapper.get_tx_status, 0)
         logger.info("TX status before send: %d", pre_status)
 
-        result_code = await asyncio.to_thread(self._wrapper.send, tx_pkt)
+        if self._sx1261_lock is not None:
+            async with self._sx1261_lock:
+                result_code = await asyncio.to_thread(self._wrapper.send, tx_pkt)
+        else:
+            result_code = await asyncio.to_thread(self._wrapper.send, tx_pkt)
 
         if result_code == 0:
             for delay in (0.05, 0.1, 0.5, 1.0):

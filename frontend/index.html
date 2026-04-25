@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="css/messaging.css" />
     <link rel="stylesheet" href="css/radio.css" />
     <link rel="stylesheet" href="css/stats.css" />
+    <link rel="stylesheet" href="css/spectrum.css" />
 </head>
 <body>
     <header class="top-bar">
@@ -43,6 +44,7 @@
         <button class="tab-bar__btn" data-tab="stats">Stats</button>
         <button class="tab-bar__btn" data-tab="messages">Messages <span id="msg-unread-badge" class="tab-bar__badge" style="display:none">0</span></button>
         <button class="tab-bar__btn" data-tab="radio">Radio</button>
+        <button class="tab-bar__btn" data-tab="spectrum">Spectrum</button>
     </nav>
 
     <div id="tab-dashboard" class="tab-content tab-content--active">
@@ -158,6 +160,10 @@
         <div id="radio-panel"></div>
     </div>
 
+    <div id="tab-spectrum" class="tab-content">
+        <div id="spectrum-panel"></div>
+    </div>
+
     <div id="node-backdrop" class="nd-backdrop"></div>
     <div id="node-drawer" class="nd-drawer"></div>
 
@@ -175,6 +181,7 @@
     <script src="js/radio_channels.js"></script>
     <script src="js/radio_settings.js"></script>
     <script src="js/stats_tab.js"></script>
+    <script src="js/spectrum_tab.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

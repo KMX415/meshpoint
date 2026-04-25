@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from src.analytics.network_mapper import NetworkMapper
 from src.analytics.signal_analyzer import SignalAnalyzer
 from src.analytics.traffic_monitor import TrafficMonitor
-from src.api.routes import analytics, config_routes, device, messages, nodes, packets, stats_routes, system_metrics, telemetry, update_check
+from src.api.routes import analytics, config_routes, device, messages, nodes, packets, spectral_scan, stats_routes, system_metrics, telemetry, update_check
 from src.api.upstream_client import UpstreamClient
 from src.api.websocket_manager import WebSocketManager
 from src.config import AppConfig, load_config, validate_activation
@@ -19,6 +19,7 @@ from src.log_format import print_banner, print_packet, setup_logging
 from src.models.device_identity import DeviceIdentity, _stable_device_id
 from src.models.packet import Packet
 from src.storage.message_repository import MessageRepository
+from src.spectral.scan_service import ScanService
 from src.transmit.tx_service import TxService
 
 setup_logging()
@@ -36,6 +37,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         global pipeline, upstream
+        import asyncio as _asyncio
         validate_activation(config)
         identity = DeviceIdentity(
             device_id=_stable_device_id(config.device.device_id),
@@ -55,8 +57,12 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
         await pipeline.start()
 
+        sx1261_lock = _asyncio.Lock()
+        scan_service = ScanService(ws_manager=ws_manager, sx1261_lock=sx1261_lock)
+        spectral_scan.init_routes(scan_service)
+
         message_repo = MessageRepository(pipeline.database)
-        tx_service = _build_tx_service(config, pipeline)
+        tx_service = _build_tx_service(config, pipeline, sx1261_lock=sx1261_lock)
         mc_source = _find_meshcore_source(pipeline)
         meshcore_tx_ref = None
         if tx_service and hasattr(tx_service, '_meshcore_tx'):
@@ -101,6 +107,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(messages.router)
     app.include_router(config_routes.router)
     app.include_router(stats_routes.router)
+    app.include_router(spectral_scan.router)
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
@@ -187,7 +194,9 @@ def _add_meshcore_usb_source(
 
 
 def _build_tx_service(
-    config: AppConfig, coord: PipelineCoordinator
+    config: AppConfig,
+    coord: PipelineCoordinator,
+    sx1261_lock=None,
 ) -> TxService | None:
     """Build the TX service if transmit is enabled in config."""
     if not config.transmit.enabled:
@@ -220,6 +229,7 @@ def _build_tx_service(
         duty_tracker=duty,
         radio_config=config.radio,
         primary_channel_name=config.meshtastic.primary_channel_name,
+        sx1261_lock=sx1261_lock,
     )
     logger.info(
         "Transmit service ready: MT=%s MC=%s",
