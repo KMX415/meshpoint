@@ -1,0 +1,212 @@
+/* ── Spectrum tab layout ─────────────────────────────────────────── */
+
+.spectrum {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 90px);
+    padding: 1rem;
+    gap: 0.75rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* ── Controls bar ────────────────────────────────────────────────── */
+
+.spectrum__controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    background: var(--surface-1, #1a1a2e);
+    border: 1px solid var(--border, #2a2a4a);
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+}
+
+.spectrum__label {
+    font-size: 0.72rem;
+    color: var(--text-muted, #888);
+    white-space: nowrap;
+}
+
+.spectrum__input {
+    background: var(--surface-0, #0f0f23);
+    border: 1px solid var(--border, #2a2a4a);
+    border-radius: 4px;
+    color: var(--text-primary, #ddd);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    padding: 0.3rem 0.5rem;
+    width: 100px;
+    outline: none;
+    text-align: right;
+}
+
+.spectrum__input:focus { border-color: var(--accent, #4ecdc4); }
+
+.spectrum__sep {
+    color: var(--text-muted, #888);
+    font-size: 0.72rem;
+}
+
+.spectrum__btn {
+    padding: 0.35rem 1rem;
+    background: var(--accent, #4ecdc4);
+    color: #000;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    white-space: nowrap;
+}
+
+.spectrum__btn:hover { opacity: 0.85; }
+
+.spectrum__btn--stop {
+    background: transparent;
+    border: 1px solid var(--border, #2a2a4a);
+    color: var(--text-primary, #ddd);
+}
+
+.spectrum__btn--stop:hover {
+    border-color: #e74c3c;
+    color: #e74c3c;
+}
+
+.spectrum__status {
+    margin-left: auto;
+    font-size: 0.72rem;
+    color: var(--text-muted, #888);
+    white-space: nowrap;
+}
+
+.spectrum__status--running { color: var(--accent, #4ecdc4); }
+.spectrum__status--error   { color: #e74c3c; }
+
+/* ── Waterfall panel ─────────────────────────────────────────────── */
+
+.spectrum__panel {
+    flex: 1;
+    background: var(--surface-1, #1a1a2e);
+    border: 1px solid var(--border, #2a2a4a);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+}
+
+.spectrum__freq-axis {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.3rem 0.5rem;
+    border-bottom: 1px solid var(--border, #2a2a4a);
+}
+
+.spectrum__freq-label {
+    font-size: 0.65rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted, #888);
+}
+
+.spectrum__canvas-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+.spectrum__canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    image-rendering: pixelated;
+}
+
+.spectrum__overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 0.5rem;
+    pointer-events: none;
+}
+
+.spectrum__idle-msg {
+    font-size: 0.85rem;
+    color: var(--text-muted, #888);
+    text-align: center;
+}
+
+.spectrum__idle-sub {
+    font-size: 0.7rem;
+    color: var(--text-muted, #888);
+    opacity: 0.6;
+    text-align: center;
+}
+
+/* ── Color scale legend ──────────────────────────────────────────── */
+
+.spectrum__legend {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    border-top: 1px solid var(--border, #2a2a4a);
+}
+
+.spectrum__legend-bar {
+    flex: 1;
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(
+        to right,
+        #0a0a1a,
+        #0d2244,
+        #0a5280,
+        #0e80aa,
+        #1ab5b0,
+        #4ecdc4,
+        #a8e6c0,
+        #f7dc6f,
+        #e74c3c
+    );
+}
+
+.spectrum__legend-lo,
+.spectrum__legend-hi {
+    font-size: 0.65rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted, #888);
+    white-space: nowrap;
+}
+
+/* ── Unavailable notice ──────────────────────────────────────────── */
+
+.spectrum__unavailable {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 0.5rem;
+    height: 100%;
+    color: var(--text-muted, #888);
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 2rem;
+}
+
+.spectrum__unavailable-sub {
+    font-size: 0.72rem;
+    opacity: 0.6;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+    .spectrum__controls { gap: 0.4rem; }
+    .spectrum__input { width: 80px; }
+}

@@ -40,11 +40,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     await _updateStats();
     _checkForUpdate();
 
+    window.spectrumTab = new SpectrumTab('spectrum-panel');
+
     window.concentratorWS.on('packet', (packet) => {
         packetFeed.addPacket(packet);
         nodeMap.updateFromPacket(packet);
         nodeCards.updateFromPacket(packet);
         _incrementPacketCount();
+    });
+
+    window.concentratorWS.on('spectral_row', (data) => {
+        if (window.spectrumTab) window.spectrumTab.onRow(data);
     });
 
     _setupTabs();
@@ -228,6 +234,9 @@ function _setupTabs() {
             }
             if (tabId === 'stats' && window.statsTab) {
                 window.statsTab.refresh();
+            }
+            if (tabId === 'spectrum' && window.spectrumTab) {
+                window.spectrumTab.onActivated();
             }
         });
     });

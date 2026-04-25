@@ -4,7 +4,7 @@
 
 <h1 align="center">Meshpoint</h1>
 
-<p align="center"><strong>Open-source Meshtastic base station with native TX/RX, 8-channel concentrator, and browser-based messaging.</strong><br>Runs on Raspberry Pi 4 + SX1302/SX1303. Supports US915, EU868, ANZ915, IN865, KR920, and SG923.</p>
+<p align="center"><strong>Open-source Meshtastic base station with native TX/RX, independently configurable 8-channel concentrator, and browser-based messaging.</strong><br>Runs on Raspberry Pi 4 + SX1302/SX1303. Supports US915, EU868, ANZ915, IN865, KR920, and SG923.</p>
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-green.svg)](https://www.python.org/)
@@ -54,7 +54,7 @@ Everything is managed from a browser dashboard: full chat with channels and DMs,
 
 **Full chat UI.** Conversations organized by channel and contact. Signal info (SNR, RSSI) on every received bubble. Duplicate badge shows how many times a relayed message was heard. Channel sidebar with LongFast, custom channels, and DM contacts. Message history persisted in SQLite.
 
-**Radio configuration from the dashboard.** Change region, modem preset, frequency, TX power, and duty cycle without SSH. Add and remove channels with custom PSKs. Toggle TX enable/disable. All settings saved to `local.yaml` and survive restarts.
+**Radio configuration from the dashboard.** Change region, modem preset, frequency, TX power, and duty cycle without SSH. Configure each of the 8 concentrator IF chains independently — assign a Meshtastic modem preset (LongFast, MediumFast, etc.) and a Meshtastic frequency slot number per chain so the concentrator listens on multiple presets and frequencies simultaneously. Add, edit, and delete messaging channels with custom PSKs; assign each channel to a specific IF chain for targeted decoding. Toggle TX enable/disable. All settings saved to `local.yaml` and survive restarts.
 
 **Node discovery.** Live node cards showing every node your Meshpoint has heard: name, ID, protocol, hardware model, signal strength, battery, and last seen. Click any node to open a detail drawer with signal history and direct message.
 
@@ -196,6 +196,7 @@ FastAPI server on port 8080:
 | `PUT /api/config/transmit` | Update TX settings |
 | `PUT /api/config/identity` | Update node ID, long/short name |
 | `PUT /api/config/radio` | Change region, preset, frequency |
+| `PUT /api/config/concentrator-slots` | Configure per-IF-chain preset and frequency slot |
 | `POST /api/messages/send` | Send a Meshtastic or MeshCore message |
 | `GET /api/messages/conversations` | Message history by conversation |
 | `WS /ws` | Real-time packet + message stream |

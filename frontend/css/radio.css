@@ -280,6 +280,25 @@
     margin-top: 0.75rem;
 }
 
+.radio-ch__slot {
+    font-size: 0.72rem;
+    padding: 0.2rem 0.3rem;
+    min-width: 120px;
+}
+
+.radio-ch__del {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    color: var(--text-muted, #888);
+    padding: 0 0.2rem;
+    transition: color 0.15s;
+}
+
+.radio-ch__del:hover { color: #e74c3c; }
+
 /* ── MeshCore companion ──────────────────────────────────────────── */
 
 .radio-companion-grid {
