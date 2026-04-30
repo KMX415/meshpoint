@@ -10,6 +10,7 @@ class RadioChannels {
     constructor(containerEl) {
         this._container = containerEl;
         this._channels = [];
+        this._focusedRow = null;
     }
 
     render(channels) {
@@ -60,6 +61,10 @@ class RadioChannels {
                 <tbody id="r-ch-body">${rows}</tbody>
             </table>
             <div class="r-card__actions">
+                <button class="r-btn r-btn--warn" id="r-ch-delete"
+                        style="display:none">
+                    Delete Channel
+                </button>
                 <button class="r-btn r-btn--secondary" id="r-ch-add">
                     + Add Channel
                 </button>
@@ -76,6 +81,12 @@ class RadioChannels {
         document.getElementById('r-ch-save').addEventListener(
             'click', () => this._save(),
         );
+
+        const delBtn = document.getElementById('r-ch-delete');
+        // preventDefault on mousedown keeps focus on the row input so blur
+        // does not fire before click, which would hide the button too early.
+        delBtn.addEventListener('mousedown', (e) => e.preventDefault());
+        delBtn.addEventListener('click', () => this._deleteRow());
     }
 
     _wireRowHandlers(scope) {
@@ -94,6 +105,38 @@ class RadioChannels {
         scope.querySelectorAll('[data-field="name"]').forEach((input) => {
             input.addEventListener('input', () => this._refreshHash(input.closest('tr')));
         });
+
+        scope.querySelectorAll('.ch-table__row input').forEach((input) => {
+            input.addEventListener('focus', () => {
+                const row = input.closest('tr');
+                const tbody = document.getElementById('r-ch-body');
+                const isPrimary = Array.from(tbody.rows).indexOf(row) === 0;
+                this._focusedRow = isPrimary ? null : row;
+                this._syncDeleteBtn();
+            });
+            input.addEventListener('blur', () => {
+                // Defer so focus can settle on another row input before we hide.
+                setTimeout(() => {
+                    if (!this._container.querySelector('.ch-table__row input:focus')) {
+                        this._focusedRow = null;
+                        this._syncDeleteBtn();
+                    }
+                }, 0);
+            });
+        });
+    }
+
+    _syncDeleteBtn() {
+        const btn = document.getElementById('r-ch-delete');
+        if (btn) btn.style.display = this._focusedRow ? '' : 'none';
+    }
+
+    _deleteRow() {
+        if (!this._focusedRow) return;
+        if (!confirm('Delete this channel?')) return;
+        this._focusedRow.remove();
+        this._focusedRow = null;
+        this._syncDeleteBtn();
     }
 
     _refreshHash(row) {

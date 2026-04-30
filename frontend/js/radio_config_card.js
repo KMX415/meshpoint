@@ -9,6 +9,13 @@
  *     apply at runtime; freq/preset/region require a service restart.
  * A horizontal readout strip shows the computed sync word, preamble,
  * and effective SF/BW/CR for the current selection.
+ *
+ * The Slot field (left of Frequency) translates between the Meshtastic
+ * 1-indexed slot number and MHz using the general formula from the
+ * firmware: freq = freqStart + (BW/2000) + ((slot-1) * (BW/1000)).
+ * Supported for BW 125/250/500 across all regions. Entering a slot
+ * fills the frequency; entering a frequency fills the slot (or shows
+ * "--" if no match).
  */
 class RadioConfigCard {
     constructor(api) {
@@ -18,6 +25,7 @@ class RadioConfigCard {
         this._regions = [];
         this._currentRadio = null;
         this._currentTx = null;
+        this._effectiveBw = null;
     }
 
     mount(rootEl) {
@@ -45,6 +53,11 @@ class RadioConfigCard {
                 <div class="config-pane">
                     <div class="config-pane__label">Tuning</div>
                     <div class="config-pane__inputs">
+                        <div class="r-field r-field--slot">
+                            <label class="r-field__label" for="r-slot">Slot</label>
+                            <input type="text" class="r-input r-input--mono r-input--narrow"
+                                   id="r-slot" placeholder="--" />
+                        </div>
                         <div class="r-field">
                             <label class="r-field__label" for="r-freq">Frequency (MHz)</label>
                             <input type="number" class="r-input r-input--mono r-input--narrow"
@@ -134,6 +147,8 @@ class RadioConfigCard {
         this._root.querySelector('#r-freq').value = this._currentRadio.frequency_mhz || '';
         this._root.querySelector('#r-tx-power').value = this._currentTx.tx_power_dbm || '';
         this._root.querySelector('#r-hop-limit').value = this._currentTx.hop_limit || '';
+        this._effectiveBw = this._currentRadio.bandwidth_khz || null;
+        this._updateSlotFromFreq();
     }
 
     _renderReadouts(radio) {
@@ -154,6 +169,57 @@ class RadioConfigCard {
         sub.textContent = freq ? `${preset} -- ${freq}` : preset;
     }
 
+    // Meshtastic band limits (freqStart, freqEnd) per region in MHz.
+    // freqStart is the lower ISM band boundary used in the slot formula:
+    //   freq = freqStart + (BW/2000) + ((slot-1) * (BW/1000))
+    _regionBand(regionId) {
+        const bands = {
+            US:     { start: 902.0, end: 928.0 },
+            EU_868: { start: 863.0, end: 870.0 },
+            ANZ:    { start: 915.0, end: 928.0 },
+            IN:     { start: 865.0, end: 867.0 },
+            KR:     { start: 920.0, end: 923.0 },
+            SG_923: { start: 917.0, end: 925.0 },
+        };
+        return bands[regionId] || null;
+    }
+
+    // Returns the center frequency (MHz) for a 1-indexed slot at the given
+    // BW (kHz) in the given region. Returns null for unsupported inputs.
+    _slotToFreq(slot, bw, regionId) {
+        const band = this._regionBand(regionId);
+        if (!band || ![125, 250, 500].includes(bw)) return null;
+        const spacing = bw / 1000;
+        const numSlots = Math.floor((band.end - band.start) / spacing);
+        if (slot < 1 || slot > numSlots) return null;
+        return parseFloat((band.start + spacing / 2 + (slot - 1) * spacing).toFixed(4));
+    }
+
+    // Returns the 1-indexed slot number for a frequency at the given BW in
+    // the given region, or null if the frequency does not land on a slot.
+    _freqToSlot(freq, bw, regionId) {
+        const band = this._regionBand(regionId);
+        if (!band || ![125, 250, 500].includes(bw)) return null;
+        const spacing = bw / 1000;
+        const numSlots = Math.floor((band.end - band.start) / spacing);
+        const raw = (freq - band.start - spacing / 2) / spacing + 1;
+        const n = Math.round(raw);
+        if (n >= 1 && n <= numSlots && Math.abs(raw - n) < 0.001) return n;
+        return null;
+    }
+
+    _updateSlotFromFreq() {
+        const freqVal = parseFloat(this._root.querySelector('#r-freq').value);
+        const slotEl = this._root.querySelector('#r-slot');
+        if (isNaN(freqVal) || !this._effectiveBw) {
+            slotEl.value = '';
+            return;
+        }
+        const region = this._root.querySelector('#r-region').value;
+        const slot = this._freqToSlot(freqVal, this._effectiveBw, region);
+        slotEl.value = slot !== null ? String(slot) : '--';
+    }
+
     _wire() {
         const presetSel = this._root.querySelector('#r-preset');
         presetSel.onchange = () => {
@@ -161,6 +227,7 @@ class RadioConfigCard {
             if (name === 'CUSTOM') return;
             const p = this._presets.find((x) => x.name === name);
             if (!p) return;
+            this._effectiveBw = p.bw_khz;
             this._renderReadouts({
                 spreading_factor: p.sf,
                 bandwidth_khz: p.bw_khz,
@@ -168,12 +235,27 @@ class RadioConfigCard {
                 sync_word: this._currentRadio.sync_word,
                 preamble_length: this._currentRadio.preamble_length,
             });
+            this._updateSlotFromFreq();
         };
 
         const regionSel = this._root.querySelector('#r-region');
         regionSel.onchange = () => {
             const r = this._regions.find((x) => x.id === regionSel.value);
-            if (r) this._root.querySelector('#r-freq').value = r.frequency_mhz;
+            if (!r) return;
+            this._root.querySelector('#r-freq').value = r.frequency_mhz;
+            this._updateSlotFromFreq();
+        };
+
+        const freqEl = this._root.querySelector('#r-freq');
+        freqEl.onchange = () => this._updateSlotFromFreq();
+
+        const slotEl = this._root.querySelector('#r-slot');
+        slotEl.onchange = () => {
+            const slotVal = parseInt(slotEl.value, 10);
+            if (isNaN(slotVal) || !this._effectiveBw) return;
+            const region = this._root.querySelector('#r-region').value;
+            const freq = this._slotToFreq(slotVal, this._effectiveBw, region);
+            if (freq !== null) freqEl.value = freq;
         };
 
         this._root.querySelector('#r-save-config').onclick = () => this._save();

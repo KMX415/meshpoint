@@ -203,6 +203,10 @@
     min-width: 0;
 }
 
+.config-pane__inputs .r-field--slot {
+    flex: 0 0 auto;
+}
+
 .config-pane__hint {
     font-size: 0.7rem;
     color: var(--text-muted);
