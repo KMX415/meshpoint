@@ -12,10 +12,35 @@ import yaml
 from src.version import __version__
 
 
+# Band-start frequencies (MHz) for the Meshtastic slot formula
+# freq = freqStart + BW/2000 + (slot-1) * BW/1000
+# Values match _REGION_BAND_LIMITS_HZ in hal/concentrator_config.py.
+_REGION_FREQ_START: dict[str, float] = {
+    "US":     902.0,
+    "EU_868": 863.0,
+    "ANZ":    915.0,
+    "IN":     865.0,
+    "KR":     920.0,
+    "SG_923": 917.0,
+}
+
+# Regional default frequencies used when neither frequency_mhz nor slot
+# is set. Values match REGION_DEFAULTS in radio/presets.py.
+_REGION_DEFAULT_FREQ: dict[str, float] = {
+    "US":     906.875,
+    "EU_868": 869.525,
+    "ANZ":    916.0,
+    "IN":     865.4625,
+    "KR":     921.9,
+    "SG_923": 923.0,
+}
+
+
 @dataclass
 class RadioConfig:
     region: str = "US"
-    frequency_mhz: float = 906.875
+    frequency_mhz: Optional[float] = None  # resolved at load time; wins over slot
+    slot: Optional[int] = None             # Meshtastic 1-indexed slot; used when frequency_mhz absent
     spreading_factor: int = 11
     bandwidth_khz: float = 250.0
     coding_rate: str = "4/8"
@@ -168,6 +193,27 @@ class AppConfig:
     transmit: TransmitConfig = field(default_factory=TransmitConfig)
 
 
+def _resolve_radio_frequency(radio: "RadioConfig") -> None:
+    """Resolve radio.frequency_mhz at startup.
+
+    Priority (first match wins):
+    1. frequency_mhz set in YAML  -> use as-is, slot ignored
+    2. slot set in YAML           -> compute from slot + bandwidth + region
+    3. neither set                -> regional default frequency
+    """
+    if radio.frequency_mhz is not None:
+        return
+    if radio.slot is not None:
+        freq_start = _REGION_FREQ_START.get(radio.region)
+        if freq_start is not None:
+            spacing = radio.bandwidth_khz / 1000
+            radio.frequency_mhz = round(
+                freq_start + spacing / 2 + (radio.slot - 1) * spacing, 4
+            )
+            return
+    radio.frequency_mhz = _REGION_DEFAULT_FREQ.get(radio.region, 906.875)
+
+
 def _merge_dataclass(instance, overrides: dict):
     """Apply dict overrides onto a dataclass instance, merging nested dataclasses."""
     if not overrides:
@@ -232,6 +278,7 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
 
     local = config_path or os.environ.get("CONCENTRATOR_CONFIG", "config/local.yaml")
     _apply_yaml(cfg, _validated_config_path(local))
+    _resolve_radio_frequency(cfg.radio)
 
     return cfg
 

@@ -1,6 +1,10 @@
 radio:
   region: "US"
-  frequency_mhz: 906.875
+  # Frequency: set frequency_mhz (explicit MHz) OR slot (Meshtastic 1-indexed
+  # slot number). frequency_mhz wins if both are present. If neither is set,
+  # the regional default is used. Examples:
+  #   frequency_mhz: 906.875
+  #   slot: 20
   spreading_factor: 11
   bandwidth_khz: 250.0
   coding_rate: "4/5"
