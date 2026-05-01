@@ -338,7 +338,7 @@ async def update_channels(req: ChannelsUpdate):
         raise HTTPException(403, str(exc))
 
     if _crypto and hasattr(_crypto, "add_channel_key"):
-        _crypto._keys.clear()
+        _crypto.clear_channel_keys()
         for name, key_b64 in channel_keys.items():
             _crypto.add_channel_key(name, key_b64)
 

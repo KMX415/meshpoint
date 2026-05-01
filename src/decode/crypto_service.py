@@ -33,6 +33,10 @@ class CryptoService:
         raw = base64.b64decode(key_b64)
         self._keys[channel_name] = self._expand_key(raw)
 
+    def clear_channel_keys(self) -> None:
+        """Drop all non-default channel keys."""
+        self._keys.clear()
+
     def get_all_keys(self) -> list[bytes]:
         """Return all available keys, default first then channel keys."""
         keys: list[bytes] = []
