@@ -205,6 +205,7 @@ class SX1302Wrapper:
                     BW_MAP.get(pkt.bandwidth, pkt.bandwidth),
                     pkt.rssic, pkt.snr, pkt.size, self._crc_bad_count,
                 )
+                continue
             elif self._debug_rx:
                 status_name = _STATUS_NAMES.get(
                     pkt.status, f"0x{pkt.status:02X}"
