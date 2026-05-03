@@ -37,6 +37,7 @@ PRESET_DISPLAY_NAMES: dict[tuple[int, int], str] = {
     (9, 250): "MediumFast",
     (10, 250): "MediumSlow",
     (11, 250): "LongFast",
+    (11, 500): "LongTurbo",
     (11, 125): "LongMod",
     (12, 125): "LongSlow",
     (12, 62): "VLongSlow",

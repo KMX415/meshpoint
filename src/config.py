@@ -43,7 +43,7 @@ class RadioConfig:
     slot: Optional[int] = None             # Meshtastic 1-indexed slot; used when frequency_mhz absent
     spreading_factor: int = 11
     bandwidth_khz: float = 250.0
-    coding_rate: str = "4/8"
+    coding_rate: str = "4/5"
     sync_word: int = 0x2B
     preamble_length: int = 16
     tx_power_dbm: int = 22
