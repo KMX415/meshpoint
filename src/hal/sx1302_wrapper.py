@@ -98,6 +98,8 @@ class SX1302Wrapper:
         self._started = False
         self._debug_rx = os.getenv("MESHPOINT_DEBUG_RX") == "1"
         self._crc_bad_count = 0
+        self._no_crc_count = 0
+        self._unknown_status_count = 0
 
     def load(self) -> None:
         if not self._lib_path or not os.path.exists(self._lib_path):
@@ -206,15 +208,32 @@ class SX1302Wrapper:
                     pkt.rssic, pkt.snr, pkt.size, self._crc_bad_count,
                 )
                 continue
-            elif self._debug_rx:
-                status_name = _STATUS_NAMES.get(
-                    pkt.status, f"0x{pkt.status:02X}"
-                )
-                logger.info(
-                    "RX if=%d sf%d bw=%g status=%s rssi=%.1f snr=%.1f size=%d",
+            elif pkt.status == STAT_NO_CRC:
+                self._no_crc_count += 1
+                logger.warning(
+                    "RX NO_CRC if=%d sf%d bw=%g rssi=%.1f snr=%.1f size=%d "
+                    "(total NO_CRC: %d)",
                     pkt.if_chain, pkt.datarate,
                     BW_MAP.get(pkt.bandwidth, pkt.bandwidth),
-                    status_name, pkt.rssic, pkt.snr, pkt.size,
+                    pkt.rssic, pkt.snr, pkt.size, self._no_crc_count,
+                )
+                continue
+            elif pkt.status != STAT_CRC_OK:
+                self._unknown_status_count += 1
+                logger.warning(
+                    "RX unknown status=0x%02X if=%d sf%d bw=%g rssi=%.1f "
+                    "snr=%.1f size=%d (total unknown: %d)",
+                    pkt.status, pkt.if_chain, pkt.datarate,
+                    BW_MAP.get(pkt.bandwidth, pkt.bandwidth),
+                    pkt.rssic, pkt.snr, pkt.size, self._unknown_status_count,
+                )
+                continue
+            elif self._debug_rx:
+                logger.info(
+                    "RX if=%d sf%d bw=%g status=CRC_OK rssi=%.1f snr=%.1f size=%d",
+                    pkt.if_chain, pkt.datarate,
+                    BW_MAP.get(pkt.bandwidth, pkt.bandwidth),
+                    pkt.rssic, pkt.snr, pkt.size,
                 )
 
             packets.append(
@@ -241,6 +260,28 @@ class SX1302Wrapper:
         on the same demodulator (capture effect failure) or weak signals.
         """
         return self._crc_bad_count
+
+    @property
+    def no_crc_count(self) -> int:
+        """Total NO_CRC packets dropped since process start.
+
+        NO_CRC indicates the chip received a packet but the LoRa header
+        CRC bit was off, or the CRC could not be validated. On a
+        Meshtastic-configured concentrator (CRC always enabled in the
+        outbound LoRa header by spec), NO_CRC at the noise floor is the
+        primary source of phantom node rows in the local SQLite.
+        """
+        return self._no_crc_count
+
+    @property
+    def unknown_status_count(self) -> int:
+        """Total packets dropped due to a chip status code that is neither
+        CRC_OK, CRC_BAD, nor NO_CRC.
+
+        Catches any future HAL or chip-firmware quirk that introduces a new
+        status code rather than silently treating it as valid.
+        """
+        return self._unknown_status_count
 
     def set_syncword(self, syncword: int) -> None:
         """Configure custom sync word (requires patched HAL)."""

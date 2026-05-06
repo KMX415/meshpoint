@@ -97,6 +97,14 @@ class MeshtasticDecoder:
         [13]   channel hash
         [14]   next_hop (relay)
         [15]   relay_node (lowest byte of last relay node's ID; 0 = direct)
+
+        Returns None if the header parses but fails a structural-validity
+        check (currently only ``hop_limit > hop_start``, which is
+        mathematically impossible for an honestly-originated Meshtastic
+        packet: hop_limit starts at hop_start and only ever decrements
+        through relays). Defense in depth against any future status-code
+        blind spot in the wrapper letting corrupted bytes reach the
+        decoder.
         """
         try:
             dest_id, source_id, packet_id = struct.unpack_from(
@@ -110,6 +118,14 @@ class MeshtasticDecoder:
             want_ack = bool(flags & 0x08)
             via_mqtt = bool(flags & 0x10)
             hop_start = (flags >> 5) & 0x07
+
+            if hop_limit > hop_start:
+                logger.debug(
+                    "Dropping packet with impossible hops hl=%d > hs=%d "
+                    "(corrupted header bytes; source=0x%08x dest=0x%08x)",
+                    hop_limit, hop_start, source_id, dest_id,
+                )
+                return None
 
             return {
                 "dest_id": dest_id,
