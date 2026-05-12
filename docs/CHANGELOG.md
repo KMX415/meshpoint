@@ -1,5 +1,11 @@
 # Changelog
 
+### Unreleased
+
+Queued for the next version bump. Bullets in this section will be folded into the release header (and dated) when the version is cut.
+
+- **MeshCore nodes now appear on the dashboard map.** MeshCore advertises position on the *advertisement* packet itself (`adv_lat`/`adv_lon`) rather than via a separate periodic position broadcast like Meshtastic. The event adapter was correctly extracting these onto the decoded payload, but `MeshcoreDecoder.extract_node_update` only consumed lat/lon from `PacketType.POSITION` packets and ignored them on `PacketType.NODEINFO` (which is what advertisements get classified as), so coordinates silently dropped on the floor before the node-repository write and the `/api/nodes/map` endpoint returned zero MC nodes. Now `extract_node_update` pulls position from both `NODEINFO` and `POSITION` packets through a shared `_apply_position` helper. Existing MC nodes will populate on the map after their next advertisement is heard (no DB migration needed). New `tests/test_meshcore_usb.py::TestMeshcoreDecoderNodeExtraction` (3 tests) covers the advertisement-with-position, advertisement-without-position, and standalone-POSITION-packet paths so this regression cannot return.
+
 ### v0.7.2 (May 5, 2026)
 
 Two-fix bundle on top of v0.7.1. One small UX feature for hop-chain debugging, one quiet-but-important correctness fix that was inflating node counts on the cloud catalog and producing intermittent garbled-but-readable text on the local mesh. Both ride together because they touch the same RX path. Pure-Python, no recompile needed.

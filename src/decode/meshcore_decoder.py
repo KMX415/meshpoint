@@ -167,6 +167,14 @@ class MeshcoreDecoder:
             return {"raw_hex": payload.hex()}
 
     def extract_node_update(self, packet: Packet) -> Optional[Node]:
+        """Build a Node update from a decoded MeshCore packet.
+
+        Unlike Meshtastic, MeshCore does not broadcast a separate periodic
+        position packet: a node's coordinates ride on its advertisement
+        (``adv_lat``/``adv_lon``), which the event adapter classifies as
+        ``NODEINFO``. We therefore extract position from both ``NODEINFO``
+        and ``POSITION`` packets so MeshCore nodes appear on the map.
+        """
         if not packet.decoded_payload:
             return None
 
@@ -178,13 +186,23 @@ class MeshcoreDecoder:
 
         if packet.packet_type == PacketType.NODEINFO:
             node.long_name = packet.decoded_payload.get("long_name")
+            self._apply_position(node, packet.decoded_payload)
 
         if packet.packet_type == PacketType.POSITION:
-            node.latitude = packet.decoded_payload.get("latitude")
-            node.longitude = packet.decoded_payload.get("longitude")
+            self._apply_position(node, packet.decoded_payload)
 
         node.latest_signal = packet.signal
         return node
+
+    @staticmethod
+    def _apply_position(node: Node, payload: dict[str, Any]) -> None:
+        """Copy lat/lon onto ``node`` when the payload carries both."""
+        lat = payload.get("latitude")
+        lon = payload.get("longitude")
+        if lat is None or lon is None:
+            return
+        node.latitude = lat
+        node.longitude = lon
 
     def extract_telemetry(self, packet: Packet) -> Optional[Telemetry]:
         if packet.packet_type != PacketType.TELEMETRY:
