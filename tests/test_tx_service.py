@@ -30,11 +30,14 @@ class TestPresetDisplayNames(unittest.TestCase):
     def test_mediumfast(self):
         self.assertEqual(PRESET_DISPLAY_NAMES[(9, 250)], "MediumFast")
 
+    def test_longturbo(self):
+        self.assertEqual(PRESET_DISPLAY_NAMES[(11, 500)], "LongTurbo")
+
     def test_all_presets_present(self):
         expected = {
             "ShortFast", "ShortTurbo", "ShortSlow",
             "MediumFast", "MediumSlow",
-            "LongFast", "LongMod", "LongSlow", "VLongSlow",
+            "LongFast", "LongTurbo", "LongMod", "LongSlow", "VLongSlow",
         }
         self.assertEqual(set(PRESET_DISPLAY_NAMES.values()), expected)
 

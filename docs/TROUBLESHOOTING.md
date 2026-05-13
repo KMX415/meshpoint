@@ -61,7 +61,7 @@ The SX1250's digital SPI interface can recover while the RF receive path remains
 ### TX not working (messages not received by other nodes)
 
 1. Verify TX is enabled in the Radio settings page on the dashboard
-2. Check that `patch_hal.sh` was run after install: `meshpoint logs | grep -i "tx\|transmit"`
+2. Confirm the HAL TX sync word patch was applied (this happens automatically when you run `install.sh`): `meshpoint logs | grep -i "tx\|transmit"`. If TX is silently failing, re-run `sudo bash /opt/meshpoint/scripts/install.sh` to re-apply the patch idempotently.
 3. Verify the modem preset matches the mesh network you're targeting (e.g. LongFast)
 4. Check that the antenna is connected: transmitting without an antenna damages the radio
 

@@ -28,10 +28,10 @@ class PacketRepository:
             INSERT INTO packets (
                 packet_id, source_id, destination_id, protocol,
                 packet_type, hop_limit, hop_start, channel_hash,
-                want_ack, via_mqtt, decoded_payload, decrypted,
+                want_ack, via_mqtt, relay_node, decoded_payload, decrypted,
                 rssi, snr, frequency_mhz, spreading_factor,
                 bandwidth_khz, capture_source, timestamp
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 packet.packet_id, packet.source_id,
@@ -39,7 +39,7 @@ class PacketRepository:
                 packet.packet_type.value, packet.hop_limit,
                 packet.hop_start, packet.channel_hash,
                 int(packet.want_ack), int(packet.via_mqtt),
-                payload_json, int(packet.decrypted),
+                packet.relay_node, payload_json, int(packet.decrypted),
                 packet.signal.rssi if packet.signal else None,
                 packet.signal.snr if packet.signal else None,
                 packet.signal.frequency_mhz if packet.signal else None,
@@ -129,6 +129,7 @@ class PacketRepository:
             channel_hash=row.get("channel_hash", 0),
             want_ack=bool(row.get("want_ack", 0)),
             via_mqtt=bool(row.get("via_mqtt", 0)),
+            relay_node=row.get("relay_node", 0),
             decoded_payload=decoded,
             decrypted=bool(row.get("decrypted", 0)),
             signal=signal,

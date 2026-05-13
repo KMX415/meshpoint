@@ -76,6 +76,7 @@ class MeshtasticDecoder:
             channel_hash=header["channel_hash"],
             want_ack=header["want_ack"],
             via_mqtt=header["via_mqtt"],
+            relay_node=header["relay_node"],
             decoded_payload=decoded_payload,
             encrypted_payload=encrypted_payload if not decrypted else None,
             decrypted=decrypted,
@@ -95,7 +96,7 @@ class MeshtasticDecoder:
                bit 4=via_mqtt, bits 5-7=hop_start
         [13]   channel hash
         [14]   next_hop (relay)
-        [15]   relay_node
+        [15]   relay_node (lowest byte of last relay node's ID; 0 = direct)
         """
         try:
             dest_id, source_id, packet_id = struct.unpack_from(
@@ -103,6 +104,7 @@ class MeshtasticDecoder:
             )
             flags = header_bytes[12]
             channel_hash = header_bytes[13]
+            relay_node = header_bytes[15]
 
             hop_limit = flags & 0x07
             want_ack = bool(flags & 0x08)
@@ -118,6 +120,7 @@ class MeshtasticDecoder:
                 "want_ack": want_ack,
                 "via_mqtt": via_mqtt,
                 "channel_hash": channel_hash,
+                "relay_node": relay_node,
             }
         except Exception:
             logger.debug("Failed to parse header", exc_info=True)

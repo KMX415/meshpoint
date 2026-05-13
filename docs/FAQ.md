@@ -198,9 +198,11 @@ sudo /opt/meshpoint/venv/bin/pip install -r requirements.txt
 sudo systemctl restart meshpoint
 ```
 
-If you are upgrading from v0.5.x to v0.6.x for the first time, also run
-the one-time HAL recompile and sudoers steps documented in
-[README > Updating to v0.6.0](../README.md#updating-to-v060-one-time-steps).
+If you are upgrading from v0.6.x or earlier for the first time, re-run
+`install.sh` instead of just restarting (it cleans up stale `.cpython-*.so`
+binaries from pre-v0.7.0 installs and re-applies HAL patches, sudoers,
+and the systemd service in one idempotent pass). See
+[README > Upgrading from v0.6.x or earlier](../README.md#upgrading-from-v06x-or-earlier-one-time).
 
 ---
 

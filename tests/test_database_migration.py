@@ -1,17 +1,27 @@
-"""Tests for the cross-protocol name contamination cleanup migration.
+"""Tests for ``DatabaseManager`` schema migrations.
 
-Versions <0.6.7 had an unscoped MeshCore name fallback in
-``src/api/server.py::_save_and_notify`` that would write a MeshCore contact's
-``long_name`` into a Meshtastic node's row whenever an inbound Meshtastic
-message lacked a name. The fallback is now scoped to MeshCore packets only,
-and a startup migration cleans up rows poisoned by the prior bug.
+Two distinct migrations are exercised here:
+
+1. The cross-protocol name contamination cleanup. Versions <0.6.7 had an
+   unscoped MeshCore name fallback in ``src/api/server.py::_save_and_notify``
+   that wrote a MeshCore contact's ``long_name`` into a Meshtastic node's
+   row whenever an inbound Meshtastic message lacked a name. The fallback
+   is now scoped to MeshCore packets only, and a startup migration cleans
+   up rows poisoned by the prior bug.
+2. The ``packets.relay_node`` column added in PR #45 to surface the
+   Meshtastic header byte 15 (the lowest byte of the last relay node's ID).
+   Pre-PR-45 SQLite files are upgraded in place via ``ALTER TABLE`` so
+   existing fleet members do not lose packet history on update.
 """
 
 from __future__ import annotations
 
 import asyncio
+import sqlite3
+import tempfile
 import unittest
 from datetime import datetime, timezone
+from pathlib import Path
 
 from src.storage.database import DatabaseManager
 
@@ -167,6 +177,158 @@ class TestCrossProtocolNameCleanup(unittest.TestCase):
             _run(db2.disconnect())
         finally:
             os.unlink(db_path)
+
+
+class TestRelayNodeMigration(unittest.TestCase):
+    """Validate the ``packets.relay_node`` ALTER TABLE migration.
+
+    Each test uses a tempfile-backed SQLite database so the schema state
+    survives the disconnect/reconnect cycle that exercises the migration.
+    """
+
+    _OLD_PACKETS_SCHEMA = """
+        CREATE TABLE packets (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            packet_id        TEXT NOT NULL,
+            source_id        TEXT NOT NULL,
+            destination_id   TEXT NOT NULL,
+            protocol         TEXT NOT NULL,
+            packet_type      TEXT NOT NULL,
+            hop_limit        INTEGER DEFAULT 0,
+            hop_start        INTEGER DEFAULT 0,
+            channel_hash     INTEGER DEFAULT 0,
+            want_ack         INTEGER DEFAULT 0,
+            via_mqtt         INTEGER DEFAULT 0,
+            decoded_payload  TEXT,
+            decrypted        INTEGER DEFAULT 0,
+            rssi             REAL,
+            snr              REAL,
+            frequency_mhz    REAL,
+            spreading_factor INTEGER,
+            bandwidth_khz    REAL,
+            capture_source   TEXT,
+            timestamp        TEXT NOT NULL
+        );
+    """
+
+    def setUp(self):
+        self._tmp_dir = tempfile.mkdtemp(prefix="meshpoint_migration_test_")
+        self._db_path = str(Path(self._tmp_dir) / "test.db")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self._tmp_dir, ignore_errors=True)
+
+    def _columns(self, table: str) -> set[str]:
+        conn = sqlite3.connect(self._db_path)
+        try:
+            rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+            return {row[1] for row in rows}
+        finally:
+            conn.close()
+
+    def _seed_pre_pr45_database(self) -> None:
+        """Create a packets table without ``relay_node``, mirroring what a
+        pre-PR-45 fleet member's SQLite file looks like on disk."""
+        conn = sqlite3.connect(self._db_path)
+        try:
+            conn.executescript(self._OLD_PACKETS_SCHEMA)
+            conn.commit()
+        finally:
+            conn.close()
+
+    def test_fresh_install_has_relay_node_column(self):
+        """A first-time ``connect()`` writes the canonical schema, which
+        already includes the ``relay_node`` column. The migration check
+        finds it and is a no-op."""
+        db = DatabaseManager(self._db_path)
+        _run(db.connect())
+        try:
+            self.assertIn("relay_node", self._columns("packets"))
+        finally:
+            _run(db.disconnect())
+
+    def test_legacy_database_gets_column_added(self):
+        """A pre-PR-45 SQLite file lacking the column is upgraded via
+        ``ALTER TABLE`` on the next ``connect()``. Existing rows survive."""
+        self._seed_pre_pr45_database()
+        self.assertNotIn("relay_node", self._columns("packets"))
+
+        db = DatabaseManager(self._db_path)
+        _run(db.connect())
+        try:
+            self.assertIn("relay_node", self._columns("packets"))
+        finally:
+            _run(db.disconnect())
+
+    def test_migration_is_idempotent_across_restarts(self):
+        """A second ``connect()`` on a database that already has the column
+        must not raise, must not duplicate the column, and must not lose
+        existing data."""
+        db1 = DatabaseManager(self._db_path)
+        _run(db1.connect())
+        now = datetime.now(timezone.utc).isoformat()
+        _run(db1.execute(
+            "INSERT INTO packets (packet_id, source_id, destination_id, "
+            "protocol, packet_type, relay_node, timestamp) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("abcd1234", "deadbeef", "ffffffff", "meshtastic",
+             "TEXT_MESSAGE", 0x42, now),
+        ))
+        _run(db1.commit())
+        _run(db1.disconnect())
+
+        db2 = DatabaseManager(self._db_path)
+        _run(db2.connect())
+        try:
+            cols = self._columns("packets")
+            self.assertEqual(
+                sum(1 for c in cols if c == "relay_node"), 1,
+                "relay_node column duplicated on second connect()",
+            )
+
+            cursor = _run(db2.execute(
+                "SELECT relay_node FROM packets WHERE packet_id = ?",
+                ("abcd1234",),
+            ))
+            row = _run(cursor.fetchone())
+            self.assertIsNotNone(row)
+            self.assertEqual(row["relay_node"], 0x42)
+        finally:
+            _run(db2.disconnect())
+
+    def test_legacy_row_defaults_relay_node_to_zero(self):
+        """Rows inserted into the pre-PR-45 schema must read back with
+        ``relay_node = 0`` after the column is added (the ALTER TABLE
+        default value applies retroactively to existing rows)."""
+        self._seed_pre_pr45_database()
+        now = datetime.now(timezone.utc).isoformat()
+
+        conn = sqlite3.connect(self._db_path)
+        try:
+            conn.execute(
+                "INSERT INTO packets (packet_id, source_id, destination_id, "
+                "protocol, packet_type, timestamp) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                ("legacy01", "11111111", "ffffffff", "meshtastic",
+                 "TEXT_MESSAGE", now),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        db = DatabaseManager(self._db_path)
+        _run(db.connect())
+        try:
+            cursor = _run(db.execute(
+                "SELECT relay_node FROM packets WHERE packet_id = ?",
+                ("legacy01",),
+            ))
+            row = _run(cursor.fetchone())
+            self.assertIsNotNone(row)
+            self.assertEqual(row["relay_node"], 0)
+        finally:
+            _run(db.disconnect())
 
 
 if __name__ == "__main__":

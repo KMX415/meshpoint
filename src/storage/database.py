@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS packets (
     channel_hash     INTEGER DEFAULT 0,
     want_ack         INTEGER DEFAULT 0,
     via_mqtt         INTEGER DEFAULT 0,
+    relay_node       INTEGER DEFAULT 0,
     decoded_payload  TEXT,
     decrypted        INTEGER DEFAULT 0,
     rssi             REAL,
@@ -109,6 +110,14 @@ class DatabaseManager:
         logger.info("Database connected: %s", self._db_path)
 
     async def _run_migrations(self) -> None:
+        cursor = await self._connection.execute("PRAGMA table_info(packets)")
+        pkt_cols = {row[1] for row in await cursor.fetchall()}
+        if "relay_node" not in pkt_cols:
+            await self._connection.execute(
+                "ALTER TABLE packets ADD COLUMN relay_node INTEGER DEFAULT 0"
+            )
+            logger.info("Migration: added 'relay_node' column to packets table")
+
         cursor = await self._connection.execute("PRAGMA table_info(nodes)")
         columns = {row[1] for row in await cursor.fetchall()}
         if "role" not in columns:

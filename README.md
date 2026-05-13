@@ -13,7 +13,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/KMX415/meshpoint?style=flat&color=yellow)](https://github.com/KMX415/meshpoint/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/KMX415/meshpoint)](https://github.com/KMX415/meshpoint/issues)
 [![Last commit](https://img.shields.io/github/last-commit/KMX415/meshpoint)](https://github.com/KMX415/meshpoint/commits/main)
-[![Version](https://img.shields.io/badge/version-0.7.1-orange.svg)](docs/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.2-orange.svg)](docs/CHANGELOG.md)
 
 ### Meshradar Cloud Dashboard
 ![Meshradar Cloud Dashboard](Meshradar414.png)
@@ -212,22 +212,18 @@ sudo systemctl restart meshpoint
 
 The local dashboard shows an orange update indicator when a new version is available.
 
-### Updating to v0.6.0 (one-time steps)
+### Upgrading from v0.6.x or earlier (one-time)
 
-v0.6.0 adds native TX support, which requires a one-time HAL recompile and two config files:
+v0.7.0 ships the core modules as Python source instead of pre-compiled `.so` binaries. If your install predates v0.7.0, `git pull` alone is not sufficient: Python's import machinery would prefer the stale `.cpython-*.so` files over the new source and you'd silently keep running v0.6.x code. Re-run `install.sh` after pulling to clean them up:
 
 ```bash
 cd /opt/meshpoint
 sudo git pull origin main
-sudo bash /opt/meshpoint/scripts/patch_hal.sh
-sudo cp config/sudoers-meshpoint /etc/sudoers.d/meshpoint
-sudo chmod 440 /etc/sudoers.d/meshpoint
-sudo cp scripts/meshpoint.service /etc/systemd/system/meshpoint.service
-sudo systemctl daemon-reload
+sudo bash scripts/install.sh
 sudo systemctl restart meshpoint
 ```
 
-`patch_hal.sh` patches the concentrator HAL for Meshtastic-compatible TX sync words and recompiles (takes about 2 minutes). The sudoers rule allows the dashboard to restart the service when you change settings. Both only need to run once. Future updates go back to `git pull` + `restart`.
+`install.sh` is idempotent and also subsumes the older v0.6.0-era one-time steps (HAL TX sync word patch, sudoers rule, systemd service install) in the same pass, so this single command covers any path from v0.5.x or v0.6.x up to current. Future updates from v0.7.0 onward go back to plain `git pull` + `restart`.
 
 ---
 

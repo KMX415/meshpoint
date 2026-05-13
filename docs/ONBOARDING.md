@@ -350,22 +350,18 @@ sudo systemctl restart meshpoint
 
 The local dashboard shows an orange update indicator when a new version is available on GitHub.
 
-### Updating to v0.6.0 (one-time steps)
+### Upgrading from v0.6.x or earlier (one-time)
 
-v0.6.0 adds native TX support, which requires a one-time HAL recompile and two config files. Run these after `git pull`:
+v0.7.0 ships the core modules as Python source instead of pre-compiled `.so` binaries. If your install predates v0.7.0, `git pull` alone is not sufficient: Python's import machinery would prefer the stale `.cpython-*.so` files over the new source and you'd silently keep running v0.6.x code. Re-run `install.sh` after pulling to clean them up:
 
 ```bash
 cd /opt/meshpoint
 sudo git pull origin main
-sudo bash /opt/meshpoint/scripts/patch_hal.sh
-sudo cp config/sudoers-meshpoint /etc/sudoers.d/meshpoint
-sudo chmod 440 /etc/sudoers.d/meshpoint
-sudo cp scripts/meshpoint.service /etc/systemd/system/meshpoint.service
-sudo systemctl daemon-reload
+sudo bash scripts/install.sh
 sudo systemctl restart meshpoint
 ```
 
-`patch_hal.sh` patches the concentrator HAL for Meshtastic-compatible TX sync words and recompiles (about 2 minutes). The sudoers rule allows the dashboard to restart the service when you change settings. The updated service file auto-fixes config directory permissions on startup. All one-time: future updates go back to `git pull` + `restart`.
+`install.sh` is idempotent and also subsumes the older v0.6.0-era one-time steps (HAL TX sync word patch, sudoers rule, systemd service install) in the same pass, so this single command covers any path from v0.5.x or v0.6.x up to current. Future updates from v0.7.0 onward go back to plain `git pull` + `restart`.
 
 A reboot ensures all changes take effect cleanly (kernel modules, SPI state, MeshCore companion). Reboots are safe: the systemd service holds the concentrator in reset during shutdown to prevent SPI bus latch.
 

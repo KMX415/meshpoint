@@ -7,6 +7,22 @@ class SimplePacketFeed {
         this._tbody = document.getElementById(tbodyId);
         this._maxRows = maxRows || 200;
         this._count = 0;
+        this._nodeByLastByte = new Map();
+        this._onFocus = null;
+    }
+
+    setOnFocus(cb) {
+        this._onFocus = cb;
+    }
+
+    loadNodes(nodes) {
+        this._nodeByLastByte.clear();
+        for (const node of nodes) {
+            const id = node.node_id;
+            if (id && id.length >= 2) {
+                this._nodeByLastByte.set(id.slice(-2).toLowerCase(), id);
+            }
+        }
     }
 
     addPacket(packet) {
@@ -21,6 +37,10 @@ class SimplePacketFeed {
                 : new Date().toLocaleTimeString();
 
         const srcShort = this._shortId(packet.source_id);
+        const relayByte = packet.relay_node || 0;
+        const srcCell = relayByte
+            ? `${srcShort} <span class="relay-hop">↝ ${this._resolveRelay(relayByte)}</span>`
+            : srcShort;
 
         const sig = packet.signal || {};
         const rawRssi = sig.rssi != null ? sig.rssi : packet.rssi;
@@ -49,7 +69,7 @@ class SimplePacketFeed {
         tr.innerHTML = `
             <td>${time}</td>
             <td class="${protocolClass}">${protocol}</td>
-            <td class="td-source">${srcShort}</td>
+            <td class="td-source">${srcCell}</td>
             <td>${destShort}</td>
             <td class="${typeClass}">${type}</td>
             <td class="${rssiClass}">${rssi}</td>
@@ -77,11 +97,14 @@ class SimplePacketFeed {
         const next = tr.nextElementSibling;
         if (next && next.classList.contains('packet-detail-row')) {
             next.remove();
+            if (this._onFocus) this._onFocus(null);
             return;
         }
 
         const prev = this._tbody.querySelector('.packet-detail-row');
         if (prev) prev.remove();
+
+        if (this._onFocus) this._onFocus(packet.source_id);
 
         const detailTr = document.createElement('tr');
         detailTr.classList.add('packet-detail-row');
@@ -132,6 +155,12 @@ class SimplePacketFeed {
         if (n >= -90) return 'rssi-good';
         if (n >= -110) return 'rssi-mid';
         return 'rssi-bad';
+    }
+
+    _resolveRelay(relayByte) {
+        const key = relayByte.toString(16).padStart(2, '0');
+        const fullId = this._nodeByLastByte.get(key);
+        return fullId ? this._shortId(fullId) : `!${key}`;
     }
 
     _shortId(id) {

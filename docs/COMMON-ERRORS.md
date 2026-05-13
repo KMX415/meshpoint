@@ -360,6 +360,42 @@ something on air, could not classify it, moving on."
 
 **Fix:** None required. Safe to ignore.
 
+### My Short or Medium preset shows the wrong coding rate
+
+**Cause:** Meshpoints running v0.7.1 or earlier shipped the Short and
+Medium presets with `coding_rate: "4/8"` in the preset table. The
+correct value per the [Meshtastic spec](https://meshtastic.org/docs/overview/radio-settings/)
+is `4/5` for `ShortFast`, `ShortSlow`, `ShortTurbo`, `MediumFast`,
+`MediumSlow`, and `LongFast`. Only `LongModerate`, `LongSlow`,
+`LongTurbo`, and the deprecated `VeryLongSlow` use `4/8`.
+
+If you picked one of the affected presets in the dashboard Radio tab
+on a pre-fix install, your `config/local.yaml` has the wrong CR
+cached, even after `git pull`.
+
+**Impact:** RX is unaffected (the SX1302 decodes any CR automatically
+because the LoRa header carries it). TX takes roughly 60% more
+airtime than a stock Meshtastic node sending the "same" preset:
+4/8 has 2x overhead per data byte vs 4/5's 1.25x. NodeInfo broadcasts,
+DM ACKs, and relay (when enabled) all pay this airtime tax.
+
+**Fix:** After `sudo git pull origin main && sudo systemctl restart
+meshpoint`, do one of the following:
+
+- **Dashboard re-pick** (recommended): open the dashboard, go to the
+  Radio tab, re-select your preset from the Radio Configuration
+  dropdown, click Save Radio, and apply the restart prompt. This
+  rewrites `local.yaml` with the corrected CR.
+- **Manual edit**: edit `config/local.yaml` and set
+  `radio.coding_rate` to the correct value for your preset (`"4/5"`
+  for the six presets listed above, `"4/8"` for the four Long
+  presets). Then `sudo systemctl restart meshpoint`.
+
+To confirm the fix took effect, check the startup banner or
+`meshpoint status` for the active radio config, and watch the next
+NodeInfo broadcast log line: airtime should drop noticeably (e.g.,
+~723ms to ~456ms for a NodeInfo on MediumSlow).
+
 ---
 
 ## API and dashboard

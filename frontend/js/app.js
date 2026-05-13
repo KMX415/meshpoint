@@ -36,6 +36,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         origClose();
     };
 
+    packetFeed.setOnFocus(sourceId => {
+        if (sourceId) nodeMap.drawFocusLine(sourceId);
+        else nodeMap.clearFocusLine();
+    });
+
     await _loadInitial(nodeMap, nodeCards, packetFeed);
     await _updateStats();
     _checkForUpdate();
@@ -52,7 +57,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.concentratorWS.connect();
 
     setInterval(() => {
-        _refreshData(nodeMap, nodeCards);
+        _refreshData(nodeMap, nodeCards, packetFeed);
         _updateStats();
     }, 15_000);
 
@@ -105,6 +110,7 @@ async function _loadInitial(nodeMap, nodeList, packetFeed) {
         const nodes = nodesData.nodes || nodesData || [];
         nodeMap.loadNodes(nodes, device);
         nodeList.loadNodes(nodes);
+        packetFeed.loadNodes(nodes);
 
         const packets = packetsData.packets || packetsData || [];
         const sorted = packets.sort((a, b) => {
@@ -119,13 +125,14 @@ async function _loadInitial(nodeMap, nodeList, packetFeed) {
     }
 }
 
-async function _refreshData(nodeMap, nodeList) {
+async function _refreshData(nodeMap, nodeList, packetFeed) {
     try {
         const res = await fetch('/api/nodes?enrich=true');
         const data = await res.json();
         const nodes = data.nodes || data || [];
         nodeMap.loadNodes(nodes);
         nodeList.loadNodes(nodes);
+        packetFeed.loadNodes(nodes);
     } catch (e) {
         console.error('Refresh failed:', e);
     }

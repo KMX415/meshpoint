@@ -346,11 +346,11 @@ radio:
   preamble_length: 16
 ```
 
-`sync_word: 0x2B` is the Meshtastic standard. The `scripts/patch_hal.sh`
-step in the v0.6.0 update specifically patches the libloragw HAL to use
-this sync word for both RX and TX. **Do not change** unless you know
-exactly why. Changing it will make your Meshpoint invisible to the
-public mesh.
+`sync_word: 0x2B` is the Meshtastic standard. `scripts/patch_hal.sh`
+(invoked automatically by `install.sh`) patches the libloragw HAL to
+use this sync word for both RX and TX. **Do not change** unless you
+know exactly why. Changing it will make your Meshpoint invisible to
+the public mesh.
 
 `preamble_length: 16` is the Meshtastic standard. Same advice.
 

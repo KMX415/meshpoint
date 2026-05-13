@@ -31,6 +31,7 @@ class NodeMap {
 
         this._topologyLayer = L.layerGroup();
         this._topologyVisible = false;
+        this._focusLine = null;
 
         this._markerGroup = L.markerClusterGroup({
             maxClusterRadius: 50,
@@ -155,6 +156,25 @@ class NodeMap {
 
         this._markerGroup.addLayer(marker);
         this._markers[n.node_id] = marker;
+    }
+
+    drawFocusLine(sourceNodeId) {
+        this.clearFocusLine();
+        if (!this._initialized || !this._deviceMarker) return;
+        const srcMarker = this._markers[sourceNodeId];
+        if (!srcMarker) return;
+
+        this._focusLine = L.polyline(
+            [srcMarker.getLatLng(), this._deviceMarker.getLatLng()],
+            { color: '#f59e0b', weight: 3, opacity: 0.9 }
+        ).addTo(this._map);
+    }
+
+    clearFocusLine() {
+        if (this._focusLine) {
+            this._map.removeLayer(this._focusLine);
+            this._focusLine = null;
+        }
     }
 
     centerOn(lat, lng, zoom = 15) {

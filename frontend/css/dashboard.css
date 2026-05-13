@@ -440,6 +440,12 @@ html, body {
     color: var(--accent-cyan);
 }
 
+.relay-hop {
+    color: var(--accent-amber);
+    font-size: 0.85em;
+    opacity: 0.85;
+}
+
 .packet-details-cell {
     max-width: 280px;
     overflow: hidden;

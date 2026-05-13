@@ -59,6 +59,7 @@ class Packet:
     channel_hash: int = 0
     want_ack: bool = False
     via_mqtt: bool = False
+    relay_node: int = 0
 
     decoded_payload: Optional[dict[str, Any]] = None
     encrypted_payload: Optional[bytes] = None
@@ -87,6 +88,7 @@ class Packet:
             "channel_hash": self.channel_hash,
             "want_ack": self.want_ack,
             "via_mqtt": self.via_mqtt,
+            "relay_node": self.relay_node,
             "decoded_payload": self.decoded_payload,
             "decrypted": self.decrypted,
             "capture_source": self.capture_source,
