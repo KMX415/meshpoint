@@ -57,6 +57,11 @@ def cmd_meshcore_radio(args: argparse.Namespace) -> None:
     run_meshcore_radio(args)
 
 
+def cmd_reset_password(_args: argparse.Namespace) -> None:
+    from src.cli.reset_password_command import run_reset_password
+    sys.exit(run_reset_password())
+
+
 def cmd_version(_args: argparse.Namespace) -> None:
     print(f"  Meshpoint v{VERSION}")
 
@@ -88,6 +93,11 @@ def main() -> None:
         help="Serial port override (auto-detected if omitted)",
     )
 
+    sub.add_parser(
+        "reset-password",
+        help="Reset the dashboard admin password (invalidates open sessions)",
+    )
+
     sub.add_parser("version", help="Print version information")
 
     args = parser.parse_args()
@@ -100,6 +110,7 @@ def main() -> None:
         "restart": cmd_restart,
         "stop": cmd_stop,
         "meshcore-radio": cmd_meshcore_radio,
+        "reset-password": cmd_reset_password,
         "version": cmd_version,
     }
 

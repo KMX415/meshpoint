@@ -54,8 +54,11 @@ html, body {
 }
 
 .top-bar__icon {
-    font-size: 1.5rem;
-    color: var(--accent-cyan);
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    display: block;
+    flex-shrink: 0;
 }
 
 .top-bar__brand h1 {
@@ -142,6 +145,30 @@ html, body {
     cursor: pointer;
     text-decoration: none;
     animation: updatePulse 2s ease-in-out infinite;
+}
+
+.top-bar__signout {
+    background: none;
+    border: none;
+    padding: 0.2rem 0.3rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    border-radius: var(--radius-sm);
+    transition: color 0.15s, background 0.15s;
+}
+
+.top-bar__signout:hover,
+.top-bar__signout:focus-visible {
+    color: var(--accent-cyan);
+    background: rgba(6, 182, 212, 0.08);
+    outline: none;
+}
+
+.top-bar__signout:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
 .hidden { display: none !important; }

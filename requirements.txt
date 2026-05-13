@@ -10,3 +10,5 @@ psutil>=5.9.0
 urllib3>=2.6.3
 meshcore>=2.1.0
 paho-mqtt>=2.1.0
+bcrypt>=4.2.0
+PyJWT>=2.10.0

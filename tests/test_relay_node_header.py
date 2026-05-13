@@ -24,7 +24,7 @@ def _build_header(
     dest_id: int = 0xFFFFFFFF,
     source_id: int = 0xDEADBEEF,
     packet_id: int = 0x12345678,
-    flags: int = 0x03,
+    flags: int = 0x63,
     channel_hash: int = 0x08,
     next_hop: int = 0x00,
     relay_node: int = 0x00,
@@ -33,6 +33,13 @@ def _build_header(
 
     Mirrors the on-air byte order documented in
     ``MeshtasticDecoder._parse_header``.
+
+    Default ``flags = 0x63`` encodes ``hop_limit=3, hop_start=3``
+    (a fresh direct packet with 3 hops of headroom). Earlier the default
+    was ``0x03`` (hop_limit=3, hop_start=0) which is structurally
+    impossible for an honestly-originated packet; the v0.7.3 header
+    validity check rejects that combination so the default had to move
+    to a sane value.
     """
     return (
         struct.pack("<III", dest_id, source_id, packet_id)

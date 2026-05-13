@@ -11,6 +11,9 @@ class ConcentratorWebSocket {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const url = `${protocol}//${window.location.host}/ws`;
 
+        // Cookie auth is the primary contract: a same-origin WS
+        // upgrade carries the meshpoint_session cookie automatically.
+        // No query-string token is required for browser clients.
         this.socket = new WebSocket(url);
 
         this.socket.onopen = () => {
@@ -19,7 +22,14 @@ class ConcentratorWebSocket {
             this._updateStatusIndicator(true);
         };
 
-        this.socket.onclose = () => {
+        this.socket.onclose = (event) => {
+            if (event && event.code === 4401) {
+                // Server rejected the upgrade (no session / expired).
+                // Bounce to /login with the current path as `next`.
+                const next = encodeURIComponent(location.pathname + location.search);
+                location.assign(`/login?next=${next}`);
+                return;
+            }
             this._emit('disconnected');
             this._updateStatusIndicator(false);
             this._scheduleReconnect();

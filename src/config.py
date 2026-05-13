@@ -179,6 +179,33 @@ class TransmitConfig:
 
 
 @dataclass
+class WebAuthConfig:
+    """Local dashboard authentication settings.
+
+    First-run state is ``admin_password_hash == ""``: the dashboard
+    forces the user through the ``/setup`` flow before any other page
+    or API call resolves. Once a hash is written, the dashboard
+    requires a valid session cookie (or ``Authorization: Bearer``)
+    on every protected endpoint.
+
+    ``jwt_secret`` is auto-generated on first run when empty and
+    persisted to ``local.yaml``. Rotating it (via the
+    ``meshpoint reset-password`` CLI) invalidates every existing
+    session in one move. ``session_version`` is embedded in the JWT
+    claim for finer-grained invalidation without rotating the secret.
+    """
+
+    admin_password_hash: str = ""
+    viewer_password_hash: str = ""
+    jwt_secret: str = ""
+    jwt_expiry_minutes: int = 60
+    allow_read_only: bool = False
+    lockout_attempts: int = 5
+    lockout_cooldown_minutes: int = 5
+    session_version: int = 1
+
+
+@dataclass
 class AppConfig:
     radio: RadioConfig = field(default_factory=RadioConfig)
     meshtastic: MeshtasticConfig = field(default_factory=MeshtasticConfig)
@@ -191,6 +218,7 @@ class AppConfig:
     relay: RelayConfig = field(default_factory=RelayConfig)
     mqtt: MqttConfig = field(default_factory=MqttConfig)
     transmit: TransmitConfig = field(default_factory=TransmitConfig)
+    web_auth: WebAuthConfig = field(default_factory=WebAuthConfig)
 
 
 def _resolve_radio_frequency(radio: "RadioConfig") -> None:
@@ -248,6 +276,7 @@ def _apply_yaml(cfg: AppConfig, path: Path) -> None:
         "relay": cfg.relay,
         "mqtt": cfg.mqtt,
         "transmit": cfg.transmit,
+        "web_auth": cfg.web_auth,
     }
 
     for section_name, section_instance in section_map.items():

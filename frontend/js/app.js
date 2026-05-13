@@ -1,8 +1,43 @@
 /**
  * Single-page controller for the local Meshpoint dashboard.
  * Wires up map, node list, packet feed, stat cards, and WebSocket.
+ *
+ * Auth boundary:
+ *   - install401Redirect intercepts every same-origin /api/* fetch
+ *     and bounces to /login?next=... when the session has expired.
+ *   - DOMContentLoaded does a quick /api/identity probe so a fresh
+ *     install (no admin password yet) lands on /setup, not on a
+ *     blank dashboard with broken API calls.
  */
+
+(function install401Redirect() {
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+        const res = await originalFetch(input, init);
+        if (res.status === 401 && _isLocalApiRequest(input)) {
+            const next = encodeURIComponent(location.pathname + location.search);
+            location.assign(`/login?next=${next}`);
+        }
+        return res;
+    };
+
+    function _isLocalApiRequest(input) {
+        const raw = typeof input === 'string' ? input : (input && input.url) || '';
+        try {
+            const parsed = new URL(raw, location.origin);
+            return parsed.origin === location.origin
+                && parsed.pathname.startsWith('/api/');
+        } catch (_) {
+            return false;
+        }
+    }
+})();
+
 document.addEventListener('DOMContentLoaded', async () => {
+    if (await _redirectIfSetupRequired()) return;
+
+    new SignOutController('signout-btn').bind();
+
     const nodeMap = new NodeMap('map');
     const packetFeed = new SimplePacketFeed('packet-tbody');
 
@@ -243,4 +278,19 @@ function _setupTabs() {
 function _setText(id, value) {
     const el = document.getElementById(id);
     if (el) el.textContent = value;
+}
+
+async function _redirectIfSetupRequired() {
+    try {
+        const res = await fetch('/api/identity', { credentials: 'same-origin' });
+        if (!res.ok) return false;
+        const data = await res.json();
+        if (data.setup_required) {
+            location.replace('/setup');
+            return true;
+        }
+    } catch (_) {
+        /* silent: the dashboard handles its own auth via 401 interception */
+    }
+    return false;
 }

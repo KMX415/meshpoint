@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Meshpoint Dashboard</title>
+    <link rel="icon" type="image/png" href="/assets/favicon.png">
+    <link rel="apple-touch-icon" href="/assets/meshpoint-logo.png">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
@@ -25,7 +27,7 @@
 <body>
     <header class="top-bar">
         <div class="top-bar__brand">
-            <span class="top-bar__icon">&#9783;</span>
+            <img src="/assets/meshpoint-logo.png" alt="Meshpoint" class="top-bar__icon" width="40" height="40" />
             <h1>
                 <a href="https://meshradar.io" target="_blank" rel="noopener"
                    class="top-bar__brand-link">Meshradar</a>
@@ -44,6 +46,14 @@
             <span id="device-id" class="top-bar__device-id" title="Click to copy device ID"></span>
             <span id="version-badge" class="top-bar__version">--</span>
             <a id="update-badge" class="update-badge hidden" title="Update available" href="https://github.com/KMX415/meshpoint/blob/main/docs/ONBOARDING.md#updating" target="_blank" rel="noopener">&#9888;</a>
+            <span class="top-bar__divider">|</span>
+            <button id="signout-btn" class="top-bar__signout" type="button" title="Sign out" aria-label="Sign out">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+            </button>
         </div>
     </header>
 
@@ -189,6 +199,7 @@
     <script src="js/radio_companion_card.js"></script>
     <script src="js/radio_settings.js"></script>
     <script src="js/stats_tab.js"></script>
+    <script src="js/signout_controller.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

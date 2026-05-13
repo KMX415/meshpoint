@@ -4,14 +4,19 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from src._so_compat_check import warn_if_stale_so_files
 from src.analytics.network_mapper import NetworkMapper
 from src.analytics.signal_analyzer import SignalAnalyzer
 from src.analytics.traffic_monitor import TrafficMonitor
-from src.api.routes import analytics, config_routes, device, messages, nodeinfo_routes, nodes, packets, stats_routes, system_metrics, telemetry, update_check
+from src.api.auth import dependencies as auth_deps
+from src.api.auth.auth_bootstrap import AuthSubsystem, build_auth_subsystem
+from src.api.auth.dependencies import require_auth
+from src.api.auth.ws_guard import WS_AUTH_CLOSE_CODE, authenticate_websocket
+from src.api.routes import analytics, auth_routes, config_routes, device, identity_routes, messages, nodeinfo_routes, nodes, packets, stats_routes, system_metrics, telemetry, update_check
 from src.api.upstream_client import UpstreamClient
 from src.api.websocket_manager import WebSocketManager
 from src.config import AppConfig, load_config, validate_activation
@@ -39,6 +44,10 @@ nodeinfo_broadcaster: NodeInfoBroadcaster | None = None
 def create_app(config: AppConfig | None = None) -> FastAPI:
     if config is None:
         config = load_config()
+
+    auth_subsystem = build_auth_subsystem(config)
+    auth_routes.init_routes(auth_subsystem.service)
+    auth_deps.init_auth(auth_subsystem.jwt_service)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -89,7 +98,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         if nodeinfo_broadcaster is not None:
             await nodeinfo_broadcaster.start()
 
-        _init_routes(pipeline, config, identity, tx_service, message_repo)
+        _init_routes(
+            pipeline, config, identity, auth_subsystem, tx_service, message_repo
+        )
         print_banner(config)
         logger.info("Meshpoint started -- listening for packets")
         yield
@@ -105,20 +116,28 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
-    app.include_router(nodes.router)
-    app.include_router(packets.router)
-    app.include_router(analytics.router)
-    app.include_router(device.router)
-    app.include_router(system_metrics.router)
-    app.include_router(telemetry.router)
-    app.include_router(update_check.router)
-    app.include_router(messages.router)
-    app.include_router(nodeinfo_routes.router)
-    app.include_router(config_routes.router)
-    app.include_router(stats_routes.router)
+    app.include_router(auth_routes.router)
+    app.include_router(identity_routes.router)
+
+    protected = [Depends(require_auth)]
+    app.include_router(nodes.router, dependencies=protected)
+    app.include_router(packets.router, dependencies=protected)
+    app.include_router(analytics.router, dependencies=protected)
+    app.include_router(device.router, dependencies=protected)
+    app.include_router(system_metrics.router, dependencies=protected)
+    app.include_router(telemetry.router, dependencies=protected)
+    app.include_router(update_check.router, dependencies=protected)
+    app.include_router(messages.router, dependencies=protected)
+    app.include_router(nodeinfo_routes.router, dependencies=protected)
+    app.include_router(config_routes.router, dependencies=protected)
+    app.include_router(stats_routes.router, dependencies=protected)
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
+        claims = authenticate_websocket(websocket, auth_subsystem.jwt_service)
+        if claims is None:
+            await websocket.close(code=WS_AUTH_CLOSE_CODE)
+            return
         await ws_manager.connect(websocket)
         try:
             while True:
@@ -127,6 +146,15 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             await ws_manager.disconnect(websocket)
 
     static_dir = Path(config.dashboard.static_dir)
+
+    @app.get("/setup", include_in_schema=False)
+    async def serve_setup_page():
+        return _serve_auth_page(static_dir, "setup.html")
+
+    @app.get("/login", include_in_schema=False)
+    async def serve_login_page():
+        return _serve_auth_page(static_dir, "login.html")
+
     if static_dir.exists():
         app.mount("/", StaticFiles(directory=str(static_dir), html=True))
 
@@ -671,9 +699,11 @@ def _init_routes(
     coord: PipelineCoordinator,
     config: AppConfig,
     identity: DeviceIdentity,
+    auth_subsystem: AuthSubsystem,
     tx_service: TxService | None = None,
     message_repo: MessageRepository | None = None,
 ) -> None:
+    identity_routes.init_routes(identity, auth_subsystem.service)
     network_mapper = NetworkMapper(coord.node_repo)
     signal_analyzer = SignalAnalyzer(coord.packet_repo)
     traffic_monitor = TrafficMonitor(coord.packet_repo)
@@ -715,6 +745,15 @@ def _init_routes(
         crypto=crypto,
         tx_service=tx_service,
     )
+
+
+def _serve_auth_page(static_dir: Path, filename: str) -> FileResponse:
+    """Return one of the two pre-auth HTML pages from frontend/auth/."""
+    page = static_dir / "auth" / filename
+    if not page.exists():
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="auth page not found")
+    return FileResponse(str(page), media_type="text/html")
 
 
 def _on_packet_received(packet: Packet) -> None:
