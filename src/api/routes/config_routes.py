@@ -7,6 +7,8 @@ flag restart_required in the response.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
 import subprocess
 from typing import Optional
@@ -78,6 +80,10 @@ async def get_config():
                     }
             except Exception:
                 pass
+    mc_status["channel_keys"] = [
+        {"name": name, "key_hex": key}
+        for name, key in (_config.meshcore.channel_keys.items() if _config else [])
+    ]
 
     duty_info = {"used_percent": 0.0, "remaining_ms": 0}
     if _tx_service and hasattr(_tx_service, "_duty"):
@@ -346,6 +352,52 @@ async def update_channels(req: ChannelsUpdate):
         "saved": True,
         "restart_required": False,
         "channel_count": len(channel_keys) + 1,
+    }
+
+
+class McChannelEntry(BaseModel):
+    name: str
+    key_hex: str
+
+
+class McChannelsUpdate(BaseModel):
+    channels: list[McChannelEntry]
+
+
+@router.put("/meshcore/channels")
+async def update_meshcore_channels(req: McChannelsUpdate):
+    """Update MeshCore channel keys (stored as hex). No restart required."""
+    if _config is None:
+        raise HTTPException(503, "Config not loaded")
+
+    channel_keys: dict[str, str] = {}
+    for ch in req.channels:
+        if not ch.name or not ch.key_hex:
+            continue
+        try:
+            binascii.unhexlify(ch.key_hex)
+        except (ValueError, binascii.Error):
+            raise HTTPException(400, f"Invalid hex key for channel '{ch.name}'")
+        channel_keys[ch.name] = ch.key_hex
+
+    _config.meshcore.channel_keys = channel_keys
+    try:
+        save_section_to_yaml("meshcore", {"channel_keys": channel_keys})
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc))
+
+    if _crypto and hasattr(_crypto, "clear_channel_keys"):
+        _crypto.clear_channel_keys()
+        for name, key_b64 in _config.meshtastic.channel_keys.items():
+            _crypto.add_channel_key(name, key_b64)
+        for name, key_hex in channel_keys.items():
+            key_b64 = base64.b64encode(binascii.unhexlify(key_hex)).decode()
+            _crypto.add_channel_key(name, key_b64)
+
+    return {
+        "saved": True,
+        "restart_required": False,
+        "channel_count": len(channel_keys),
     }
 
 

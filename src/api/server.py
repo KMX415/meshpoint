@@ -509,7 +509,10 @@ def _setup_message_interception(
         if is_broadcast:
             if our_node_hex and source == our_node_hex:
                 return
-            ch_idx = channel_hash_map.get(packet.channel_hash, 0)
+            if packet.protocol == Protocol.MESHCORE:
+                ch_idx = packet.channel_hash or 0
+            else:
+                ch_idx = channel_hash_map.get(packet.channel_hash, 0)
             node_id = f"broadcast:{packet.protocol.value}:{ch_idx}"
             direction = "received"
         elif is_for_us:

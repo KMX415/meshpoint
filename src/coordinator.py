@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import logging
 from typing import Any, Callable, Optional
 
@@ -324,7 +326,9 @@ class PipelineCoordinator:
             logger.exception("MQTT publish error for packet %s", packet.packet_id)
 
     def _setup_channel_keys(self) -> None:
+        import binascii, base64
         for name, key in self._config.meshtastic.channel_keys.items():
             self._crypto.add_channel_key(name, key)
         for name, key in self._config.meshcore.channel_keys.items():
-            self._crypto.add_channel_key(name, key)
+            key_b64 = base64.b64encode(binascii.unhexlify(key)).decode()
+            self._crypto.add_channel_key(name, key_b64)
