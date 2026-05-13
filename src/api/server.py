@@ -4,8 +4,8 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi import Depends, FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from src._so_compat_check import warn_if_stale_so_files
@@ -14,7 +14,8 @@ from src.analytics.signal_analyzer import SignalAnalyzer
 from src.analytics.traffic_monitor import TrafficMonitor
 from src.api.auth import dependencies as auth_deps
 from src.api.auth.auth_bootstrap import AuthSubsystem, build_auth_subsystem
-from src.api.auth.dependencies import require_auth
+from src.api.auth.dependencies import SESSION_COOKIE_NAME, require_auth
+from src.api.auth.jwt_session import JwtSessionService
 from src.api.auth.ws_guard import WS_AUTH_CLOSE_CODE, authenticate_websocket
 from src.api.routes import analytics, auth_routes, config_routes, device, identity_routes, messages, nodeinfo_routes, nodes, packets, stats_routes, system_metrics, telemetry, update_check
 from src.api.upstream_client import UpstreamClient
@@ -134,9 +135,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
-        claims = authenticate_websocket(websocket, auth_subsystem.jwt_service)
-        if claims is None:
-            await websocket.close(code=WS_AUTH_CLOSE_CODE)
+        if not await _gate_ws_or_close(
+            websocket, auth_subsystem.jwt_service
+        ):
             return
         await ws_manager.connect(websocket)
         try:
@@ -154,6 +155,21 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     @app.get("/login", include_in_schema=False)
     async def serve_login_page():
         return _serve_auth_page(static_dir, "login.html")
+
+    @app.get("/", include_in_schema=False)
+    async def serve_dashboard_root(request: Request):
+        # Gate the dashboard HTML behind auth with a 302 redirect so
+        # the browser lands on /login (or /setup) instead of loading
+        # cached SPA JS that then fights an unauthenticated /ws upgrade.
+        # Registered BEFORE the StaticFiles mount so this route wins.
+        if not _request_has_valid_session(
+            request, auth_subsystem.jwt_service
+        ):
+            target = "/login" if auth_subsystem.service.is_setup_complete() else "/setup"
+            return RedirectResponse(url=target, status_code=302)
+        return FileResponse(
+            str(static_dir / "index.html"), media_type="text/html"
+        )
 
     if static_dir.exists():
         app.mount("/", StaticFiles(directory=str(static_dir), html=True))
@@ -745,6 +761,47 @@ def _init_routes(
         crypto=crypto,
         tx_service=tx_service,
     )
+
+
+async def _gate_ws_or_close(
+    websocket: WebSocket, jwt_service: JwtSessionService | None
+) -> bool:
+    """Authenticate a WS upgrade; return True iff the caller may proceed.
+
+    On rejection: completes the WS handshake with ``accept()`` BEFORE
+    closing with the custom 4401 code. This sequencing matters --
+    closing pre-accept causes Starlette to fail the upgrade with HTTP
+    403, which browsers translate to JS close code ``1006`` (Abnormal
+    Closure) instead of the negotiated ``4401``. The dashboard's WS
+    client only redirects to ``/login`` on ``4401``, so the pre-accept
+    close stranded users in an indefinite reconnect loop. Caught in
+    the wild on v0.7.3 (Willard, Discord, 2026-05-13).
+    """
+    claims = authenticate_websocket(websocket, jwt_service)
+    if claims is not None:
+        return True
+    await websocket.accept()
+    await websocket.close(code=WS_AUTH_CLOSE_CODE)
+    return False
+
+
+def _request_has_valid_session(
+    request: Request, jwt_service: JwtSessionService | None
+) -> bool:
+    """Quick cookie-only check used by the dashboard root gate.
+
+    Mirrors ``dependencies._claims_or_none`` but takes the service
+    explicitly so the route can run even before ``init_auth`` (e.g.
+    in tests that exercise pre-bootstrap states). Cookie-only by
+    design: bearer-token clients have no business hitting the SPA
+    root, they should call ``/api/...`` directly.
+    """
+    if jwt_service is None:
+        return False
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if not token:
+        return False
+    return jwt_service.verify(token) is not None
 
 
 def _serve_auth_page(static_dir: Path, filename: str) -> FileResponse:
