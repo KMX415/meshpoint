@@ -385,6 +385,11 @@ async def update_meshcore_channels(req: McChannelsUpdate):
         save_section_to_yaml("meshcore", {"channel_keys": channel_keys})
     except PermissionError as exc:
         raise HTTPException(403, str(exc))
+    logger.info(
+        "MeshCore channels updated: %d channel(s) — %s",
+        len(channel_keys),
+        ", ".join(channel_keys) or "none",
+    )
 
     if _crypto and hasattr(_crypto, "clear_channel_keys"):
         _crypto.clear_channel_keys()
