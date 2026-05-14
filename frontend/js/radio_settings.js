@@ -41,6 +41,23 @@ class RadioSettings {
         panel.innerHTML = `
             <div class="r-stage">
                 <div class="r-shell">
+                    <div class="r-observational-banner" role="status">
+                        <span class="r-observational-banner__icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="8" x2="12" y2="12"/>
+                                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                        </span>
+                        <span class="r-observational-banner__text">
+                            <strong>Radio is observational in v0.7.4.</strong>
+                            Editing has moved to <a href="#/configuration/radio" class="r-observational-banner__link">Configuration &rsaquo; Radio</a>,
+                            <a href="#/configuration/identity" class="r-observational-banner__link">Identity</a>,
+                            <a href="#/configuration/channels" class="r-observational-banner__link">Channels</a>, and
+                            <a href="#/configuration/transmit" class="r-observational-banner__link">Transmit</a>.
+                        </span>
+                    </div>
+
                     <div class="restart-bar" id="r-restart-bar">
                         <span class="restart-bar__icon">!</span>
                         <span class="restart-bar__msg" id="r-restart-msg">
