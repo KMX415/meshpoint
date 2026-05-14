@@ -122,11 +122,27 @@ def _build_channel_message(
 def _build_advertisement(
     payload: dict, signal: Optional[SignalMetrics]
 ) -> Packet:
-    pubkey = payload.get("public_key", payload.get("pubkey", "unknown"))
+    pubkey = _first_payload_value(
+        payload,
+        "public_key",
+        "pubkey",
+        "pub_key",
+        "pubkey_prefix",
+        default="unknown",
+    )
     source_id = pubkey[:12] if len(pubkey) >= 12 else pubkey
+    name = _first_payload_value(
+        payload,
+        "adv_name",
+        "name",
+        "long_name",
+        "display_name",
+        default="",
+    )
+    display_name = name or source_id
     decoded = {
-        "long_name": payload.get("adv_name", source_id),
-        "short_name": payload.get("adv_name", source_id)[:4],
+        "long_name": display_name,
+        "short_name": display_name[:4],
         "public_key": pubkey,
         "advertisement": payload,
     }
@@ -145,6 +161,18 @@ def _build_advertisement(
         signal=signal,
         timestamp=_parse_timestamp(payload.get("timestamp")),
     )
+
+
+def _first_payload_value(payload: dict, *keys: str, default: str = "") -> str:
+    """Return the first non-empty string-ish value from a MeshCore event."""
+    for key in keys:
+        value = payload.get(key)
+        if value is None:
+            continue
+        value = str(value).strip()
+        if value:
+            return value
+    return default
 
 
 def _build_raw_data(

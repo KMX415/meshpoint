@@ -107,6 +107,18 @@ class TestMeshcoreEventAdapter(unittest.TestCase):
         self.assertAlmostEqual(pkt.decoded_payload["latitude"], 43.9091)
         self.assertAlmostEqual(pkt.decoded_payload["longitude"], -72.2207)
 
+    def test_advertisement_accepts_name_alias(self):
+        raw = self._make_envelope("advertisement", {
+            "public_key": "abcdef1234567890abcdef",
+            "name": "AliasNode",
+        })
+        pkt = adapt_event(raw)
+        self.assertIsNotNone(pkt)
+        self.assertEqual(pkt.packet_type, PacketType.NODEINFO)
+        self.assertEqual(pkt.source_id, "abcdef123456")
+        self.assertEqual(pkt.decoded_payload["long_name"], "AliasNode")
+        self.assertEqual(pkt.decoded_payload["short_name"], "Alia")
+
     def test_advertisement_no_coords(self):
         raw = self._make_envelope("advertisement", {
             "public_key": "abcdef1234567890abcdef",
