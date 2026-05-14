@@ -138,6 +138,35 @@ the most common cause is the missing `paho-mqtt` package after a
 [Common Errors > MQTT enabled but no traffic on the broker](COMMON-ERRORS.md#mqtt-enabled-but-no-traffic-on-the-broker-no-mqtt-lines-in-logs)
 for the full diagnostic table.
 
+Expected healthy snippet:
+
+```text
+MQTT publisher started as !9A1BCDEF
+MQTT pub rc=0 topic=msh/US/2/e/LongFast/!9A1BCDEF
+MQTT pub rc=0 topic=msh/US/2/e/LongFast/!C001D00D
+```
+
+If you need a hierarchical region/topic path (for example `msh/US/FL`),
+either set:
+
+```yaml
+mqtt:
+  topic_root: "msh"
+  region: "US/FL"
+```
+
+or split it across both keys:
+
+```yaml
+mqtt:
+  topic_root: "msh/US"
+  region: "FL"
+```
+
+If startup appears but there are no `MQTT pub rc=0` lines, your
+`mqtt.publish_channels` allowlist is filtering all observed traffic.
+Temporarily include `LongFast` while validating the pipeline end-to-end.
+
 ### Publishing private channels (your own broker)
 
 If you want to publish a private channel into your own MQTT broker

@@ -338,14 +338,29 @@ mqtt:
   port: 1883                     # broker port
   username: "meshdev"            # broker credentials
   password: "large4cats"
-  topic_root: "msh"             # MQTT topic prefix
-  region: "US"                   # used in topic path
+  topic_root: "msh"              # MQTT prefix root (can include path segments)
+  region: "US"                   # topic path region segment (can be hierarchical: US/FL)
   publish_channels:              # Gate 2: only these channels are published
     - "LongFast"
   publish_json: false            # also publish JSON on /json/ topic
   location_precision: "exact"    # exact | approximate | none
   homeassistant_discovery: false # publish HA auto-discovery configs
 ```
+
+Topic path prefix composition is:
+
+```text
+<topic_root>/<region>/2/...
+```
+
+Examples:
+
+- `topic_root: "msh"`, `region: "US"` -> `msh/US/2/...`
+- `topic_root: "msh"`, `region: "US/FL"` -> `msh/US/FL/2/...`
+- `topic_root: "msh/US"`, `region: "FL"` -> `msh/US/FL/2/...`
+
+If `topic_root` already ends with the same `region`, Meshpoint avoids
+duplicating that segment.
 
 ### Location Precision
 

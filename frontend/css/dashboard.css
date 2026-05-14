@@ -54,11 +54,8 @@ html, body {
 }
 
 .top-bar__icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
-    display: block;
-    flex-shrink: 0;
+    font-size: 1.5rem;
+    color: var(--accent-cyan);
 }
 
 .top-bar__brand h1 {
@@ -145,30 +142,6 @@ html, body {
     cursor: pointer;
     text-decoration: none;
     animation: updatePulse 2s ease-in-out infinite;
-}
-
-.top-bar__signout {
-    background: none;
-    border: none;
-    padding: 0.2rem 0.3rem;
-    cursor: pointer;
-    color: var(--text-muted);
-    display: inline-flex;
-    align-items: center;
-    border-radius: var(--radius-sm);
-    transition: color 0.15s, background 0.15s;
-}
-
-.top-bar__signout:hover,
-.top-bar__signout:focus-visible {
-    color: var(--accent-cyan);
-    background: rgba(6, 182, 212, 0.08);
-    outline: none;
-}
-
-.top-bar__signout:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
 }
 
 .hidden { display: none !important; }
@@ -501,6 +474,37 @@ html, body {
     font-weight: 600;
     padding: 0.1rem 0.4rem;
     border-radius: 8px;
+}
+
+.packet-header__controls {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.packet-filter-label {
+    font-size: 0.62rem;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+}
+
+.packet-filter-select {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.12rem 0.35rem;
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+}
+
+.packet-filter-select:focus {
+    outline: none;
+    border-color: var(--accent-cyan);
+}
+
+.packet-row--hidden {
+    display: none;
 }
 
 @keyframes packetFlash {

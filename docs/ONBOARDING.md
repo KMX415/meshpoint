@@ -350,35 +350,22 @@ sudo systemctl restart meshpoint
 
 The local dashboard shows an orange update indicator when a new version is available on GitHub.
 
-> **Hard-refresh the browser after every update.** The dashboard SPA is heavily cached. After `systemctl restart meshpoint`, press Ctrl+Shift+R (Cmd+Shift+R on macOS) on each open dashboard tab so the browser pulls the new frontend JS instead of the stale copy. Skipping this is the most common cause of "looks broken after upgrade" reports.
+### Updating to v0.6.0 (one-time steps)
 
-### Upgrading from v0.7.2 or earlier to v0.7.3 (one-time)
-
-v0.7.3 adds local dashboard authentication, which requires two new Python dependencies (`bcrypt` and `PyJWT`). A bare `git pull` does **not** install them: the service will fail to start with `ModuleNotFoundError: No module named 'bcrypt'` (or `'jwt'`) until the venv is refreshed. Re-run `install.sh` after pulling:
+v0.6.0 adds native TX support, which requires a one-time HAL recompile and two config files. Run these after `git pull`:
 
 ```bash
 cd /opt/meshpoint
 sudo git pull origin main
-sudo bash scripts/install.sh
+sudo bash /opt/meshpoint/scripts/patch_hal.sh
+sudo cp config/sudoers-meshpoint /etc/sudoers.d/meshpoint
+sudo chmod 440 /etc/sudoers.d/meshpoint
+sudo cp scripts/meshpoint.service /etc/systemd/system/meshpoint.service
+sudo systemctl daemon-reload
 sudo systemctl restart meshpoint
 ```
 
-`install.sh` is idempotent: it reuses the existing venv, just runs `pip install -r requirements.txt` to pick up the new wheels, and reinstalls the systemd unit. After restart, open `http://<pi-ip>:8080` in your browser and you'll be redirected to `/setup` to set an admin password (8-character minimum). All subsequent dashboard access requires sign-in. If you forget the password later, recover via SSH: `sudo meshpoint reset-password`.
-
-Once you're on v0.7.3 or later, future minor updates inside the v0.7.x series go back to plain `git pull + restart` unless a release explicitly notes new dependencies.
-
-### Upgrading from v0.6.x or earlier (one-time)
-
-v0.7.0 ships the core modules as Python source instead of pre-compiled `.so` binaries. If your install predates v0.7.0, `git pull` alone is not sufficient: Python's import machinery would prefer the stale `.cpython-*.so` files over the new source and you'd silently keep running v0.6.x code. Re-run `install.sh` after pulling to clean them up:
-
-```bash
-cd /opt/meshpoint
-sudo git pull origin main
-sudo bash scripts/install.sh
-sudo systemctl restart meshpoint
-```
-
-`install.sh` is idempotent and also subsumes the older v0.6.0-era one-time steps (HAL TX sync word patch, sudoers rule, systemd service install) in the same pass, so this single command covers any path from v0.5.x or v0.6.x up to current. Future updates from v0.7.0 onward go back to plain `git pull` + `restart`.
+`patch_hal.sh` patches the concentrator HAL for Meshtastic-compatible TX sync words and recompiles (about 2 minutes). The sudoers rule allows the dashboard to restart the service when you change settings. The updated service file auto-fixes config directory permissions on startup. All one-time: future updates go back to `git pull` + `restart`.
 
 A reboot ensures all changes take effect cleanly (kernel modules, SPI state, MeshCore companion). Reboots are safe: the systemd service holds the concentrator in reset during shutdown to prevent SPI bus latch.
 

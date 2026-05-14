@@ -50,11 +50,11 @@ These are not blocked, just reviewed more carefully.
 
 ## Workflow
 
-1. Fork the repo (or, if you're a collaborator, push a feature branch directly to `KMX415/meshpoint`)
-2. Create a branch from `main`
+1. Fork the repo
+2. Create a branch from main
 3. Make your change
 4. Test it
-5. Open a pull request **targeting `KMX415/meshpoint:main`**
+5. Open a pull request
 
 Example branch names:
 
@@ -64,12 +64,6 @@ fix/install-script
 docs/setup
 refactor/config-loader
 ```
-
-When you open the PR from a fork, **leave "Allow edits from maintainers" checked** (GitHub's default). It lets the maintainer push small fixes (lint, rebases on top of newly-landed work) directly onto your PR branch without a back-and-forth review cycle.
-
-PRs land on `main` via **Squash and merge** by default, so each merged PR becomes one commit. Keep your PR commit message in the PR description (the merge UI uses it).
-
-If `main` moves while your PR is open and conflicts appear, rebase your branch on the new `main` and force-push to your fork. Don't merge `main` into your PR branch -- it produces a noisy history that breaks the squash-merge convention.
 
 ---
 
@@ -134,14 +128,11 @@ Rules:
 ## Before opening a PR
 
 - Code builds
-- Tests pass: `python -m pytest tests/ -q`
-- Lint clean: `python -m ruff check src/ tests/`
+- Tests pass (if present)
 - Docs updated if needed
 - Config changes documented
 - Hardware/region impact noted
 - PR description is clear
-
-CI runs the same `ruff` + `pytest` jobs on every PR (see `.github/workflows/ci.yml`). PRs cannot merge until that check passes.
 
 ---
 

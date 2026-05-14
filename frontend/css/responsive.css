@@ -19,7 +19,8 @@
 
 @media (max-width: 720px) {
     .top-bar { padding: 0.5rem 0.75rem; }
-    .top-bar__status {
+    .top-bar__status,
+    .top-bar__hybrid-mid {
         flex-wrap: wrap;
         row-gap: 0.25rem;
         column-gap: 0.5rem;
@@ -47,7 +48,8 @@
         align-items: flex-start;
     }
     .top-bar__brand { width: 100%; }
-    .top-bar__status { width: 100%; }
+    .top-bar__status,
+    .top-bar__hybrid-mid { width: 100%; }
     .top-bar__brand h1 { font-size: 0.95rem; }
     .packet-table { font-size: 0.7rem; }
     .packet-table th, .packet-table td { padding: 0.3rem 0.4rem; }

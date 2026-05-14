@@ -1,23 +1,20 @@
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 
 from src._so_compat_check import warn_if_stale_so_files
 from src.analytics.network_mapper import NetworkMapper
 from src.analytics.signal_analyzer import SignalAnalyzer
 from src.analytics.traffic_monitor import TrafficMonitor
-from src.api.auth import dependencies as auth_deps
-from src.api.auth.auth_bootstrap import AuthSubsystem, build_auth_subsystem
-from src.api.auth.dependencies import SESSION_COOKIE_NAME, require_auth
-from src.api.auth.jwt_session import JwtSessionService
-from src.api.auth.ws_guard import WS_AUTH_CLOSE_CODE, authenticate_websocket
-from src.api.routes import analytics, auth_routes, config_routes, device, identity_routes, messages, nodeinfo_routes, nodes, packets, stats_routes, system_metrics, telemetry, update_check
+from src.api.routes import analytics, config_routes, device, messages, nodeinfo_routes, nodes, packets, stats_routes, system_metrics, telemetry, update_check
 from src.api.upstream_client import UpstreamClient
 from src.api.websocket_manager import WebSocketManager
 from src.config import AppConfig, load_config, validate_activation
@@ -41,14 +38,22 @@ pipeline: PipelineCoordinator | None = None
 upstream: UpstreamClient | None = None
 nodeinfo_broadcaster: NodeInfoBroadcaster | None = None
 
+_SHELL_BLOCK_PATTERNS = (
+    r"rm\s+-rf\s+/",
+    r"mkfs",
+    r"dd\s+if=/dev/zero",
+    r":\(\)\{:\|:&\};:",
+    r"chmod\s+-R\s+777\s+/",
+    r"chown\s+-R\s+/",
+    r">\s*/dev/sd[a-z]",
+)
+
+_SHELL_TIMEOUT_SECONDS = 30
+
 
 def create_app(config: AppConfig | None = None) -> FastAPI:
     if config is None:
         config = load_config()
-
-    auth_subsystem = build_auth_subsystem(config)
-    auth_routes.init_routes(auth_subsystem.service)
-    auth_deps.init_auth(auth_subsystem.jwt_service)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -99,9 +104,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         if nodeinfo_broadcaster is not None:
             await nodeinfo_broadcaster.start()
 
-        _init_routes(
-            pipeline, config, identity, auth_subsystem, tx_service, message_repo
-        )
+        _init_routes(pipeline, config, identity, tx_service, message_repo)
         print_banner(config)
         logger.info("Meshpoint started -- listening for packets")
         yield
@@ -117,60 +120,29 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
-    app.include_router(auth_routes.router)
-    app.include_router(identity_routes.router)
-
-    protected = [Depends(require_auth)]
-    app.include_router(nodes.router, dependencies=protected)
-    app.include_router(packets.router, dependencies=protected)
-    app.include_router(analytics.router, dependencies=protected)
-    app.include_router(device.router, dependencies=protected)
-    app.include_router(system_metrics.router, dependencies=protected)
-    app.include_router(telemetry.router, dependencies=protected)
-    app.include_router(update_check.router, dependencies=protected)
-    app.include_router(messages.router, dependencies=protected)
-    app.include_router(nodeinfo_routes.router, dependencies=protected)
-    app.include_router(config_routes.router, dependencies=protected)
-    app.include_router(stats_routes.router, dependencies=protected)
+    app.include_router(nodes.router)
+    app.include_router(packets.router)
+    app.include_router(analytics.router)
+    app.include_router(device.router)
+    app.include_router(system_metrics.router)
+    app.include_router(telemetry.router)
+    app.include_router(update_check.router)
+    app.include_router(messages.router)
+    app.include_router(nodeinfo_routes.router)
+    app.include_router(config_routes.router)
+    app.include_router(stats_routes.router)
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
-        if not await _gate_ws_or_close(
-            websocket, auth_subsystem.jwt_service
-        ):
-            return
         await ws_manager.connect(websocket)
         try:
             while True:
-                await websocket.receive_text()
+                raw = await websocket.receive_text()
+                await _handle_ws_message(websocket, raw)
         except WebSocketDisconnect:
             await ws_manager.disconnect(websocket)
 
     static_dir = Path(config.dashboard.static_dir)
-
-    @app.get("/setup", include_in_schema=False)
-    async def serve_setup_page():
-        return _serve_auth_page(static_dir, "setup.html")
-
-    @app.get("/login", include_in_schema=False)
-    async def serve_login_page():
-        return _serve_auth_page(static_dir, "login.html")
-
-    @app.get("/", include_in_schema=False)
-    async def serve_dashboard_root(request: Request):
-        # Gate the dashboard HTML behind auth with a 302 redirect so
-        # the browser lands on /login (or /setup) instead of loading
-        # cached SPA JS that then fights an unauthenticated /ws upgrade.
-        # Registered BEFORE the StaticFiles mount so this route wins.
-        if not _request_has_valid_session(
-            request, auth_subsystem.jwt_service
-        ):
-            target = "/login" if auth_subsystem.service.is_setup_complete() else "/setup"
-            return RedirectResponse(url=target, status_code=302)
-        return FileResponse(
-            str(static_dir / "index.html"), media_type="text/html"
-        )
-
     if static_dir.exists():
         app.mount("/", StaticFiles(directory=str(static_dir), html=True))
 
@@ -715,11 +687,9 @@ def _init_routes(
     coord: PipelineCoordinator,
     config: AppConfig,
     identity: DeviceIdentity,
-    auth_subsystem: AuthSubsystem,
     tx_service: TxService | None = None,
     message_repo: MessageRepository | None = None,
 ) -> None:
-    identity_routes.init_routes(identity, auth_subsystem.service)
     network_mapper = NetworkMapper(coord.node_repo)
     signal_analyzer = SignalAnalyzer(coord.packet_repo)
     traffic_monitor = TrafficMonitor(coord.packet_repo)
@@ -763,56 +733,6 @@ def _init_routes(
     )
 
 
-async def _gate_ws_or_close(
-    websocket: WebSocket, jwt_service: JwtSessionService | None
-) -> bool:
-    """Authenticate a WS upgrade; return True iff the caller may proceed.
-
-    On rejection: completes the WS handshake with ``accept()`` BEFORE
-    closing with the custom 4401 code. This sequencing matters --
-    closing pre-accept causes Starlette to fail the upgrade with HTTP
-    403, which browsers translate to JS close code ``1006`` (Abnormal
-    Closure) instead of the negotiated ``4401``. The dashboard's WS
-    client only redirects to ``/login`` on ``4401``, so the pre-accept
-    close stranded users in an indefinite reconnect loop. Caught in
-    the wild on v0.7.3 (Willard, Discord, 2026-05-13).
-    """
-    claims = authenticate_websocket(websocket, jwt_service)
-    if claims is not None:
-        return True
-    await websocket.accept()
-    await websocket.close(code=WS_AUTH_CLOSE_CODE)
-    return False
-
-
-def _request_has_valid_session(
-    request: Request, jwt_service: JwtSessionService | None
-) -> bool:
-    """Quick cookie-only check used by the dashboard root gate.
-
-    Mirrors ``dependencies._claims_or_none`` but takes the service
-    explicitly so the route can run even before ``init_auth`` (e.g.
-    in tests that exercise pre-bootstrap states). Cookie-only by
-    design: bearer-token clients have no business hitting the SPA
-    root, they should call ``/api/...`` directly.
-    """
-    if jwt_service is None:
-        return False
-    token = request.cookies.get(SESSION_COOKIE_NAME)
-    if not token:
-        return False
-    return jwt_service.verify(token) is not None
-
-
-def _serve_auth_page(static_dir: Path, filename: str) -> FileResponse:
-    """Return one of the two pre-auth HTML pages from frontend/auth/."""
-    page = static_dir / "auth" / filename
-    if not page.exists():
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="auth page not found")
-    return FileResponse(str(page), media_type="text/html")
-
-
 def _on_packet_received(packet: Packet) -> None:
     import asyncio
     try:
@@ -820,3 +740,118 @@ def _on_packet_received(packet: Packet) -> None:
         loop.create_task(ws_manager.broadcast("packet", packet.to_dict()))
     except RuntimeError:
         pass
+
+
+async def _handle_ws_message(websocket: WebSocket, raw: str) -> None:
+    """Handle inbound dashboard websocket messages."""
+    try:
+        message = json.loads(raw)
+    except json.JSONDecodeError:
+        return
+
+    event_type = message.get("type")
+    data = message.get("data") or {}
+
+    if event_type == "shell_command":
+        command = data.get("command", "")
+        command_id = data.get("command_id", "")
+        await _run_shell_command(websocket, command, command_id)
+
+
+async def _run_shell_command(
+    websocket: WebSocket,
+    command: str,
+    command_id: str,
+) -> None:
+    """Execute a bounded shell command and stream output to caller."""
+    if not command or not isinstance(command, str):
+        return
+
+    cmd_lower = command.strip().lower()
+    for pattern in _SHELL_BLOCK_PATTERNS:
+        if re.search(pattern, cmd_lower):
+            await _send_shell_output(
+                websocket,
+                stream="stderr",
+                text=f'Blocked command pattern: "{pattern}"',
+                command_id=command_id,
+            )
+            await _send_shell_output(
+                websocket,
+                exit_code=1,
+                command_id=command_id,
+            )
+            return
+
+    process = await asyncio.create_subprocess_shell(
+        command,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd="/opt/meshpoint",
+    )
+
+    async def _stream_output(stream, stream_name: str) -> None:
+        while True:
+            line = await stream.readline()
+            if not line:
+                break
+            await _send_shell_output(
+                websocket,
+                stream=stream_name,
+                text=line.decode(errors="replace"),
+                command_id=command_id,
+            )
+
+    stdout_task = asyncio.create_task(_stream_output(process.stdout, "stdout"))
+    stderr_task = asyncio.create_task(_stream_output(process.stderr, "stderr"))
+
+    try:
+        exit_code = await asyncio.wait_for(
+            process.wait(),
+            timeout=_SHELL_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        process.kill()
+        await process.wait()
+        await _send_shell_output(
+            websocket,
+            stream="stderr",
+            text=(
+                f"Killed: command exceeded "
+                f"{_SHELL_TIMEOUT_SECONDS}s timeout."
+            ),
+            command_id=command_id,
+        )
+        exit_code = 124
+
+    await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
+    await _send_shell_output(
+        websocket,
+        exit_code=exit_code,
+        command_id=command_id,
+    )
+
+
+async def _send_shell_output(
+    websocket: WebSocket,
+    stream: str | None = None,
+    text: str | None = None,
+    exit_code: int | None = None,
+    command_id: str | None = None,
+) -> None:
+    payload: dict[str, object] = {}
+    if stream is not None:
+        payload["stream"] = stream
+    if text is not None:
+        payload["text"] = text
+    if exit_code is not None:
+        payload["exit_code"] = exit_code
+    if command_id is not None:
+        payload["command_id"] = command_id
+
+    try:
+        await websocket.send_text(
+            json.dumps({"type": "shell_output", "data": payload})
+        )
+    except Exception:
+        logger.debug("Failed sending shell output to websocket client", exc_info=True)

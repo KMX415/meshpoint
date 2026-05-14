@@ -7,6 +7,17 @@ class SimplePacketFeed {
         this._tbody = document.getElementById(tbodyId);
         this._maxRows = maxRows || 200;
         this._count = 0;
+
+        this._visibleCount = 0;
+        this._typeFilter = 'all';
+        this._knownTypes = new Set();
+        this._filterSelect = document.getElementById('packet-type-filter');
+        if (this._filterSelect) {
+            this._filterSelect.addEventListener('change', () => {
+                this.setTypeFilter(this._filterSelect.value);
+            });
+        }
+
         this._nodeByLastByte = new Map();
         this._onFocus = null;
     }
@@ -26,6 +37,7 @@ class SimplePacketFeed {
     }
 
     addPacket(packet) {
+        this._registerPacketType(packet.packet_type);
         const tr = document.createElement('tr');
         tr.classList.add('packet-row--new');
         tr.addEventListener('animationend', () => tr.classList.remove('packet-row--new'));
@@ -83,17 +95,43 @@ class SimplePacketFeed {
         tr.addEventListener('click', () => this._toggleDetail(tr, packet));
 
         this._tbody.prepend(tr);
+        this._applyFilterToRow(tr, packet);
         this._count++;
-
-        const countEl = document.getElementById('packet-count');
-        if (countEl) countEl.textContent = this._count;
+        this._updateCountBadge();
 
         while (this._tbody.children.length > this._maxRows * 2) {
-            this._tbody.removeChild(this._tbody.lastChild);
+            const last = this._tbody.lastChild;
+            if (last && !last.classList.contains('packet-detail-row')) {
+                if (!last.classList.contains('packet-row--hidden')) {
+                    this._visibleCount = Math.max(0, this._visibleCount - 1);
+                }
+            }
+            this._tbody.removeChild(last);
         }
+        this._updateCountBadge();
+    }
+
+    setTypeFilter(type) {
+        this._typeFilter = (type || 'all').toLowerCase();
+        const rows = Array.from(this._tbody.querySelectorAll('tr:not(.packet-detail-row)'));
+        for (const row of rows) {
+            const packetType = row.dataset.packetType || '';
+            const visible = this._typeFilter === 'all' || packetType === this._typeFilter;
+            row.classList.toggle('packet-row--hidden', !visible);
+
+            const next = row.nextElementSibling;
+            if (next && next.classList.contains('packet-detail-row') && !visible) {
+                next.remove();
+            }
+        }
+        this._visibleCount = rows.filter(r => !r.classList.contains('packet-row--hidden')).length;
+        this._updateCountBadge();
     }
 
     _toggleDetail(tr, packet) {
+        if (tr.classList.contains('packet-row--hidden')) {
+            return;
+        }
         const next = tr.nextElementSibling;
         if (next && next.classList.contains('packet-detail-row')) {
             next.remove();
@@ -173,5 +211,36 @@ class SimplePacketFeed {
         const el = document.createElement('span');
         el.textContent = str;
         return el.innerHTML;
+    }
+
+    _registerPacketType(type) {
+        if (!type) return;
+        const normalized = String(type).toLowerCase();
+        if (this._knownTypes.has(normalized)) return;
+        this._knownTypes.add(normalized);
+        if (!this._filterSelect) return;
+
+        const option = document.createElement('option');
+        option.value = normalized;
+        option.textContent = String(type).toUpperCase();
+        this._filterSelect.appendChild(option);
+    }
+
+    _applyFilterToRow(tr, packet) {
+        const packetType = String(packet.packet_type || '').toLowerCase();
+        tr.dataset.packetType = packetType;
+        const visible = this._typeFilter === 'all' || packetType === this._typeFilter;
+        tr.classList.toggle('packet-row--hidden', !visible);
+        if (visible) this._visibleCount++;
+    }
+
+    _updateCountBadge() {
+        const countEl = document.getElementById('packet-count');
+        if (!countEl) return;
+        if (this._typeFilter === 'all') {
+            countEl.textContent = String(this._count);
+            return;
+        }
+        countEl.textContent = `${this._visibleCount}/${this._count}`;
     }
 }

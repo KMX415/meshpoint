@@ -1,17 +1,22 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Meshpoint Dashboard</title>
-    <link rel="icon" type="image/png" href="/assets/favicon.png">
-    <link rel="apple-touch-icon" href="/assets/meshpoint-logo.png">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
     <link rel="stylesheet" href="css/dashboard.css" />
     <link rel="stylesheet" href="css/tab_bar.css" />
     <link rel="stylesheet" href="css/node_cards.css" />
@@ -23,174 +28,422 @@
     <link rel="stylesheet" href="css/radio_channels.css" />
     <link rel="stylesheet" href="css/stats.css" />
     <link rel="stylesheet" href="css/responsive.css" />
-</head>
-<body>
-    <header class="top-bar">
+    <link rel="stylesheet" href="css/terminal.css" />
+    <link rel="stylesheet" href="css/meshradar.css" />
+    <link rel="stylesheet" href="css/meshpoint-compliant.css" />
+  </head>
+  <body>
+    <div class="ms-root">
+      <header class="top-bar top-bar--compliant">
         <div class="top-bar__brand">
-            <img src="/assets/meshpoint-logo.png" alt="Meshpoint" class="top-bar__icon" width="40" height="40" />
-            <h1>
-                <a href="https://meshradar.io" target="_blank" rel="noopener"
-                   class="top-bar__brand-link">Meshradar</a>
-                <span class="top-bar__subtitle">/ Meshpoint</span>
-            </h1>
+          <img
+            src="/assets/meshpoint-mark.svg"
+            alt=""
+            class="top-bar__icon"
+            width="40"
+            height="40"
+          />
+          <h1 class="top-bar__brand-title">
+            <a
+              href="https://meshradar.io"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="top-bar__brand-link"
+              >Meshradar</a
+            >
+            <span class="top-bar__subtitle">/ Meshpoint</span>
+          </h1>
+          <div class="top-bar__heartbeat" aria-hidden="true"></div>
         </div>
-        <div class="top-bar__status">
-            <span id="ws-status" class="status-dot status-dot--disconnected"></span>
-            <span id="ws-label" class="status-label">Connecting...</span>
-            <span class="top-bar__divider">|</span>
-            <span id="node-count-badge" class="top-bar__stat">0 nodes</span>
-            <span class="top-bar__divider">|</span>
-            <span id="packet-count-badge" class="top-bar__stat">0 packets</span>
-            <span class="top-bar__divider">|</span>
-            <span id="device-name" class="top-bar__device"></span>
-            <span id="device-id" class="top-bar__device-id" title="Click to copy device ID"></span>
-            <span id="version-badge" class="top-bar__version">--</span>
-            <a id="update-badge" class="update-badge hidden" title="Update available" href="https://github.com/KMX415/meshpoint/blob/main/docs/ONBOARDING.md#updating" target="_blank" rel="noopener">&#9888;</a>
-            <span class="top-bar__divider">|</span>
-            <button id="signout-btn" class="top-bar__signout" type="button" title="Sign out" aria-label="Sign out">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                    <polyline points="16 17 21 12 16 7"/>
-                    <line x1="21" y1="12" x2="9" y2="12"/>
-                </svg>
-            </button>
+        <span class="top-bar__radio" id="top-freq">N/A</span>
+        <div class="top-bar__hybrid-mid" role="group" aria-label="Connection and device">
+          <span
+            id="ws-status"
+            class="status-dot status-dot--disconnected"
+            aria-hidden="true"
+          ></span>
+          <span id="ws-label" class="status-label">Connecting…</span>
+          <span class="top-bar__divider" aria-hidden="true">|</span>
+          <span id="node-count-badge" class="top-bar__stat">--</span>
+          <span class="top-bar__divider" aria-hidden="true">|</span>
+          <span id="packet-count-badge" class="top-bar__stat">--</span>
+          <span class="top-bar__divider" aria-hidden="true">|</span>
+          <span id="device-name" class="top-bar__device"></span>
+          <span
+            id="device-id"
+            class="top-bar__device-id"
+            title="Click to copy device ID"
+          ></span>
+          <span id="version-badge" class="top-bar__version">--</span>
+          <a
+            id="update-badge"
+            class="update-badge hidden"
+            title="Update available"
+            href="https://github.com/KMX415/meshpoint/blob/main/docs/ONBOARDING.md#updating"
+            target="_blank"
+            rel="noopener noreferrer"
+            >&#9888;</a
+          >
+          <span class="top-bar__divider" aria-hidden="true">|</span>
+          <button
+            id="signout-btn"
+            class="top-bar__signout"
+            type="button"
+            title="Sign out"
+            aria-label="Sign out"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              width="14"
+              height="14"
+              aria-hidden="true"
+            >
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          </button>
         </div>
-    </header>
-
-    <nav class="tab-bar">
-        <button class="tab-bar__btn tab-bar__btn--active" data-tab="dashboard">Dashboard</button>
-        <button class="tab-bar__btn" data-tab="stats">Stats</button>
-        <button class="tab-bar__btn" data-tab="messages">Messages <span id="msg-unread-badge" class="tab-bar__badge" style="display:none">0</span></button>
-        <button class="tab-bar__btn" data-tab="radio">Radio</button>
-    </nav>
-
-    <div id="tab-dashboard" class="tab-content tab-content--active">
-    <main class="dashboard">
-        <section class="dashboard__stats">
-            <div class="stat-card" id="stat-nodes">
-                <div class="stat-card__label">Nodes Discovered</div>
-                <div class="stat-card__value" id="stat-nodes-val">--</div>
-                <div class="stat-card__subtitle">24h / total</div>
-            </div>
-            <div class="stat-card" id="stat-packets-card">
-                <div class="stat-card__label">Total Packets</div>
-                <div class="stat-card__value" id="stat-packets-val">--</div>
-            </div>
-            <div class="stat-card" id="stat-rate">
-                <div class="stat-card__label">Packets / Min</div>
-                <div class="stat-card__value" id="stat-rate-val">--</div>
-            </div>
-            <div class="stat-card" id="stat-rssi">
-                <div class="stat-card__label">Avg RSSI</div>
-                <div class="stat-card__value" id="stat-rssi-val">--</div>
-            </div>
-            <div class="stat-card stat-card--relay" id="stat-relay">
-                <div class="stat-card__label">Packets Relayed</div>
-                <div class="stat-card__value" id="stat-relay-val">--</div>
-                <div class="stat-card__sub" id="stat-relay-sub"></div>
-            </div>
-            <div class="stat-card" id="stat-uptime">
-                <div class="stat-card__label">Uptime</div>
-                <div class="stat-card__value" id="stat-uptime-val">--</div>
-            </div>
-            <div class="stat-card stat-card--system" id="stat-cpu">
-                <div class="stat-card__label">CPU</div>
-                <div class="stat-card__value" id="stat-cpu-val">--</div>
-            </div>
-            <div class="stat-card stat-card--system" id="stat-ram">
-                <div class="stat-card__label">RAM</div>
-                <div class="stat-card__value" id="stat-ram-val">--</div>
-                <div class="stat-card__sub" id="stat-ram-sub"></div>
-            </div>
-            <div class="stat-card stat-card--system" id="stat-disk">
-                <div class="stat-card__label">Disk</div>
-                <div class="stat-card__value" id="stat-disk-val">--</div>
-                <div class="stat-card__sub" id="stat-disk-sub"></div>
-            </div>
-            <div class="stat-card stat-card--system" id="stat-temp">
-                <div class="stat-card__label">CPU Temp</div>
-                <div class="stat-card__value" id="stat-temp-val">--</div>
-            </div>
-        </section>
-
-        <div class="dashboard__main">
-            <section class="dashboard__map">
-                <div class="panel">
-                    <div class="panel__header">Node Map</div>
-                    <div id="map" class="panel__body map-container"></div>
-                </div>
-            </section>
-
-            <section class="dashboard__side">
-                <div class="panel panel--nodes">
-                    <div class="panel__header">
-                        <span>Nodes</span>
-                        <input type="text" id="node-search" class="node-search" placeholder="Search..." />
-                    </div>
-                    <div class="panel__body" id="node-list"></div>
-                </div>
-            </section>
+        <div class="top-bar__stats">
+          <div class="top-bar__stat">
+            <span class="top-bar__stat-value" id="stat-nodes">--</span>
+            <span class="top-bar__stat-label">Nodes (24h)</span>
+          </div>
+          <div class="top-bar__stat">
+            <span class="top-bar__stat-value" id="stat-pkts">--</span>
+            <span class="top-bar__stat-label">Packets</span>
+          </div>
+          <div class="top-bar__stat">
+            <span class="top-bar__stat-value" id="stat-rate">--</span>
+            <span class="top-bar__stat-label">Pkt/min</span>
+          </div>
+          <span
+            id="conn-pill"
+            class="top-bar__pill top-bar__pill--warn"
+            role="status"
+            >CONNECTING</span
+          >
         </div>
-
-        <section class="dashboard__feed">
-            <div class="panel">
+      </header>
+      <nav class="tab-bar" role="tablist" aria-label="Main views">
+        <button
+          type="button"
+          class="tab-bar__btn tab-bar__btn--active"
+          data-view="topology"
+          data-tab="topology"
+          role="tab"
+          aria-selected="true"
+        >
+          Topology
+        </button>
+        <button
+          type="button"
+          class="tab-bar__btn"
+          data-view="packets"
+          data-tab="packets"
+          role="tab"
+          aria-selected="false"
+        >
+          Packets
+        </button>
+        <button
+          type="button"
+          class="tab-bar__btn"
+          data-view="signal"
+          data-tab="signal"
+          role="tab"
+          aria-selected="false"
+        >
+          Signal
+        </button>
+        <button
+          type="button"
+          class="tab-bar__btn"
+          data-view="traceroute"
+          data-tab="traceroute"
+          role="tab"
+          aria-selected="false"
+        >
+          Trace route
+        </button>
+        <button
+          type="button"
+          class="tab-bar__btn"
+          data-view="messages"
+          data-tab="messages"
+          role="tab"
+          aria-selected="false"
+        >
+          Messages
+        </button>
+        <button
+          type="button"
+          class="tab-bar__btn"
+          data-view="radio"
+          data-tab="radio"
+          role="tab"
+          aria-selected="false"
+        >
+          Radio
+        </button>
+        <button
+          type="button"
+          class="tab-bar__btn"
+          data-view="terminal"
+          data-tab="terminal"
+          role="tab"
+          aria-selected="false"
+        >
+          Terminal
+        </button>
+        <button
+          type="button"
+          class="tab-bar__btn"
+          data-view="system"
+          data-tab="system"
+          role="tab"
+          aria-selected="false"
+        >
+          System
+        </button>
+      </nav>
+      <div class="ms-workspace">
+        <aside class="ms-rail" aria-label="Nodes in range">
+          <div class="ms-rail__section">Nodes in range</div>
+          <div class="ms-node-source">
+            <span class="packet-filter-label">Source</span>
+            <select
+              class="packet-filter-select"
+              id="node-source-filter"
+              aria-label="Node source filter"
+            >
+              <option value="ALL">ALL</option>
+              <option value="RF">LoRa/RF</option>
+              <option value="MQTT">MQTT</option>
+              <option value="UNKNOWN">UNKNOWN</option>
+            </select>
+          </div>
+          <div class="ms-rail__list" id="node-list"></div>
+          <div class="ms-rail__footer">
+            <div class="ms-detail-row">
+              <span class="ms-detail-row__key">CPU</span
+              ><span class="ms-detail-row__val" id="dev-cpu">N/A</span>
+            </div>
+            <div class="ms-detail-row">
+              <span class="ms-detail-row__key">Temp</span
+              ><span class="ms-detail-row__val" id="dev-temp">N/A</span>
+            </div>
+            <div class="ms-detail-row">
+              <span class="ms-detail-row__key">Uptime</span
+              ><span class="ms-detail-row__val" id="dev-uptime">N/A</span>
+            </div>
+            <div class="ms-detail-row">
+              <span class="ms-detail-row__key">Sources</span
+              ><span class="ms-detail-row__val" id="dev-sources">N/A</span>
+            </div>
+          </div>
+          <div class="ms-rail__hint" aria-hidden="true">
+            Tab: switch views &middot; focus rail: nodes
+          </div>
+        </aside>
+        <div class="ms-stage" id="ms-stage">
+          <div class="ms-stage-main">
+            <div
+              id="tab-topology"
+              class="tab-content tab-content--active"
+              role="tabpanel"
+            >
+              <div class="panel ms-fill">
                 <div class="panel__header">
-                    Packets
-                    <span class="packet-count" id="packet-count">0</span>
+                  <span>Network topology</span>
+                  <span class="packet-count" id="topo-count">0 nodes</span>
                 </div>
-                <div class="panel__body">
-                    <table class="packet-table">
-                        <thead>
-                            <tr>
-                                <th>Time</th>
-                                <th>Protocol</th>
-                                <th>Source</th>
-                                <th>Dest</th>
-                                <th>Type</th>
-                                <th>RSSI</th>
-                                <th>SNR</th>
-                                <th>Freq</th>
-                                <th>SF</th>
-                                <th>Hops</th>
-                                <th>Details</th>
-                            </tr>
-                        </thead>
-                        <tbody id="packet-tbody"></tbody>
-                    </table>
+                <div class="panel__body" id="topo-wrap">
+                  <canvas id="topoCanvas" aria-label="Topology graph"></canvas>
                 </div>
+              </div>
             </div>
-        </section>
-    </main>
-    </div>
-
-    <div id="tab-stats" class="tab-content">
-        <div id="stats-panel" class="stats-panel">
-            <div class="stats-panel__loading">Loading stats...</div>
+            <div id="tab-packets" class="tab-content" role="tabpanel">
+              <div class="panel ms-fill">
+                <div class="panel__header">
+                  <span>Live packet feed</span>
+                  <div class="packet-header__controls">
+                    <label class="packet-filter" for="pkt-portnum-filter">
+                      <span class="packet-filter-label">Type</span>
+                      <select
+                        class="packet-filter-select"
+                        id="pkt-portnum-filter"
+                      >
+                        <option value="">ALL</option>
+                        <option value="TEXT_MESSAGE_APP">TEXT_MESSAGE</option>
+                        <option value="POSITION_APP">POSITION</option>
+                        <option value="NODEINFO_APP">NODEINFO</option>
+                        <option value="TELEMETRY_APP">TELEMETRY</option>
+                        <option value="ROUTING_APP">ROUTING</option>
+                        <option value="ADMIN_APP">ADMIN</option>
+                        <option value="WAYPOINT_APP">WAYPOINT</option>
+                        <option value="DETECTION_SENSOR_APP">
+                          DETECTION_SENSOR
+                        </option>
+                        <option value="PAXCOUNTER_APP">PAXCOUNTER</option>
+                        <option value="STORE_FORWARD_APP">STORE_FORWARD</option>
+                        <option value="RANGE_TEST_APP">RANGE_TEST</option>
+                        <option value="TRACEROUTE_APP">TRACEROUTE</option>
+                        <option value="NEIGHBORINFO_APP">NEIGHBORINFO</option>
+                        <option value="MAP_REPORT_APP">MAP_REPORT</option>
+                        <option value="__ENCRYPTED__">ENCRYPTED</option>
+                      </select>
+                    </label>
+                    <label
+                      class="packet-total-toggle"
+                      for="pkt-count-show-total"
+                    >
+                      <input
+                        id="pkt-count-show-total"
+                        type="checkbox"
+                        checked
+                      />
+                      <span>Total</span>
+                    </label>
+                    <span class="packet-count" id="pkt-count-badge">0</span>
+                  </div>
+                </div>
+                <div class="panel__body" id="pkt-feed-container"></div>
+              </div>
+            </div>
+            <div id="tab-signal" class="tab-content" role="tabpanel">
+              <div class="panel ms-fill">
+                <div class="panel__header">
+                  <span>Signal analytics</span>
+                  <span class="packet-count" id="sig-window">Last 60 min</span>
+                </div>
+                <div class="panel__body" id="signal-container"></div>
+              </div>
+            </div>
+            <div id="tab-traceroute" class="tab-content" role="tabpanel">
+              <div class="panel ms-fill">
+                <div class="panel__header">
+                  <span>Trace routes</span>
+                  <span class="packet-count" id="trace-count">0</span>
+                </div>
+                <div class="panel__body" id="trace-container"></div>
+              </div>
+            </div>
+            <div id="tab-messages" class="tab-content" role="tabpanel">
+              <div class="panel ms-fill">
+                <div class="panel__header">
+                  <span>Messages</span>
+                  <span class="packet-count">Chat</span>
+                </div>
+                <div class="panel__body" id="messaging-panel"></div>
+              </div>
+            </div>
+            <div id="tab-radio" class="tab-content" role="tabpanel">
+              <div class="panel ms-fill">
+                <div class="panel__header">
+                  <span>Radio</span>
+                  <span class="packet-count">Config</span>
+                </div>
+                <div class="panel__body" id="radio-panel"></div>
+              </div>
+            </div>
+            <div id="tab-terminal" class="tab-content" role="tabpanel">
+              <div class="panel ms-fill">
+                <div class="panel__header">
+                  <span>Terminal</span>
+                  <span class="packet-count">Shell</span>
+                </div>
+                <div class="panel__body" id="terminal-panel"></div>
+              </div>
+            </div>
+            <div id="tab-system" class="tab-content" role="tabpanel">
+              <nav class="sys-nav" aria-label="System sections">
+                <button
+                  type="button"
+                  class="sys-nav__btn sys-nav__btn--active"
+                  data-sys="overview"
+                >
+                  Overview
+                </button>
+                <button type="button" class="sys-nav__btn" data-sys="services">
+                  Services
+                </button>
+                <button type="button" class="sys-nav__btn" data-sys="config">
+                  Config
+                </button>
+                <button type="button" class="sys-nav__btn" data-sys="logs">
+                  Logs
+                </button>
+                <button
+                  type="button"
+                  class="sys-nav__btn"
+                  data-sys="diagnostics"
+                >
+                  Diagnostics
+                </button>
+              </nav>
+              <div id="sys-overview" class="sys-panel sys-panel--active">
+                <p class="sys-panel-placeholder">
+                  Live CPU, temperature, uptime, and capture sources stay in the
+                  <strong>Nodes in range</strong> rail on the left. Deeper
+                  system controls from the compliant mock (services, config
+                  editor, log tail, diagnostics) can be wired to the API here
+                  when endpoints are available.
+                </p>
+              </div>
+              <div id="sys-services" class="sys-panel">
+                <p class="sys-panel-placeholder">
+                  Service control (start/stop/restart) is not connected yet.
+                </p>
+              </div>
+              <div id="sys-config" class="sys-panel">
+                <p class="sys-panel-placeholder">
+                  Radio and upstream configuration UI is not connected yet. Use
+                  the <strong>Radio</strong> tab for on-device radio settings
+                  where supported.
+                </p>
+              </div>
+              <div id="sys-logs" class="sys-panel">
+                <p class="sys-panel-placeholder">
+                  Live log tail is not connected yet.
+                </p>
+              </div>
+              <div id="sys-diagnostics" class="sys-panel">
+                <p class="sys-panel-placeholder">
+                  Diagnostics (ping, trace route, upstream check) is not
+                  connected yet. Use <strong>Trace route</strong> for live
+                  traceroute packets from the mesh.
+                </p>
+              </div>
+            </div>
+          </div>
+          <aside class="ms-detail" aria-label="Node detail">
+            <div class="panel ms-fill">
+              <div class="panel__header">
+                <span>Node detail</span>
+                <span class="ms-detail__hint" id="detail-hint"
+                  >Select a node</span
+                >
+              </div>
+              <div class="panel__body" id="detail-content">
+                <div class="ms-detail-empty">
+                  Select a node to view details.
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
+      </div>
     </div>
-
-    <div id="tab-messages" class="tab-content">
-        <div id="messaging-panel"></div>
-    </div>
-
-    <div id="tab-radio" class="tab-content">
-        <div id="radio-panel"></div>
-    </div>
-
-    <div id="node-backdrop" class="nd-backdrop"></div>
-    <div id="node-drawer" class="nd-drawer"></div>
-
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     <script src="js/websocket_client.js"></script>
-    <script src="js/components/node_map.js"></script>
-    <script src="js/node_cards.js"></script>
-    <script src="js/node_drawer.js"></script>
-    <script src="js/simple_packet_feed.js"></script>
     <script src="js/messaging_contacts.js"></script>
     <script src="js/messaging_chat.js"></script>
     <script src="js/messaging.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="js/radio_channels.js"></script>
     <script src="js/radio_status_card.js"></script>
     <script src="js/radio_identity_card.js"></script>
@@ -198,8 +451,7 @@
     <script src="js/radio_nodeinfo_card.js"></script>
     <script src="js/radio_companion_card.js"></script>
     <script src="js/radio_settings.js"></script>
-    <script src="js/stats_tab.js"></script>
-    <script src="js/signout_controller.js"></script>
-    <script src="js/app.js"></script>
-</body>
+    <script src="js/terminal.js"></script>
+    <script type="module" src="./js/meshradar/main.js"></script>
+  </body>
 </html>

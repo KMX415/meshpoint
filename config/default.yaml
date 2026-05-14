@@ -50,7 +50,7 @@ device:
   longitude: 0.0
   altitude: 25
   hardware_description: "RAK2287 + Raspberry Pi 4"
-  firmware_version: "0.7.3.1"
+  firmware_version: "0.7.2"
 
 relay:
   enabled: false
@@ -80,20 +80,6 @@ transmit:
   nodeinfo:
     interval_minutes: 180      # 5..1440 min, default 180 (3 hr); 0 = disabled
     startup_delay_seconds: 60  # delay before first broadcast on boot
-
-web_auth:
-  # First-run state: hashes are empty -> dashboard forces /setup.
-  # After setup, the admin hash is written via the API and the JWT
-  # secret is auto-generated. Rotating jwt_secret (e.g. via
-  # `meshpoint reset-password`) invalidates every active session.
-  admin_password_hash: ""
-  viewer_password_hash: ""
-  jwt_secret: ""
-  jwt_expiry_minutes: 60
-  allow_read_only: false
-  lockout_attempts: 5
-  lockout_cooldown_minutes: 5
-  session_version: 1
 
 mqtt:
   enabled: false

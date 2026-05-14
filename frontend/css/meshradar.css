@@ -1,0 +1,499 @@
+/* ---- Meshradar local dashboard shell (composes design tokens + BEM ms-*) ---- */
+
+.ms-root {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Shell tab bar: canonical tokens over messaging.css fallbacks */
+.ms-root > .tab-bar {
+    flex-shrink: 0;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+}
+
+.ms-root > .tab-bar .tab-bar__btn:hover {
+    color: var(--text-primary);
+}
+
+.ms-root > .tab-bar .tab-bar__btn--active {
+    color: var(--accent-cyan);
+    border-bottom-color: var(--accent-cyan);
+    box-shadow: none;
+}
+
+.ms-workspace {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    gap: 0;
+}
+
+.ms-rail {
+    width: 220px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    min-height: 0;
+}
+
+.ms-rail__section {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    padding: 0.65rem 0.85rem 0.35rem;
+}
+
+.ms-rail__section--spaced {
+    margin-top: 0.35rem;
+}
+
+.ms-node-source {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0 0.85rem 0.5rem;
+}
+
+.ms-rail__list {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.ms-rail__footer {
+    flex-shrink: 0;
+    border-top: 1px solid var(--border);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.72rem;
+}
+
+.ms-rail__hint {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    padding: 0.35rem 0.75rem 0.5rem;
+    border-top: 1px solid var(--border);
+    line-height: 1.35;
+}
+
+.ms-stage {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr minmax(240px, 300px);
+}
+
+.ms-stage--single {
+    grid-template-columns: 1fr;
+}
+
+.ms-stage--single .ms-detail {
+    display: none;
+}
+
+.ms-stage-main {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    background: var(--bg-primary);
+}
+
+.ms-stage-main > .tab-content {
+    position: absolute;
+    inset: 0;
+    display: none;
+    overflow: hidden;
+    flex-direction: column;
+    padding: 0.5rem;
+    box-sizing: border-box;
+}
+
+.ms-stage-main > .tab-content.tab-content--active {
+    display: flex;
+    height: 100%;
+    max-height: 100%;
+}
+
+.ms-fill {
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+}
+
+#topo-wrap {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    background: var(--bg-primary);
+}
+
+#topoCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.ms-detail {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-primary);
+    border-left: 1px solid var(--border);
+}
+
+.ms-detail .panel {
+    height: 100%;
+    min-height: 0;
+}
+
+.ms-detail__hint {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 400;
+    color: var(--text-muted);
+}
+
+.ms-detail-empty {
+    padding: 1.25rem 0.85rem;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+}
+
+.ms-detail-hero {
+    padding: 0.75rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.ms-detail-hero__title {
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--accent-cyan);
+}
+
+.ms-detail-hero__meta {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+.ms-detail-body {
+    padding: 0.75rem 0.85rem;
+}
+
+.ms-detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.35rem;
+}
+
+.ms-detail-row__key {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.ms-detail-row__val {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-primary);
+}
+
+/* Node list (rail) */
+.ms-node-entry {
+    padding: 0.45rem 0.75rem;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+}
+
+.ms-node-entry:hover {
+    background: rgba(6, 182, 212, 0.06);
+}
+
+.ms-node-entry--selected {
+    background: rgba(6, 182, 212, 0.08);
+    border-left-color: var(--accent-cyan);
+}
+
+.ms-node-entry__line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ms-node-entry__line--meta {
+    margin-top: 0.15rem;
+}
+
+.ms-node-callsign {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.ms-node-source-pill {
+    display: inline-block;
+    margin-left: 0.35rem;
+    padding: 0.05rem 0.35rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.55rem;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    line-height: 1.35;
+    border: 1px solid transparent;
+    vertical-align: middle;
+}
+
+.ms-node-source-pill--rf {
+    background: rgba(0, 229, 160, 0.1);
+    color: var(--accent-green);
+    border-color: rgba(0, 229, 160, 0.25);
+}
+
+.ms-node-source-pill--mqtt {
+    background: rgba(59, 130, 246, 0.12);
+    color: var(--accent-blue);
+    border-color: rgba(59, 130, 246, 0.25);
+}
+
+.ms-node-source-pill--unknown {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--accent-amber);
+    border-color: rgba(245, 158, 11, 0.22);
+}
+
+.ms-node-meta {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+/* Connection status */
+.ms-conn-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    letter-spacing: 0.04em;
+    border: 1px solid var(--border);
+    margin-left: 0.5rem;
+}
+
+.ms-conn-pill--live {
+    background: rgba(0, 229, 160, 0.1);
+    border-color: rgba(0, 229, 160, 0.35);
+    color: var(--accent-green);
+    box-shadow: var(--glow-green);
+}
+
+.ms-conn-pill--connecting {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.35);
+    color: var(--accent-amber);
+}
+
+.ms-conn-pill--offline {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.35);
+    color: var(--accent-red);
+}
+
+/* Packet feed rows */
+.ms-pkt-row {
+    display: grid;
+    grid-template-columns: 62px 50px 50px 1fr 56px;
+    gap: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    align-items: center;
+}
+
+.ms-pkt-row:hover {
+    background: rgba(6, 182, 212, 0.04);
+}
+
+.ms-pkt-type {
+    display: inline-block;
+    padding: 0.05rem 0.35rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.58rem;
+    font-weight: 600;
+}
+
+.ms-pkt-type--text {
+    background: rgba(0, 229, 160, 0.12);
+    color: var(--accent-green);
+}
+
+.ms-pkt-type--pos {
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--accent-amber);
+}
+
+.ms-pkt-type--telem {
+    background: rgba(6, 182, 212, 0.12);
+    color: var(--accent-cyan);
+}
+
+.ms-pkt-type--node {
+    background: rgba(168, 85, 247, 0.12);
+    color: var(--accent-purple);
+}
+
+.ms-pkt-type--route {
+    background: rgba(59, 130, 246, 0.12);
+    color: var(--accent-blue);
+}
+
+.ms-pkt-type--admin {
+    background: rgba(100, 116, 139, 0.15);
+    color: var(--text-secondary);
+}
+
+.ms-pkt-type--enc {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--accent-red);
+}
+
+.ms-pkt-body {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+.ms-pkt-content {
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ms-pkt-time,
+.ms-pkt-from,
+.ms-pkt-via,
+.ms-pkt-rssi {
+    color: var(--text-secondary);
+}
+
+/* Signal tab */
+.ms-signal-block {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.ms-signal-block__label {
+    font-size: 0.62rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.ms-signal-chart-wrap {
+    position: relative;
+    height: 180px;
+}
+
+.ms-signal-chart-wrap--traffic {
+    height: 140px;
+}
+
+.ms-signal-node-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.2rem 0;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+}
+
+/* Traceroute */
+.ms-trace-row {
+    padding: 0.55rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono);
+}
+
+.ms-trace-row__meta {
+    display: flex;
+    justify-content: space-between;
+    color: var(--text-muted);
+    font-size: 0.68rem;
+}
+
+.ms-trace-row__path {
+    margin-top: 0.35rem;
+    color: var(--text-primary);
+    font-size: 0.78rem;
+}
+
+/* Messaging / radio / terminal fill parent panel */
+#tab-messages .panel__body,
+#tab-radio .panel__body,
+#tab-terminal .panel__body {
+    padding: 0;
+    background: var(--bg-primary);
+}
+
+#messaging-panel,
+#radio-panel,
+#terminal-panel {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.packet-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.packet-total-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.62rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-family: var(--font-sans);
+}
+
+.packet-total-toggle input {
+    accent-color: var(--accent-cyan);
+}
+
+#tab-messages .messaging {
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+}
+
+#tab-messages .messaging,
+#tab-messages .msg-sidebar,
+#tab-messages .msg-chat {
+    background: var(--bg-primary);
+}
+
+#tab-messages .msg-sidebar,
+#tab-messages .msg-chat {
+    border-color: var(--border);
+}
