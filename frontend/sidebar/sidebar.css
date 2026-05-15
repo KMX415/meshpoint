@@ -2,7 +2,7 @@
  * Persistent left-rail navigation.
  * Three viewport modes:
  *   desktop (>= 1024px)  : full sidebar, 240px wide
- *   tablet  (768-1023px) : icon-only rail, 64px wide
+ *   tablet  (768-1023px) : icon-only rail, 76px wide
  *   phone   (< 768px)    : hidden by default; hamburger opens drawer
  *
  * Active item is marked with a 2px mint accent bar that slides
@@ -12,7 +12,7 @@
 
 :root {
     --sidebar-width: 240px;
-    --sidebar-rail-width: 64px;
+    --sidebar-rail-width: 76px;
     --sidebar-bg: #0d1422;
     --sidebar-border: #1c2840;
     --sidebar-item-hover: rgba(6, 182, 212, 0.06);
@@ -70,9 +70,9 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.95rem 0.85rem;
+    padding: 1rem 0.85rem;
     border-bottom: 1px solid var(--sidebar-border);
-    min-height: 76px;
+    min-height: 88px;
 }
 
 /* Logo "frame": image + animated accent ring + connection pip.
@@ -81,13 +81,13 @@
  * "small icon next to text". */
 .sidebar__logo-frame {
     position: relative;
-    width: 48px;
-    height: 48px;
+    width: 56px;
+    height: 56px;
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 12px;
+    border-radius: 14px;
     background: linear-gradient(
         135deg,
         rgba(6, 182, 212, 0.18) 0%,
@@ -111,9 +111,9 @@
 .sidebar__logo {
     position: relative;
     z-index: 2;
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
     display: block;
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
 }
@@ -124,7 +124,7 @@
 .sidebar__logo-ring {
     position: absolute;
     inset: -2px;
-    border-radius: 14px;
+    border-radius: 16px;
     border: 1px solid transparent;
     background:
         linear-gradient(
@@ -173,10 +173,10 @@
  * anchored to the logo so the brand mark itself shows liveness. */
 .sidebar__logo-pip {
     position: absolute;
-    right: -2px;
-    bottom: -2px;
-    width: 12px;
-    height: 12px;
+    right: -1px;
+    bottom: -1px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
     background: var(--text-muted);
     border: 2px solid var(--sidebar-bg, #0f1624);
@@ -224,8 +224,9 @@
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    gap: 0.5rem;
-    padding: 0.85rem 0;
+    gap: 0.4rem;
+    padding: 0.9rem 0 0.6rem;
+    min-height: 110px;
 }
 
 .sidebar__device {
@@ -616,12 +617,17 @@
     transition: opacity var(--motion-base) var(--ease-out-expo);
 }
 
+/* Tablet (768-1023px): default layout is the icon-only rail to
+ * preserve content space, but the user can still toggle to the
+ * full 240px sidebar via the collapse button or the [ shortcut.
+ * Earlier versions of this rule forced rail width even when
+ * data-sidebar="expanded", which made the toggle do nothing. */
 @media (max-width: 1023px) {
-    .app:not([data-sidebar="hidden"]) {
+    .app[data-sidebar="rail"] {
         grid-template-columns: var(--sidebar-rail-width) 1fr;
     }
     .app[data-sidebar="expanded"] {
-        grid-template-columns: var(--sidebar-rail-width) 1fr;
+        grid-template-columns: var(--sidebar-width) 1fr;
     }
 }
 
