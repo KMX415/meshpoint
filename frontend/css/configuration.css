@@ -1,0 +1,192 @@
+/* Configuration subsections shared chrome.
+
+   Single responsibility: layout and form styling for the cards
+   mounted under each Configuration > * subsection. Reused across
+   Transmit / MQTT / GPS; the existing radio_*.css continues to
+   style the migrated radio cards. */
+
+[data-section^="configuration/"] {
+    color: #f3f4f6;
+    overflow-y: auto;
+    padding: 24px clamp(16px, 3vw, 32px);
+}
+
+[data-section^="configuration/"] .section__placeholder {
+    color: rgba(243, 244, 246, 0.55);
+}
+
+.cfg-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 16px;
+    animation: cfgFadeIn 320ms ease-out both;
+}
+
+.cfg-card__head {
+    margin-bottom: 14px;
+}
+
+.cfg-card__title {
+    margin: 0 0 4px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.cfg-card__hint {
+    margin: 0;
+    font-size: 13px;
+    color: rgba(243, 244, 246, 0.65);
+    line-height: 1.5;
+}
+
+.cfg-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.cfg-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+}
+
+.cfg-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cfg-field--toggle {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.cfg-field--narrow {
+    max-width: 140px;
+}
+
+.cfg-field__label {
+    font-size: 12px;
+    color: rgba(243, 244, 246, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.cfg-field__input {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #f3f4f6;
+    font-family: inherit;
+    font-size: 14px;
+    padding: 10px 12px;
+    transition: border-color 160ms ease, background 160ms ease;
+}
+
+.cfg-field__input:focus {
+    outline: none;
+    border-color: var(--brand-amber, #ffb84d);
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.cfg-fieldset {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cfg-fieldset__legend {
+    color: rgba(243, 244, 246, 0.6);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 0 4px;
+}
+
+.cfg-card__actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.cfg-status {
+    margin: 0;
+    font-size: 13px;
+    min-height: 1.4em;
+}
+
+.cfg-status[data-kind="error"] { color: #ff6b6b; }
+.cfg-status[data-kind="success"] { color: #44d39a; }
+.cfg-status[data-kind="pending"] { color: rgba(243, 244, 246, 0.7); }
+
+.cfg-preview {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cfg-preview__label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: rgba(243, 244, 246, 0.5);
+}
+
+.cfg-preview__value {
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 13px;
+    color: var(--brand-amber, #ffb84d);
+}
+
+.cfg-note {
+    margin: 0;
+    padding: 10px 14px;
+    background: rgba(255, 184, 77, 0.08);
+    border: 1px solid rgba(255, 184, 77, 0.2);
+    border-radius: 8px;
+    color: var(--brand-amber, #ffb84d);
+    font-size: 12px;
+}
+
+.cfg-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(15, 18, 24, 0.96);
+    color: #f3f4f6;
+    padding: 12px 18px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 14px;
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 240ms ease, opacity 240ms ease;
+    z-index: 100;
+}
+
+.cfg-toast--visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+@keyframes cfgFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cfg-card { animation: none; }
+    .cfg-toast { transition: none; }
+}
