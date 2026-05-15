@@ -33,11 +33,20 @@ from src.api.update.apply import (
     StreamCallback,
     UpdateApplier,
 )
+from src.api.update.release_notes import (
+    ChangelogBullet,
+    ChangelogParser,
+    ChangelogSection,
+    select_preview_section,
+)
 from src.api.update.watchdog import RollbackTag, WatchdogMonitor
 
 __all__ = [
     "ApplyAttempt",
     "ApplyResult",
+    "ChangelogBullet",
+    "ChangelogParser",
+    "ChangelogSection",
     "DEFAULT_CHANNELS",
     "ReleaseChannel",
     "ReleaseChannelRegistry",
@@ -46,4 +55,5 @@ __all__ = [
     "StreamCallback",
     "UpdateApplier",
     "WatchdogMonitor",
+    "select_preview_section",
 ]

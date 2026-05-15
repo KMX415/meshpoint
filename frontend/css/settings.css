@@ -486,6 +486,112 @@
     .update-card__row { grid-template-columns: 1fr; }
 }
 
+/* ---------- Release notes preview ---------- */
+
+.update-release-notes {
+    margin-top: 16px;
+    padding: 18px 20px;
+    border-radius: 12px;
+    background: rgba(13, 26, 43, 0.55);
+    border: 1px solid rgba(0, 209, 255, 0.18);
+    color: rgba(243, 244, 246, 0.92);
+    display: none;
+}
+
+.update-release-notes[data-state="ready"],
+.update-release-notes[data-state="empty"],
+.update-release-notes[data-state="error"] {
+    display: block;
+    animation: updateReleaseNotesFade 220ms ease-out both;
+}
+
+@keyframes updateReleaseNotesFade {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.update-release-notes__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.update-release-notes__eyebrow {
+    margin: 0;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(0, 209, 255, 0.85);
+    font-weight: 600;
+}
+
+.update-release-notes__title {
+    margin: 0;
+    font-size: 14px;
+    color: #f3f4f6;
+    font-weight: 600;
+}
+
+.update-release-notes__date {
+    margin: 0;
+    font-size: 12px;
+    color: rgba(243, 244, 246, 0.55);
+}
+
+.update-release-notes__list {
+    list-style: none;
+    margin: 4px 0 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.update-release-notes__bullet {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: rgba(243, 244, 246, 0.88);
+}
+
+.update-release-notes__bullet::before {
+    content: "›";
+    color: rgba(0, 209, 255, 0.6);
+    font-weight: 700;
+    flex-shrink: 0;
+    line-height: 1.45;
+}
+
+.update-release-notes__bullet-headline {
+    color: #f3f4f6;
+    font-weight: 600;
+}
+
+.update-release-notes__bullet-detail {
+    color: rgba(243, 244, 246, 0.65);
+    margin-left: 6px;
+}
+
+.update-release-notes__empty,
+.update-release-notes__error {
+    margin: 0;
+    font-size: 13px;
+    color: rgba(243, 244, 246, 0.6);
+}
+
+.update-release-notes[data-state="error"] .update-release-notes__error {
+    color: #ff6b6b;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .update-release-notes[data-state],
+    .update-release-notes { animation: none; }
+}
+
 /* ---------- Dangerous panel ---------- */
 
 .dangerous-panel {

@@ -28,8 +28,12 @@ class UpdatePanelController {
         this.logView = new window.UpdateLogView(
             rootEl.querySelector('[data-update-log]')
         );
+        this.releaseNotesView = new window.ReleaseNotesView(
+            rootEl.querySelector('[data-update-release-notes]')
+        );
         this._channels = [];
         this._lastResult = null;
+        this._releaseNotesToken = 0;
     }
 
     bind() {
@@ -95,6 +99,36 @@ class UpdatePanelController {
         }
         if (this.customRow) {
             this.customRow.style.display = channel.tier === 'custom' ? '' : 'none';
+        }
+        this._loadReleaseNotes(channel);
+    }
+
+    async _loadReleaseNotes(channel) {
+        if (!this.releaseNotesView) return;
+        const token = ++this._releaseNotesToken;
+        if (channel.tier === 'custom') {
+            this.releaseNotesView.renderEmpty(channel.label);
+            return;
+        }
+        try {
+            const response = await fetch(
+                `/api/update/release_notes?channel_id=${encodeURIComponent(channel.id)}`,
+                { credentials: 'same-origin' },
+            );
+            if (token !== this._releaseNotesToken) return;
+            if (!response.ok) {
+                this.releaseNotesView.renderError(
+                    `Could not load release notes (HTTP ${response.status}).`
+                );
+                return;
+            }
+            const body = await response.json();
+            if (token !== this._releaseNotesToken) return;
+            this.releaseNotesView.render(body);
+        } catch (_e) {
+            if (token === this._releaseNotesToken) {
+                this.releaseNotesView.renderError('Network error loading release notes.');
+            }
         }
     }
 

@@ -18,8 +18,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from src.api.audit import AuditLogWriter
@@ -28,6 +29,8 @@ from src.api.auth.dependencies import require_admin
 from src.api.auth.jwt_session import SessionClaims
 from src.api.update.apply import UpdateApplier
 from src.api.update.channels import ReleaseChannelRegistry
+from src.api.update.release_notes import ChangelogParser, select_preview_section
+from src.version import __version__ as INSTALLED_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -35,21 +38,25 @@ router = APIRouter(prefix="/api/update", tags=["update"])
 
 _applier: UpdateApplier | None = None
 _registry: ReleaseChannelRegistry | None = None
+_changelog_path: Path | None = None
 
 
 def init_routes(
     applier: UpdateApplier,
     registry: ReleaseChannelRegistry,
+    changelog_path: Path | None = None,
 ) -> None:
-    global _applier, _registry
+    global _applier, _registry, _changelog_path
     _applier = applier
     _registry = registry
+    _changelog_path = changelog_path
 
 
 def reset_routes() -> None:
-    global _applier, _registry
+    global _applier, _registry, _changelog_path
     _applier = None
     _registry = None
+    _changelog_path = None
 
 
 def _require_initialized() -> tuple[UpdateApplier, ReleaseChannelRegistry]:
@@ -76,6 +83,39 @@ async def list_channels(
 ) -> dict:
     _applier_instance, registry = _require_initialized()
     return {"channels": registry.to_payload()}
+
+
+@router.get("/release_notes")
+async def release_notes(
+    channel_id: str = Query(..., min_length=1, max_length=64),
+    _claims: SessionClaims = Depends(require_admin),
+) -> dict:
+    _applier_instance, registry = _require_initialized()
+    channel = registry.find(channel_id)
+    if channel is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="invalid_channel",
+        )
+    sections = _load_changelog_sections()
+    preview = select_preview_section(sections, tier=channel.tier)
+    return {
+        "channel_id": channel.id,
+        "channel_label": channel.label,
+        "channel_tier": channel.tier,
+        "current_installed_version": INSTALLED_VERSION,
+        "preview_section": preview.to_dict() if preview is not None else None,
+    }
+
+
+def _load_changelog_sections() -> list:
+    if _changelog_path is None or not _changelog_path.exists():
+        return []
+    try:
+        return ChangelogParser.parse_file(_changelog_path)
+    except OSError as exc:
+        logger.warning("release_notes: could not read changelog: %s", exc)
+        return []
 
 
 @router.post("/apply")

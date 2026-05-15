@@ -74,6 +74,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     update_routes.init_routes(
         applier=UpdateApplier(),
         registry=ReleaseChannelRegistry(),
+        changelog_path=Path(__file__).resolve().parents[2] / "docs" / "CHANGELOG.md",
     )
     # Dangerous registry is wired in lifespan so clear-db / wipe-phantoms /
     # force-nodeinfo can close over the live pipeline objects.
