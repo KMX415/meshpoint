@@ -62,6 +62,7 @@ class MeshcoreUsbCaptureSource(CaptureSource):
         self._reconnect_task: Optional[asyncio.Task] = None
         self._last_rf_signal: Optional[SignalMetrics] = None
         self._last_event_at: float = 0.0
+        self._on_connected_callback = None
 
     @property
     def name(self) -> str:
@@ -195,6 +196,11 @@ class MeshcoreUsbCaptureSource(CaptureSource):
                 "MeshCore USB source started on %s @ %d baud",
                 port, self._baud_rate,
             )
+            if self._on_connected_callback:
+                asyncio.create_task(
+                    self._on_connected_callback(),
+                    name="meshcore-on-connected",
+                )
         except Exception:
             logger.exception(
                 "Failed to start MeshCore USB source on %s", port
@@ -404,6 +410,10 @@ class MeshcoreUsbCaptureSource(CaptureSource):
             capture_source="meshcore_usb",
             protocol_hint=Protocol.MESHCORE,
         )
+
+    def set_connected_callback(self, callback) -> None:
+        """Register a coroutine called after every successful connection."""
+        self._on_connected_callback = callback
 
     async def restart_auto_fetching(self) -> None:
         """Re-enable auto message fetching after TX operations."""

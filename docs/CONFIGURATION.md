@@ -149,10 +149,10 @@ MeshCore uses its own default channel key, configurable separately:
 ```yaml
 meshcore:
   default_key_b64: null              # leave null to use the MeshCore built-in default
-  channel_keys: {}                   # reserved for future multi-channel support
+  channel_keys: 
+    SomeChannelName: "32-BytePSK"      # Meshcore Channel Name with 32-Byte Hex PSK. One channel per line            
 ```
-
-> Multi-key decryption for MeshCore is on the roadmap but not yet implemented. Currently only the default MeshCore key is tried at decode time.
+Any Channels listed in the YAML will show in the UI. Changes made in the UI will be written to the YAML config file and pushed to the USB Companion device. Additionally, all channels will be pushed to the USB Companion device upon Meshpoint startup.
 
 ---
 

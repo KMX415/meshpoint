@@ -391,6 +391,12 @@ async def update_meshcore_channels(req: McChannelsUpdate):
         ", ".join(channel_keys) or "none",
     )
 
+    if _tx_service and hasattr(_tx_service, "_meshcore_tx"):
+        mc_tx = _tx_service._meshcore_tx
+        if mc_tx and mc_tx.connected:
+            import asyncio
+            asyncio.create_task(mc_tx.sync_channels(channel_keys))
+
     if _crypto and hasattr(_crypto, "clear_channel_keys"):
         _crypto.clear_channel_keys()
         for name, key_b64 in _config.meshtastic.channel_keys.items():
