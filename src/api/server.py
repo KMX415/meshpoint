@@ -17,6 +17,10 @@ from src.api.auth.auth_bootstrap import AuthSubsystem, build_auth_subsystem
 from src.api.auth.dependencies import SESSION_COOKIE_NAME, require_auth
 from src.api.auth.jwt_session import JwtSessionService
 from src.api.auth.ws_guard import WS_AUTH_CLOSE_CODE, authenticate_websocket
+from src.api.meshcore_contacts import (
+    setup_meshcore_contact_enrichment,
+    sync_meshcore_contacts_to_nodes,
+)
 from src.api.routes import analytics, auth_routes, config_routes, device, identity_routes, messages, nodeinfo_routes, nodes, packets, stats_routes, system_metrics, telemetry, update_check
 from src.api.upstream_client import UpstreamClient
 from src.api.websocket_manager import WebSocketManager
@@ -87,6 +91,12 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         _setup_message_interception(
             pipeline, message_repo, config, meshcore_tx_ref
         )
+        setup_meshcore_contact_enrichment(pipeline, meshcore_tx_ref)
+        if meshcore_tx_ref and meshcore_tx_ref.connected:
+            import asyncio
+            asyncio.get_running_loop().create_task(
+                sync_meshcore_contacts_to_nodes(pipeline, meshcore_tx_ref)
+            )
 
         upstream = UpstreamClient(
             config.upstream, identity,
