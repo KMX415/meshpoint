@@ -215,10 +215,16 @@
     50%      { opacity: 0.4; }
 }
 
-/* Rail (icon-only) sidebar mode: keep the logo as the anchor and
- * shift the device block out of the way. */
+/* Rail (icon-only) sidebar mode: keep the logo as the anchor, hide
+ * the device-name block (text won't fit in the rail width), and stack
+ * the collapse / expand button under the logo so it stays reachable.
+ * The button doubles as the only way to bring the sidebar back to
+ * the expanded state, so it MUST stay clickable in rail mode. */
 .app[data-sidebar="rail"] .sidebar__header {
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.5rem;
     padding: 0.85rem 0;
 }
 
@@ -231,10 +237,12 @@
     transition: opacity var(--motion-fast) var(--ease-out-expo);
 }
 
-.app[data-sidebar="rail"] .sidebar__device,
-.app[data-sidebar="rail"] .sidebar__collapse {
-    opacity: 0;
-    pointer-events: none;
+.app[data-sidebar="rail"] .sidebar__device {
+    display: none;
+}
+
+.app[data-sidebar="rail"] .sidebar__collapse svg {
+    transform: rotate(180deg);
 }
 
 .sidebar__device-name {
@@ -266,6 +274,10 @@
     border-radius: 4px;
     transition: color var(--motion-fast) var(--ease-out-expo),
                 background var(--motion-fast) var(--ease-out-expo);
+}
+
+.sidebar__collapse svg {
+    transition: transform var(--motion-fast) var(--ease-out-expo);
 }
 
 .sidebar__collapse:hover,

@@ -40,6 +40,7 @@ class SidebarController {
         this._wireEvents();
         this._wireRouterSubscription();
         this._applyIdentity();
+        this._refreshCollapseAffordance();
     }
 
     setIdentity(identity) {
@@ -174,6 +175,16 @@ class SidebarController {
         const next = current === 'rail' ? 'expanded' : 'rail';
         this._app.dataset.sidebar = next;
         try { localStorage.setItem(this._storageKey, next); } catch (_) {}
+        this._refreshCollapseAffordance();
+    }
+
+    _refreshCollapseAffordance() {
+        const btn = document.getElementById('sidebar-collapse-btn');
+        if (!btn) return;
+        const isRail = this._app.dataset.sidebar === 'rail';
+        const label = isRail ? 'Expand sidebar' : 'Collapse sidebar';
+        btn.setAttribute('aria-label', label);
+        btn.title = `${label} ([)`;
     }
 
     _handleHamburger() {
@@ -202,9 +213,11 @@ class SidebarController {
         const wasDrawerOpen = this._app.dataset.sidebar === 'drawer-open';
         if (wasDrawerOpen && window.innerWidth >= 768) {
             this._app.dataset.sidebar = 'expanded';
+            this._refreshCollapseAffordance();
             return;
         }
         this._applyViewportState();
+        this._refreshCollapseAffordance();
         const route = this._router.currentRoute();
         if (route) this._slideAccentBar(route);
     }
@@ -212,6 +225,15 @@ class SidebarController {
     _handleKeydown(event) {
         if (event.target && /input|textarea|select/i.test(event.target.tagName)) return;
         if (event.target && event.target.isContentEditable) return;
+
+        if (event.key === '[' && !event.metaKey && !event.ctrlKey && !event.altKey) {
+            const current = this._app.dataset.sidebar;
+            if (current === 'rail' || current === 'expanded') {
+                event.preventDefault();
+                this._handleCollapseToggle();
+                return;
+            }
+        }
 
         const now = Date.now();
         if (event.key === 'g' && !event.metaKey && !event.ctrlKey && !event.altKey) {

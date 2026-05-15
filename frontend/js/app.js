@@ -500,6 +500,7 @@ function _bootCommandPaletteAndKeymap(router) {
         { keys: ['Ctrl', 'K'], label: 'Open command palette', group: 'Global' },
         { keys: ['?'], label: 'Show this shortcuts overlay', group: 'Global' },
         { keys: ['Esc'], label: 'Close any modal / overlay', group: 'Global' },
+        { keys: ['['], label: 'Collapse / expand sidebar', group: 'Global' },
         { keys: ['Ctrl', 'Shift', 'C'], label: 'Copy terminal selection', group: 'Terminal' },
         { keys: ['Ctrl', 'Shift', 'V'], label: 'Paste into terminal', group: 'Terminal' },
         { keys: ['Ctrl', 'Shift', 'F'], label: 'Find in terminal output', group: 'Terminal' },
