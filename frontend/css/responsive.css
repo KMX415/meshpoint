@@ -10,16 +10,25 @@
  * stats.css) live alongside their components since they sit well
  * under the 500-line file budget. */
 
-/* ===== Dashboard layout breakpoints ===== */
+/* ===== Dashboard layout breakpoints =====
+ *
+ * Below 1024px the dashboard switches from a 2-column flex layout to a
+ * vertically-scrolled stack. The map needs an explicit anchor height
+ * once that happens because its CSS height chain (#map height:100% ->
+ * .panel height:100% -> grid item auto -> dashboard auto) otherwise
+ * resolves to zero and the map silently disappears on phones. */
 
 @media (max-width: 1024px) {
-    .dashboard__main { grid-template-columns: 1fr; }
-    .dashboard__side { max-height: 300px; }
     .dashboard { height: auto; overflow: auto; }
+    .dashboard__main { grid-template-columns: 1fr; }
+    .dashboard__map { min-height: 50vh; }
+    .dashboard__side { max-height: 300px; }
+    .dashboard__feed { height: auto; min-height: 200px; }
 }
 
 @media (max-width: 720px) {
-    .dashboard__feed { height: auto; min-height: 220px; }
+    .dashboard__map { min-height: 45vh; }
+    .dashboard__feed { min-height: 180px; }
     .stat-card { min-width: 88px; padding: 0.3rem 0.5rem; }
     .stat-card__value { font-size: 1rem; }
     .packet-table th:nth-child(8),
@@ -33,6 +42,7 @@
 }
 
 @media (max-width: 640px) {
+    .dashboard__map { min-height: 320px; }
     .packet-table { font-size: 0.7rem; }
     .packet-table th, .packet-table td { padding: 0.3rem 0.4rem; }
     .packet-table th:nth-child(7),
