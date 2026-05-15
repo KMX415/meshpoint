@@ -132,6 +132,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         if nodeinfo_broadcaster is not None:
             await nodeinfo_broadcaster.start()
 
+        _wire_native_relay(pipeline, tx_service)
+
         global _noise_floor_emitter_task
         import asyncio
         _noise_floor_emitter_task = asyncio.get_running_loop().create_task(
@@ -349,6 +351,46 @@ def _build_tx_service(
         tx_svc.meshtastic_enabled, tx_svc.meshcore_enabled,
     )
     return tx_svc
+
+
+def _wire_native_relay(
+    coord: PipelineCoordinator, tx_service: TxService | None
+) -> None:
+    """Hook the native onboard SX1302 path into the relay manager.
+
+    When ``transmit.enabled`` is true the onboard radio is the
+    preferred relay backend: it preserves the original sender's
+    identity, shares duty-cycle accounting with outbound messaging,
+    and removes the need for a second USB-attached node.
+
+    The legacy ``MeshtasticTransmitter`` (USB-companion) wired by
+    :class:`PipelineCoordinator._setup_relay_transmitter` is left in
+    place; if both backends end up present, the native one wins
+    because it is registered second. A future cleanup can drop the
+    USB-companion path entirely once hardware-validated.
+    """
+    if tx_service is None or not tx_service.meshtastic_enabled:
+        return
+    relay = coord.relay_manager
+    if not relay.enabled:
+        return
+
+    async def _native_relay(packet):
+        from src.models.packet import Protocol
+        if packet.protocol != Protocol.MESHTASTIC:
+            return
+        if not packet.raw_radio_packet:
+            return
+        result = await tx_service.send_raw_relay(packet.raw_radio_packet)
+        if not result.success:
+            logger.debug(
+                "Native relay TX skipped: %s", result.error,
+            )
+
+    relay.set_transmit_function(_native_relay)
+    logger.info(
+        "Relay backend: native onboard SX1302 (identity-preserving)"
+    )
 
 
 def _build_nodeinfo_broadcaster(

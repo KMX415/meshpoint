@@ -158,9 +158,31 @@ Any Channels listed in the YAML will show in the UI. Changes made in the UI will
 
 ## Smart Relay
 
-> **Status: experimental — TX path wired in v0.7.4.** The decoder now hands the inner application-payload bytes through to the transmitter, so decrypted Meshtastic packets are re-emitted with the correct portnum, hop decrement, and channel index. **Hardware validation is still in progress** — please report results in Discord or via a Github issue. Encrypted packets (no key match locally) and MeshCore packets are intentionally skipped to avoid garbage on the air.
+> **Status: experimental — native onboard relay added in v0.7.4.** When `transmit.enabled: true` the Meshpoint now relays through its own SX1302 concentrator using identity-preserving re-broadcast (original `source_id` and `packet_id` survive, only `hop_limit` is decremented). No second radio required. **Hardware validation is still in progress** — please report results in Discord or via a Github issue.
 
-Connect a separate radio (T-Beam, Heltec, RAK4631) via USB to re-broadcast captured packets:
+### Native onboard relay (preferred)
+
+Set both `transmit` and `relay` to enabled. The same SX1302 that handles outgoing messages re-broadcasts captured packets, sharing duty-cycle accounting so relay traffic can never crowd out user TX:
+
+```yaml
+transmit:
+  enabled: true
+  # ... see Transmit (Native Messaging) below for the full block
+
+relay:
+  enabled: true
+  max_relay_per_minute: 20
+  burst_size: 5
+  min_relay_rssi: -110.0
+  max_relay_rssi: -50.0
+  # serial_port intentionally omitted — native path is used
+```
+
+Encrypted packets (no key match locally) and MeshCore packets are intentionally skipped on the native path to avoid emitting garbage on the air.
+
+### Legacy USB-companion relay
+
+The original v0.7.0–v0.7.3 path is preserved for setups that already have a second Meshtastic radio attached. Only used when `transmit.enabled: false` and `relay.serial_port` is set:
 
 ```yaml
 relay:

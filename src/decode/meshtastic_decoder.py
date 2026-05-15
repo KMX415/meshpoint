@@ -81,6 +81,7 @@ class MeshtasticDecoder:
             decoded_payload=decoded_payload,
             encrypted_payload=encrypted_payload if not decrypted else None,
             raw_app_payload=raw_app_payload,
+            raw_radio_packet=bytes(raw_bytes),
             decrypted=decrypted,
             signal=signal,
             timestamp=datetime.now(timezone.utc),

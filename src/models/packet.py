@@ -64,12 +64,17 @@ class Packet:
     decoded_payload: Optional[dict[str, Any]] = None
     encrypted_payload: Optional[bytes] = None
     # Inner application-payload bytes from the decrypted protobuf (the
-    # bytes that follow `portnum` in a Meshtastic Data message). The
-    # relay TX path needs these to call `interface.sendData(payload,
-    # portNum=…)` — without them the transmitter has no way to
-    # re-emit the packet on a separate radio. None for non-decrypted
-    # or non-Meshtastic packets.
+    # bytes that follow `portnum` in a Meshtastic Data message). Used
+    # by the legacy USB-companion relay path that calls
+    # `interface.sendData(payload, portNum=…)`.
     raw_app_payload: Optional[bytes] = None
+    # The full original radio frame as captured (16-byte Meshtastic
+    # header + encrypted body). Used by the native relay path to
+    # re-emit the packet verbatim through the onboard SX1302 with
+    # only the hop_limit decremented, preserving the original
+    # source_id and packet_id so other nodes' dedup treats it as a
+    # legitimate relay rather than a fresh broadcast.
+    raw_radio_packet: Optional[bytes] = None
     decrypted: bool = False
 
     signal: Optional[SignalMetrics] = None

@@ -277,12 +277,38 @@ class PipelineCoordinator:
             )
             return
 
+        # Native onboard relay (preferred, identity-preserving) is
+        # wired later in src/api/server.py once tx_service is built.
+        # That registration replaces whatever this method binds, so
+        # we only spin up the legacy USB-companion transmitter when
+        # the user has explicitly configured ``relay.serial_port``
+        # AND has not enabled native transmit.
+        native_available = self._config.transmit.enabled
+        legacy_configured = bool(self._config.relay.serial_port)
+
+        if native_available:
+            logger.info(
+                f" {CYAN}--{RESET} {GREEN}RELAY{RESET}    "
+                f"native onboard SX1302  "
+                f"{DIM}max {self._config.relay.max_relay_per_minute}/min{RESET}"
+            )
+            return
+
+        if not legacy_configured:
+            logger.warning(
+                "Relay enabled but no transmit backend available. "
+                "Either set transmit.enabled=true to use the onboard "
+                "SX1302 (preferred), or set relay.serial_port to a "
+                "USB-attached Meshtastic radio."
+            )
+            return
+
         logger.warning(
-            "Relay TX is EXPERIMENTAL. The decoder->sendData path "
-            "is wired (v0.7.4) and decrypted Meshtastic packets are "
-            "now re-emitted via the relay radio, but full hardware "
-            "validation is still in progress. Encrypted packets and "
-            "MeshCore packets are intentionally skipped."
+            "Relay TX is using the LEGACY USB-companion path "
+            "(transmit.enabled=false). The onboard SX1302 path is "
+            "preferred: enable transmit in config/local.yaml to "
+            "activate identity-preserving relay through the same "
+            "radio that handles outbound messaging."
         )
 
         self._transmitter = MeshtasticTransmitter(self._config.relay)
@@ -290,7 +316,7 @@ class PipelineCoordinator:
         self._relay.set_transmit_function(self._transmitter.transmit)
         logger.info(
             f" {CYAN}--{RESET} {GREEN}RELAY{RESET}    "
-            f"transmitter ready  "
+            f"USB-companion ready  "
             f"{DIM}max {self._config.relay.max_relay_per_minute}/min{RESET}"
         )
 
