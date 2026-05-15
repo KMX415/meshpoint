@@ -18,9 +18,15 @@ separate channels:
     { "type": "resize", "rows": 40, "cols": 120 }
 
   server -> client frames:
+    { "type": "ready",  "hostname": "...", "pid": N,
+      "shell": "/bin/bash", "user": "meshpoint" }
     { "type": "output", "data": "<base64-encoded bytes>" }
     { "type": "exit",   "code": 0 }
     { "type": "error",  "message": "<reason>" }
+
+The ``ready`` frame is emitted exactly once, immediately after the
+PTY spawns, so the frontend chrome can render the live session's
+hostname / pid / shell / user without an extra round trip.
 
 The handler authenticates via the existing cookie/JWT machinery
 (admin-only), spawns a new PTY session per connection, and audits
@@ -34,8 +40,10 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import getpass
 import json
 import logging
+import socket
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, status
@@ -155,6 +163,17 @@ async def terminal_websocket(websocket: WebSocket) -> None:
         ):
             pass
 
+    try:
+        await websocket.send_json({
+            "type": "ready",
+            "hostname": _safe_hostname(),
+            "pid": spawn.session.pid,
+            "shell": spawn.session.shell,
+            "user": _safe_user(),
+        })
+    except Exception:
+        logger.debug("failed to emit ready frame", exc_info=True)
+
     reader_task = asyncio.create_task(_pump_pty_to_ws(websocket, spawn.session))
     try:
         await _pump_ws_to_pty(websocket, spawn.session)
@@ -227,3 +246,17 @@ def _safe_decode(raw: str) -> Optional[dict]:
     if not isinstance(frame, dict):
         return None
     return frame
+
+
+def _safe_hostname() -> str:
+    try:
+        return socket.gethostname() or "meshpoint"
+    except Exception:
+        return "meshpoint"
+
+
+def _safe_user() -> str:
+    try:
+        return getpass.getuser()
+    except Exception:
+        return "meshpoint"

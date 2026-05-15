@@ -24,6 +24,7 @@
     <link rel="stylesheet" href="css/stats.css" />
     <link rel="stylesheet" href="css/settings.css" />
     <link rel="stylesheet" href="css/configuration.css" />
+    <link rel="stylesheet" href="css/terminal_theme.css" />
     <link rel="stylesheet" href="css/terminal.css" />
     <link rel="stylesheet" href="/vendor/xterm/xterm.css" />
     <link rel="stylesheet" href="css/responsive.css" />
@@ -306,6 +307,12 @@
                             <span class="terminal-panel__status" data-term-status data-state="idle">idle</span>
                         </div>
                         <div class="terminal-panel__actions">
+                            <button class="terminal-button terminal-button--ghost" type="button" data-term-search disabled aria-label="Find in terminal">
+                                <span aria-hidden="true">⌕</span> Find
+                            </button>
+                            <button class="terminal-button terminal-button--ghost" type="button" data-term-copy disabled aria-label="Copy selection">
+                                <span aria-hidden="true">⧉</span> Copy
+                            </button>
                             <button class="terminal-button terminal-button--ghost" type="button" data-term-toggle-drawer aria-expanded="false">
                                 <span aria-hidden="true">⌘</span> Commands
                             </button>
@@ -315,8 +322,26 @@
                         </div>
                     </header>
                     <div class="terminal-panel__body">
-                        <div class="terminal-panel__shell">
+                        <div class="terminal-panel__shell" data-term-search-host>
+                            <div class="terminal-panel__strip" aria-hidden="true">
+                                <span class="terminal-strip__lights">
+                                    <span class="terminal-strip__light terminal-strip__light--red"></span>
+                                    <span class="terminal-strip__light terminal-strip__light--yellow"></span>
+                                    <span class="terminal-strip__light terminal-strip__light--green"></span>
+                                </span>
+                                <span class="terminal-strip__badges">
+                                    <span class="terminal-strip__badge terminal-strip__badge--accent" data-term-host>--</span>
+                                    <span class="terminal-strip__badge" data-term-pid>--</span>
+                                    <span class="terminal-strip__badge" data-term-shell>--</span>
+                                </span>
+                                <span class="terminal-strip__hint">
+                                    <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> copy
+                                    <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> paste
+                                    <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> find
+                                </span>
+                            </div>
                             <div id="terminal-host" class="terminal-host"></div>
+                            <div class="terminal-toast" data-term-toast aria-live="polite"></div>
                             <p class="terminal-panel__hint" data-term-hint>Press Connect to open a shell. The session is admin-only and audited.</p>
                         </div>
                         <aside class="terminal-drawer" data-term-drawer aria-hidden="true">
@@ -511,9 +536,16 @@
     <script src="js/configuration/configuration_panel.js"></script>
     <script src="/vendor/xterm/xterm.js"></script>
     <script src="/vendor/xterm/xterm-addon-fit.js"></script>
+    <script src="/vendor/xterm/xterm-addon-webgl.js"></script>
+    <script src="/vendor/xterm/xterm-addon-search.js"></script>
+    <script src="/vendor/xterm/xterm-addon-web-links.js"></script>
+    <script src="/vendor/xterm/xterm-addon-unicode11.js"></script>
     <script src="js/terminal/dangerous_modal.js"></script>
     <script src="js/terminal/command_drawer.js"></script>
     <script src="js/terminal/terminal_client.js"></script>
+    <script src="js/terminal/terminal_chrome.js"></script>
+    <script src="js/terminal/terminal_renderer.js"></script>
+    <script src="js/terminal/terminal_search_overlay.js"></script>
     <script src="js/terminal/terminal_panel.js"></script>
     <script src="sidebar/router.js"></script>
     <script src="sidebar/sidebar_controller.js"></script>

@@ -13,6 +13,8 @@
  *     { "type": "resize", "rows": N, "cols": N }
  *
  *   server -> client:
+ *     { "type": "ready",  "hostname": "...", "pid": N,
+ *       "shell": "/bin/bash", "user": "meshpoint" }
  *     { "type": "output", "data": <base64> }
  *     { "type": "exit",   "code": N }
  *     { "type": "error",  "message": "..." }
@@ -26,6 +28,7 @@ class TerminalClient {
         this.onError = null;
         this.onOpen = null;
         this.onClose = null;
+        this.onReady = null;
     }
 
     get connected() {
@@ -76,6 +79,13 @@ class TerminalClient {
         if (!frame || typeof frame !== 'object') return;
         if (frame.type === 'output' && frame.data) {
             this.onOutput?.(this._fromB64(frame.data));
+        } else if (frame.type === 'ready') {
+            this.onReady?.({
+                hostname: frame.hostname,
+                pid: frame.pid,
+                shell: frame.shell,
+                user: frame.user,
+            });
         } else if (frame.type === 'exit') {
             this.onExit?.(frame.code ?? 0);
         } else if (frame.type === 'error') {
