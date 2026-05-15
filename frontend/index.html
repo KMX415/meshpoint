@@ -47,7 +47,11 @@
 
         <aside class="sidebar" role="navigation" aria-label="Primary">
             <header class="sidebar__header">
-                <img class="sidebar__logo" src="/assets/meshpoint-logo.png" alt="Meshpoint" />
+                <div class="sidebar__logo-frame" id="sidebar-logo-frame" data-state="connecting">
+                    <span class="sidebar__logo-ring" aria-hidden="true"></span>
+                    <img class="sidebar__logo" src="/assets/meshpoint-logo.png" alt="Meshpoint" />
+                    <span class="sidebar__logo-pip" aria-hidden="true"></span>
+                </div>
                 <div class="sidebar__device">
                     <div class="sidebar__device-name" id="sidebar-device-name">Meshpoint</div>
                     <div class="sidebar__device-status">
@@ -636,6 +640,7 @@
     <script src="js/terminal/terminal_panel.js"></script>
     <script src="sidebar/router.js"></script>
     <script src="sidebar/sidebar_controller.js"></script>
+    <script src="sidebar/sidebar_logo_pip.js"></script>
     <script src="sidebar/noise_floor_sparkline.js"></script>
     <script src="sidebar/telemetry_rail.js"></script>
     <script src="js/reconnect_storyboard.js"></script>

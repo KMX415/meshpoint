@@ -53,6 +53,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.sidebar = sidebar;
     router.start();
 
+    const logoFrame = document.getElementById('sidebar-logo-frame');
+    if (logoFrame && window.SidebarLogoPip) {
+        const pip = new SidebarLogoPip(logoFrame, window.concentratorWS);
+        pip.init();
+        window.sidebarLogoPip = pip;
+    }
+
     const topbarRoot = document.getElementById('topbar');
     if (topbarRoot && window.TopbarController) {
         const topbar = new TopbarController(topbarRoot, window.concentratorWS);

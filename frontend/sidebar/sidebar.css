@@ -69,18 +69,157 @@
 .sidebar__header {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
-    padding: 0.85rem 0.75rem;
+    gap: 0.75rem;
+    padding: 0.95rem 0.85rem;
     border-bottom: 1px solid var(--sidebar-border);
-    min-height: 60px;
+    min-height: 76px;
+}
+
+/* Logo "frame": image + animated accent ring + connection pip.
+ * The frame is the visual anchor of the entire sidebar — sized
+ * up so first impression reads "branded device" instead of
+ * "small icon next to text". */
+.sidebar__logo-frame {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: linear-gradient(
+        135deg,
+        rgba(6, 182, 212, 0.18) 0%,
+        rgba(168, 85, 247, 0.12) 100%
+    );
+    box-shadow:
+        0 4px 14px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    transition: transform var(--motion-base) var(--ease-out-expo),
+                box-shadow var(--motion-base) var(--ease-out-expo);
+}
+
+.sidebar__logo-frame:hover {
+    transform: translateY(-1px) scale(1.03);
+    box-shadow:
+        0 8px 22px rgba(0, 0, 0, 0.55),
+        0 0 24px rgba(6, 182, 212, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .sidebar__logo {
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    flex-shrink: 0;
+    position: relative;
+    z-index: 2;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
     display: block;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+}
+
+/* Animated accent ring sitting just outside the logo. Kept low
+ * opacity so it reads as a glow, not a hard outline. Pulses when
+ * the websocket is online; static otherwise. */
+.sidebar__logo-ring {
+    position: absolute;
+    inset: -2px;
+    border-radius: 14px;
+    border: 1px solid transparent;
+    background:
+        linear-gradient(
+            135deg,
+            rgba(6, 182, 212, 0.55),
+            rgba(168, 85, 247, 0.4) 50%,
+            rgba(6, 182, 212, 0.55)
+        ) border-box;
+    -webkit-mask:
+        linear-gradient(#000 0 0) padding-box,
+        linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0.85;
+    z-index: 1;
+}
+
+.sidebar__logo-frame[data-state="online"] .sidebar__logo-ring {
+    animation: sidebar-logo-ring-pulse 3.4s ease-in-out infinite;
+}
+
+.sidebar__logo-frame[data-state="offline"] .sidebar__logo-ring {
+    background:
+        linear-gradient(
+            135deg,
+            rgba(239, 68, 68, 0.55),
+            rgba(239, 68, 68, 0.25) 50%,
+            rgba(239, 68, 68, 0.55)
+        ) border-box;
+    opacity: 0.7;
+}
+
+.sidebar__logo-frame[data-state="connecting"] .sidebar__logo-ring {
+    background:
+        linear-gradient(
+            135deg,
+            rgba(245, 158, 11, 0.55),
+            rgba(245, 158, 11, 0.25) 50%,
+            rgba(245, 158, 11, 0.55)
+        ) border-box;
+    animation: sidebar-logo-ring-blink 1s steps(2, end) infinite;
+}
+
+/* Bottom-right status pip — same idea as the topbar lamp but
+ * anchored to the logo so the brand mark itself shows liveness. */
+.sidebar__logo-pip {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    border: 2px solid var(--sidebar-bg, #0f1624);
+    z-index: 3;
+    transition: background var(--motion-fast) var(--ease-out-expo),
+                box-shadow var(--motion-fast) var(--ease-out-expo);
+}
+
+.sidebar__logo-frame[data-state="online"] .sidebar__logo-pip {
+    background: var(--accent-green, #00e5a0);
+    box-shadow: 0 0 8px rgba(0, 229, 160, 0.7);
+}
+
+.sidebar__logo-frame[data-state="offline"] .sidebar__logo-pip {
+    background: var(--accent-red, #ef4444);
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.7);
+}
+
+.sidebar__logo-frame[data-state="connecting"] .sidebar__logo-pip {
+    background: var(--accent-amber, #f59e0b);
+    animation: sidebar-logo-pip-blink 0.9s steps(2, end) infinite;
+}
+
+@keyframes sidebar-logo-ring-pulse {
+    0%, 100% { opacity: 0.85; }
+    50%      { opacity: 1; }
+}
+
+@keyframes sidebar-logo-ring-blink {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.35; }
+}
+
+@keyframes sidebar-logo-pip-blink {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+}
+
+/* Rail (icon-only) sidebar mode: keep the logo as the anchor and
+ * shift the device block out of the way. */
+.app[data-sidebar="rail"] .sidebar__header {
+    justify-content: center;
+    padding: 0.85rem 0;
 }
 
 .sidebar__device {
