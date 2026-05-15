@@ -131,21 +131,27 @@ def _build_advertisement(
         default="unknown",
     )
     source_id = pubkey[:12] if len(pubkey) >= 12 else pubkey
-    name = _first_payload_value(
+    name = _find_payload_name(
         payload,
         "adv_name",
+        "advName",
         "name",
         "long_name",
+        "longName",
         "display_name",
-        default="",
+        "displayName",
+        "node_name",
+        "nodeName",
+        "repeater_name",
+        "repeaterName",
     )
-    display_name = name or source_id
     decoded = {
-        "long_name": display_name,
-        "short_name": display_name[:4],
         "public_key": pubkey,
         "advertisement": payload,
     }
+    if name and not _looks_like_identifier(name, source_id, pubkey):
+        decoded["long_name"] = name
+        decoded["short_name"] = name[:4]
     lat = payload.get("adv_lat")
     lon = payload.get("adv_lon")
     if lat and lon:
@@ -173,6 +179,45 @@ def _first_payload_value(payload: dict, *keys: str, default: str = "") -> str:
         if value:
             return value
     return default
+
+
+def _find_payload_name(payload: dict, *keys: str) -> str:
+    """Find a display name even when the meshcore library nests advert data."""
+    direct = _first_payload_value(payload, *keys, default="")
+    if direct:
+        return direct
+
+    wanted = {k.lower() for k in keys}
+    stack = list(payload.values())
+    while stack:
+        value = stack.pop()
+        if isinstance(value, dict):
+            for k, v in value.items():
+                if k.lower() in wanted and v is not None:
+                    candidate = str(v).strip()
+                    if candidate:
+                        return candidate
+                elif isinstance(v, (dict, list)):
+                    stack.append(v)
+        elif isinstance(value, list):
+            stack.extend(value)
+    return ""
+
+
+def _looks_like_identifier(name: str, source_id: str, pubkey: str) -> bool:
+    lowered = name.lower().lstrip("!")
+    identifiers = {
+        source_id.lower().lstrip("!"),
+        pubkey.lower().lstrip("!"),
+        pubkey[:12].lower().lstrip("!"),
+    }
+    if lowered in identifiers:
+        return True
+    try:
+        int(lowered, 16)
+        return len(lowered) >= 8
+    except ValueError:
+        return False
 
 
 def _build_raw_data(

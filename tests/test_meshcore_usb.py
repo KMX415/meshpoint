@@ -119,6 +119,29 @@ class TestMeshcoreEventAdapter(unittest.TestCase):
         self.assertEqual(pkt.decoded_payload["long_name"], "AliasNode")
         self.assertEqual(pkt.decoded_payload["short_name"], "Alia")
 
+    def test_advertisement_accepts_nested_name_alias(self):
+        raw = self._make_envelope("advertisement", {
+            "public_key": "abcdef1234567890abcdef",
+            "advert": {"longName": "NestedRepeater"},
+        })
+        pkt = adapt_event(raw)
+        self.assertIsNotNone(pkt)
+        self.assertEqual(pkt.packet_type, PacketType.NODEINFO)
+        self.assertEqual(pkt.source_id, "abcdef123456")
+        self.assertEqual(pkt.decoded_payload["long_name"], "NestedRepeater")
+        self.assertEqual(pkt.decoded_payload["short_name"], "Nest")
+
+    def test_advertisement_without_real_name_does_not_store_id_as_name(self):
+        raw = self._make_envelope("advertisement", {
+            "public_key": "abcdef1234567890abcdef",
+        })
+        pkt = adapt_event(raw)
+        self.assertIsNotNone(pkt)
+        self.assertEqual(pkt.packet_type, PacketType.NODEINFO)
+        self.assertEqual(pkt.source_id, "abcdef123456")
+        self.assertNotIn("long_name", pkt.decoded_payload)
+        self.assertNotIn("short_name", pkt.decoded_payload)
+
     def test_advertisement_no_coords(self):
         raw = self._make_envelope("advertisement", {
             "public_key": "abcdef1234567890abcdef",

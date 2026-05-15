@@ -136,6 +136,7 @@ class DatabaseManager:
             logger.info("Migration: added rx_count column to messages table")
 
         await self._cleanup_cross_protocol_name_contamination()
+        await self._cleanup_meshcore_placeholder_names()
 
     async def _cleanup_cross_protocol_name_contamination(self) -> None:
         """Repair Meshtastic node rows whose long_name was overwritten by a
@@ -164,6 +165,30 @@ class DatabaseManager:
             logger.warning(
                 "Migration: cleared %d cross-protocol contaminated Meshtastic "
                 "node row(s); long_name will be repopulated on next NodeInfo",
+                cursor.rowcount,
+            )
+
+    async def _cleanup_meshcore_placeholder_names(self) -> None:
+        """Clear MeshCore rows that accidentally stored IDs as display names."""
+        cursor = await self._connection.execute(
+            """
+            UPDATE nodes
+            SET long_name = NULL,
+                short_name = CASE
+                    WHEN short_name IS NOT NULL
+                     AND LOWER(LTRIM(short_name, '!')) = LOWER(SUBSTR(LTRIM(node_id, '!'), 1, 4))
+                        THEN NULL
+                    ELSE short_name
+                END
+            WHERE protocol = 'meshcore'
+              AND long_name IS NOT NULL
+              AND LOWER(LTRIM(long_name, '!')) = LOWER(LTRIM(node_id, '!'))
+            """
+        )
+        if cursor.rowcount and cursor.rowcount > 0:
+            logger.warning(
+                "Migration: cleared %d MeshCore node placeholder name(s); "
+                "names will repopulate on the next valid advert",
                 cursor.rowcount,
             )
 

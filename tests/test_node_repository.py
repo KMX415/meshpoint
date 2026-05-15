@@ -71,6 +71,16 @@ class TestNodeRepository(unittest.TestCase):
         self.assertIsNotNone(node)
         self.assertEqual(node.long_name, "Trail Relay")
 
+    def test_meshcore_display_name_ignores_id_placeholder(self):
+        node = Node(
+            node_id="abcdef123456",
+            long_name="abcdef123456",
+            short_name="abcd",
+            protocol="meshcore",
+        )
+
+        self.assertEqual(node.display_name, "!abcdef123456")
+
 
 if __name__ == "__main__":
     unittest.main()
