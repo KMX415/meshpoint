@@ -25,22 +25,32 @@ class MessagingPanel {
         panel.innerHTML = `
             <div id="msg-tx-banner" class="msg-tx-banner" style="display:none"></div>
             <div class="messaging">
-                <div class="msg-sidebar">
-                    <div class="msg-sidebar__header">
-                        <span class="msg-sidebar__title">Messages</span>
-                        <div class="msg-sidebar__actions">
-                            <button class="msg-sidebar__monitor-btn" id="msg-monitor-btn" title="Monitor: show overheard DMs">&#x1F441;</button>
-                            <button class="msg-sidebar__new-btn" id="msg-new-btn">+ New</button>
+                <aside class="msg-sidebar">
+                    <header class="msg-sidebar__header">
+                        <div class="msg-sidebar__title-row">
+                            <span class="msg-sidebar__title">Messages</span>
+                            <span class="msg-sidebar__subtitle">Channels &amp; direct conversations</span>
                         </div>
-                    </div>
-                    <div class="msg-protocol-toggle">
-                        <button class="msg-protocol-toggle__btn msg-protocol-toggle__btn--active" data-filter="all">All</button>
-                        <button class="msg-protocol-toggle__btn" data-filter="meshtastic">MT</button>
-                        <button class="msg-protocol-toggle__btn" data-filter="meshcore">MC</button>
+                        <div class="msg-sidebar__actions">
+                            <button class="msg-icon-btn" id="msg-monitor-btn" type="button" title="Monitor: show overheard DMs" aria-label="Monitor mode">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/>
+                                    <circle cx="12" cy="12" r="2.5"/>
+                                </svg>
+                            </button>
+                            <button class="msg-pill-btn msg-pill-btn--accent" id="msg-new-btn" type="button">
+                                <span aria-hidden="true">＋</span> New
+                            </button>
+                        </div>
+                    </header>
+                    <div class="msg-protocol-toggle" role="tablist" aria-label="Filter conversations by protocol">
+                        <button class="msg-protocol-toggle__btn msg-protocol-toggle__btn--active" data-filter="all"        role="tab" aria-selected="true">All</button>
+                        <button class="msg-protocol-toggle__btn"                                  data-filter="meshtastic" role="tab" aria-selected="false">MT</button>
+                        <button class="msg-protocol-toggle__btn"                                  data-filter="meshcore"   role="tab" aria-selected="false">MC</button>
                     </div>
                     <div class="msg-sidebar__list" id="msg-convo-list"></div>
-                </div>
-                <div class="msg-chat" id="msg-chat-area"></div>
+                </aside>
+                <div class="msg-chat msg-chat--empty" id="msg-chat-area"></div>
             </div>
         `;
 
@@ -57,15 +67,22 @@ class MessagingPanel {
         document.getElementById('msg-monitor-btn').addEventListener('click', () => {
             this._monitorMode = !this._monitorMode;
             const btn = document.getElementById('msg-monitor-btn');
-            btn.classList.toggle('msg-sidebar__monitor-btn--active', this._monitorMode);
-            btn.title = this._monitorMode ? 'Monitor ON: showing overheard DMs' : 'Monitor: show overheard DMs';
+            btn.classList.toggle('msg-icon-btn--active', this._monitorMode);
+            btn.setAttribute('aria-pressed', this._monitorMode ? 'true' : 'false');
+            btn.title = this._monitorMode
+                ? 'Monitor ON: showing overheard DMs'
+                : 'Monitor: show overheard DMs';
             this._contacts.load(this._monitorMode);
         });
 
         panel.querySelectorAll('.msg-protocol-toggle__btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                panel.querySelectorAll('.msg-protocol-toggle__btn').forEach(b => b.classList.remove('msg-protocol-toggle__btn--active'));
+                panel.querySelectorAll('.msg-protocol-toggle__btn').forEach(b => {
+                    b.classList.remove('msg-protocol-toggle__btn--active');
+                    b.setAttribute('aria-selected', 'false');
+                });
                 btn.classList.add('msg-protocol-toggle__btn--active');
+                btn.setAttribute('aria-selected', 'true');
                 this._contacts.setFilter(btn.dataset.filter);
             });
         });
