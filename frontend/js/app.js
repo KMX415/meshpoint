@@ -53,6 +53,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.sidebar = sidebar;
     router.start();
 
+    const topbarRoot = document.getElementById('topbar');
+    if (topbarRoot && window.TopbarController) {
+        const topbar = new TopbarController(topbarRoot, window.concentratorWS);
+        topbar.init();
+        window.topbar = topbar;
+    }
+
+    if (window.BuildStamp) {
+        const stamp = new BuildStamp();
+        stamp.mount();
+        window.buildStamp = stamp;
+    }
+
     new SignOutController('signout-btn').bind();
 
     _bootAuthPanel(router);

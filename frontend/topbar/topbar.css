@@ -1,0 +1,283 @@
+/* Topbar — chrome strip pinned above every section.
+ *
+ * Layout: full-width flex row with three regions (left lamp + ident
+ * + radio chips, flexible spacer, right actions). 48px tall on
+ * desktop, drops to 44px under 720px.
+ *
+ * Visual goal: reads like the front panel of a piece of lab gear —
+ * monospace labels, segmented amber identity, cyan radio readout,
+ * subtle border-bottom that mirrors the sidebar's right edge. */
+
+.topbar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.4rem 1rem;
+    min-height: 48px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(
+        180deg,
+        rgba(15, 22, 36, 0.85) 0%,
+        rgba(15, 22, 36, 0.65) 100%
+    );
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    position: relative;
+    z-index: 30;
+}
+
+.topbar::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 1px;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(6, 182, 212, 0.45) 50%,
+        transparent 100%
+    );
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.topbar__group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.topbar__spacer {
+    flex: 1 1 auto;
+}
+
+/* --- Lamp ------------------------------------------------------- */
+
+.topbar-lamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.25rem 0.6rem 0.25rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(0, 0, 0, 0.25);
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+
+.topbar-lamp__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: background 0.2s, box-shadow 0.2s;
+}
+
+.topbar-lamp--online {
+    color: var(--accent-green, #00e5a0);
+    border-color: rgba(0, 229, 160, 0.4);
+    background: rgba(0, 229, 160, 0.08);
+}
+
+.topbar-lamp--online .topbar-lamp__dot {
+    background: var(--accent-green, #00e5a0);
+    box-shadow: 0 0 10px rgba(0, 229, 160, 0.7);
+    animation: topbar-lamp-pulse 2.4s ease-in-out infinite;
+}
+
+.topbar-lamp--offline {
+    color: var(--accent-red, #ef4444);
+    border-color: rgba(239, 68, 68, 0.4);
+    background: rgba(239, 68, 68, 0.06);
+}
+
+.topbar-lamp--offline .topbar-lamp__dot {
+    background: var(--accent-red, #ef4444);
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
+}
+
+.topbar-lamp--reconnecting {
+    color: var(--accent-amber, #f59e0b);
+    border-color: rgba(245, 158, 11, 0.4);
+    background: rgba(245, 158, 11, 0.06);
+}
+
+.topbar-lamp--reconnecting .topbar-lamp__dot {
+    background: var(--accent-amber, #f59e0b);
+    animation: topbar-lamp-blink 0.9s steps(2, end) infinite;
+}
+
+@keyframes topbar-lamp-pulse {
+    0%, 100% {
+        box-shadow: 0 0 10px rgba(0, 229, 160, 0.7);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 14px rgba(0, 229, 160, 0.95);
+        transform: scale(1.12);
+    }
+}
+
+@keyframes topbar-lamp-blink {
+    0% { opacity: 1; }
+    50% { opacity: 0.25; }
+    100% { opacity: 1; }
+}
+
+/* --- LCD identity badge ----------------------------------------- */
+
+.topbar-ident {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0.7rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    background:
+        linear-gradient(180deg, rgba(15, 12, 6, 0.95) 0%, rgba(8, 6, 3, 0.95) 100%);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 200, 100, 0.06),
+        inset 0 0 14px rgba(245, 158, 11, 0.08),
+        0 1px 0 rgba(0, 0, 0, 0.4);
+    position: relative;
+}
+
+.topbar-ident__label {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    color: rgba(245, 158, 11, 0.55);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+}
+
+.topbar-ident__value {
+    font-family: var(--font-mono);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--accent-amber, #f59e0b);
+    letter-spacing: 0.22em;
+    text-shadow:
+        0 0 6px rgba(245, 158, 11, 0.6),
+        0 0 14px rgba(245, 158, 11, 0.3);
+    min-width: 4ch;
+    text-align: center;
+    line-height: 1;
+}
+
+.topbar-ident.topbar-ident--flicker .topbar-ident__value {
+    animation: topbar-ident-flicker 280ms ease-out;
+}
+
+@keyframes topbar-ident-flicker {
+    0%   { opacity: 1; }
+    20%  { opacity: 0.2; }
+    40%  { opacity: 0.95; }
+    60%  { opacity: 0.4; }
+    100% { opacity: 1; }
+}
+
+/* --- Radio chip ------------------------------------------------- */
+
+.topbar-radio {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.55rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: rgba(6, 182, 212, 0.04);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.topbar-radio:hover { border-color: rgba(6, 182, 212, 0.4); }
+
+.topbar-radio--unknown { opacity: 0.5; }
+
+.topbar-radio__sep {
+    color: var(--text-muted);
+    opacity: 0.5;
+    margin: 0 0.05rem;
+}
+
+.topbar-radio__region {
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.04em;
+}
+
+.topbar-radio__freq {
+    color: var(--accent-cyan);
+    text-shadow: 0 0 6px rgba(6, 182, 212, 0.25);
+    letter-spacing: 0.02em;
+}
+
+.topbar-radio__preset {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    border-left: 1px solid var(--border);
+    padding-left: 0.4rem;
+    margin-left: 0.1rem;
+}
+
+/* --- Action group ----------------------------------------------- */
+
+.topbar-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.topbar-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s,
+                transform 0.1s;
+}
+
+.topbar-action:hover {
+    border-color: var(--border);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--accent-cyan);
+}
+
+.topbar-action:active { transform: scale(0.94); }
+
+.topbar-action:focus-visible {
+    outline: none;
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.35);
+}
+
+/* --- Responsive -------------------------------------------------- */
+
+@media (max-width: 900px) {
+    .topbar { gap: 0.5rem; padding: 0.35rem 0.7rem; min-height: 44px; }
+    .topbar-radio__preset { display: none; }
+    .topbar-ident__label { display: none; }
+}
+
+@media (max-width: 600px) {
+    .topbar-radio { display: none; }
+    .topbar-ident__value { font-size: 0.82rem; letter-spacing: 0.18em; }
+}

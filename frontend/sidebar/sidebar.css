@@ -169,6 +169,50 @@
     list-style: none;
 }
 
+/* ---- Group headers (STATUS / OPS / CONFIG dividers) ----
+ *
+ * Tiny uppercase mono labels that organize the nav into clusters
+ * the same way Status / Configuration / Settings groups the IA.
+ * Hidden when the sidebar is in icon-only "rail" mode, since the
+ * label text would have nowhere to go.
+ */
+.sidebar__group-header {
+    margin: 0.6rem 0.85rem 0.2rem;
+    padding: 0 0.4rem;
+    pointer-events: none;
+}
+
+.sidebar__group-header:first-child { margin-top: 0.2rem; }
+
+.sidebar__group-header-label {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.55rem;
+    font-weight: 700;
+    color: var(--sidebar-text-muted);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    opacity: 0.6;
+    transition: opacity var(--motion-fast) var(--ease-out-expo);
+}
+
+.app[data-sidebar="rail"] .sidebar__group-header {
+    margin: 0.4rem 0.5rem 0.1rem;
+    padding: 0;
+    height: 1px;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        var(--sidebar-border) 50%,
+        transparent
+    );
+    opacity: 0.5;
+}
+
+.app[data-sidebar="rail"] .sidebar__group-header-label {
+    display: none;
+}
+
 .sidebar__link,
 .sidebar__group-toggle {
     display: flex;
@@ -258,6 +302,20 @@
 .sidebar__badge--update {
     background: rgba(245, 158, 11, 0.18);
     color: var(--accent-amber);
+}
+
+.sidebar__badge--beta {
+    background: rgba(168, 85, 247, 0.16);
+    color: #c4b5fd;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.sidebar__badge--new {
+    background: rgba(0, 229, 160, 0.16);
+    color: var(--accent-green);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
 }
 
 .sidebar__chevron {
