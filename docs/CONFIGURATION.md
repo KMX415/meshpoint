@@ -152,7 +152,7 @@ meshcore:
   channel_keys: 
     SomeChannelName: "32-BytePSK"      # Meshcore Channel Name with 32-Byte Hex PSK. One channel per line            
 ```
-Any Channels listed in the YAML will show in the UI. Changes made in the UI will be written to the YAML config file and pushed to the USB Companion device. Additionally, all channels will be pushed to the USB Companion device upon Meshpoint startup.
+Any Channels listed in the YAML will show in the UI. Changes made in the UI will be written to the YAML config file and pushed to the USB Companion device. Additionally, all channels will be pushed to the USB Companion device upon Meshpoint startup. Maximum of 8 Channels can by configured at this time. THis limit may be adjusted at a later date. 
 
 ---
 

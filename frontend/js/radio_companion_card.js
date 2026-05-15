@@ -153,6 +153,7 @@ class RadioCompanionCard {
 
         const addBtn = this._root.querySelector('#r-mc-ch-add');
         if (addBtn) addBtn.addEventListener('click', () => this._addEmptyRow());
+        this._updateAddBtn();
 
         const saveBtn = this._root.querySelector('#r-mc-ch-save');
         if (saveBtn) saveBtn.addEventListener('click', () => this._saveChannels());
@@ -218,6 +219,20 @@ class RadioCompanionCard {
         if (btn) btn.style.display = this._focusedRow ? '' : 'none';
     }
 
+    _MC_MAX_CHANNELS = 8;
+
+    _updateAddBtn() {
+        const btn = this._root.querySelector('#r-mc-ch-add');
+        if (!btn) return;
+        const tbody = this._root.querySelector('#r-mc-ch-body');
+        const count = tbody
+            ? tbody.querySelectorAll('tr:not(.ch-table__row--locked)').length
+            : 0;
+        const atLimit = count >= this._MC_MAX_CHANNELS;
+        btn.disabled = atLimit;
+        btn.title = atLimit ? 'Only 8 Channels Allowed' : '';
+    }
+
     _addEmptyRow() {
         const tbody = this._root.querySelector('#r-mc-ch-body');
         const idx = tbody.querySelectorAll('tr').length;
@@ -239,6 +254,7 @@ class RadioCompanionCard {
         `;
         this._wireChannelHandlers(tr);
         tbody.appendChild(tr);
+        this._updateAddBtn();
     }
 
     _deleteRow() {
@@ -247,6 +263,7 @@ class RadioCompanionCard {
         this._focusedRow.remove();
         this._focusedRow = null;
         this._syncDeleteBtn();
+        this._updateAddBtn();
     }
 
     async _saveChannels() {
