@@ -52,6 +52,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     sidebar.bind();
     window.sidebar = sidebar;
 
+    if (window.RadioTxBadge) {
+        const radioTxBadge = new RadioTxBadge(sidebar);
+        radioTxBadge.init();
+        window.radioTxBadge = radioTxBadge;
+    }
+
     if (window.SinceLineController && window.lastVisitTracker) {
         const sinceCtrl = new SinceLineController(router, window.lastVisitTracker);
         const dashHost = document.getElementById('dashboard-since-host');
