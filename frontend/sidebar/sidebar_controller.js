@@ -33,6 +33,7 @@ class SidebarController {
         this._handleCollapseToggle = this._handleCollapseToggle.bind(this);
         this._handleGroupToggle = this._handleGroupToggle.bind(this);
         this._handleNavClick = this._handleNavClick.bind(this);
+        this._handleDocumentClick = this._handleDocumentClick.bind(this);
     }
 
     bind() {
@@ -81,6 +82,13 @@ class SidebarController {
 
         window.addEventListener('resize', this._handleResize);
         window.addEventListener('keydown', this._handleKeydown);
+
+        // Tablet click-outside-to-collapse: when the rail has been
+        // expanded transiently and the operator clicks anywhere outside
+        // the sidebar, snap it back to icon-only rail. Desktop is not
+        // affected (sidebar is meant to be persistent there) and mobile
+        // already has its own dedicated backdrop element.
+        document.addEventListener('click', this._handleDocumentClick);
     }
 
     _wireRouterSubscription() {
@@ -193,6 +201,42 @@ class SidebarController {
 
     _handleBackdrop() {
         this._app.dataset.sidebar = 'expanded';
+    }
+
+    /**
+     * Document-level click handler that collapses an expanded rail
+     * back to icon-only when the operator clicks outside the sidebar.
+     *
+     * Tablet-only by design: the sidebar default at 768-1023px is
+     * rail, and the toggle button is treated as a transient expand.
+     * Clicking elsewhere should feel like dismissing a popover.
+     *
+     * Skipped at:
+     *   - desktop (>=1024px): sidebar is persistent there, by design
+     *   - mobile (<768px): dedicated backdrop element handles the
+     *     drawer dismissal already
+     *   - when click target is inside the sidebar itself or the
+     *     collapse-toggle button (the toggle has its own handler)
+     *
+     * Persists 'rail' to localStorage so the next reload also lands
+     * on rail, matching the "click outside == I'm done with this"
+     * mental model.
+     */
+    _handleDocumentClick(event) {
+        const w = window.innerWidth;
+        if (w < 768 || w >= 1024) return;
+        if (this._app.dataset.sidebar !== 'expanded') return;
+        const target = event.target;
+        if (!target) return;
+        if (this._sidebar && this._sidebar.contains(target)) return;
+        const collapseBtn = document.getElementById('sidebar-collapse-btn');
+        if (collapseBtn && collapseBtn.contains(target)) return;
+        const hamburger = document.getElementById('sidebar-hamburger');
+        if (hamburger && hamburger.contains(target)) return;
+
+        this._app.dataset.sidebar = 'rail';
+        try { localStorage.setItem(this._storageKey, 'rail'); } catch (_) {}
+        this._refreshCollapseAffordance();
     }
 
     _applyViewportState() {

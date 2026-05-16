@@ -1,3 +1,14 @@
+/* Stats section needs its own scroll context. The parent .section
+ * has overflow:hidden (cascaded from .app__content's flex:1 viewport
+ * frame) so any content taller than the viewport gets clipped with
+ * no scrollbar. The dashboard solves this with .dashboard becoming
+ * overflow:auto at narrow widths; stats has no equivalent inner
+ * wrapper, so we promote .section[data-section="stats"] itself to
+ * the scroll container. */
+.section[data-section="stats"] {
+    overflow-y: auto;
+}
+
 .stats-panel {
     padding: 1.5rem;
     max-width: 900px;
