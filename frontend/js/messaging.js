@@ -167,7 +167,9 @@ class MessagingPanel {
                 return;
             }
 
-            if (this._activeConvo && data.node_id === this._activeConvo.node_id) {
+            const isViewingThisConvo =
+                this._activeConvo && data.node_id === this._activeConvo.node_id;
+            if (isViewingThisConvo) {
                 const chParts = (data.node_id || '').split(':');
                 const chIdx = chParts.length >= 3 ? parseInt(chParts[2], 10) || 0 : 0;
                 const msg = {
@@ -189,7 +191,29 @@ class MessagingPanel {
                 this._chat.addMessage(msg);
             }
             this._contacts.addOrUpdateConversation(data);
-            if (!isOverheard) this._updateUnreadBadge();
+
+            // Sidebar unread badge is DM-only on purpose.
+            //
+            // Public/broadcast channels (LongFast, MeshCore public, etc.)
+            // are routinely spammy on real meshes; if every channel
+            // packet bumped the badge, the indicator would be lit
+            // constantly and stop conveying signal. The server tags
+            // broadcast conversations with a node_id of the form
+            // "broadcast:<protocol>:<channel_idx>" (server.py
+            // on_text_packet, is_broadcast branch) so we filter on
+            // that prefix.
+            //
+            // Also skip when the user is already looking at the
+            // conversation: the message renders inline in the chat
+            // pane, the badge would just create busywork to dismiss.
+            const isBroadcast = (data.node_id || '').startsWith('broadcast:');
+            const isReceivedDm =
+                !isOverheard
+                && !isBroadcast
+                && data.direction !== 'sent';
+            if (isReceivedDm && !isViewingThisConvo) {
+                this._updateUnreadBadge();
+            }
         });
 
         window.concentratorWS.on('message_updated', (data) => {
