@@ -23,12 +23,19 @@
     .dashboard__main { grid-template-columns: 1fr; }
     .dashboard__map { min-height: 50vh; }
     .dashboard__side { max-height: 300px; }
-    .dashboard__feed { height: auto; min-height: 200px; }
+    /* Feed must stay bounded at narrow widths. Earlier this rule used
+     * `height: auto; min-height: 200px;` which let the packet table grow
+     * vertically as WS events streamed in: first paint had 0 packets and
+     * the layout fit, then within seconds the feed inflated past the
+     * section frame and visually buried the map and node panels above it.
+     * Keeping it at a fixed 220px (same as desktop) means the table
+     * scrolls inside its panel body instead of growing the parent. */
+    .dashboard__feed { height: 220px; }
 }
 
 @media (max-width: 720px) {
     .dashboard__map { min-height: 45vh; }
-    .dashboard__feed { min-height: 180px; }
+    .dashboard__feed { height: 180px; }
     .stat-card { min-width: 88px; padding: 0.3rem 0.5rem; }
     .stat-card__value { font-size: 1rem; }
     .packet-table th:nth-child(8),
