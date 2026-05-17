@@ -714,3 +714,48 @@
         padding-top: 3rem;
     }
 }
+
+/* Short-viewport drawer fix.
+ *
+ * On a phone in landscape orientation the viewport height drops to
+ * ~375-410px, which means the drawer at 100vh has roughly:
+ *   - header  ~89px
+ *   - footer  ~76px
+ *   - nav     ~210px tall window
+ * The nav element already has `overflow-y: auto` so it CAN scroll,
+ * but a 73-210px touch surface for 500+ pixels of nav items is so
+ * tight on a phone (especially with finger occlusion) that drag-
+ * scrolling rarely registers, and many users perceive the drawer
+ * as having no scroll affordance at all. Reported on .141 in
+ * iPhone landscape: "you cant scroll down" inside the open drawer.
+ *
+ * Fix: at any narrow-and-short viewport (phone landscape and
+ * smaller), promote scrolling to the sidebar element itself and
+ * let the header / nav / footer flow naturally. The footer stops
+ * being sticky against the viewport bottom and instead sits at the
+ * bottom of the content stack, but it remains reachable via a
+ * normal vertical scroll from anywhere in the drawer. This is the
+ * right tradeoff: a temporary drawer doesn't need a sticky footer
+ * the way a persistent rail does, and a usable scroll surface the
+ * full height of the drawer is far more important than keeping
+ * Sign Out anchored to the bottom of the screen.
+ *
+ * Scoped to (max-width: 767px) so only phone-mode drawers are
+ * affected; tablet rail (768-1023px) and desktop sidebar
+ * (>=1024px) keep the original sticky-header / scrollable-nav /
+ * sticky-footer layout. The (max-height: 500px) bound restricts
+ * this to phone landscape (and any future fold/flip device that
+ * lands in the same height bracket); phone portrait at e.g.
+ * 393x852 is tall enough that the nav window is already a
+ * comfortable ~600px and doesn't need this treatment.
+ */
+@media (max-width: 767px) and (max-height: 500px) {
+    .sidebar {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .sidebar__nav {
+        flex: 0 0 auto;
+        overflow: visible;
+    }
+}
