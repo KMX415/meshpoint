@@ -684,7 +684,15 @@
         position: fixed;
         top: 0;
         left: 0;
+        /* 100vh fallback for browsers that don't support dvh, but
+         * prefer 100dvh: iOS Safari and Chrome on Android count the
+         * collapsing URL/toolbar chrome as part of the viewport in
+         * vh, so a 100vh element is taller than the actually-visible
+         * area in landscape and the bottom of the drawer (Sign Out)
+         * disappears behind the toolbar. dvh follows the dynamic
+         * viewport so the sidebar matches what the user can see. */
         height: 100vh;
+        height: 100dvh;
         width: var(--sidebar-width);
         transform: translateX(-100%);
         transition: transform var(--motion-base) var(--ease-out-expo);
@@ -757,5 +765,17 @@
     .sidebar__nav {
         flex: 0 0 auto;
         overflow: visible;
+    }
+    /* Pad the bottom of the scrollable drawer past the iOS home
+     * indicator AND past the collapsing landscape toolbar even when
+     * dvh is unsupported (older iOS Safari < 15.4). The
+     * env(safe-area-inset-bottom) value is 0 on devices without a
+     * notch so this is a no-op for laptops and Android phones in
+     * tablet mode; on iPhone landscape it adds the ~21-34px the
+     * home-indicator strip requires. The extra 0.5rem covers the
+     * smaller residual gap when dvh is honored, so Sign Out has a
+     * comfortable margin from the very bottom edge in all cases. */
+    .sidebar__footer {
+        padding-bottom: calc(0.65rem + env(safe-area-inset-bottom, 0px) + 0.5rem);
     }
 }
