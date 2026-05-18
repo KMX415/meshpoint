@@ -1,33 +1,57 @@
 /* Responsive overrides for the local dashboard.
  *
  * This file consolidates @media-query rules for dashboard.css and
- * messaging.css to keep those source files focused on layout
- * primitives. Loaded LAST in index.html so it cleanly overrides
- * the desktop defaults at narrower viewports.
+ * messaging.css. Loaded LAST in index.html so it cleanly overrides
+ * the desktop defaults at narrower viewports. Sidebar-specific
+ * responsive rules live in sidebar/sidebar.css to keep the sidebar
+ * concern self-contained.
  *
  * Card-specific responsive rules (radio.css, radio_cards.css,
  * stats.css) live alongside their components since they sit well
  * under the 500-line file budget. */
 
-/* ===== Dashboard tab + global top bar ===== */
+/* ===== Dashboard layout breakpoints =====
+ *
+ * Below 1024px the dashboard switches from a 2-column flex layout to a
+ * vertically-scrolled stack. The map needs an explicit anchor height
+ * once that happens because its CSS height chain (#map height:100% ->
+ * .panel height:100% -> grid item auto -> dashboard auto) otherwise
+ * resolves to zero and the map silently disappears on phones. */
 
 @media (max-width: 1024px) {
-    .dashboard__main { grid-template-columns: 1fr; }
-    .dashboard__side { max-height: 300px; }
     .dashboard { height: auto; overflow: auto; }
+    /* The desktop base rule for .dashboard__main is `flex: 1; min-height: 0`
+     * so it can grow to fill the column-flex dashboard's remaining height
+     * after stats + feed are placed. At narrow widths where the dashboard
+     * itself becomes `height: auto; overflow: auto`, that flex:1 + min-height:0
+     * combination lets the grid container collapse to height: 0 in tight
+     * viewports (phone landscape ~393px tall: 80 stats + 220 feed = 300,
+     * leaving ~49px for main, which then shrinks to 0 under flex-shrink:1).
+     * The map's min-height:50vh still applies but the *parent grid* is 0
+     * tall, so the user sees stats then jumps straight to the packets feed
+     * with the map and node panels visually missing. Forcing flex-basis to
+     * the grid's natural content height + flex-shrink:0 keeps the map and
+     * node panels visible at any viewport; the dashboard's overflow:auto
+     * absorbs any overflow as a scroll. */
+    .dashboard__main {
+        grid-template-columns: 1fr;
+        flex: 0 0 auto;
+    }
+    .dashboard__map { min-height: 50vh; }
+    .dashboard__side { max-height: 300px; }
+    /* Feed must stay bounded at narrow widths. Earlier this rule used
+     * `height: auto; min-height: 200px;` which let the packet table grow
+     * vertically as WS events streamed in: first paint had 0 packets and
+     * the layout fit, then within seconds the feed inflated past the
+     * section frame and visually buried the map and node panels above it.
+     * Keeping it at a fixed 220px (same as desktop) means the table
+     * scrolls inside its panel body instead of growing the parent. */
+    .dashboard__feed { height: 220px; }
 }
 
 @media (max-width: 720px) {
-    .top-bar { padding: 0.5rem 0.75rem; }
-    .top-bar__status {
-        flex-wrap: wrap;
-        row-gap: 0.25rem;
-        column-gap: 0.5rem;
-        font-size: 0.72rem;
-    }
-    .top-bar__divider { display: none; }
-    .top-bar__device { font-size: 0.75rem; }
-    .dashboard__feed { height: auto; min-height: 220px; }
+    .dashboard__map { min-height: 45vh; }
+    .dashboard__feed { height: 180px; }
     .stat-card { min-width: 88px; padding: 0.3rem 0.5rem; }
     .stat-card__value { font-size: 1rem; }
     .packet-table th:nth-child(8),
@@ -41,14 +65,7 @@
 }
 
 @media (max-width: 640px) {
-    .top-bar {
-        flex-direction: column;
-        gap: 0.4rem;
-        align-items: flex-start;
-    }
-    .top-bar__brand { width: 100%; }
-    .top-bar__status { width: 100%; }
-    .top-bar__brand h1 { font-size: 0.95rem; }
+    .dashboard__map { min-height: 320px; }
     .packet-table { font-size: 0.7rem; }
     .packet-table th, .packet-table td { padding: 0.3rem 0.4rem; }
     .packet-table th:nth-child(7),

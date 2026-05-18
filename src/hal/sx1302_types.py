@@ -119,6 +119,61 @@ class LgwTxGainLutS(ctypes.Structure):
     ]
 
 
+# ── SX1261 companion / spectral scan / LBT structs ──────────────────
+
+LGW_LBT_CHANNEL_NB_MAX: int = 16
+
+
+class LgwConfChanS(ctypes.Structure):
+    """Mirrors struct lgw_conf_chan_s — one LBT channel descriptor."""
+    _fields_ = [
+        ("freq_hz", ctypes.c_uint32),
+        ("bandwidth", ctypes.c_uint8),
+        ("scan_time_us", ctypes.c_uint16),
+        ("transmit_time_ms", ctypes.c_uint16),
+    ]
+
+
+class LgwConfLbtS(ctypes.Structure):
+    """Mirrors struct lgw_conf_lbt_s.
+
+    We never enable LBT (Listen Before Talk); this struct is only
+    here so its bytes are correctly laid out inside
+    ``LgwConfSx1261S``. ``enable=False`` makes the rest of the
+    fields irrelevant from the HAL's perspective.
+    """
+    _fields_ = [
+        ("enable", ctypes.c_bool),
+        ("rssi_target", ctypes.c_int8),
+        ("nb_channel", ctypes.c_uint8),
+        ("channels", LgwConfChanS * LGW_LBT_CHANNEL_NB_MAX),
+    ]
+
+
+class LgwConfSx1261S(ctypes.Structure):
+    """Mirrors struct lgw_conf_sx1261_s.
+
+    Required by ``lgw_spectral_scan_*``. The Semtech HAL gates
+    spectral scan on this struct's ``enable`` flag — without an
+    explicit ``lgw_sx1261_setconf(enable=true)`` call, every
+    ``lgw_spectral_scan_start`` returns -1 with the HAL stderr
+    line ``ERROR: sx1261 is not enabled, no spectral scan``.
+
+    ``spi_path`` selects the SPI device used to talk to the SX1261
+    companion radio. On RAK2287 / RAK5146 boards this is typically
+    ``/dev/spidev0.1`` (separate from the SX1302's
+    ``/dev/spidev0.0``); on other carriers it can match the SX1302
+    path when the chip is daisy-chained behind the SX1302's SPI
+    router.
+    """
+    _fields_ = [
+        ("enable", ctypes.c_bool),
+        ("spi_path", ctypes.c_char * 64),
+        ("rssi_offset", ctypes.c_int8),
+        ("lbt_conf", LgwConfLbtS),
+    ]
+
+
 class LgwPktTxS(ctypes.Structure):
     """Mirrors struct lgw_pkt_tx_s.
 

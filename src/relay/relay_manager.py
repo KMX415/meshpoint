@@ -119,7 +119,14 @@ class RelayManager:
             )
 
     async def _relay(self, packet: Packet) -> None:
-        """Transmit a relay packet via the attached radio."""
+        """Transmit a relay packet via the attached radio.
+
+        The registered transmit function may be either synchronous
+        (legacy USB-companion path that calls a blocking serial API)
+        or asynchronous (native onboard SX1302 path that schedules
+        through asyncio). We detect at call time and dispatch
+        accordingly so both backends share the same RelayManager.
+        """
         if self._transmit_fn is None:
             logger.warning("No transmit function registered for relay")
             return
@@ -134,7 +141,12 @@ class RelayManager:
         )
 
         try:
-            await asyncio.to_thread(self._transmit_fn, packet)
+            if asyncio.iscoroutinefunction(self._transmit_fn):
+                await self._transmit_fn(packet)
+            else:
+                # Sync transmit (legacy USB-companion path) blocks on
+                # serial I/O, so it must run off the event loop.
+                await asyncio.to_thread(self._transmit_fn, packet)
         except Exception:
             logger.exception("Relay transmission failed")
 

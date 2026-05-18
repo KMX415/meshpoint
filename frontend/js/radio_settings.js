@@ -1,20 +1,22 @@
 /**
- * Radio tab orchestrator.
+ * Radio tab orchestrator (observational, v0.7.4).
  *
- * Owns the page shell (console header, card stack, restart bar, footer,
- * toast) and dispatches /api/config payloads to per-card modules:
- *   - RadioStatusCard
- *   - RadioIdentityCard
- *   - RadioConfigCard
- *   - RadioNodeInfoCard
- *   - RadioChannels (legacy, in radio_channels.js)
- *   - RadioCompanionCard
+ * Renders the Radio status dashboard: a console-style header strip,
+ * a stack of read-only telemetry cards, and a footer. All editing
+ * was relocated to Configuration → Radio / Identity / Channels /
+ * Transmit; the orchestrator no longer owns Save/restart wiring.
+ *
+ * Cards rendered, in order:
+ *   - RadioStatusCard      (TX duty gauge + TX-enabled indicator)
+ *   - RadioIdentityCard    (long/short name, node ID)
+ *   - RadioConfigCard      (region/preset/freq/power readouts)
+ *   - RadioNodeInfoCard    (countdown + last-sent + interval)
+ *   - RadioChannels        (read-only channel table)
+ *   - RadioCompanionCard   (MeshCore companion: operational, kept)
  *
  * Each card receives a shared ``api`` helper (put / post / refresh /
- * toast / signalRestart / escape) so cross-cutting concerns live in
- * one place. Adding a new card means: write a class with the same
- * contract, mount it in ``_buildCards``, and add a render call in
- * ``_renderAll``.
+ * toast / escape) so the few operational actions still living in
+ * this tab (Companion advert/refresh) keep working.
  */
 class RadioSettings {
     constructor() {
@@ -22,7 +24,6 @@ class RadioSettings {
         this._config = null;
         this._cards = [];
         this._channels = null;
-        this._restartShown = false;
     }
 
     async onActivated() {
@@ -41,13 +42,19 @@ class RadioSettings {
         panel.innerHTML = `
             <div class="r-stage">
                 <div class="r-shell">
-                    <div class="restart-bar" id="r-restart-bar">
-                        <span class="restart-bar__icon">!</span>
-                        <span class="restart-bar__msg" id="r-restart-msg">
-                            Some changes require a service restart to take effect.
+                    <div class="r-observational-banner" role="status">
+                        <span class="r-observational-banner__icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="8" x2="12" y2="12"/>
+                                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
                         </span>
-                        <button class="r-btn r-btn--warn"
-                                id="r-restart-btn">Restart Service</button>
+                        <span class="r-observational-banner__text">
+                            <strong>Radio is observational.</strong>
+                            One-stop view of every live radio detail. Each card
+                            links to its editor in Configuration.
+                        </span>
                     </div>
 
                     <div class="r-console">
@@ -71,24 +78,12 @@ class RadioSettings {
 
                     <div class="r-console-foot">
                         <span class="r-console-foot__hint">
-                            <kbd>Tab</kbd> next field
-                        </span>
-                        <span class="r-console-foot__sep">|</span>
-                        <span class="r-console-foot__hint">
-                            <kbd>Esc</kbd> close
-                        </span>
-                        <span class="r-console-foot__sep">|</span>
-                        <span class="r-console-foot__hint" id="r-build-stamp">
-                            radio v0.7.1
+                            Live values · refreshes on tab activation
                         </span>
                     </div>
                 </div>
             </div>
         `;
-
-        document.getElementById('r-restart-btn').addEventListener(
-            'click', () => this._restartService(),
-        );
     }
 
     _buildCards() {
@@ -122,12 +117,11 @@ class RadioSettings {
     _buildApi() {
         const self = this;
         return {
-            put:           (url, body) => self._request('PUT', url, body),
-            post:          (url, body) => self._request('POST', url, body),
-            refresh:       () => self._loadConfig(),
-            toast:         (msg) => self._showToast(msg),
-            signalRestart: (reason) => self._showRestartBar(reason),
-            escape:        (str) => self._escape(str),
+            put:     (url, body) => self._request('PUT', url, body),
+            post:    (url, body) => self._request('POST', url, body),
+            refresh: () => self._loadConfig(),
+            toast:   (msg) => self._showToast(msg),
+            escape:  (str) => self._escape(str),
         };
     }
 
@@ -181,32 +175,6 @@ class RadioSettings {
         } catch (e) {
             this._showToast(`Save failed: ${e.message}`);
             return null;
-        }
-    }
-
-    async _restartService() {
-        const ok = confirm(
-            'Restart the Meshpoint service? This briefly interrupts packet capture.',
-        );
-        if (!ok) return;
-        try {
-            await fetch('/api/config/restart', { method: 'POST' });
-            const msg = document.getElementById('r-restart-msg');
-            if (msg) msg.textContent = 'Restarting... reloading in 10 seconds.';
-            setTimeout(() => location.reload(), 10000);
-        } catch (e) {
-            this._showToast(`Restart failed: ${e.message}`);
-        }
-    }
-
-    _showRestartBar(reason) {
-        this._restartShown = true;
-        const bar = document.getElementById('r-restart-bar');
-        if (!bar) return;
-        bar.classList.add('restart-bar--visible');
-        if (reason) {
-            const msg = document.getElementById('r-restart-msg');
-            if (msg) msg.textContent = reason;
         }
     }
 

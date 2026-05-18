@@ -66,8 +66,7 @@ class MeshtasticMqttFormatter:
     def __init__(self, topic_root: str, region: str, gateway_id: str,
                  location_precision: str = "exact",
                  channel_resolver: Optional[ChannelResolver] = None):
-        self._topic_root = topic_root
-        self._region = region
+        self._topic_prefix = _build_topic_prefix(topic_root, region)
         self._gateway_id = gateway_id
         self._location_precision = location_precision
         self._channel_resolver = channel_resolver or ChannelResolver()
@@ -91,7 +90,7 @@ class MeshtasticMqttFormatter:
             return None
 
         channel_name = self._resolve_channel(packet)
-        topic = f"{self._topic_root}/{self._region}/2/e/{channel_name}/{self._gateway_id}"
+        topic = f"{self._topic_prefix}/2/e/{channel_name}/{self._gateway_id}"
 
         mesh_pkt = MeshPacket()
         mesh_pkt.id = _parse_packet_id(packet.packet_id)
@@ -128,7 +127,7 @@ class MeshtasticMqttFormatter:
             return None
 
         channel_name = self._resolve_channel(packet)
-        topic = f"{self._topic_root}/{self._region}/2/e/{channel_name}/{self._gateway_id}"
+        topic = f"{self._topic_prefix}/2/e/{channel_name}/{self._gateway_id}"
 
         mesh_pkt = MeshPacket()
         mesh_pkt.id = _parse_packet_id(packet.packet_id)
@@ -154,7 +153,7 @@ class MeshtasticMqttFormatter:
     def format_json(self, packet: Packet) -> Optional[MqttMessage]:
         """Build a JSON representation on the /json/ topic for HA/Node-RED."""
         channel_name = self._resolve_channel(packet)
-        topic = f"{self._topic_root}/{self._region}/2/json/{channel_name}/{self._gateway_id}"
+        topic = f"{self._topic_prefix}/2/json/{channel_name}/{self._gateway_id}"
 
         payload = self._build_json_payload(packet)
         return MqttMessage(topic=topic, payload=json.dumps(payload).encode())
@@ -201,14 +200,13 @@ class MeshCoreMqttFormatter:
 
     def __init__(self, topic_root: str, region: str, gateway_id: str,
                  location_precision: str = "exact"):
-        self._topic_root = topic_root
-        self._region = region
+        self._topic_prefix = _build_topic_prefix(topic_root, region)
         self._gateway_id = gateway_id
         self._location_precision = location_precision
 
     def format(self, packet: Packet) -> Optional[MqttMessage]:
         channel_name = "MeshCore"
-        topic = f"{self._topic_root}/{self._region}/2/c/{channel_name}/{self._gateway_id}"
+        topic = f"{self._topic_prefix}/2/c/{channel_name}/{self._gateway_id}"
 
         lat, lon = LocationRounder.apply(
             (packet.decoded_payload or {}).get("latitude"),
@@ -341,3 +339,29 @@ def _is_hex(value: str) -> bool:
         return True
     except (ValueError, TypeError):
         return False
+
+
+def _build_topic_prefix(topic_root: str, region: str) -> str:
+    """Build MQTT prefix with backward-compatible root/region semantics.
+
+    Examples:
+    - topic_root="msh", region="US"     -> "msh/US"
+    - topic_root="msh/US", region="FL"  -> "msh/US/FL"
+    - topic_root="msh/US", region="US"  -> "msh/US"  (no duplicate)
+    - topic_root="msh", region="US/FL"  -> "msh/US/FL"
+    """
+    root = (topic_root or "").strip().strip("/")
+    reg = (region or "").strip().strip("/")
+
+    if not root and not reg:
+        return "msh/US"
+    if not reg:
+        return root
+    if not root:
+        return reg
+
+    root_lower = root.lower()
+    reg_lower = reg.lower()
+    if root_lower == reg_lower or root_lower.endswith(f"/{reg_lower}"):
+        return root
+    return f"{root}/{reg}"

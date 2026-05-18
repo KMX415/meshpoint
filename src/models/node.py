@@ -37,7 +37,18 @@ class Node:
 
     @property
     def display_name(self) -> str:
-        return self.long_name or self.short_name or f"!{self.node_id}"
+        if self.long_name and not self._is_placeholder_name(self.long_name):
+            return self.long_name
+        if self.short_name and not self._is_placeholder_name(self.short_name):
+            return self.short_name
+        return f"!{self.node_id}"
+
+    def _is_placeholder_name(self, name: str) -> bool:
+        if self.protocol != "meshcore":
+            return False
+        lowered = name.lower().lstrip("!")
+        node_id = self.node_id.lower().lstrip("!")
+        return lowered == node_id or lowered == node_id[:4]
 
     def to_dict(self) -> dict:
         result = {

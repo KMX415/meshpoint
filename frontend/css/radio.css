@@ -8,17 +8,79 @@
 /* Page-level shell. The radio tab content is wrapped in
  * <div class="r-stage"><div class="r-shell">...</div></div>. */
 
+/* Allow internal vertical scroll on the Radio section. The shared
+   .section rule clamps overflow so each route can pick its own
+   scroll story; Radio has more telemetry than fits on one screen
+   for most laptops, so we let it scroll within the section. */
+.section[data-section="radio"] {
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
 .r-stage {
     position: relative;
     padding: 1.5rem;
     max-width: 960px;
     margin: 0 auto;
+    padding-bottom: 3rem;
 }
 
 .r-shell {
     display: flex;
     flex-direction: column;
     gap: 1rem;
+}
+
+/*
+ * Observational banner. Surfaces the v0.7.4 IA refactor: this tab is
+ * read-only now; editable controls live under Configuration. The
+ * banner stays at the top of the radio shell so anyone arriving here
+ * out of muscle memory sees the new editing path immediately.
+ */
+.r-observational-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.65rem 0.85rem;
+    background: rgba(6, 182, 212, 0.08);
+    border: 1px solid rgba(6, 182, 212, 0.25);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    line-height: 1.5;
+    animation: bannerFadeIn 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.r-observational-banner__icon {
+    color: var(--accent-cyan);
+    display: inline-flex;
+    flex-shrink: 0;
+}
+
+.r-observational-banner__text strong {
+    color: var(--accent-cyan);
+    font-weight: 600;
+}
+
+.r-observational-banner__link {
+    color: var(--accent-green);
+    text-decoration: none;
+    font-weight: 500;
+    border-bottom: 1px dotted rgba(0, 229, 160, 0.4);
+    transition: color 140ms cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.r-observational-banner__link:hover,
+.r-observational-banner__link:focus-visible {
+    color: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+    outline: none;
+}
+
+@keyframes bannerFadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 /* Console-style header banner (`admin@meshpoint:~$ radio status`). */

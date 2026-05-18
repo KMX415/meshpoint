@@ -97,6 +97,20 @@ class MeshtasticTransmitter:
             )
             return
 
+        # Only relay decrypted packets. We have the inner application
+        # bytes for those and ``sendData`` can re-emit them with the
+        # correct portnum. Encrypted-blob relay would require raw-radio
+        # access we don't have via the meshtastic-python serial API
+        # (sendData would treat the blob as application data and
+        # re-encrypt+wrap it, producing garbage on the air).
+        if not packet.decrypted:
+            logger.debug(
+                "Relay TX skipped: packet %s could not be decrypted "
+                "(no key match); raw-blob relay is not safe here",
+                packet.packet_id,
+            )
+            return
+
         try:
             self._send_meshtastic(packet)
         except Exception:
@@ -157,9 +171,16 @@ class MeshtasticTransmitter:
 
     @staticmethod
     def _get_payload(packet: Packet) -> Optional[bytes]:
-        """Extract the best available payload for retransmission."""
-        if packet.encrypted_payload:
-            return packet.encrypted_payload
+        """Extract the best available payload for retransmission.
+
+        Prefers ``raw_app_payload`` (the inner application bytes
+        captured by the decoder) so ``sendData(payload, portNum=…)``
+        re-emits exactly what the original sender packed. Falls back
+        to legacy ``decoded_payload['raw_bytes']`` for any historical
+        callers that populated it manually.
+        """
+        if packet.raw_app_payload:
+            return packet.raw_app_payload
 
         if packet.decoded_payload:
             raw = packet.decoded_payload.get("raw_bytes")

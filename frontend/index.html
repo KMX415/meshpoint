@@ -13,7 +13,17 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/dashboard.css" />
-    <link rel="stylesheet" href="css/tab_bar.css" />
+    <link rel="stylesheet" href="sidebar/sidebar.css" />
+    <link rel="stylesheet" href="topbar/topbar.css" />
+    <link rel="stylesheet" href="css/build_stamp.css" />
+    <link rel="stylesheet" href="sidebar/telemetry_rail.css" />
+    <link rel="stylesheet" href="css/reconnect_pill.css" />
+    <link rel="stylesheet" href="css/init_checklist.css" />
+    <link rel="stylesheet" href="css/route_motion.css" />
+    <link rel="stylesheet" href="css/since_line.css" />
+    <link rel="stylesheet" href="css/command_palette.css" />
+    <link rel="stylesheet" href="css/keymap_overlay.css" />
+    <link rel="stylesheet" href="css/theme_high_contrast.css" />
     <link rel="stylesheet" href="css/node_cards.css" />
     <link rel="stylesheet" href="css/node_drawer.css" />
     <link rel="stylesheet" href="css/messaging.css" />
@@ -21,164 +31,570 @@
     <link rel="stylesheet" href="css/radio.css" />
     <link rel="stylesheet" href="css/radio_cards.css" />
     <link rel="stylesheet" href="css/radio_channels.css" />
+    <link rel="stylesheet" href="css/radio_readout.css" />
     <link rel="stylesheet" href="css/stats.css" />
+    <link rel="stylesheet" href="css/settings.css" />
+    <link rel="stylesheet" href="css/configuration.css" />
+    <link rel="stylesheet" href="css/terminal_theme.css" />
+    <link rel="stylesheet" href="css/terminal.css" />
+    <link rel="stylesheet" href="/vendor/xterm/xterm.css" />
     <link rel="stylesheet" href="css/responsive.css" />
 </head>
 <body>
-    <header class="top-bar">
-        <div class="top-bar__brand">
-            <img src="/assets/meshpoint-logo.png" alt="Meshpoint" class="top-bar__icon" width="40" height="40" />
-            <h1>
-                <a href="https://meshradar.io" target="_blank" rel="noopener"
-                   class="top-bar__brand-link">Meshradar</a>
-                <span class="top-bar__subtitle">/ Meshpoint</span>
-            </h1>
-        </div>
-        <div class="top-bar__status">
-            <span id="ws-status" class="status-dot status-dot--disconnected"></span>
-            <span id="ws-label" class="status-label">Connecting...</span>
-            <span class="top-bar__divider">|</span>
-            <span id="node-count-badge" class="top-bar__stat">0 nodes</span>
-            <span class="top-bar__divider">|</span>
-            <span id="packet-count-badge" class="top-bar__stat">0 packets</span>
-            <span class="top-bar__divider">|</span>
-            <span id="device-name" class="top-bar__device"></span>
-            <span id="device-id" class="top-bar__device-id" title="Click to copy device ID"></span>
-            <span id="version-badge" class="top-bar__version">--</span>
-            <a id="update-badge" class="update-badge hidden" title="Update available" href="https://github.com/KMX415/meshpoint/blob/main/docs/ONBOARDING.md#updating" target="_blank" rel="noopener">&#9888;</a>
-            <span class="top-bar__divider">|</span>
-            <button id="signout-btn" class="top-bar__signout" type="button" title="Sign out" aria-label="Sign out">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-                    <polyline points="16 17 21 12 16 7"/>
-                    <line x1="21" y1="12" x2="9" y2="12"/>
-                </svg>
-            </button>
-        </div>
-    </header>
+    <div class="app" data-sidebar="expanded">
+        <button class="sidebar__hamburger" id="sidebar-hamburger" aria-label="Open menu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="3" y1="6" x2="21" y2="6"/>
+                <line x1="3" y1="12" x2="21" y2="12"/>
+                <line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+        </button>
+        <div class="sidebar__backdrop" id="sidebar-backdrop"></div>
 
-    <nav class="tab-bar">
-        <button class="tab-bar__btn tab-bar__btn--active" data-tab="dashboard">Dashboard</button>
-        <button class="tab-bar__btn" data-tab="stats">Stats</button>
-        <button class="tab-bar__btn" data-tab="messages">Messages <span id="msg-unread-badge" class="tab-bar__badge" style="display:none">0</span></button>
-        <button class="tab-bar__btn" data-tab="radio">Radio</button>
-    </nav>
-
-    <div id="tab-dashboard" class="tab-content tab-content--active">
-    <main class="dashboard">
-        <section class="dashboard__stats">
-            <div class="stat-card" id="stat-nodes">
-                <div class="stat-card__label">Nodes Discovered</div>
-                <div class="stat-card__value" id="stat-nodes-val">--</div>
-                <div class="stat-card__subtitle">24h / total</div>
-            </div>
-            <div class="stat-card" id="stat-packets-card">
-                <div class="stat-card__label">Total Packets</div>
-                <div class="stat-card__value" id="stat-packets-val">--</div>
-            </div>
-            <div class="stat-card" id="stat-rate">
-                <div class="stat-card__label">Packets / Min</div>
-                <div class="stat-card__value" id="stat-rate-val">--</div>
-            </div>
-            <div class="stat-card" id="stat-rssi">
-                <div class="stat-card__label">Avg RSSI</div>
-                <div class="stat-card__value" id="stat-rssi-val">--</div>
-            </div>
-            <div class="stat-card stat-card--relay" id="stat-relay">
-                <div class="stat-card__label">Packets Relayed</div>
-                <div class="stat-card__value" id="stat-relay-val">--</div>
-                <div class="stat-card__sub" id="stat-relay-sub"></div>
-            </div>
-            <div class="stat-card" id="stat-uptime">
-                <div class="stat-card__label">Uptime</div>
-                <div class="stat-card__value" id="stat-uptime-val">--</div>
-            </div>
-            <div class="stat-card stat-card--system" id="stat-cpu">
-                <div class="stat-card__label">CPU</div>
-                <div class="stat-card__value" id="stat-cpu-val">--</div>
-            </div>
-            <div class="stat-card stat-card--system" id="stat-ram">
-                <div class="stat-card__label">RAM</div>
-                <div class="stat-card__value" id="stat-ram-val">--</div>
-                <div class="stat-card__sub" id="stat-ram-sub"></div>
-            </div>
-            <div class="stat-card stat-card--system" id="stat-disk">
-                <div class="stat-card__label">Disk</div>
-                <div class="stat-card__value" id="stat-disk-val">--</div>
-                <div class="stat-card__sub" id="stat-disk-sub"></div>
-            </div>
-            <div class="stat-card stat-card--system" id="stat-temp">
-                <div class="stat-card__label">CPU Temp</div>
-                <div class="stat-card__value" id="stat-temp-val">--</div>
-            </div>
-        </section>
-
-        <div class="dashboard__main">
-            <section class="dashboard__map">
-                <div class="panel">
-                    <div class="panel__header">Node Map</div>
-                    <div id="map" class="panel__body map-container"></div>
+        <aside class="sidebar" role="navigation" aria-label="Primary">
+            <header class="sidebar__header">
+                <div class="sidebar__logo-frame" id="sidebar-logo-frame" data-state="connecting">
+                    <span class="sidebar__logo-ring" aria-hidden="true"></span>
+                    <img class="sidebar__logo" src="/assets/meshpoint-logo.png" alt="Meshpoint" />
+                    <span class="sidebar__logo-pip" aria-hidden="true"></span>
                 </div>
-            </section>
-
-            <section class="dashboard__side">
-                <div class="panel panel--nodes">
-                    <div class="panel__header">
-                        <span>Nodes</span>
-                        <input type="text" id="node-search" class="node-search" placeholder="Search..." />
+                <div class="sidebar__device">
+                    <div class="sidebar__device-name" id="sidebar-device-name">Meshpoint</div>
+                    <div class="sidebar__device-status">
+                        <span id="sidebar-status-text">connecting...</span>
                     </div>
-                    <div class="panel__body" id="node-list"></div>
+                </div>
+                <button class="sidebar__collapse" id="sidebar-collapse-btn" type="button" aria-label="Collapse sidebar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true">
+                        <polyline points="15 18 9 12 15 6"/>
+                    </svg>
+                </button>
+            </header>
+
+            <nav class="sidebar__nav" aria-label="Sections">
+                <ul class="sidebar__list">
+                    <li class="sidebar__group-header" aria-hidden="true">
+                        <span class="sidebar__group-header-label">Status</span>
+                    </li>
+                    <li class="sidebar__item">
+                        <a href="#/dashboard" class="sidebar__link" data-route="dashboard">
+                            <span class="sidebar__icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <rect x="3" y="3" width="7" height="7"/>
+                                    <rect x="14" y="3" width="7" height="7"/>
+                                    <rect x="14" y="14" width="7" height="7"/>
+                                    <rect x="3" y="14" width="7" height="7"/>
+                                </svg>
+                            </span>
+                            <span class="sidebar__label">Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="sidebar__item">
+                        <a href="#/stats" class="sidebar__link" data-route="stats">
+                            <span class="sidebar__icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <line x1="12" y1="20" x2="12" y2="10"/>
+                                    <line x1="18" y1="20" x2="18" y2="4"/>
+                                    <line x1="6" y1="20" x2="6" y2="16"/>
+                                </svg>
+                            </span>
+                            <span class="sidebar__label">Stats</span>
+                        </a>
+                    </li>
+                    <li class="sidebar__item">
+                        <a href="#/messages" class="sidebar__link" data-route="messages">
+                            <span class="sidebar__icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                                </svg>
+                            </span>
+                            <span class="sidebar__label">Messages</span>
+                            <span id="msg-unread-badge" class="sidebar__badge sidebar__badge--unread" data-badge-for="messages" style="display:none">0</span>
+                        </a>
+                    </li>
+                    <li class="sidebar__item">
+                        <a href="#/radio" class="sidebar__link" data-route="radio">
+                            <span class="sidebar__icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M4.93 19.07a10 10 0 0 1 0-14.14"/>
+                                    <path d="M7.76 16.24a6 6 0 0 1 0-8.48"/>
+                                    <circle cx="12" cy="12" r="2"/>
+                                    <path d="M16.24 7.76a6 6 0 0 1 0 8.48"/>
+                                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                                </svg>
+                            </span>
+                            <span class="sidebar__label">Radio</span>
+                            <span class="sidebar__badge" data-badge-for="radio" style="display:none"></span>
+                        </a>
+                    </li>
+                    <li class="sidebar__group-header" aria-hidden="true">
+                        <span class="sidebar__group-header-label">Ops</span>
+                    </li>
+                    <li class="sidebar__item" data-requires-section="terminal">
+                        <a href="#/terminal" class="sidebar__link" data-route="terminal">
+                            <span class="sidebar__icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <polyline points="4 17 10 11 4 5"/>
+                                    <line x1="12" y1="19" x2="20" y2="19"/>
+                                </svg>
+                            </span>
+                            <span class="sidebar__label">Terminal</span>
+                        </a>
+                    </li>
+
+                    <li class="sidebar__group-header" aria-hidden="true">
+                        <span class="sidebar__group-header-label">Config</span>
+                    </li>
+                    <li class="sidebar__group" data-group="configuration" data-expanded="false">
+                        <button class="sidebar__group-toggle" type="button" data-group="configuration" aria-expanded="false">
+                            <span class="sidebar__icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M12 20a8 8 0 1 0-8-8"/>
+                                    <path d="M12 12l4 4"/>
+                                    <path d="M12 4v4"/>
+                                </svg>
+                            </span>
+                            <span class="sidebar__label">Configuration</span>
+                            <svg class="sidebar__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="9 18 15 12 9 6"/>
+                            </svg>
+                        </button>
+                        <ul class="sidebar__sublist">
+                            <li class="sidebar__subitem"><a href="#/configuration/identity" class="sidebar__link" data-route="configuration/identity"><span class="sidebar__label">Identity</span></a></li>
+                            <li class="sidebar__subitem"><a href="#/configuration/radio" class="sidebar__link" data-route="configuration/radio"><span class="sidebar__label">Radio</span></a></li>
+                            <li class="sidebar__subitem"><a href="#/configuration/channels" class="sidebar__link" data-route="configuration/channels"><span class="sidebar__label">Channels</span></a></li>
+                            <li class="sidebar__subitem"><a href="#/configuration/transmit" class="sidebar__link" data-route="configuration/transmit"><span class="sidebar__label">Transmit</span></a></li>
+                            <li class="sidebar__subitem"><a href="#/configuration/mqtt" class="sidebar__link" data-route="configuration/mqtt"><span class="sidebar__label">MQTT</span></a></li>
+                            <li class="sidebar__subitem"><a href="#/configuration/gps" class="sidebar__link" data-route="configuration/gps"><span class="sidebar__label">GPS</span></a></li>
+                        </ul>
+                    </li>
+
+                    <li class="sidebar__group" data-group="settings" data-expanded="false" data-requires-section="settings">
+                        <button class="sidebar__group-toggle" type="button" data-group="settings" aria-expanded="false">
+                            <span class="sidebar__icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <circle cx="12" cy="12" r="3"/>
+                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                                </svg>
+                            </span>
+                            <span class="sidebar__label">Settings</span>
+                            <svg class="sidebar__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="9 18 15 12 9 6"/>
+                            </svg>
+                        </button>
+                        <ul class="sidebar__sublist">
+                            <li class="sidebar__subitem"><a href="#/settings/updates" class="sidebar__link" data-route="settings/updates"><span class="sidebar__label">Updates</span><span class="sidebar__badge sidebar__badge--update" data-badge-for="settings/updates" style="display:none"></span></a></li>
+                            <li class="sidebar__subitem"><a href="#/settings/auth" class="sidebar__link" data-route="settings/auth"><span class="sidebar__label">Auth</span></a></li>
+                            <li class="sidebar__subitem" data-requires-section="settings.dangerous"><a href="#/settings/dangerous" class="sidebar__link" data-route="settings/dangerous"><span class="sidebar__label">Dangerous</span></a></li>
+                        </ul>
+                    </li>
+                </ul>
+                <span class="sidebar__active-bar" id="sidebar-active-bar" aria-hidden="true"></span>
+            </nav>
+
+            <section class="telemetry-rail" id="telemetry-rail" aria-label="Live device telemetry">
+                <div class="telemetry-rail__row">
+                    <span class="telemetry-rail__label">Uptime</span>
+                    <span class="telemetry-rail__value" id="telemetry-uptime">--</span>
+                </div>
+                <div class="telemetry-rail__row">
+                    <span class="telemetry-rail__label">Sessions</span>
+                    <span class="telemetry-rail__value" id="telemetry-sessions">--</span>
+                </div>
+                <div class="telemetry-rail__noise" aria-label="Noise floor">
+                    <div class="telemetry-rail__noise-head">
+                        <span class="telemetry-rail__noise-label">Noise floor</span>
+                        <span class="telemetry-rail__noise-value" id="telemetry-noise-value">--</span>
+                        <span class="telemetry-rail__noise-bw" id="telemetry-noise-bw">--</span>
+                    </div>
+                    <canvas class="telemetry-rail__noise-canvas" id="telemetry-noise-canvas" aria-hidden="true"></canvas>
                 </div>
             </section>
-        </div>
 
-        <section class="dashboard__feed">
-            <div class="panel">
-                <div class="panel__header">
-                    Packets
-                    <span class="packet-count" id="packet-count">0</span>
+            <footer class="sidebar__footer">
+                <div class="sidebar__role">
+                    <span class="sidebar__role-pill" id="sidebar-role-pill">--</span>
+                    <span class="sidebar__user" id="sidebar-username">--</span>
                 </div>
-                <div class="panel__body">
-                    <table class="packet-table">
-                        <thead>
-                            <tr>
-                                <th>Time</th>
-                                <th>Protocol</th>
-                                <th>Source</th>
-                                <th>Dest</th>
-                                <th>Type</th>
-                                <th>RSSI</th>
-                                <th>SNR</th>
-                                <th>Freq</th>
-                                <th>SF</th>
-                                <th>Hops</th>
-                                <th>Details</th>
-                            </tr>
-                        </thead>
-                        <tbody id="packet-tbody"></tbody>
-                    </table>
+                <button class="sidebar__signout" id="signout-btn" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/>
+                        <line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                    <span class="sidebar__signout-label">Sign out</span>
+                </button>
+            </footer>
+        </aside>
+
+        <main class="app__content" id="app-content">
+            <header class="topbar" id="topbar" role="banner">
+                <div class="topbar__group">
+                    <span class="topbar-lamp" role="status" aria-live="polite">
+                        <span class="topbar-lamp__dot" aria-hidden="true"></span>
+                        <span class="topbar-lamp__label">CONNECTING</span>
+                    </span>
                 </div>
-            </div>
-        </section>
-    </main>
-    </div>
+                <div class="topbar__group">
+                    <span class="topbar-ident" aria-label="Device short name">
+                        <span class="topbar-ident__label">CALL</span>
+                        <span class="topbar-ident__value">----</span>
+                    </span>
+                </div>
+                <div class="topbar__group">
+                    <span class="topbar-radio" aria-label="Active radio configuration">
+                        <span class="topbar-radio__region">--</span>
+                        <span class="topbar-radio__sep">·</span>
+                        <span class="topbar-radio__freq">--</span>
+                        <span class="topbar-radio__preset">--</span>
+                    </span>
+                </div>
+                <div class="topbar__spacer" aria-hidden="true"></div>
+                <div class="topbar-actions" role="toolbar" aria-label="Quick actions"></div>
+            </header>
+            <section class="section section--active" data-section="dashboard">
+                <main class="dashboard">
+                    <div id="dashboard-since-host"></div>
+                    <section class="dashboard__stats">
+                        <div class="stat-card" id="stat-nodes">
+                            <div class="stat-card__label">Nodes Discovered</div>
+                            <div class="stat-card__value" id="stat-nodes-val">--</div>
+                            <div class="stat-card__subtitle">24h / total</div>
+                        </div>
+                        <div class="stat-card" id="stat-packets-card">
+                            <div class="stat-card__label">Total Packets</div>
+                            <div class="stat-card__value" id="stat-packets-val">--</div>
+                        </div>
+                        <div class="stat-card" id="stat-rate">
+                            <div class="stat-card__label">Packets / Min</div>
+                            <div class="stat-card__value" id="stat-rate-val">--</div>
+                        </div>
+                        <div class="stat-card" id="stat-rssi">
+                            <div class="stat-card__label">Avg RSSI</div>
+                            <div class="stat-card__value" id="stat-rssi-val">--</div>
+                        </div>
+                        <div class="stat-card stat-card--relay" id="stat-relay">
+                            <div class="stat-card__label">Packets Relayed</div>
+                            <div class="stat-card__value" id="stat-relay-val">--</div>
+                            <div class="stat-card__sub" id="stat-relay-sub"></div>
+                        </div>
+                        <div class="stat-card" id="stat-uptime">
+                            <div class="stat-card__label">Uptime</div>
+                            <div class="stat-card__value" id="stat-uptime-val">--</div>
+                        </div>
+                        <div class="stat-card stat-card--system" id="stat-cpu">
+                            <div class="stat-card__label">CPU</div>
+                            <div class="stat-card__value" id="stat-cpu-val">--</div>
+                        </div>
+                        <div class="stat-card stat-card--system" id="stat-ram">
+                            <div class="stat-card__label">RAM</div>
+                            <div class="stat-card__value" id="stat-ram-val">--</div>
+                            <div class="stat-card__sub" id="stat-ram-sub"></div>
+                        </div>
+                        <div class="stat-card stat-card--system" id="stat-disk">
+                            <div class="stat-card__label">Disk</div>
+                            <div class="stat-card__value" id="stat-disk-val">--</div>
+                            <div class="stat-card__sub" id="stat-disk-sub"></div>
+                        </div>
+                        <div class="stat-card stat-card--system" id="stat-temp">
+                            <div class="stat-card__label">CPU Temp</div>
+                            <div class="stat-card__value" id="stat-temp-val">--</div>
+                        </div>
+                    </section>
 
-    <div id="tab-stats" class="tab-content">
-        <div id="stats-panel" class="stats-panel">
-            <div class="stats-panel__loading">Loading stats...</div>
-        </div>
-    </div>
+                    <div class="dashboard__main">
+                        <section class="dashboard__map">
+                            <div class="panel">
+                                <div class="panel__header">Node Map</div>
+                                <div id="map" class="panel__body map-container"></div>
+                            </div>
+                        </section>
 
-    <div id="tab-messages" class="tab-content">
-        <div id="messaging-panel"></div>
-    </div>
+                        <section class="dashboard__side">
+                            <div class="panel panel--nodes">
+                                <div class="panel__header">
+                                    <span>Nodes</span>
+                                    <input type="text" id="node-search" class="node-search" placeholder="Search..." />
+                                </div>
+                                <div class="panel__body" id="node-list"></div>
+                            </div>
+                        </section>
+                    </div>
 
-    <div id="tab-radio" class="tab-content">
-        <div id="radio-panel"></div>
-    </div>
+                    <section class="dashboard__feed">
+                        <div class="panel">
+                            <div class="panel__header">
+                                Packets
+                                <span class="packet-count" id="packet-count">0</span>
+                            </div>
+                            <div class="panel__body">
+                                <table class="packet-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Time</th>
+                                            <th>Protocol</th>
+                                            <th>Source</th>
+                                            <th>Dest</th>
+                                            <th>Type</th>
+                                            <th>RSSI</th>
+                                            <th>SNR</th>
+                                            <th>Freq</th>
+                                            <th>SF</th>
+                                            <th>Hops</th>
+                                            <th>Details</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="packet-tbody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+                </main>
+            </section>
 
-    <div id="node-backdrop" class="nd-backdrop"></div>
-    <div id="node-drawer" class="nd-drawer"></div>
+            <section class="section" data-section="stats" style="display:none">
+                <div id="stats-panel" class="stats-panel">
+                    <div class="stats-panel__loading">Loading stats...</div>
+                </div>
+            </section>
+
+            <section class="section" data-section="messages" style="display:none">
+                <div id="messaging-panel"></div>
+            </section>
+
+            <section class="section" data-section="radio" style="display:none">
+                <div id="radio-panel"></div>
+            </section>
+
+            <section class="section" data-section="terminal" style="display:none">
+                <div id="terminal-panel" class="terminal-panel">
+                    <header class="terminal-panel__head">
+                        <div class="terminal-panel__title-row">
+                            <h2 class="terminal-panel__title">Terminal</h2>
+                            <span class="terminal-panel__status" data-term-status data-state="idle">idle</span>
+                        </div>
+                        <div class="terminal-panel__actions">
+                            <button class="terminal-button terminal-button--ghost" type="button" data-term-search disabled aria-label="Find in terminal">
+                                <span aria-hidden="true">⌕</span> Find
+                            </button>
+                            <button class="terminal-button terminal-button--ghost" type="button" data-term-copy disabled aria-label="Copy selection">
+                                <span aria-hidden="true">⧉</span> Copy
+                            </button>
+                            <button class="terminal-button terminal-button--ghost" type="button" data-term-toggle-drawer aria-expanded="false">
+                                <span aria-hidden="true">⌘</span> Commands
+                            </button>
+                            <button class="terminal-button terminal-button--ghost" type="button" data-term-clear>Clear</button>
+                            <button class="terminal-button terminal-button--primary" type="button" data-term-connect>Connect</button>
+                            <button class="terminal-button terminal-button--danger" type="button" data-term-disconnect disabled>Disconnect</button>
+                        </div>
+                    </header>
+                    <div class="terminal-panel__body">
+                        <div class="terminal-panel__shell" data-term-search-host>
+                            <div class="terminal-panel__strip" aria-hidden="true">
+                                <span class="terminal-strip__lights">
+                                    <span class="terminal-strip__light terminal-strip__light--red"></span>
+                                    <span class="terminal-strip__light terminal-strip__light--yellow"></span>
+                                    <span class="terminal-strip__light terminal-strip__light--green"></span>
+                                </span>
+                                <span class="terminal-strip__badges">
+                                    <span class="terminal-strip__badge terminal-strip__badge--accent" data-term-host>--</span>
+                                    <span class="terminal-strip__badge" data-term-pid>--</span>
+                                    <span class="terminal-strip__badge" data-term-shell>--</span>
+                                </span>
+                                <span class="terminal-strip__hint">
+                                    <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> copy
+                                    <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> paste
+                                    <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> find
+                                </span>
+                            </div>
+                            <div id="terminal-host" class="terminal-host"></div>
+                            <div class="terminal-toast" data-term-toast aria-live="polite"></div>
+                            <p class="terminal-panel__hint" data-term-hint>Press Connect to open a shell. The session is admin-only and audited.</p>
+                        </div>
+                        <aside class="terminal-drawer" data-term-drawer aria-hidden="true">
+                            <div class="terminal-drawer__head">
+                                <h3 class="terminal-drawer__title">Quick commands</h3>
+                                <button class="terminal-drawer__close" type="button" data-term-close-drawer aria-label="Close commands">&times;</button>
+                            </div>
+                            <p class="terminal-drawer__hint">Click to insert at the prompt. Buttons marked dangerous require typed confirmation.</p>
+                            <div class="terminal-drawer__list" data-term-command-list></div>
+                        </aside>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section" data-section="configuration/identity" style="display:none"><div id="cfg-identity-panel" class="section__placeholder"><h2>Configuration · Identity</h2><p>Skeleton; controls land alongside this section.</p></div></section>
+            <section class="section" data-section="configuration/radio" style="display:none"><div id="cfg-radio-panel" class="section__placeholder"><h2>Configuration · Radio</h2><p>Skeleton; controls migrate from the Radio tab.</p></div></section>
+            <section class="section" data-section="configuration/channels" style="display:none"><div id="cfg-channels-panel" class="section__placeholder"><h2>Configuration · Channels</h2><p>Skeleton; PSK list + add/remove.</p></div></section>
+            <section class="section" data-section="configuration/transmit" style="display:none"><div id="cfg-transmit-panel" class="section__placeholder"><h2>Configuration · Transmit</h2><p>Skeleton; TX power + duty cycle + relay.</p></div></section>
+            <section class="section" data-section="configuration/mqtt" style="display:none"><div id="cfg-mqtt-panel" class="section__placeholder"><h2>Configuration · MQTT</h2><p>Skeleton; broker + topic root + region.</p></div></section>
+            <section class="section" data-section="configuration/gps" style="display:none"><div id="cfg-gps-panel" class="section__placeholder"><h2>Configuration · GPS</h2><p>Skeleton; UART vs static. gpsd integration in v0.7.5.</p></div></section>
+
+            <section class="section" data-section="settings/updates" style="display:none">
+                <div id="settings-updates-panel" class="update-panel">
+                    <header class="update-panel__head">
+                        <h2 class="update-panel__title">Updates</h2>
+                        <p class="update-panel__subtitle">Pin the install tree to a release channel and apply changes from the dashboard.</p>
+                    </header>
+                    <article class="update-card">
+                        <div class="update-card__row">
+                            <label class="update-field">
+                                <span class="update-field__label">Channel</span>
+                                <select class="update-field__input" data-update-channel></select>
+                            </label>
+                            <div class="update-version">
+                                <span class="update-version__label">Local</span>
+                                <span class="update-version__value" data-update-local-version>--</span>
+                            </div>
+                            <div class="update-version">
+                                <span class="update-version__label">Remote</span>
+                                <span class="update-version__value" data-update-remote-version>--</span>
+                            </div>
+                        </div>
+                        <p class="update-card__description" data-update-description></p>
+                        <label class="update-field" data-update-custom-row style="display:none">
+                            <span class="update-field__label">Custom branch</span>
+                            <input class="update-field__input" type="text" placeholder="e.g. feat/v0.7.4" data-update-custom-branch>
+                        </label>
+                        <div class="update-card__actions">
+                            <button class="terminal-button terminal-button--primary" type="button" data-update-apply>Apply update</button>
+                            <button class="terminal-button terminal-button--ghost" type="button" data-update-rollback disabled>Roll back last apply</button>
+                        </div>
+                        <p class="update-status" data-update-status aria-live="polite"></p>
+                    </article>
+                    <section class="update-release-notes" data-update-release-notes aria-live="polite"></section>
+                    <section class="update-log" data-update-log></section>
+                </div>
+            </section>
+            <section class="section" data-section="settings/auth" style="display:none">
+                <div id="settings-auth-panel" class="auth-panel">
+                    <header class="auth-panel__head">
+                        <h2 class="auth-panel__title">Authentication</h2>
+                        <p class="auth-panel__subtitle">Manage admin credentials, sessions, the viewer role, and lockout policy.</p>
+                    </header>
+
+                    <div class="auth-panel__grid">
+                        <article class="auth-card" data-pwc-root>
+                            <h3 class="auth-card__title">Change password</h3>
+                            <p class="auth-card__hint">Rotates this account's password and invalidates other browser sessions immediately.</p>
+                            <form class="auth-card__form" data-pwc-form autocomplete="off">
+                                <label class="auth-field">
+                                    <span class="auth-field__label">Current password</span>
+                                    <input class="auth-field__input" type="password" required autocomplete="current-password" data-pwc-current>
+                                </label>
+                                <label class="auth-field">
+                                    <span class="auth-field__label">New password</span>
+                                    <input class="auth-field__input" type="password" required minlength="8" autocomplete="new-password" data-pwc-new>
+                                </label>
+                                <div class="auth-strength" role="progressbar" aria-valuemin="0" aria-valuemax="5" aria-valuenow="0" data-pwc-strength>
+                                    <span></span><span></span><span></span><span></span><span></span>
+                                </div>
+                                <label class="auth-field">
+                                    <span class="auth-field__label">Confirm new password</span>
+                                    <input class="auth-field__input" type="password" required minlength="8" autocomplete="new-password" data-pwc-confirm>
+                                </label>
+                                <div class="auth-card__actions">
+                                    <button class="auth-button auth-button--primary" type="submit" data-pwc-submit>Update password</button>
+                                </div>
+                                <p class="auth-status" data-pwc-status aria-live="polite"></p>
+                            </form>
+                        </article>
+
+                        <article class="auth-card" data-sigout-all-root>
+                            <h3 class="auth-card__title">Sign out everywhere</h3>
+                            <p class="auth-card__hint">Invalidates every outstanding session, including this one. You'll be redirected to /login.</p>
+                            <div class="auth-card__actions">
+                                <button class="auth-button auth-button--danger" type="button" data-sigout-all-btn>Sign out all sessions</button>
+                            </div>
+                            <p class="auth-status" data-sigout-all-status aria-live="polite"></p>
+                        </article>
+
+                        <article class="auth-card" data-viewer-root>
+                            <h3 class="auth-card__title">Viewer role <span class="auth-pill" data-viewer-state data-state="disabled">Disabled</span></h3>
+                            <p class="auth-card__hint">Read-only login for sharing the dashboard with trusted observers. Viewers cannot reach Settings or the Terminal.</p>
+                            <form class="auth-card__form" data-viewer-form autocomplete="off">
+                                <label class="auth-field">
+                                    <span class="auth-field__label">Viewer password</span>
+                                    <input class="auth-field__input" type="password" required minlength="8" autocomplete="new-password" data-viewer-password>
+                                </label>
+                                <label class="auth-field">
+                                    <span class="auth-field__label">Confirm</span>
+                                    <input class="auth-field__input" type="password" required minlength="8" autocomplete="new-password" data-viewer-confirm>
+                                </label>
+                                <div class="auth-card__actions">
+                                    <button class="auth-button auth-button--primary" type="submit" data-viewer-enable>Enable viewer</button>
+                                    <button class="auth-button auth-button--ghost" type="button" data-viewer-disable disabled>Disable viewer</button>
+                                </div>
+                                <p class="auth-status" data-viewer-status aria-live="polite"></p>
+                            </form>
+                        </article>
+
+                        <article class="auth-card" data-lockout-root>
+                            <h3 class="auth-card__title">Failed-login lockout</h3>
+                            <p class="auth-card__hint">After this many failures, login is blocked for the cooldown window. Defaults to 5 attempts / 5 minutes.</p>
+                            <form class="auth-card__form" data-lockout-form autocomplete="off">
+                                <div class="auth-field-row">
+                                    <label class="auth-field">
+                                        <span class="auth-field__label">Attempts before lockout</span>
+                                        <input class="auth-field__input" type="number" min="1" max="100" required value="5" data-lockout-attempts>
+                                    </label>
+                                    <label class="auth-field">
+                                        <span class="auth-field__label">Cooldown (minutes)</span>
+                                        <input class="auth-field__input" type="number" min="1" max="1440" required value="5" data-lockout-cooldown>
+                                    </label>
+                                </div>
+                                <div class="auth-card__actions">
+                                    <button class="auth-button auth-button--primary" type="submit" data-lockout-submit>Save lockout</button>
+                                </div>
+                                <p class="auth-status" data-lockout-status aria-live="polite"></p>
+                            </form>
+                        </article>
+
+                        <article class="auth-card" data-session-lifetime-root>
+                            <h3 class="auth-card__title">Session lifetime</h3>
+                            <p class="auth-card__hint">How long a fresh login stays valid before the dashboard bounces you back to <code>/login</code>. Pick a preset or set custom minutes (5 min – 30 days). Existing sessions keep their original expiry until they run out.</p>
+                            <form class="auth-card__form" data-session-lifetime-form autocomplete="off">
+                                <div class="auth-presets" role="group" aria-label="Session lifetime presets">
+                                    <button class="auth-preset" type="button" data-session-lifetime-preset="60"    aria-pressed="false">1 hour</button>
+                                    <button class="auth-preset" type="button" data-session-lifetime-preset="480"   aria-pressed="false">8 hours</button>
+                                    <button class="auth-preset" type="button" data-session-lifetime-preset="1440"  aria-pressed="false">1 day</button>
+                                    <button class="auth-preset" type="button" data-session-lifetime-preset="10080" aria-pressed="false">7 days</button>
+                                    <button class="auth-preset" type="button" data-session-lifetime-preset="43200" aria-pressed="false">30 days</button>
+                                </div>
+                                <div class="auth-field-row">
+                                    <label class="auth-field">
+                                        <span class="auth-field__label">Custom (minutes)</span>
+                                        <input class="auth-field__input" type="number" min="5" max="43200" required value="480" data-session-lifetime-input>
+                                    </label>
+                                    <div class="auth-field auth-field--readout">
+                                        <span class="auth-field__label">Equivalent</span>
+                                        <span class="auth-readout" data-session-lifetime-preview>8 hours</span>
+                                    </div>
+                                </div>
+                                <div class="auth-card__actions">
+                                    <button class="auth-button auth-button--primary" type="submit" data-session-lifetime-submit>Save lifetime</button>
+                                </div>
+                                <p class="auth-status" data-session-lifetime-status aria-live="polite"></p>
+                            </form>
+                        </article>
+                    </div>
+                </div>
+            </section>
+            <section class="section" data-section="settings/dangerous" style="display:none">
+                <div id="settings-dangerous-panel" class="dangerous-panel">
+                    <header class="dangerous-panel__head">
+                        <h2 class="dangerous-panel__title">Dangerous actions</h2>
+                        <p class="dangerous-panel__subtitle">Operations that can leave the host in a degraded state. Each requires typed confirmation and is recorded in the audit log.</p>
+                    </header>
+                    <p class="dangerous-panel__status" data-dangerous-status aria-live="polite"></p>
+                    <div class="dangerous-panel__list" data-dangerous-list></div>
+                </div>
+            </section>
+        </main>
+
+        <div id="node-backdrop" class="nd-backdrop"></div>
+        <div id="node-drawer" class="nd-drawer"></div>
+    </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
@@ -200,6 +616,56 @@
     <script src="js/radio_settings.js"></script>
     <script src="js/stats_tab.js"></script>
     <script src="js/signout_controller.js"></script>
+    <script src="js/settings/password_change_form.js"></script>
+    <script src="js/settings/sign_out_all_form.js"></script>
+    <script src="js/settings/viewer_role_form.js"></script>
+    <script src="js/settings/lockout_config_form.js"></script>
+    <script src="js/settings/session_lifetime_form.js"></script>
+    <script src="js/settings/auth_panel_controller.js"></script>
+    <script src="js/settings/update_log_view.js"></script>
+    <script src="js/settings/release_notes_view.js"></script>
+    <script src="js/settings/update_panel_controller.js"></script>
+    <script src="js/settings/dangerous_panel_controller.js"></script>
+    <script src="js/configuration/transmit_card.js"></script>
+    <script src="js/configuration/mqtt_card.js"></script>
+    <script src="js/configuration/gps_card.js"></script>
+    <script src="js/configuration/configuration_panel.js"></script>
+    <script src="/vendor/xterm/xterm.js"></script>
+    <script src="/vendor/xterm/xterm-addon-fit.js"></script>
+    <script src="/vendor/xterm/xterm-addon-webgl.js"></script>
+    <script src="/vendor/xterm/xterm-addon-search.js"></script>
+    <script src="/vendor/xterm/xterm-addon-web-links.js"></script>
+    <script src="/vendor/xterm/xterm-addon-unicode11.js"></script>
+    <script src="js/terminal/dangerous_modal.js"></script>
+    <script src="js/terminal/command_drawer.js"></script>
+    <script src="js/terminal/terminal_client.js"></script>
+    <script src="js/terminal/terminal_chrome.js"></script>
+    <script src="js/terminal/terminal_renderer.js"></script>
+    <script src="js/terminal/terminal_search_overlay.js"></script>
+    <script src="js/terminal/terminal_splash.js"></script>
+    <script src="js/terminal/terminal_panel.js"></script>
+    <script src="sidebar/router.js"></script>
+    <script src="sidebar/sidebar_controller.js"></script>
+    <script src="sidebar/sidebar_logo_pip.js"></script>
+    <script src="sidebar/noise_floor_sparkline.js"></script>
+    <script src="sidebar/telemetry_rail.js"></script>
+    <script src="sidebar/radio_tx_badge.js"></script>
+    <script src="js/reconnect_storyboard.js"></script>
+    <script src="js/tab_title_telemetry.js"></script>
+    <script src="topbar/topbar_lamp.js"></script>
+    <script src="topbar/topbar_identity_badge.js"></script>
+    <script src="topbar/topbar_radio_chip.js"></script>
+    <script src="topbar/topbar_actions.js"></script>
+    <script src="topbar/topbar_controller.js"></script>
+    <script src="js/build_stamp.js"></script>
+    <script src="js/last_visit_tracker.js"></script>
+    <script src="js/since_line.js"></script>
+    <script src="js/since_line_controller.js"></script>
+    <script src="js/init_checklist.js"></script>
+    <script src="js/command_palette.js"></script>
+    <script src="js/keymap_overlay.js"></script>
+    <script src="js/sound_engine.js"></script>
+    <script src="js/theme_controller.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

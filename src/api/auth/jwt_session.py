@@ -61,13 +61,58 @@ class JwtSessionService:
         if session_version < 1:
             raise ValueError("session_version must be >= 1")
         self._secret = secret
+        self._expiry_minutes = expiry_minutes
         self._expiry = timedelta(minutes=expiry_minutes)
         self._session_version = session_version
+
+    @property
+    def expiry_minutes(self) -> int:
+        return self._expiry_minutes
+
+    def set_expiry_minutes(self, minutes: int) -> None:
+        """Live-update the session TTL applied to subsequently-issued tokens.
+
+        Existing tokens keep their original ``exp`` claim until they
+        expire naturally; only :meth:`issue` calls made after this
+        method runs see the new lifetime. Callers (the auth service)
+        are responsible for persisting the change to ``local.yaml``.
+        """
+        if minutes <= 0:
+            raise ValueError("expiry_minutes must be positive")
+        self._expiry_minutes = minutes
+        self._expiry = timedelta(minutes=minutes)
 
     @staticmethod
     def generate_secret() -> str:
         """Return a fresh, URL-safe secret for first-run bootstrapping."""
         return secrets.token_urlsafe(_SECRET_BYTES)
+
+    @property
+    def session_version(self) -> int:
+        return self._session_version
+
+    def rotate_secret(self, new_secret: str) -> None:
+        """Replace the signing secret. Every existing token becomes invalid.
+
+        Used by ``change_password``: a fresh secret means the JWT
+        cookie that carried the request through is dead the moment it
+        leaves the response, forcing all clients (including the caller)
+        through ``/login`` again.
+        """
+        if not new_secret:
+            raise ValueError("new_secret must not be empty")
+        self._secret = new_secret
+
+    def bump_session_version(self) -> int:
+        """Increment ``session_version`` and return the new value.
+
+        Tokens carrying the old ``sv`` claim fail ``verify`` immediately
+        without needing a new secret -- handy for ``logout_all`` where
+        we want every browser kicked but don't need to nuke the secret
+        itself.
+        """
+        self._session_version += 1
+        return self._session_version
 
     def issue(self, subject: str, role: str) -> str:
         """Sign and return a JWT for (subject, role).

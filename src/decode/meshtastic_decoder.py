@@ -40,6 +40,7 @@ class MeshtasticDecoder:
         decoded_payload = None
         packet_type = PacketType.UNKNOWN
         decrypted = False
+        raw_app_payload: Optional[bytes] = None
 
         for key in self._crypto.get_all_keys():
             decrypted_bytes = self._crypto.decrypt_meshtastic(
@@ -50,8 +51,8 @@ class MeshtasticDecoder:
             )
             if decrypted_bytes is None:
                 continue
-            decoded_payload, packet_type = self._decode_payload(
-                decrypted_bytes
+            decoded_payload, packet_type, raw_app_payload = (
+                self._decode_payload(decrypted_bytes)
             )
             if decoded_payload is not None:
                 decrypted = True
@@ -79,6 +80,8 @@ class MeshtasticDecoder:
             relay_node=header["relay_node"],
             decoded_payload=decoded_payload,
             encrypted_payload=encrypted_payload if not decrypted else None,
+            raw_app_payload=raw_app_payload,
+            raw_radio_packet=bytes(raw_bytes),
             decrypted=decrypted,
             signal=signal,
             timestamp=datetime.now(timezone.utc),
@@ -144,25 +147,29 @@ class MeshtasticDecoder:
 
     def _decode_payload(
         self, decrypted: bytes
-    ) -> tuple[Optional[dict[str, Any]], PacketType]:
+    ) -> tuple[Optional[dict[str, Any]], PacketType, Optional[bytes]]:
         """Decode the decrypted protobuf payload.
 
         The first byte after decryption is the portnum.
-        Returns (decoded_dict, packet_type).
+        Returns (decoded_dict, packet_type, raw_app_payload). The
+        third element is the inner application-payload bytes (the
+        bytes that follow ``portnum`` in the Meshtastic Data
+        protobuf); the relay TX path needs these to re-emit the
+        packet via ``interface.sendData``.
         """
         if len(decrypted) < 2:
-            return None, PacketType.UNKNOWN
+            return None, PacketType.UNKNOWN, None
 
         try:
             return self._try_protobuf_decode(decrypted)
         except Exception:
             logger.debug("Protobuf decode failed", exc_info=True)
-            return None, PacketType.UNKNOWN
+            return None, PacketType.UNKNOWN, None
 
     @staticmethod
     def _try_protobuf_decode(
         payload: bytes,
-    ) -> tuple[Optional[dict[str, Any]], PacketType]:
+    ) -> tuple[Optional[dict[str, Any]], PacketType, Optional[bytes]]:
         """Attempt to decode the inner Data protobuf message.
 
         The decrypted payload is a serialized protobuf `Data` message
@@ -176,12 +183,17 @@ class MeshtasticDecoder:
             portnum = data_msg.portnum
             inner = data_msg.payload
 
-            return dispatch_portnum(portnum, inner)
+            decoded, packet_type = dispatch_portnum(portnum, inner)
+            return decoded, packet_type, bytes(inner) if inner else None
         except ImportError:
-            return {"raw_hex": payload.hex(), "size": len(payload)}, PacketType.UNKNOWN
+            return (
+                {"raw_hex": payload.hex(), "size": len(payload)},
+                PacketType.UNKNOWN,
+                None,
+            )
         except Exception:
             logger.debug("Data protobuf parse failed", exc_info=True)
-            return None, PacketType.UNKNOWN
+            return None, PacketType.UNKNOWN, None
 
     def extract_node_update(self, packet: Packet) -> Optional[Node]:
         """Extract node metadata from a decoded packet if applicable."""

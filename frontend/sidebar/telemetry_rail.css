@@ -1,0 +1,122 @@
+/* Sidebar telemetry rail.
+ *
+ * Lives between .sidebar__nav and .sidebar__footer. Three rows:
+ * uptime, sessions, noise-floor (with inline sparkline). Reads
+ * like a piece of lab gear at idle — small, dense, mono. */
+
+.telemetry-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.65rem 0.85rem 0.4rem;
+    margin: 0 0.25rem;
+    border-top: 1px solid var(--sidebar-border);
+    transition: opacity var(--motion-base) var(--ease-out-expo);
+}
+
+.app[data-sidebar="rail"] .telemetry-rail {
+    opacity: 0;
+    pointer-events: none;
+    height: 0;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    border: 0;
+}
+
+.telemetry-rail__row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.05em;
+    color: var(--sidebar-text-muted);
+}
+
+.telemetry-rail__label {
+    flex: 0 0 auto;
+    text-transform: uppercase;
+    color: var(--sidebar-text-muted);
+    letter-spacing: 0.12em;
+    font-size: 0.55rem;
+    font-weight: 700;
+    opacity: 0.7;
+}
+
+.telemetry-rail__value {
+    flex: 1 1 auto;
+    text-align: right;
+    color: var(--sidebar-text);
+    letter-spacing: 0.04em;
+}
+
+/* Noise floor row -- value + sparkline canvas */
+
+.telemetry-rail__noise {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.45rem 0.55rem 0.4rem;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.telemetry-rail__noise-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.4rem;
+    font-family: var(--font-mono);
+}
+
+.telemetry-rail__noise-label {
+    font-size: 0.55rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    color: var(--sidebar-text-muted);
+    opacity: 0.7;
+}
+
+.telemetry-rail__noise-value {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--accent-cyan);
+    letter-spacing: 0.02em;
+}
+
+.telemetry-rail__noise-bw {
+    margin-left: auto;
+    font-size: 0.55rem;
+    color: var(--sidebar-text-muted);
+    letter-spacing: 0.06em;
+}
+
+.telemetry-rail__noise-canvas {
+    display: block;
+    width: 100%;
+    height: 24px;
+}
+
+.telemetry-rail__noise--stale {
+    opacity: 0.55;
+}
+
+.telemetry-rail__noise--stale .telemetry-rail__noise-value::after {
+    content: " ·";
+    color: var(--sidebar-text-muted);
+    margin-left: 0.2rem;
+}
+
+.telemetry-rail__noise--calibrating .telemetry-rail__noise-value {
+    color: var(--text-muted);
+    font-style: italic;
+    animation: telemetry-noise-calibrating 2s ease-in-out infinite;
+}
+
+@keyframes telemetry-noise-calibrating {
+    0%, 100% { opacity: 0.6; }
+    50%      { opacity: 1; }
+}

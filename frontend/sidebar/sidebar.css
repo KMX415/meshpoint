@@ -1,0 +1,781 @@
+/*
+ * Persistent left-rail navigation.
+ * Three viewport modes:
+ *   desktop (>= 1024px)  : full sidebar, 240px wide
+ *   tablet  (768-1023px) : icon-only rail, 76px wide
+ *   phone   (< 768px)    : hidden by default; hamburger opens drawer
+ *
+ * Active item is marked with a 2px mint accent bar that slides
+ * between items via FLIP. All transitions use the project's locked
+ * easing curve (--ease-out-expo) and durations.
+ */
+
+:root {
+    --sidebar-width: 240px;
+    --sidebar-rail-width: 76px;
+    --sidebar-bg: #0d1422;
+    --sidebar-border: #1c2840;
+    --sidebar-item-hover: rgba(6, 182, 212, 0.06);
+    --sidebar-item-active-bg: rgba(0, 229, 160, 0.08);
+    --sidebar-accent: var(--accent-green);
+    --sidebar-text: var(--text-primary);
+    --sidebar-text-muted: var(--text-muted);
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+    --motion-fast: 140ms;
+    --motion-base: 220ms;
+    --motion-slow: 320ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --motion-fast: 0ms;
+        --motion-base: 0ms;
+        --motion-slow: 0ms;
+    }
+}
+
+/* ---- App shell ---- */
+.app {
+    display: grid;
+    grid-template-columns: var(--sidebar-width) 1fr;
+    grid-template-rows: 1fr;
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    transition: grid-template-columns var(--motion-base) var(--ease-out-expo);
+}
+
+.app[data-sidebar="rail"] {
+    grid-template-columns: var(--sidebar-rail-width) 1fr;
+}
+
+.app[data-sidebar="hidden"] {
+    grid-template-columns: 0 1fr;
+}
+
+/* ---- Sidebar shell ---- */
+.sidebar {
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    z-index: 100;
+}
+
+/* ---- Header ---- */
+.sidebar__header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 0.85rem;
+    border-bottom: 1px solid var(--sidebar-border);
+    min-height: 88px;
+}
+
+/* Logo "frame": image + animated accent ring + connection pip.
+ * The frame is the visual anchor of the entire sidebar — sized
+ * up so first impression reads "branded device" instead of
+ * "small icon next to text". */
+.sidebar__logo-frame {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: linear-gradient(
+        135deg,
+        rgba(6, 182, 212, 0.18) 0%,
+        rgba(168, 85, 247, 0.12) 100%
+    );
+    box-shadow:
+        0 4px 14px rgba(0, 0, 0, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    transition: transform var(--motion-base) var(--ease-out-expo),
+                box-shadow var(--motion-base) var(--ease-out-expo);
+}
+
+.sidebar__logo-frame:hover {
+    transform: translateY(-1px) scale(1.03);
+    box-shadow:
+        0 8px 22px rgba(0, 0, 0, 0.55),
+        0 0 24px rgba(6, 182, 212, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Visual sizing of the brand mark inside the frame.
+ *
+ * The shipped PNG has roughly 25-30% transparent padding baked in
+ * around the actual mark. To make the mark dominate the frame
+ * instead of floating inside a too-large square, we render the
+ * image element 1.5x the frame size and clip-path it back down
+ * to frame dimensions. This effectively crops into the PNG's
+ * internal whitespace so the mark itself fills the visible area.
+ *
+ * Geometry: 84x84 image, clip-path inset 14px on each side,
+ * leaving a 56x56 visible region matching the frame. Adjust the
+ * inset down if a tighter PNG asset is shipped later (smaller
+ * crop = more visible padding); adjust up to crop deeper.
+ *
+ * The clip-path is relative to the image's own coordinate space,
+ * so the frame's hover scale composes cleanly without warping
+ * the crop.
+ */
+.sidebar__logo {
+    position: relative;
+    z-index: 2;
+    width: 84px;
+    height: 84px;
+    flex-shrink: 0;
+    border-radius: 14px;
+    display: block;
+    clip-path: inset(14px round 14px);
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+    transition: clip-path var(--motion-fast) var(--ease-out-expo);
+}
+
+/* Animated accent ring sitting just outside the logo. Kept low
+ * opacity so it reads as a glow, not a hard outline. Pulses when
+ * the websocket is online; static otherwise. */
+.sidebar__logo-ring {
+    position: absolute;
+    inset: -2px;
+    border-radius: 16px;
+    border: 1px solid transparent;
+    background:
+        linear-gradient(
+            135deg,
+            rgba(6, 182, 212, 0.55),
+            rgba(168, 85, 247, 0.4) 50%,
+            rgba(6, 182, 212, 0.55)
+        ) border-box;
+    -webkit-mask:
+        linear-gradient(#000 0 0) padding-box,
+        linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0.85;
+    z-index: 1;
+}
+
+.sidebar__logo-frame[data-state="online"] .sidebar__logo-ring {
+    animation: sidebar-logo-ring-pulse 3.4s ease-in-out infinite;
+}
+
+.sidebar__logo-frame[data-state="offline"] .sidebar__logo-ring {
+    background:
+        linear-gradient(
+            135deg,
+            rgba(239, 68, 68, 0.55),
+            rgba(239, 68, 68, 0.25) 50%,
+            rgba(239, 68, 68, 0.55)
+        ) border-box;
+    opacity: 0.7;
+}
+
+.sidebar__logo-frame[data-state="connecting"] .sidebar__logo-ring {
+    background:
+        linear-gradient(
+            135deg,
+            rgba(245, 158, 11, 0.55),
+            rgba(245, 158, 11, 0.25) 50%,
+            rgba(245, 158, 11, 0.55)
+        ) border-box;
+    animation: sidebar-logo-ring-blink 1s steps(2, end) infinite;
+}
+
+/* Bottom-right status pip — same idea as the topbar lamp but
+ * anchored to the logo so the brand mark itself shows liveness. */
+.sidebar__logo-pip {
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    border: 2px solid var(--sidebar-bg, #0f1624);
+    z-index: 3;
+    transition: background var(--motion-fast) var(--ease-out-expo),
+                box-shadow var(--motion-fast) var(--ease-out-expo);
+}
+
+.sidebar__logo-frame[data-state="online"] .sidebar__logo-pip {
+    background: var(--accent-green, #00e5a0);
+    box-shadow: 0 0 8px rgba(0, 229, 160, 0.7);
+}
+
+.sidebar__logo-frame[data-state="offline"] .sidebar__logo-pip {
+    background: var(--accent-red, #ef4444);
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.7);
+}
+
+.sidebar__logo-frame[data-state="connecting"] .sidebar__logo-pip {
+    background: var(--accent-amber, #f59e0b);
+    animation: sidebar-logo-pip-blink 0.9s steps(2, end) infinite;
+}
+
+@keyframes sidebar-logo-ring-pulse {
+    0%, 100% { opacity: 0.85; }
+    50%      { opacity: 1; }
+}
+
+@keyframes sidebar-logo-ring-blink {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.35; }
+}
+
+@keyframes sidebar-logo-pip-blink {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+}
+
+/* Rail (icon-only) sidebar mode: keep the logo as the anchor, hide
+ * the device-name block (text won't fit in the rail width), and stack
+ * the collapse / expand button under the logo so it stays reachable.
+ * The button doubles as the only way to bring the sidebar back to
+ * the expanded state, so it MUST stay clickable in rail mode. */
+.app[data-sidebar="rail"] .sidebar__header {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.4rem;
+    padding: 0.9rem 0 0.6rem;
+    min-height: 110px;
+}
+
+.sidebar__device {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    transition: opacity var(--motion-fast) var(--ease-out-expo);
+}
+
+.app[data-sidebar="rail"] .sidebar__device {
+    display: none;
+}
+
+.app[data-sidebar="rail"] .sidebar__collapse svg {
+    transform: rotate(180deg);
+}
+
+.sidebar__device-name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--sidebar-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sidebar__device-status {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.65rem;
+    font-family: var(--font-mono);
+    color: var(--sidebar-text-muted);
+}
+
+.sidebar__collapse {
+    background: none;
+    border: none;
+    padding: 0.25rem;
+    cursor: pointer;
+    color: var(--sidebar-text-muted);
+    display: inline-flex;
+    align-items: center;
+    border-radius: 4px;
+    transition: color var(--motion-fast) var(--ease-out-expo),
+                background var(--motion-fast) var(--ease-out-expo);
+}
+
+.sidebar__collapse svg {
+    transition: transform var(--motion-fast) var(--ease-out-expo);
+}
+
+.sidebar__collapse:hover,
+.sidebar__collapse:focus-visible {
+    color: var(--accent-cyan);
+    background: var(--sidebar-item-hover);
+    outline: none;
+}
+
+/* ---- Nav list ---- */
+.sidebar__nav {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.5rem 0;
+    position: relative;
+    scrollbar-width: thin;
+    scrollbar-color: var(--sidebar-border) transparent;
+}
+
+.sidebar__nav::-webkit-scrollbar { width: 6px; }
+.sidebar__nav::-webkit-scrollbar-track { background: transparent; }
+.sidebar__nav::-webkit-scrollbar-thumb {
+    background: var(--sidebar-border);
+    border-radius: 3px;
+}
+
+.sidebar__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.sidebar__item,
+.sidebar__group,
+.sidebar__subitem {
+    list-style: none;
+}
+
+/* ---- Group headers (STATUS / OPS / CONFIG dividers) ----
+ *
+ * Tiny uppercase mono labels that organize the nav into clusters
+ * the same way Status / Configuration / Settings groups the IA.
+ * Hidden when the sidebar is in icon-only "rail" mode, since the
+ * label text would have nowhere to go.
+ */
+.sidebar__group-header {
+    margin: 0.6rem 0.85rem 0.2rem;
+    padding: 0 0.4rem;
+    pointer-events: none;
+}
+
+.sidebar__group-header:first-child { margin-top: 0.2rem; }
+
+.sidebar__group-header-label {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 0.55rem;
+    font-weight: 700;
+    color: var(--sidebar-text-muted);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    opacity: 0.6;
+    transition: opacity var(--motion-fast) var(--ease-out-expo);
+}
+
+.app[data-sidebar="rail"] .sidebar__group-header {
+    margin: 0.4rem 0.5rem 0.1rem;
+    padding: 0;
+    height: 1px;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        var(--sidebar-border) 50%,
+        transparent
+    );
+    opacity: 0.5;
+}
+
+.app[data-sidebar="rail"] .sidebar__group-header-label {
+    display: none;
+}
+
+.sidebar__link,
+.sidebar__group-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.55rem 0.85rem;
+    margin: 0 0.4rem;
+    border-radius: 6px;
+    color: var(--sidebar-text-muted);
+    text-decoration: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    width: calc(100% - 0.8rem);
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-align: left;
+    transition: color var(--motion-fast) var(--ease-out-expo),
+                background var(--motion-fast) var(--ease-out-expo);
+}
+
+.sidebar__link:hover,
+.sidebar__group-toggle:hover,
+.sidebar__link:focus-visible,
+.sidebar__group-toggle:focus-visible {
+    color: var(--sidebar-text);
+    background: var(--sidebar-item-hover);
+    outline: none;
+}
+
+.sidebar__link[aria-current="page"],
+.sidebar__subitem[data-active="true"] .sidebar__link {
+    color: var(--sidebar-accent);
+    background: var(--sidebar-item-active-bg);
+}
+
+.sidebar__icon {
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.sidebar__icon svg {
+    width: 18px;
+    height: 18px;
+    stroke-width: 1.75;
+}
+
+.sidebar__label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: opacity var(--motion-fast) var(--ease-out-expo);
+}
+
+.app[data-sidebar="rail"] .sidebar__label,
+.app[data-sidebar="rail"] .sidebar__chevron,
+.app[data-sidebar="rail"] .sidebar__badge,
+.app[data-sidebar="rail"] .sidebar__role,
+.app[data-sidebar="rail"] .sidebar__signout-label {
+    opacity: 0;
+    width: 0;
+    pointer-events: none;
+}
+
+.sidebar__badge {
+    font-size: 0.6rem;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    padding: 0.1rem 0.35rem;
+    border-radius: 8px;
+    background: rgba(6, 182, 212, 0.15);
+    color: var(--accent-cyan);
+    margin-left: auto;
+}
+
+.sidebar__badge--unread {
+    background: rgba(0, 229, 160, 0.15);
+    color: var(--accent-green);
+}
+
+.sidebar__badge--update {
+    background: rgba(245, 158, 11, 0.18);
+    color: var(--accent-amber);
+}
+
+.sidebar__badge--new {
+    background: rgba(0, 229, 160, 0.16);
+    color: var(--accent-green);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.sidebar__chevron {
+    width: 14px;
+    height: 14px;
+    color: var(--sidebar-text-muted);
+    transition: transform var(--motion-base) var(--ease-out-expo);
+    flex-shrink: 0;
+    display: inline-flex;
+}
+
+.sidebar__group[data-expanded="true"] .sidebar__chevron {
+    transform: rotate(90deg);
+}
+
+/* ---- Sublist (collapsible) ---- */
+.sidebar__sublist {
+    list-style: none;
+    margin: 0.1rem 0 0.3rem 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.05rem;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height var(--motion-base) var(--ease-out-expo);
+}
+
+.sidebar__group[data-expanded="true"] .sidebar__sublist {
+    max-height: 600px;
+}
+
+.sidebar__subitem .sidebar__link {
+    padding-left: 2.5rem;
+    font-size: 0.78rem;
+}
+
+/* ---- Active accent bar (FLIP target) ---- */
+.sidebar__active-bar {
+    position: absolute;
+    left: 0;
+    width: 2px;
+    height: 22px;
+    background: var(--sidebar-accent);
+    box-shadow: 0 0 8px rgba(0, 229, 160, 0.45);
+    border-radius: 0 2px 2px 0;
+    pointer-events: none;
+    transform: translateY(0);
+    transition: transform var(--motion-base) var(--ease-out-expo);
+    opacity: 0;
+}
+
+.sidebar__active-bar[data-visible="true"] {
+    opacity: 1;
+}
+
+/* ---- Footer ---- */
+.sidebar__footer {
+    border-top: 1px solid var(--sidebar-border);
+    padding: 0.65rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.sidebar__role {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.7rem;
+    color: var(--sidebar-text-muted);
+}
+
+.sidebar__role-pill {
+    background: rgba(6, 182, 212, 0.12);
+    color: var(--accent-cyan);
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    font-weight: 600;
+    padding: 0.1rem 0.4rem;
+    border-radius: 8px;
+    text-transform: uppercase;
+}
+
+.sidebar__role-pill--viewer {
+    background: rgba(168, 85, 247, 0.15);
+    color: var(--accent-purple);
+}
+
+.sidebar__signout {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.45rem 0.6rem;
+    background: none;
+    border: 1px solid var(--sidebar-border);
+    border-radius: 6px;
+    color: var(--sidebar-text-muted);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    transition: color var(--motion-fast) var(--ease-out-expo),
+                border-color var(--motion-fast) var(--ease-out-expo),
+                background var(--motion-fast) var(--ease-out-expo);
+}
+
+.sidebar__signout:hover,
+.sidebar__signout:focus-visible {
+    color: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+    background: var(--sidebar-item-hover);
+    outline: none;
+}
+
+.sidebar__signout svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 2;
+    flex-shrink: 0;
+}
+
+/* ---- Mobile drawer ---- */
+.sidebar__hamburger {
+    display: none;
+    position: fixed;
+    top: 0.6rem;
+    left: 0.6rem;
+    z-index: 1100;
+    background: var(--bg-secondary);
+    border: 1px solid var(--sidebar-border);
+    border-radius: 6px;
+    padding: 0.45rem;
+    cursor: pointer;
+    color: var(--sidebar-text);
+    transition: background var(--motion-fast) var(--ease-out-expo);
+}
+
+.sidebar__hamburger:hover { background: var(--sidebar-bg); }
+
+.sidebar__hamburger svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+}
+
+.sidebar__backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 4, 8, 0.55);
+    backdrop-filter: blur(2px);
+    z-index: 90;
+    opacity: 0;
+    transition: opacity var(--motion-base) var(--ease-out-expo);
+}
+
+/* Tablet (768-1023px): default layout is the icon-only rail to
+ * preserve content space, but the user can still toggle to the
+ * full 240px sidebar via the collapse button or the [ shortcut.
+ * Earlier versions of this rule forced rail width even when
+ * data-sidebar="expanded", which made the toggle do nothing.
+ *
+ * IMPORTANT: this query MUST be bounded with min-width: 768px.
+ * Without it, the .app[data-sidebar="..."] selectors below have
+ * higher specificity (0,2,0) than the plain `.app` selector
+ * (0,1,0) used in the phone breakpoint, so on a 360px phone the
+ * tablet rules would win and pin the sidebar at 240px / 76px
+ * instead of letting the phone rule collapse it to a drawer. */
+@media (min-width: 768px) and (max-width: 1023px) {
+    .app[data-sidebar="rail"] {
+        grid-template-columns: var(--sidebar-rail-width) 1fr;
+    }
+    .app[data-sidebar="expanded"] {
+        grid-template-columns: var(--sidebar-width) 1fr;
+    }
+}
+
+/* Phone (< 768px): sidebar collapses to a drawer that overlays
+ * content. Specificity-bumped from `.app` to `.app[data-sidebar]`
+ * on the grid override so any persisted state on the root element
+ * cannot keep the sidebar pinned in the layout grid.
+ *
+ * Single grid column on phones (not "0 1fr"). The sidebar is
+ * position: fixed below and so is removed from grid flow, but
+ * <main class="app__content"> is still position: static. With a
+ * "0 1fr" template, grid auto-placement put <main> into the
+ * first (0px) cell and squashed it to zero width, so the page
+ * rendered as just the off-screen drawer with no visible content.
+ * One 1fr column means <main> always gets the full viewport width
+ * regardless of which other grid children come and go. */
+@media (max-width: 767px) {
+    .app,
+    .app[data-sidebar="rail"],
+    .app[data-sidebar="expanded"],
+    .app[data-sidebar="hidden"],
+    .app[data-sidebar="drawer-open"] {
+        grid-template-columns: 1fr;
+    }
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        /* 100vh fallback for browsers that don't support dvh, but
+         * prefer 100dvh: iOS Safari and Chrome on Android count the
+         * collapsing URL/toolbar chrome as part of the viewport in
+         * vh, so a 100vh element is taller than the actually-visible
+         * area in landscape and the bottom of the drawer (Sign Out)
+         * disappears behind the toolbar. dvh follows the dynamic
+         * viewport so the sidebar matches what the user can see. */
+        height: 100vh;
+        height: 100dvh;
+        width: var(--sidebar-width);
+        transform: translateX(-100%);
+        transition: transform var(--motion-base) var(--ease-out-expo);
+        box-shadow: 2px 0 24px rgba(0, 0, 0, 0.45);
+        z-index: 1000;
+    }
+    .app[data-sidebar="drawer-open"] .sidebar {
+        transform: translateX(0);
+    }
+    .app[data-sidebar="drawer-open"] .sidebar__backdrop {
+        display: block;
+        opacity: 1;
+    }
+    .app[data-sidebar="drawer-open"] .sidebar__label,
+    .app[data-sidebar="drawer-open"] .sidebar__chevron,
+    .app[data-sidebar="drawer-open"] .sidebar__role,
+    .app[data-sidebar="drawer-open"] .sidebar__signout-label,
+    .app[data-sidebar="drawer-open"] .sidebar__device {
+        opacity: 1;
+        width: auto;
+        pointer-events: auto;
+    }
+    .sidebar__hamburger {
+        display: inline-flex;
+    }
+    main, .dashboard, .stats-panel, .messaging-panel, .radio-panel, #tab-content {
+        padding-top: 3rem;
+    }
+}
+
+/* Short-viewport drawer fix.
+ *
+ * On a phone in landscape orientation the viewport height drops to
+ * ~375-410px, which means the drawer at 100vh has roughly:
+ *   - header  ~89px
+ *   - footer  ~76px
+ *   - nav     ~210px tall window
+ * The nav element already has `overflow-y: auto` so it CAN scroll,
+ * but a 73-210px touch surface for 500+ pixels of nav items is so
+ * tight on a phone (especially with finger occlusion) that drag-
+ * scrolling rarely registers, and many users perceive the drawer
+ * as having no scroll affordance at all. Reported on .141 in
+ * iPhone landscape: "you cant scroll down" inside the open drawer.
+ *
+ * Fix: at any narrow-and-short viewport (phone landscape and
+ * smaller), promote scrolling to the sidebar element itself and
+ * let the header / nav / footer flow naturally. The footer stops
+ * being sticky against the viewport bottom and instead sits at the
+ * bottom of the content stack, but it remains reachable via a
+ * normal vertical scroll from anywhere in the drawer. This is the
+ * right tradeoff: a temporary drawer doesn't need a sticky footer
+ * the way a persistent rail does, and a usable scroll surface the
+ * full height of the drawer is far more important than keeping
+ * Sign Out anchored to the bottom of the screen.
+ *
+ * Scoped to (max-width: 767px) so only phone-mode drawers are
+ * affected; tablet rail (768-1023px) and desktop sidebar
+ * (>=1024px) keep the original sticky-header / scrollable-nav /
+ * sticky-footer layout. The (max-height: 500px) bound restricts
+ * this to phone landscape (and any future fold/flip device that
+ * lands in the same height bracket); phone portrait at e.g.
+ * 393x852 is tall enough that the nav window is already a
+ * comfortable ~600px and doesn't need this treatment.
+ */
+@media (max-width: 767px) and (max-height: 500px) {
+    .sidebar {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .sidebar__nav {
+        flex: 0 0 auto;
+        overflow: visible;
+    }
+    /* Pad the bottom of the scrollable drawer past the iOS home
+     * indicator AND past the collapsing landscape toolbar even when
+     * dvh is unsupported (older iOS Safari < 15.4). The
+     * env(safe-area-inset-bottom) value is 0 on devices without a
+     * notch so this is a no-op for laptops and Android phones in
+     * tablet mode; on iPhone landscape it adds the ~21-34px the
+     * home-indicator strip requires. The extra 0.5rem covers the
+     * smaller residual gap when dvh is honored, so Sign Out has a
+     * comfortable margin from the very bottom edge in all cases. */
+    .sidebar__footer {
+        padding-bottom: calc(0.65rem + env(safe-area-inset-bottom, 0px) + 0.5rem);
+    }
+}

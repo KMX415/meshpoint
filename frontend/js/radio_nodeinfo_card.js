@@ -1,53 +1,29 @@
 /**
- * Radio tab — NodeInfo Broadcast card.
+ * Radio tab — NodeInfo Broadcast card (observational, v0.7.4).
  *
- * Shipped in v0.7.1. Three jobs:
- *   - Display a live countdown to the next NodeInfo broadcast.
- *   - Let the operator change the interval via preset chips
- *     (5m / 30m / 1h / 3h / 6h / 12h / 24h / Off) or a numeric input.
- *   - Provide a "Send Now" button that pushes an immediate broadcast.
- *
- * Interval is the single knob: setting it to 0 pauses the broadcaster
- * (the periodic loop, not TX itself). DMs and replies still work in
- * the paused state. Interval changes hot-reload the running broadcast
- * loop and take effect within milliseconds: no service restart is
- * needed for this knob.
+ * Live countdown to the next NodeInfo broadcast plus a status lamp
+ * (ACTIVE / IDLE / PAUSED). Read-only: editing the interval and
+ * triggering an on-demand broadcast moved to Configuration → Radio
+ * in v0.7.4.
  */
 class RadioNodeInfoCard {
-    static PRESETS = [
-        { minutes: 0,    label: 'Off', off: true },
-        { minutes: 5,    label: '5m' },
-        { minutes: 30,   label: '30m' },
-        { minutes: 60,   label: '1h' },
-        { minutes: 180,  label: '3h' },
-        { minutes: 360,  label: '6h' },
-        { minutes: 720,  label: '12h' },
-        { minutes: 1440, label: '24h' },
-    ];
-
     constructor(api) {
         this._api = api;
         this._root = null;
         this._timer = null;
         this._zeroSince = null;
-        // Saved state: what the live broadcaster is doing. Drives the
-        // countdown, lamp, interval label, and Send Now next_due math.
+        // Live broadcaster state. Drives countdown, lamp, last-sent.
         this._saved = {
             interval_minutes: 0,
             running: false,
             last_sent_at: null,
             next_due_at: null,
         };
-        // Draft state: what the user has selected in chips/input but
-        // not yet saved. Save reads draft; everything else reads saved.
-        // Splitting these prevents a chip click from clobbering the
-        // live state (which then snap-back-revert via api.refresh).
-        this._draft = { interval_minutes: 0 };
     }
 
     mount(rootEl) {
         this._root = rootEl;
-        rootEl.classList.add('r-card');
+        rootEl.classList.add('r-card', 'r-card--readout');
         rootEl.innerHTML = `
             <div class="r-card__header">
                 <h3 class="r-card__title">NodeInfo Broadcast</h3>
@@ -69,31 +45,11 @@ class RadioNodeInfoCard {
                     </span>
                 </div>
             </div>
-            <div class="interval-chips">
-                <div class="interval-chips__row">
-                    <div class="interval-chips__chips" id="r-ni-chips"></div>
-                    <div class="r-input-with-unit">
-                        <input type="number" id="r-ni-input"
-                               class="r-input r-input--mono r-input--narrow"
-                               min="0" max="1440" />
-                        <span class="r-input-with-unit__suffix">MIN</span>
-                    </div>
-                </div>
-                <p class="r-hint">
-                    0 pauses periodic broadcasts (TX still works for DMs and
-                    replies). Otherwise 5-1440 minutes. Saved intervals take
-                    effect immediately: no service restart required.
-                </p>
-            </div>
-            <div class="r-card__actions">
-                <button class="r-btn r-btn--secondary"
-                        id="r-ni-send-now">Send Now</button>
-                <button class="r-btn r-btn--primary"
-                        id="r-ni-save">Save NodeInfo</button>
-            </div>
+            <a class="r-config-link" href="#/configuration/radio">
+                <span>Edit broadcast interval</span>
+                <span aria-hidden="true">→</span>
+            </a>
         `;
-        this._renderChips();
-        this._wire();
     }
 
     render(config) {
@@ -102,31 +58,16 @@ class RadioNodeInfoCard {
         this._saved.running = !!ni.running;
         this._saved.last_sent_at = _parseTimestamp(ni.last_sent_at);
         this._saved.next_due_at = _parseTimestamp(ni.next_due_at);
-        // Reset draft to the freshly-fetched saved value on every
-        // render. After a successful save the UI snaps to live state.
-        this._draft.interval_minutes = this._saved.interval_minutes;
         this._zeroSince = null;
 
-        this._root.querySelector('#r-ni-input').value = String(this._draft.interval_minutes);
-        this._setActiveChip(this._draft.interval_minutes);
         this._renderIntervalLabel();
         this._renderLamp();
-        this._renderPendingCue();
         this._tick();
         this._startTimer();
     }
 
     destroy() {
         this._stopTimer();
-    }
-
-    _renderChips() {
-        const chips = this._root.querySelector('#r-ni-chips');
-        chips.innerHTML = RadioNodeInfoCard.PRESETS.map((p) => {
-            const cls = p.off ? 'r-chip r-chip--off' : 'r-chip';
-            return `<button type="button" class="${cls}" `
-                + `data-minutes="${p.minutes}">${p.label}</button>`;
-        }).join('');
     }
 
     _renderIntervalLabel() {
@@ -152,94 +93,6 @@ class RadioNodeInfoCard {
         } else {
             lamp.classList.add('status-lamp--warn');
             label.textContent = 'IDLE';
-        }
-    }
-
-    _setActiveChip(minutes) {
-        this._root.querySelectorAll('#r-ni-chips .r-chip').forEach((chip) => {
-            const m = parseInt(chip.dataset.minutes, 10);
-            chip.classList.toggle('r-chip--active', m === minutes);
-        });
-    }
-
-    _isPending() {
-        return this._draft.interval_minutes !== this._saved.interval_minutes;
-    }
-
-    _renderPendingCue() {
-        const saveBtn = this._root.querySelector('#r-ni-save');
-        if (saveBtn) {
-            saveBtn.classList.toggle('r-btn--has-pending', this._isPending());
-        }
-    }
-
-    _wire() {
-        this._root.querySelectorAll('#r-ni-chips .r-chip').forEach((chip) => {
-            chip.addEventListener('click', (e) => {
-                e.preventDefault();
-                const minutes = parseInt(chip.dataset.minutes, 10);
-                this._root.querySelector('#r-ni-input').value = String(minutes);
-                this._draft.interval_minutes = minutes;
-                this._setActiveChip(minutes);
-                this._renderPendingCue();
-            });
-        });
-
-        const input = this._root.querySelector('#r-ni-input');
-        input.addEventListener('input', () => {
-            const minutes = parseInt(input.value, 10);
-            if (isNaN(minutes)) return;
-            this._setActiveChip(minutes);
-            if (minutes === 0 || (minutes >= 5 && minutes <= 1440)) {
-                this._draft.interval_minutes = minutes;
-            }
-            this._renderPendingCue();
-        });
-
-        this._root.querySelector('#r-ni-save').addEventListener(
-            'click', async () => this._save(),
-        );
-
-        this._root.querySelector('#r-ni-send-now').addEventListener(
-            'click', async () => this._sendNow(),
-        );
-    }
-
-    async _save() {
-        const minutes = this._draft.interval_minutes;
-        if (isNaN(minutes) || (minutes !== 0 && (minutes < 5 || minutes > 1440))) {
-            this._api.toast('Interval must be 0 or 5-1440 minutes');
-            return;
-        }
-        const result = await this._api.put(
-            '/api/config/nodeinfo', { interval_minutes: minutes },
-        );
-        if (!result) return;
-        this._api.toast(
-            minutes === 0 ? 'NodeInfo broadcasts paused' : 'Interval saved',
-        );
-        if (result.restart_required) {
-            this._api.signalRestart(
-                'Some NodeInfo settings require a service restart to apply.',
-            );
-        }
-        await this._api.refresh();
-    }
-
-    async _sendNow() {
-        const result = await this._api.post('/api/config/nodeinfo/send');
-        if (!result) return;
-        if (result.success) {
-            this._api.toast('NodeInfo broadcast sent');
-            this._saved.last_sent_at = new Date();
-            if (this._saved.interval_minutes > 0) {
-                this._saved.next_due_at = new Date(
-                    Date.now() + this._saved.interval_minutes * 60 * 1000,
-                );
-            }
-            this._tick();
-        } else {
-            this._api.toast(`Send failed: ${result.error || 'unknown'}`);
         }
     }
 

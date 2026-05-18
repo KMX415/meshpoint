@@ -13,8 +13,10 @@ from src.config import (
     MeshcoreUsbConfig,
     _merge_dataclass,
 )
+from src.decode.crypto_service import CryptoService
+from src.decode.meshcore_decoder import MeshcoreDecoder
 from src.decode.meshcore_event_adapter import adapt_event
-from src.models.packet import PacketType, Protocol
+from src.models.packet import Packet, PacketType, Protocol
 from src.models.signal import SignalMetrics
 
 
@@ -107,6 +109,41 @@ class TestMeshcoreEventAdapter(unittest.TestCase):
         self.assertAlmostEqual(pkt.decoded_payload["latitude"], 43.9091)
         self.assertAlmostEqual(pkt.decoded_payload["longitude"], -72.2207)
 
+    def test_advertisement_accepts_name_alias(self):
+        raw = self._make_envelope("advertisement", {
+            "public_key": "abcdef1234567890abcdef",
+            "name": "AliasNode",
+        })
+        pkt = adapt_event(raw)
+        self.assertIsNotNone(pkt)
+        self.assertEqual(pkt.packet_type, PacketType.NODEINFO)
+        self.assertEqual(pkt.source_id, "abcdef123456")
+        self.assertEqual(pkt.decoded_payload["long_name"], "AliasNode")
+        self.assertEqual(pkt.decoded_payload["short_name"], "Alia")
+
+    def test_advertisement_accepts_nested_name_alias(self):
+        raw = self._make_envelope("advertisement", {
+            "public_key": "abcdef1234567890abcdef",
+            "advert": {"longName": "NestedRepeater"},
+        })
+        pkt = adapt_event(raw)
+        self.assertIsNotNone(pkt)
+        self.assertEqual(pkt.packet_type, PacketType.NODEINFO)
+        self.assertEqual(pkt.source_id, "abcdef123456")
+        self.assertEqual(pkt.decoded_payload["long_name"], "NestedRepeater")
+        self.assertEqual(pkt.decoded_payload["short_name"], "Nest")
+
+    def test_advertisement_without_real_name_does_not_store_id_as_name(self):
+        raw = self._make_envelope("advertisement", {
+            "public_key": "abcdef1234567890abcdef",
+        })
+        pkt = adapt_event(raw)
+        self.assertIsNotNone(pkt)
+        self.assertEqual(pkt.packet_type, PacketType.NODEINFO)
+        self.assertEqual(pkt.source_id, "abcdef123456")
+        self.assertNotIn("long_name", pkt.decoded_payload)
+        self.assertNotIn("short_name", pkt.decoded_payload)
+
     def test_advertisement_no_coords(self):
         raw = self._make_envelope("advertisement", {
             "public_key": "abcdef1234567890abcdef",
@@ -197,6 +234,87 @@ class TestMeshcoreEventAdapter(unittest.TestCase):
         pkt = adapt_event(raw)
         self.assertIsNotNone(pkt.timestamp)
         self.assertEqual(pkt.timestamp.tzinfo, timezone.utc)
+
+
+class TestMeshcoreDecoderNodeExtraction(unittest.TestCase):
+    """Verify ``extract_node_update`` lifts MeshCore advert position onto Node.
+
+    Regression coverage for the bug where MeshCore nodes never appeared on
+    the dashboard map: their lat/lon rides on the advertisement (classified
+    by the event adapter as ``PacketType.NODEINFO``), but the extractor only
+    consumed positions from ``PacketType.POSITION`` packets, so the lat/lon
+    silently dropped on the floor before the node repository write.
+    """
+
+    def setUp(self) -> None:
+        self._decoder = MeshcoreDecoder(CryptoService())
+
+    @staticmethod
+    def _make_envelope(event_type: str, payload: dict) -> bytes:
+        return json.dumps({
+            "event_type": event_type,
+            "payload": payload,
+        }).encode("utf-8")
+
+    def _adapt_advertisement(self, payload: dict) -> Packet:
+        pkt = adapt_event(self._make_envelope("advertisement", payload))
+        assert pkt is not None, "advertisement should adapt to a Packet"
+        return pkt
+
+    def test_advertisement_with_position_yields_positioned_node(self):
+        pkt = self._adapt_advertisement({
+            "public_key": "abcdef1234567890abcdef",
+            "adv_name": "TestNode",
+            "adv_lat": 43.9091,
+            "adv_lon": -72.2207,
+        })
+
+        node = self._decoder.extract_node_update(pkt)
+
+        self.assertIsNotNone(node)
+        self.assertTrue(node.has_position)
+        self.assertAlmostEqual(node.latitude, 43.9091)
+        self.assertAlmostEqual(node.longitude, -72.2207)
+        self.assertEqual(node.long_name, "TestNode")
+        self.assertEqual(node.protocol, Protocol.MESHCORE.value)
+
+    def test_advertisement_without_position_yields_node_without_position(self):
+        pkt = self._adapt_advertisement({
+            "public_key": "abcdef1234567890abcdef",
+            "adv_name": "TestNode",
+            "adv_lat": 0.0,
+            "adv_lon": 0.0,
+        })
+
+        node = self._decoder.extract_node_update(pkt)
+
+        self.assertIsNotNone(node)
+        self.assertFalse(node.has_position)
+        self.assertIsNone(node.latitude)
+        self.assertIsNone(node.longitude)
+        self.assertEqual(node.long_name, "TestNode")
+
+    def test_position_packet_still_extracts_lat_lon(self):
+        """Regression guard for the original ``PacketType.POSITION`` path."""
+        from datetime import datetime, timezone
+
+        pkt = Packet(
+            packet_id="0001",
+            source_id="abcd",
+            destination_id="broadcast",
+            protocol=Protocol.MESHCORE,
+            packet_type=PacketType.POSITION,
+            decoded_payload={"latitude": 12.34, "longitude": -56.78},
+            timestamp=datetime.now(timezone.utc),
+            decrypted=True,
+        )
+
+        node = self._decoder.extract_node_update(pkt)
+
+        self.assertIsNotNone(node)
+        self.assertTrue(node.has_position)
+        self.assertAlmostEqual(node.latitude, 12.34)
+        self.assertAlmostEqual(node.longitude, -56.78)
 
 
 class TestMeshcoreUsbConfig(unittest.TestCase):

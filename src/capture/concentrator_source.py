@@ -34,8 +34,13 @@ class ConcentratorCaptureSource(CaptureSource):
         poll_interval_ms: int = 10,
         syncword: int = 0x2B,
         radio_config: Optional[RadioConfig] = None,
+        sx1261_spi_path: str = "",
     ):
-        self._wrapper = SX1302Wrapper(lib_path=lib_path, spi_path=spi_path)
+        self._wrapper = SX1302Wrapper(
+            lib_path=lib_path,
+            spi_path=spi_path,
+            sx1261_spi_path=sx1261_spi_path,
+        )
         self._channel_plan = self._resolve_channel_plan(
             channel_plan, radio_config
         )

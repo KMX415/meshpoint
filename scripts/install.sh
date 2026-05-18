@@ -416,6 +416,12 @@ fi
 
 # Grant access to SPI, UART, GPIO, and I2C
 usermod -a -G spi,gpio,dialout,i2c meshpoint 2>/dev/null || true
+
+# Grant the service user read access to its own systemd journal so the
+# dashboard's `meshpoint logs` button (and `journalctl -u meshpoint`
+# inside the web terminal) work without sudo. This is the same group
+# Raspberry Pi OS uses to gate journal access for the `pi` user.
+usermod -a -G systemd-journal,adm meshpoint 2>/dev/null || true
 chown -R meshpoint:meshpoint "${MESHPOINT_DIR}/data"
 chown -R meshpoint:meshpoint "${MESHPOINT_DIR}/config"
 

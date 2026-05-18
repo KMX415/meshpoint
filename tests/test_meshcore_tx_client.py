@@ -37,6 +37,27 @@ class TestNormalizeContactPayload(unittest.TestCase):
         result = MeshCoreTxClient._normalize_contact_payload(payload)
         self.assertEqual(len(result), 1)
 
+    def test_dict_filters_non_dict_values(self):
+        # Some firmware revisions return a dict with mixed value types
+        # (count fields alongside contact dicts). The normaliser must
+        # drop the int / string values so they cannot crash the
+        # downstream entry.get() loop.
+        payload = {
+            "contact_count": 2,
+            "ts": "2026-05-15T19:48:42Z",
+            "aabb001122": {"adv_name": "Alice", "public_key": "aabb001122"},
+            "ccdd334455": {"adv_name": "Bob", "public_key": "ccdd334455"},
+        }
+        result = MeshCoreTxClient._normalize_contact_payload(payload)
+        self.assertEqual(len(result), 2)
+        names = {e.get("adv_name") for e in result}
+        self.assertEqual(names, {"Alice", "Bob"})
+
+    def test_dict_all_int_values_returns_empty(self):
+        payload = {"a": 1, "b": 2, "c": 3}
+        result = MeshCoreTxClient._normalize_contact_payload(payload)
+        self.assertEqual(result, [])
+
     def test_none_returns_empty(self):
         self.assertEqual(MeshCoreTxClient._normalize_contact_payload(None), [])
 

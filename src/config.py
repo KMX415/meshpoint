@@ -47,6 +47,24 @@ class RadioConfig:
     sync_word: int = 0x2B
     preamble_length: int = 16
     tx_power_dbm: int = 22
+    # Periodic SX1302 spectral scan to measure ambient noise floor
+    # directly. Each scan briefly pauses RX on the primary channel
+    # (~50 ms). Default 60 s gives ~0.08% downtime; raise for less.
+    # Set to 0 to disable (falls back to packet-derived noise floor).
+    spectral_scan_interval_seconds: float = 60.0
+    # SPI device for the SX1261 companion radio used by spectral
+    # scan. Empty string disables the SX1261 init step entirely
+    # (default; spectral scan stays unavailable, packet-derived
+    # noise floor remains in use).
+    #
+    # On RAK2287 / RAK5146 / SenseCap M1 this is typically
+    # ``/dev/spidev0.1`` (separate from the SX1302's
+    # ``/dev/spidev0.0``). Some carriers daisy-chain the SX1261
+    # behind the SX1302's SPI router and want this set to the same
+    # path as the SX1302 SPI device. Wrong path = HAL refuses to
+    # ``lgw_start`` after our config attempt, so we ship empty by
+    # default and ask interested users to opt in explicitly.
+    sx1261_spi_path: str = ""
 
 
 @dataclass
@@ -198,7 +216,11 @@ class WebAuthConfig:
     admin_password_hash: str = ""
     viewer_password_hash: str = ""
     jwt_secret: str = ""
-    jwt_expiry_minutes: int = 60
+    # Session lifetime in minutes. v0.7.4 raised the default from 60 to
+    # 480 (8 hours) after operators reported being kicked back to /login
+    # mid-shift. Configurable from Settings -> Auth -> Session lifetime,
+    # range-checked at the route layer (5 min .. 30 days).
+    jwt_expiry_minutes: int = 480
     allow_read_only: bool = False
     lockout_attempts: int = 5
     lockout_cooldown_minutes: int = 5

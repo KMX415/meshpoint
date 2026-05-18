@@ -1,0 +1,136 @@
+/* Command palette overlay. Modal, centered, dark glass surface. */
+
+.cmd-palette {
+    position: fixed;
+    inset: 0;
+    display: none;
+    z-index: 2000;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 12vh;
+    color: var(--text-primary);
+}
+
+.cmd-palette--open { display: flex; }
+
+.cmd-palette__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(7, 11, 20, 0.62);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.cmd-palette__panel {
+    position: relative;
+    width: min(620px, 92vw);
+    max-height: 60vh;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, rgba(20, 28, 46, 0.95) 0%, rgba(13, 19, 32, 0.96) 100%);
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(6, 182, 212, 0.22);
+    box-shadow:
+        0 30px 60px rgba(0, 0, 0, 0.55),
+        0 0 0 1px rgba(255, 255, 255, 0.04),
+        0 0 30px rgba(6, 182, 212, 0.18);
+    animation: cmd-palette-pop 180ms var(--ease-out-expo);
+    overflow: hidden;
+}
+
+@keyframes cmd-palette-pop {
+    from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.cmd-palette__hint {
+    padding: 0.5rem 0.95rem 0.3rem;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.cmd-palette__input {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 0.55rem 0.95rem 0.85rem;
+    color: var(--text-primary);
+    font-size: 1.05rem;
+    outline: none;
+    font-family: var(--font-mono);
+}
+
+.cmd-palette__input::placeholder { color: var(--text-muted); opacity: 0.7; }
+
+.cmd-palette__list {
+    list-style: none;
+    margin: 0;
+    padding: 0.35rem 0;
+    overflow-y: auto;
+    max-height: 48vh;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+.cmd-palette__list li {
+    display: grid;
+    grid-template-columns: 22px 1fr auto;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.95rem;
+    cursor: pointer;
+    transition: background 80ms var(--ease-out-expo);
+    border-left: 2px solid transparent;
+}
+
+.cmd-palette__list li:hover,
+.cmd-palette__row--active {
+    background: rgba(6, 182, 212, 0.08);
+    border-left-color: var(--accent-cyan);
+}
+
+.cmd-palette__row-icon {
+    color: var(--accent-cyan);
+    font-size: 0.95rem;
+    text-align: center;
+}
+
+.cmd-palette__row-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+}
+
+.cmd-palette__row-label {
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cmd-palette__row-hint {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-family: var(--font-mono);
+}
+
+.cmd-palette__row-group {
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    opacity: 0.7;
+}
+
+.cmd-palette__empty {
+    padding: 1rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-style: italic;
+}

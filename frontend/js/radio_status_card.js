@@ -86,7 +86,7 @@ class RadioStatusCard {
 
     mount(rootEl) {
         this._root = rootEl;
-        rootEl.classList.add('r-card');
+        rootEl.classList.add('r-card', 'r-card--readout');
         rootEl.innerHTML = `
             <div class="r-card__header">
                 <h3 class="r-card__title">TX Status</h3>
@@ -113,17 +113,23 @@ class RadioStatusCard {
                     <div class="duty-gauge__cap">of 0.0% allotted</div>
                 </div>
             </div>
-            <div class="r-card__row">
-                <span class="r-card__label">TX Enabled</span>
-                <label class="r-switch">
-                    <input type="checkbox" id="r-tx-enabled" />
-                    <span class="r-switch__track"></span>
-                </label>
+            <div class="r-readout-grid">
+                <div class="r-readout-row">
+                    <span class="r-readout-row__label">TX Enabled</span>
+                    <span class="r-readout-row__value" id="r-tx-state">--</span>
+                </div>
+                <div class="r-readout-row">
+                    <span class="r-readout-row__label">Duty cap</span>
+                    <span class="r-readout-row__value" id="r-tx-cap">--</span>
+                </div>
             </div>
+            <a class="r-config-link" href="#/configuration/transmit">
+                <span>Edit transmit settings</span>
+                <span aria-hidden="true">→</span>
+            </a>
         `;
 
         this._gauge = new _DutyGauge(rootEl.querySelector('.duty-gauge'));
-        this._wire();
     }
 
     render(config) {
@@ -133,7 +139,11 @@ class RadioStatusCard {
         const cap = tx.max_duty_cycle_percent || 1;
         this._gauge.render(used, cap);
         this._renderLamp(tx.enabled, used, cap);
-        this._root.querySelector('#r-tx-enabled').checked = !!tx.enabled;
+        const stateEl = this._root.querySelector('#r-tx-state');
+        const capEl = this._root.querySelector('#r-tx-cap');
+        stateEl.textContent = tx.enabled ? 'On' : 'Off';
+        stateEl.dataset.state = tx.enabled ? 'on' : 'off';
+        capEl.textContent = `${(cap || 0).toFixed(1)}%`;
     }
 
     _renderLamp(enabled, used, cap) {
@@ -162,21 +172,6 @@ class RadioStatusCard {
         }
     }
 
-    _wire() {
-        const toggle = this._root.querySelector('#r-tx-enabled');
-        toggle.addEventListener('change', async (e) => {
-            const result = await this._api.put(
-                '/api/config/transmit', { enabled: e.target.checked },
-            );
-            if (result && result.restart_required) {
-                this._api.signalRestart(
-                    e.target.checked
-                        ? 'TX enabled. Restart required to bring up the radio.'
-                        : 'TX disabled. Restart required to release the radio.',
-                );
-            }
-        });
-    }
 }
 
 window.RadioStatusCard = RadioStatusCard;

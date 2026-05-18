@@ -114,6 +114,46 @@ body.auth-body {
     100% { transform: scale(2.5); opacity: 0; }
 }
 
+/* ---- Live blips ---- */
+.auth-radar__blip {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    background: rgba(0, 229, 160, 0.9);
+    box-shadow: 0 0 8px rgba(0, 229, 160, 0.6);
+    animation: auth-radar-blip 6s ease-out forwards;
+    z-index: 1;
+}
+
+.auth-radar__blip--strong {
+    background: rgba(0, 229, 160, 0.95);
+    box-shadow: 0 0 12px rgba(0, 229, 160, 0.8);
+}
+
+.auth-radar__blip--medium {
+    background: rgba(255, 184, 77, 0.9);
+    box-shadow: 0 0 10px rgba(255, 184, 77, 0.6);
+}
+
+.auth-radar__blip--weak {
+    background: rgba(120, 160, 200, 0.85);
+    box-shadow: 0 0 6px rgba(120, 160, 200, 0.4);
+}
+
+@keyframes auth-radar-blip {
+    0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0; }
+    10%  { transform: translate(-50%, -50%) scale(1.6); opacity: 1; }
+    35%  { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .auth-radar__blip { animation-duration: 1s; }
+}
+
 /* ---- Identity strip ---- */
 .auth-identity {
     border-top: 1px solid var(--border);

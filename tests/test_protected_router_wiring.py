@@ -4,12 +4,15 @@ Mirrors the wiring that ``src.api.server.create_app`` uses:
 
 - public routers mounted with no auth dependency
 - protected routers mounted with ``dependencies=[Depends(require_auth)]``
-- WS handshake gated by ``authenticate_websocket``
-
-Confirms that a router mounted with ``Depends(require_auth)`` rejects
-anonymous requests with 401 across every method on it, accepts a
-valid session cookie, and that the WS guard rejects un-authed
-upgrades with the negotiated 4401 close code.
+- WS handshake gated by ``authenticate_websocket`` with the production
+  accept-then-close pattern: when auth fails, the server first
+  ``accept()``s the upgrade, then ``close(4401)``s it. Without the
+  ``accept()`` call, Starlette responds with HTTP 403 to the upgrade
+  and the JS ``WebSocket.onclose`` event surfaces a generic ``1006``
+  to the browser instead of the negotiated ``4401``. The frontend
+  reconnect loop only short-circuits on ``4401``, so any regression
+  back to "close before accept" silently breaks dashboard recovery
+  for un-authed clients (the v0.7.3.1 hotfix bug).
 """
 
 from __future__ import annotations
@@ -52,6 +55,7 @@ def _build_app(jwt_service: JwtSessionService) -> FastAPI:
     async def websocket_endpoint(websocket: WebSocket):
         claims = authenticate_websocket(websocket, jwt_service)
         if claims is None:
+            await websocket.accept()
             await websocket.close(code=WS_AUTH_CLOSE_CODE)
             return
         await websocket.accept()
@@ -111,9 +115,9 @@ class TestWebsocketAuthGate(unittest.TestCase):
         auth_deps.reset_auth()
 
     def test_ws_rejects_anonymous_with_4401(self) -> None:
-        with self.assertRaises(WebSocketDisconnect) as ctx:
-            with self.client.websocket_connect("/ws"):
-                pass
+        with self.client.websocket_connect("/ws") as ws:
+            with self.assertRaises(WebSocketDisconnect) as ctx:
+                ws.receive_text()
         self.assertEqual(ctx.exception.code, WS_AUTH_CLOSE_CODE)
 
     def test_ws_accepts_valid_cookie(self) -> None:
@@ -128,9 +132,9 @@ class TestWebsocketAuthGate(unittest.TestCase):
             ws.close()
 
     def test_ws_rejects_invalid_token(self) -> None:
-        with self.assertRaises(WebSocketDisconnect) as ctx:
-            with self.client.websocket_connect("/ws?token=not-a-jwt"):
-                pass
+        with self.client.websocket_connect("/ws?token=not-a-jwt") as ws:
+            with self.assertRaises(WebSocketDisconnect) as ctx:
+                ws.receive_text()
         self.assertEqual(ctx.exception.code, WS_AUTH_CLOSE_CODE)
 
 

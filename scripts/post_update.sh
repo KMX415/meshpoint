@@ -37,6 +37,18 @@ fi
 # ── 3. Config directory permissions ─────────────────────────────────
 chown -R meshpoint:meshpoint "${MESHPOINT_DIR}/config" 2>/dev/null || true
 
+# ── 3a. Service-user group membership (idempotent) ──────────────────
+# v0.7.4+: meshpoint user needs systemd-journal + adm to read its own
+# logs from the dashboard without sudo. Existing installs upgraded
+# from <=v0.7.3 won't have this until we re-run usermod here.
+for grp in systemd-journal adm; do
+    if ! id -nG meshpoint 2>/dev/null | grep -qw "$grp"; then
+        info "Adding meshpoint to '$grp' group for journal access..."
+        usermod -a -G "$grp" meshpoint 2>/dev/null || true
+        CHANGED=1
+    fi
+done
+
 # ── 4. HAL TX sync word patch (one-time, ~2 minutes if needed) ──────
 if [ -f "$HAL_SRC" ]; then
     if ! grep -q "PEAK1_POS.*sx1302_tx_sw_peak1" "$HAL_SRC"; then

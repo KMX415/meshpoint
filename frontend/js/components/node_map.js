@@ -29,6 +29,8 @@ class NodeMap {
             maxZoom: 19,
         }).addTo(this._map);
 
+        this._wireResizeRecalc();
+
         this._topologyLayer = L.layerGroup();
         this._topologyVisible = false;
         this._focusLine = null;
@@ -179,6 +181,42 @@ class NodeMap {
 
     centerOn(lat, lng, zoom = 15) {
         if (this._map) this._map.flyTo([lat, lng], zoom);
+    }
+
+    _wireResizeRecalc() {
+        if (!this._map) return;
+
+        requestAnimationFrame(() => {
+            if (this._map) this._map.invalidateSize();
+        });
+
+        let resizeTimer = null;
+        const recalc = () => {
+            if (!this._map) return;
+            this._map.invalidateSize();
+        };
+
+        window.addEventListener('resize', () => {
+            if (resizeTimer) clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(recalc, 150);
+        });
+
+        document.addEventListener('sidebar:routeActivated', (event) => {
+            if (event.detail && event.detail.route === 'dashboard') {
+                requestAnimationFrame(recalc);
+            }
+        });
+
+        if (typeof ResizeObserver === 'function') {
+            const el = document.getElementById(this._containerId);
+            if (el) {
+                this._resizeObserver = new ResizeObserver(() => {
+                    if (resizeTimer) clearTimeout(resizeTimer);
+                    resizeTimer = setTimeout(recalc, 150);
+                });
+                this._resizeObserver.observe(el);
+            }
+        }
     }
 
     updateFromPacket(packet) {

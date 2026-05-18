@@ -328,6 +328,87 @@ class TxService:
             error=f"lgw_send returned {result_code}",
         )
 
+    async def send_raw_relay(
+        self, raw_radio_bytes: bytes
+    ) -> SendResult:
+        """Re-broadcast a captured Meshtastic radio frame verbatim.
+
+        Identity-preserving relay: the original 16-byte radio header
+        (source_id, packet_id, channel_hash, …) and encrypted body
+        are kept intact. Only ``hop_limit`` (bits 0-2 of the flags
+        byte at offset 12) is decremented. Other Meshtastic nodes
+        recognise the frame as a relay and apply their own dedup,
+        rather than seeing a fresh broadcast originated by this
+        Meshpoint.
+
+        Used by RelayManager when the onboard SX1302 is available;
+        replaces the legacy USB-companion ``MeshtasticTransmitter``
+        path which had to rewrite the source identity.
+        """
+        if not self.meshtastic_enabled:
+            return SendResult(
+                success=False,
+                protocol="meshtastic",
+                error="Meshtastic TX not available",
+            )
+
+        if len(raw_radio_bytes) < 16:
+            return SendResult(
+                success=False,
+                protocol="meshtastic",
+                error="Packet too short (need full 16-byte header)",
+            )
+
+        flags = raw_radio_bytes[12]
+        hop_limit = flags & 0x07
+        if hop_limit == 0:
+            return SendResult(
+                success=False,
+                protocol="meshtastic",
+                error="Packet has no hops remaining",
+            )
+
+        new_flags = (flags & ~0x07) | (hop_limit - 1)
+        new_packet = bytearray(raw_radio_bytes)
+        new_packet[12] = new_flags
+        new_packet_bytes = bytes(new_packet)
+
+        tx_pkt = self._build_hal_packet(new_packet_bytes)
+        airtime_ms = await self._get_airtime(tx_pkt)
+
+        if self._duty and not self._duty.check_budget(airtime_ms):
+            return SendResult(
+                success=False,
+                protocol="meshtastic",
+                error="Duty cycle limit reached",
+                airtime_ms=airtime_ms,
+            )
+
+        logger.info(
+            "Relay TX (native): hops %d -> %d, size=%d, airtime=%dms",
+            hop_limit, hop_limit - 1, len(new_packet_bytes), airtime_ms,
+        )
+
+        result_code = await asyncio.to_thread(
+            self._wrapper.send, tx_pkt
+        )
+        if result_code == 0:
+            if self._duty:
+                self._duty.record_tx(airtime_ms)
+            return SendResult(
+                success=True,
+                protocol="meshtastic",
+                timestamp=time.time(),
+                airtime_ms=airtime_ms,
+            )
+
+        return SendResult(
+            success=False,
+            protocol="meshtastic",
+            error=f"lgw_send returned {result_code}",
+            airtime_ms=airtime_ms,
+        )
+
     async def _send_meshcore(
         self, text: str, destination: int | str, channel: int
     ) -> SendResult:

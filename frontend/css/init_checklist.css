@@ -1,0 +1,93 @@
+/* Per-page init checklist. Console-styled, dim-on-idle, animates
+ * each row in with a 35ms stagger. Fades out as a unit when the
+ * last task settles. */
+
+.init-checklist {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 2rem;
+    pointer-events: none;
+    z-index: 5;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    transition: opacity 220ms var(--ease-out-expo);
+    background:
+        radial-gradient(
+            ellipse at center,
+            rgba(15, 22, 36, 0.72) 0%,
+            rgba(15, 22, 36, 0.55) 60%,
+            transparent 100%
+        );
+}
+
+.init-checklist--leaving { opacity: 0; }
+
+.init-checklist__row {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.65rem;
+    padding: 0.3rem 0.85rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    background: rgba(15, 22, 36, 0.4);
+    opacity: 0;
+    transform: translateX(-6px);
+    animation: init-checklist-row-in 220ms var(--ease-out-expo) forwards;
+    color: var(--text-muted);
+}
+
+@keyframes init-checklist-row-in {
+    from { opacity: 0; transform: translateX(-6px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+.init-checklist__row--active {
+    border-color: rgba(6, 182, 212, 0.4);
+    color: var(--accent-cyan);
+    box-shadow: 0 0 14px rgba(6, 182, 212, 0.18);
+}
+
+.init-checklist__row--done {
+    color: var(--accent-green, #00e5a0);
+    border-color: rgba(0, 229, 160, 0.18);
+    background: rgba(0, 229, 160, 0.04);
+}
+
+.init-checklist__row--error {
+    color: var(--accent-red, #ef4444);
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.06);
+}
+
+.init-checklist__mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    font-weight: 700;
+    font-size: 0.78rem;
+    color: inherit;
+    flex-shrink: 0;
+}
+
+.init-checklist__row--active .init-checklist__mark::before {
+    content: "›";
+    color: var(--accent-cyan);
+    animation: init-checklist-cursor 0.8s steps(2, end) infinite;
+}
+
+@keyframes init-checklist-cursor {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.3; }
+}
+
+.init-checklist__label {
+    letter-spacing: 0.02em;
+}

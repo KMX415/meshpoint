@@ -29,6 +29,47 @@ class MessagingContacts {
         }
     }
 
+    /**
+     * Total unread across DM conversations only. Broadcast/channel
+     * conversations are excluded on purpose (see messaging.js
+     * sidebar-badge comment block) so the sidebar stays a meaningful
+     * "you got a DM" signal instead of a public-channel firehose.
+     */
+    getDmUnreadTotal() {
+        return this._conversations
+            .filter(c => !c.is_broadcast)
+            .reduce((sum, c) => sum + (c.unread_count || 0), 0);
+    }
+
+    /**
+     * POST mark-read for a conversation, then zero its local
+     * unread_count and re-render so the per-row badge clears
+     * immediately. Caller is responsible for syncing the sidebar
+     * badge afterward (the panel owns that surface).
+     *
+     * No-op for broadcast conversations: the server still tracks
+     * unread on channel rows but we deliberately don't surface that
+     * in the sidebar today, and clearing it on every channel-row
+     * click would silently flip the server-side state for a feature
+     * we haven't designed yet.
+     */
+    async markConversationRead(nodeId) {
+        if (!nodeId || nodeId.startsWith('broadcast:')) return;
+        const convo = this._conversations.find(c => c.node_id === nodeId);
+        if (!convo || (convo.unread_count || 0) === 0) return;
+        try {
+            await fetch(
+                `/api/messages/conversation/${encodeURIComponent(nodeId)}/read`,
+                { method: 'POST' },
+            );
+            convo.unread_count = 0;
+            this.render();
+            if (this._activeNodeId) this.setActive(this._activeNodeId);
+        } catch (e) {
+            console.error('Failed to mark conversation read:', e);
+        }
+    }
+
     render() {
         this._listEl.innerHTML = '';
 

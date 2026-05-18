@@ -214,9 +214,18 @@ class MeshCoreTxClient:
 
     @staticmethod
     def _normalize_contact_payload(payload) -> list[dict]:
-        """Accept both dict-keyed-by-pubkey and list formats."""
+        """Accept both dict-keyed-by-pubkey and list formats.
+
+        Defensively filters values to dicts only. Some firmware
+        revisions of the MeshCore companion return a payload like
+        ``{"contact_count": 5, ...}`` where some values are ints
+        and some are nested dicts; we only want the nested-dict
+        contact entries. Non-dict values (ints, strings, lists)
+        are silently dropped so a payload-shape change in the
+        companion firmware can never crash get_contacts.
+        """
         if isinstance(payload, dict):
-            return list(payload.values())
+            return [v for v in payload.values() if isinstance(v, dict)]
         if isinstance(payload, list):
             return [e for e in payload if isinstance(e, dict)]
         return []
@@ -330,7 +339,13 @@ class MeshCoreTxClient:
         logger.info("sync_channels: done (%d configured)", len(desired))
 
     async def get_contacts(self) -> list[dict]:
-        """Retrieve the companion's contact list."""
+        """Retrieve the companion's contact list.
+
+        Each entry inside the response can shape-shift between
+        firmware versions, so the per-entry parse is wrapped in
+        a defensive isinstance check + try/except so one weird
+        contact never poisons the whole list.
+        """
         if not self.connected:
             return []
         try:
@@ -339,8 +354,15 @@ class MeshCoreTxClient:
                 timeout=10.0,
             )
             entries = self._normalize_contact_payload(result.payload)
-            contacts = []
-            for i, entry in enumerate(entries):
+        except Exception:
+            logger.exception("Failed to retrieve MeshCore contacts")
+            return []
+
+        contacts: list[dict] = []
+        for i, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                continue
+            try:
                 name = (
                     entry.get("adv_name")
                     or entry.get("name")
@@ -354,8 +376,11 @@ class MeshCoreTxClient:
                         "public_key": pk,
                         "last_seen": entry.get("lastmod", 0),
                     })
-            logger.info("get_contacts: %d contacts parsed", len(contacts))
-            return contacts
-        except Exception:
-            logger.exception("Failed to retrieve MeshCore contacts")
-            return []
+            except Exception:
+                logger.debug(
+                    "get_contacts: skipping malformed entry at index %d",
+                    i, exc_info=True,
+                )
+                continue
+        logger.info("get_contacts: %d contacts parsed", len(contacts))
+        return contacts

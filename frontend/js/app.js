@@ -36,7 +36,95 @@
 document.addEventListener('DOMContentLoaded', async () => {
     if (await _redirectIfSetupRequired()) return;
 
+    const identity = await _loadIdentity();
+
+    const router = new Router({
+        defaultRoute: 'dashboard',
+        allowedRoutes: [
+            'dashboard', 'stats', 'messages', 'radio', 'terminal',
+            'configuration/identity', 'configuration/radio',
+            'configuration/channels', 'configuration/transmit',
+            'configuration/mqtt', 'configuration/gps',
+            'settings/updates', 'settings/auth', 'settings/dangerous',
+        ],
+    });
+    const sidebar = new SidebarController({ router, identity });
+    sidebar.bind();
+    window.sidebar = sidebar;
+
+    if (window.RadioTxBadge) {
+        const radioTxBadge = new RadioTxBadge(sidebar);
+        radioTxBadge.init();
+        window.radioTxBadge = radioTxBadge;
+    }
+
+    if (window.SinceLineController && window.lastVisitTracker) {
+        const sinceCtrl = new SinceLineController(router, window.lastVisitTracker);
+        const dashHost = document.getElementById('dashboard-since-host');
+        if (dashHost) {
+            sinceCtrl.register('dashboard', {
+                hostEl: dashHost,
+                label: 'packets',
+                getCount: () => (window.getTotalPackets ? window.getTotalPackets() : 0),
+            });
+        }
+        sinceCtrl.start();
+        window.sinceLineController = sinceCtrl;
+    }
+
+    router.start();
+
+    const logoFrame = document.getElementById('sidebar-logo-frame');
+    if (logoFrame && window.SidebarLogoPip) {
+        const pip = new SidebarLogoPip(logoFrame, window.concentratorWS);
+        pip.init();
+        window.sidebarLogoPip = pip;
+    }
+
+    const topbarRoot = document.getElementById('topbar');
+    if (topbarRoot && window.TopbarController) {
+        const topbar = new TopbarController(topbarRoot, window.concentratorWS);
+        topbar.init();
+        window.topbar = topbar;
+    }
+
+    if (window.BuildStamp) {
+        const stamp = new BuildStamp();
+        stamp.mount();
+        window.buildStamp = stamp;
+    }
+
+    const telemetryRoot = document.getElementById('telemetry-rail');
+    if (telemetryRoot && window.SidebarTelemetryRail) {
+        const rail = new SidebarTelemetryRail(telemetryRoot, window.concentratorWS);
+        rail.init();
+        window.telemetryRail = rail;
+    }
+
+    if (window.ReconnectStoryboard) {
+        const story = new ReconnectStoryboard(window.concentratorWS);
+        story.mount();
+        story.init();
+        window.reconnectStoryboard = story;
+    }
+
+    if (window.TabTitleTelemetry) {
+        const tabTitle = new TabTitleTelemetry(window.concentratorWS);
+        tabTitle.init();
+        window.tabTitleTelemetry = tabTitle;
+    }
+
+    if (window.themeController) window.themeController.init();
+    _bootCommandPaletteAndKeymap(router);
+    _wireSoundEvents();
+
     new SignOutController('signout-btn').bind();
+
+    _bootAuthPanel(router);
+    _bootTerminalPanel(router);
+    _bootUpdatePanel(router);
+    _bootConfigurationPanel(router);
+    _bootDangerousPanel(router);
 
     const nodeMap = new NodeMap('map');
     const packetFeed = new SimplePacketFeed('packet-tbody');
@@ -87,8 +175,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         _incrementPacketCount();
     });
 
-    _setupTabs();
-
     window.concentratorWS.connect();
 
     setInterval(() => {
@@ -99,9 +185,94 @@ document.addEventListener('DOMContentLoaded', async () => {
     setInterval(_checkForUpdate, 300_000);
 });
 
+function _bootDangerousPanel(router) {
+    const root = document.getElementById('settings-dangerous-panel');
+    if (!root || !window.DangerousPanelController) return;
+    const controller = new window.DangerousPanelController(root);
+    controller.bind();
+    let primed = false;
+    router.onRouteChange((route) => {
+        if (route !== 'settings/dangerous') return;
+        if (primed) return;
+        primed = true;
+        controller.refresh();
+    });
+}
+
+function _bootConfigurationPanel(router) {
+    if (!window.ConfigurationPanel) return;
+    const panel = new window.ConfigurationPanel();
+    panel.bind();
+    router.onRouteChange((route) => {
+        if (!route || !route.startsWith('configuration/')) return;
+        panel.onSectionEnter(route);
+    });
+}
+
+function _bootUpdatePanel(router) {
+    const root = document.getElementById('settings-updates-panel');
+    if (!root || !window.UpdatePanelController) return;
+    const controller = new window.UpdatePanelController(root);
+    controller.bind();
+    let primed = false;
+    router.onRouteChange((route) => {
+        if (route !== 'settings/updates') return;
+        if (primed) return;
+        primed = true;
+        controller.refresh();
+    });
+}
+
+function _bootTerminalPanel(router) {
+    const root = document.getElementById('terminal-panel');
+    if (!root || !window.TerminalPanelController) return;
+    const controller = new window.TerminalPanelController(root);
+    controller.bind();
+    let primed = false;
+    router.onRouteChange((route) => {
+        if (route !== 'terminal') return;
+        if (!primed) {
+            primed = true;
+            controller.refresh();
+        }
+        controller.onSectionEnter();
+    });
+}
+
+function _bootAuthPanel(router) {
+    const root = document.getElementById('settings-auth-panel');
+    if (!root || !window.AuthPanelController) return;
+    const controller = new window.AuthPanelController(root);
+    controller.bind();
+    let primed = false;
+    const maybeRefresh = (route) => {
+        if (route !== 'settings/auth') return;
+        if (primed) return;
+        primed = true;
+        controller.refresh();
+    };
+    router.onRouteChange(maybeRefresh);
+    if ((location.hash || '').replace(/^#\//, '') === 'settings/auth') {
+        maybeRefresh('settings/auth');
+    }
+}
+
+async function _loadIdentity() {
+    try {
+        const res = await fetch('/api/identity', { credentials: 'same-origin' });
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (_) {
+        return null;
+    }
+}
+
 function _openMessagingForNode(node) {
-    const msgTab = document.querySelector('[data-tab="messages"]');
-    if (msgTab) msgTab.click();
+    if (window.sidebar && window.sidebar._router) {
+        window.sidebar._router.navigate('messages');
+    } else if (location.hash !== '#/messages') {
+        location.hash = '#/messages';
+    }
 
     setTimeout(() => {
         if (window.messagingPanel) {
@@ -126,21 +297,7 @@ async function _loadInitial(nodeMap, nodeList, packetFeed) {
         const nodesData = await nodesRes.json();
         const packetsData = await packetsRes.json();
 
-        _setText('device-name', device.device_name || 'Meshpoint');
-        if (device.device_id) {
-            const short = device.device_id.slice(0, 8);
-            const idEl = document.getElementById('device-id');
-            if (idEl) {
-                idEl.textContent = short;
-                idEl.title = device.device_id;
-                idEl.addEventListener('click', () => {
-                    navigator.clipboard.writeText(device.device_id).then(() => {
-                        idEl.textContent = 'copied!';
-                        setTimeout(() => { idEl.textContent = short; }, 1500);
-                    });
-                });
-            }
-        }
+        _setText('sidebar-device-name', _resolveDeviceLabel(device));
 
         const nodes = nodesData.nodes || nodesData || [];
         nodeMap.loadNodes(nodes, device);
@@ -202,9 +359,16 @@ async function _updateStats() {
 
         _setText('stat-uptime-val', _formatUptime(device.uptime_seconds || 0));
 
-        _setText('node-count-badge', `${nodeCount.active} / ${nodeCount.count} nodes`);
-        _setText('packet-count-badge', `${traffic.total_packets} packets`);
-        _setText('version-badge', device.firmware_version ? `v${device.firmware_version}` : '--');
+        _setText('sidebar-device-name', _resolveDeviceLabel(device));
+        const statusText = device.firmware_version
+            ? `online · v${device.firmware_version}`
+            : 'online';
+        _setText('sidebar-status-text', statusText);
+        const statusDot = document.getElementById('sidebar-status-dot');
+        if (statusDot) {
+            statusDot.classList.remove('status-dot--disconnected');
+            statusDot.classList.add('status-dot--connected');
+        }
 
         if (metricsRes.ok) {
             const metrics = await metricsRes.json();
@@ -226,6 +390,8 @@ function _incrementPacketCount() {
     _totalPackets++;
 }
 
+window.getTotalPackets = () => _totalPackets;
+
 function _formatUptime(totalSeconds) {
     const days = Math.floor(totalSeconds / 86400);
     const hours = Math.floor((totalSeconds % 86400) / 3600);
@@ -239,45 +405,37 @@ async function _checkForUpdate() {
     try {
         const res = await fetch('/api/device/update-check');
         const data = await res.json();
-        const badge = document.getElementById('update-badge');
-        if (!badge) return;
-        if (data.update_available) {
-            badge.classList.remove('hidden');
-            badge.title = `Update available (local: ${data.local_version}, remote: ${data.remote_version})`;
-        } else {
-            badge.classList.add('hidden');
+        if (window.sidebar) {
+            window.sidebar.setStatusBadge(
+                'settings/updates',
+                data.update_available ? '1' : null,
+                'update'
+            );
         }
     } catch (_) {}
-}
-
-function _setupTabs() {
-    document.querySelectorAll('.tab-bar__btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const tabId = btn.dataset.tab;
-            document.querySelectorAll('.tab-bar__btn').forEach(b => b.classList.remove('tab-bar__btn--active'));
-            btn.classList.add('tab-bar__btn--active');
-
-            document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('tab-content--active'));
-            const target = document.getElementById(`tab-${tabId}`);
-            if (target) target.classList.add('tab-content--active');
-
-            if (tabId === 'messages' && window.messagingPanel) {
-                window.messagingPanel.onActivated();
-                window.messagingPanel.resetUnreadBadge();
-            }
-            if (tabId === 'radio' && window.radioSettings) {
-                window.radioSettings.onActivated();
-            }
-            if (tabId === 'stats' && window.statsTab) {
-                window.statsTab.refresh();
-            }
-        });
-    });
 }
 
 function _setText(id, value) {
     const el = document.getElementById(id);
     if (el) el.textContent = value;
+}
+
+/**
+ * Pick the most user-meaningful name for the device label.
+ *
+ * Order:
+ *  1. transmit.long_name -- this is what the device broadcasts in
+ *     NodeInfo and what shows up on meshradar / meshmap / other
+ *     people's dashboards. Most users customise this and never
+ *     touch device_name, so it's the right primary label.
+ *  2. device.device_name -- internal fallback, defaults to "Meshpoint".
+ *  3. The literal string "Meshpoint" if neither is populated.
+ */
+function _resolveDeviceLabel(device) {
+    if (!device) return 'Meshpoint';
+    const long = (device.long_name || '').trim();
+    const fallback = (device.device_name || '').trim();
+    return long || fallback || 'Meshpoint';
 }
 
 async function _redirectIfSetupRequired() {
@@ -293,4 +451,91 @@ async function _redirectIfSetupRequired() {
         /* silent: the dashboard handles its own auth via 401 interception */
     }
     return false;
+}
+
+function _bootCommandPaletteAndKeymap(router) {
+    if (!window.CommandPalette || !window.KeymapOverlay) return;
+
+    const palette = new CommandPalette();
+    palette.init();
+    window.commandPalette = palette;
+
+    const keymap = new KeymapOverlay();
+    keymap.init();
+    window.keymapOverlay = keymap;
+
+    const routeCommands = [
+        ['dashboard', 'Go to Dashboard', 'Pages'],
+        ['stats', 'Go to Stats', 'Pages'],
+        ['messages', 'Go to Messages', 'Pages'],
+        ['radio', 'Go to Radio', 'Pages'],
+        ['terminal', 'Go to Terminal', 'Pages'],
+        ['configuration/identity', 'Go to Configuration · Identity', 'Configuration'],
+        ['configuration/radio', 'Go to Configuration · Radio', 'Configuration'],
+        ['configuration/channels', 'Go to Configuration · Channels', 'Configuration'],
+        ['settings/auth', 'Go to Settings · Auth', 'Settings'],
+        ['settings/updates', 'Go to Settings · Updates', 'Settings'],
+        ['settings/dangerous', 'Go to Settings · Dangerous', 'Settings'],
+    ];
+    routeCommands.forEach(([routeId, label, group]) => {
+        palette.register({
+            id: `route:${routeId}`,
+            label,
+            group,
+            icon: '→',
+            run: () => router.navigate(routeId),
+        });
+    });
+
+    palette.register({
+        id: 'theme:cycle',
+        label: 'Cycle theme (dark / high-contrast / sunlight)',
+        group: 'View',
+        icon: '◐',
+        run: () => {
+            if (!window.themeController) return;
+            const next = window.themeController.cycle();
+            console.info('theme →', next);
+        },
+    });
+
+    palette.register({
+        id: 'sound:toggle',
+        label: 'Toggle UI sounds',
+        group: 'View',
+        icon: '♪',
+        run: () => {
+            if (!window.soundEngine) return;
+            const next = !window.soundEngine.isEnabled();
+            window.soundEngine.setEnabled(next);
+            console.info('sounds →', next ? 'on' : 'off');
+        },
+    });
+
+    palette.register({
+        id: 'help:keymap',
+        label: 'Show keyboard shortcuts',
+        group: 'Help',
+        icon: '?',
+        run: () => keymap.open(),
+    });
+
+    keymap.registerAll([
+        { keys: ['Ctrl', 'K'], label: 'Open command palette', group: 'Global' },
+        { keys: ['?'], label: 'Show this shortcuts overlay', group: 'Global' },
+        { keys: ['Esc'], label: 'Close any modal / overlay', group: 'Global' },
+        { keys: ['['], label: 'Collapse / expand sidebar', group: 'Global' },
+        { keys: ['Ctrl', 'Shift', 'C'], label: 'Copy terminal selection', group: 'Terminal' },
+        { keys: ['Ctrl', 'Shift', 'V'], label: 'Paste into terminal', group: 'Terminal' },
+        { keys: ['Ctrl', 'Shift', 'F'], label: 'Find in terminal output', group: 'Terminal' },
+    ]);
+}
+
+function _wireSoundEvents() {
+    if (!window.soundEngine || !window.concentratorWS) return;
+    const ws = window.concentratorWS;
+    if (typeof ws.on === 'function') {
+        ws.on('connected', () => window.soundEngine.play('connect'));
+        ws.on('disconnected', () => window.soundEngine.play('disconnect'));
+    }
 }

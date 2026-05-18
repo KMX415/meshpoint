@@ -27,7 +27,16 @@ class NodeRepository:
                 altitude, last_heard, first_seen, packet_count
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(node_id) DO UPDATE SET
-                long_name = COALESCE(excluded.long_name, nodes.long_name),
+                long_name = CASE
+                    WHEN excluded.long_name IS NULL OR excluded.long_name = ''
+                        THEN nodes.long_name
+                    WHEN nodes.long_name IS NULL OR nodes.long_name = ''
+                        THEN excluded.long_name
+                    WHEN nodes.protocol = 'meshcore'
+                         AND LOWER(nodes.long_name) = LOWER(nodes.node_id)
+                        THEN excluded.long_name
+                    ELSE nodes.long_name
+                END,
                 short_name = COALESCE(excluded.short_name, nodes.short_name),
                 hardware_model = COALESCE(excluded.hardware_model, nodes.hardware_model),
                 firmware_version = COALESCE(excluded.firmware_version, nodes.firmware_version),

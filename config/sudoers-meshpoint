@@ -1,9 +1,36 @@
-# Service management
+# sudoers grants for the `meshpoint` service account.
+#
+# The meshpoint user runs as a least-privilege system account (no login
+# shell, no password). The dashboard exposes a curated set of admin
+# operations (service control, self-update, post-update migrations)
+# that need root; each is enumerated here with NOPASSWD so the service
+# can shell out without an interactive prompt.
+#
+# Path discipline: every command is pinned to its absolute path. Sudo
+# matches the literal argv, so wildcards only relax the trailing args
+# (branch names, package names, commit SHAs) -- never the binary.
+
+# ── Service management ────────────────────────────────────────────────
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart meshpoint
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop meshpoint
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/systemctl daemon-reload
 
-# Self-update (git pull + pip install + post-update migrations)
-meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git pull origin main
+# ── Self-update apply chain (Settings → Updates) ──────────────────────
+# /opt/meshpoint is owned by root, so all repo mutations need sudo.
+# Branch arg is wildcarded so any release channel (main, rc-074,
+# custom branch) can be checked out.
+meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git fetch origin *
+meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git checkout *
+meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git pull origin *
+meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git reset --hard *
+
+# Read-only git ops that hit the dubious-ownership check on the
+# root-owned tree; the terminal catalog surfaces these as buttons.
+meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git status
+meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git log *
+meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git rev-parse HEAD
+
+# ── Post-update hooks ─────────────────────────────────────────────────
 meshpoint ALL=(ALL) NOPASSWD: /opt/meshpoint/venv/bin/pip install *
+meshpoint ALL=(ALL) NOPASSWD: /bin/bash /opt/meshpoint/scripts/install.sh
 meshpoint ALL=(ALL) NOPASSWD: /bin/bash /opt/meshpoint/scripts/post_update.sh

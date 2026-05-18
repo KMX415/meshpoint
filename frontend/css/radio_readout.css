@@ -1,0 +1,290 @@
+/* Radio tab — observational readout styles (v0.7.4).
+ *
+ * The Radio tab is read-only as of v0.7.4: editing moved to the
+ * Configuration section. These rules give the Radio cards a visual
+ * vocabulary distinct from form-style cards in Configuration:
+ *   - Tighter, denser key/value rows (no input chrome)
+ *   - Mono values right-aligned for telemetry feel
+ *   - A subtle accent strip on the card edge so the page reads
+ *     as a status dashboard at a glance
+ *   - A "Configure" deep-link chip pinned to the bottom of every
+ *     card, so muscle memory still finds the editor
+ *
+ * Loaded after radio.css and radio_cards.css; the .r-card--readout
+ * modifier opts a card in. */
+
+/* Subtle left-border accent so observational cards feel different
+   from edit cards (which we no longer ship here, but the visual
+   differentiation also helps when the eye scans across screens). */
+.r-card.r-card--readout {
+    position: relative;
+    padding: 1rem 1.2rem 0.75rem;
+}
+
+.r-card.r-card--readout::before {
+    content: "";
+    position: absolute;
+    inset: 12px auto 12px 0;
+    width: 2px;
+    border-radius: 2px;
+    background: linear-gradient(
+        180deg,
+        rgba(6, 182, 212, 0.0) 0%,
+        rgba(6, 182, 212, 0.55) 35%,
+        rgba(6, 182, 212, 0.55) 65%,
+        rgba(6, 182, 212, 0.0) 100%
+    );
+    pointer-events: none;
+}
+
+/* Telemetry grid. Two-column layout: label on the left, value on
+   the right. Dense, monospace values, tight vertical rhythm. */
+.r-readout-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.05rem;
+    margin: 0.25rem 0 0.5rem;
+}
+
+.r-readout-grid--two-col {
+    grid-template-columns: 1fr 1fr;
+    column-gap: 1.2rem;
+}
+
+.r-readout-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    min-height: 32px;
+}
+
+.r-readout-row:last-child { border-bottom: 0; }
+
+.r-readout-row__label {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+.r-readout-row__value {
+    font-family: var(--font-sans);
+    font-size: 0.88rem;
+    color: var(--text-primary);
+    text-align: right;
+    word-break: break-word;
+    line-height: 1.35;
+}
+
+.r-readout-row__value--mono {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: var(--accent-cyan);
+    text-shadow: 0 0 8px rgba(6, 182, 212, 0.18);
+    letter-spacing: 0.02em;
+}
+
+.r-readout-row__value--empty {
+    color: var(--text-muted);
+    text-shadow: none;
+    font-style: italic;
+}
+
+.r-readout-row__value[data-state="on"] {
+    color: var(--accent-green, #00e5a0);
+    font-family: var(--font-mono);
+    font-weight: 600;
+    text-shadow: 0 0 8px rgba(0, 229, 160, 0.25);
+}
+
+.r-readout-row__value[data-state="off"] {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-weight: 600;
+}
+
+/* Configure deep-link chip. Pinned at the bottom of each readout
+   card. Looks like a quiet button until hovered, then lifts with
+   the dashboard accent glow. */
+.r-config-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-top: 0.85rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: rgba(6, 182, 212, 0.04);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    text-decoration: none;
+    transition: border-color 0.15s, background 0.15s, color 0.15s,
+                transform 0.15s, box-shadow 0.15s;
+    align-self: stretch;
+}
+
+.r-config-link:hover,
+.r-config-link:focus-visible {
+    border-color: var(--accent-cyan);
+    background: rgba(6, 182, 212, 0.1);
+    color: var(--accent-cyan);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(6, 182, 212, 0.18);
+    outline: none;
+}
+
+.r-config-link:focus-visible {
+    box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.35),
+                0 4px 14px rgba(6, 182, 212, 0.18);
+}
+
+.r-config-link span:last-child {
+    font-size: 0.95rem;
+    transition: transform 0.15s;
+}
+
+.r-config-link:hover span:last-child {
+    transform: translateX(3px);
+}
+
+/* Hint paragraph inside readout cards. Smaller and less ceremony
+   than the full r-hint used on edit cards. */
+.r-card--readout .r-hint {
+    margin: 0.35rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    line-height: 1.45;
+}
+
+/* Read-only channels table. Columns are aligned for skim-reading
+   rather than data entry; PSK is masked. */
+.ch-table.ch-table--readout {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+}
+
+.ch-table--readout thead th {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: left;
+    padding: 0.4rem 0.55rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.ch-table--readout tbody td {
+    padding: 0.55rem 0.55rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+}
+
+.ch-table--readout tbody tr:last-child td { border-bottom: 0; }
+
+.ch-table--readout .ch-table__idx {
+    color: var(--text-muted);
+    width: 32px;
+}
+
+.ch-table--readout .ch-table__name {
+    font-family: var(--font-sans);
+    color: var(--text-primary);
+}
+
+.ch-table--readout .ch-table__name--empty {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.ch-table--readout .ch-table__psk {
+    color: var(--text-secondary);
+}
+
+.ch-table--readout .ch-table__psk--empty {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.ch-table--readout .ch-table__psk--masked {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    letter-spacing: 0.18em;
+}
+
+.ch-table--readout .ch-table__psk--masked span {
+    font-size: 0.62rem;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.ch-table--readout .ch-table__hash {
+    color: var(--accent-cyan);
+    text-shadow: 0 0 8px rgba(6, 182, 212, 0.18);
+    width: 64px;
+}
+
+.ch-table--readout .ch-table__row--empty td {
+    text-align: center;
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 1rem;
+}
+
+/* Pill (channel state). */
+.ch-table__pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border: 1px solid var(--border);
+}
+
+.ch-table__pill--on {
+    color: var(--accent-green, #00e5a0);
+    background: rgba(0, 229, 160, 0.08);
+    border-color: rgba(0, 229, 160, 0.4);
+}
+
+.ch-table__pill--off {
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+@media (max-width: 720px) {
+    .r-readout-grid--two-col { grid-template-columns: 1fr; column-gap: 0; }
+    .ch-table--readout thead { display: none; }
+    .ch-table--readout tbody td { display: block; padding: 0.25rem 0; }
+    .ch-table--readout tbody tr {
+        display: block;
+        padding: 0.55rem 0;
+        border-bottom: 1px solid var(--border);
+    }
+    .ch-table--readout tbody td::before {
+        content: attr(data-label);
+        font-size: 0.62rem;
+        color: var(--text-muted);
+        margin-right: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+}

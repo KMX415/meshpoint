@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from src.api.routes import nodeinfo_routes
 from src.config import AppConfig, save_section_to_yaml
+from src.models.device_identity import DeviceIdentity
 from src.radio.presets import (
     REGION_DEFAULTS,
     SUPPORTED_REGIONS,
@@ -34,17 +35,20 @@ router = APIRouter(prefix="/api/config", tags=["config"])
 _config: AppConfig | None = None
 _crypto = None
 _tx_service = None
+_identity: DeviceIdentity | None = None
 
 
 def init_routes(
     config: AppConfig,
     crypto=None,
     tx_service=None,
+    identity: DeviceIdentity | None = None,
 ) -> None:
-    global _config, _crypto, _tx_service
+    global _config, _crypto, _tx_service, _identity
     _config = config
     _crypto = crypto
     _tx_service = tx_service
+    _identity = identity
 
 
 @router.get("")
@@ -210,11 +214,15 @@ async def update_identity(req: IdentityUpdate):
             raise HTTPException(400, "Long name max 36 characters")
         tx.long_name = req.long_name
         updates["long_name"] = req.long_name
+        if _identity is not None:
+            _identity.long_name = req.long_name
     if req.short_name is not None:
         if len(req.short_name) > 4:
             raise HTTPException(400, "Short name max 4 characters")
         tx.short_name = req.short_name
         updates["short_name"] = req.short_name
+        if _identity is not None:
+            _identity.short_name = req.short_name
     if req.node_id is not None:
         tx.node_id = req.node_id
         updates["node_id"] = req.node_id
