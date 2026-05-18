@@ -185,7 +185,8 @@ class MeshcoreUsbCaptureSource(CaptureSource):
                 EventType.RAW_DATA,
                 EventType.CONTACT_MSG_RECV,
                 EventType.CHANNEL_MSG_RECV,
-                EventType.ADVERTISEMENT,
+                EventType.ADVERTISEMENT,                
+                EventType.NEW_CONTACT,
                 EventType.DISCONNECTED,
             ):
                 sub = self._meshcore.subscribe(event_type, self._on_event)
