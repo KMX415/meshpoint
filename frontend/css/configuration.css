@@ -190,3 +190,161 @@
     .cfg-card { animation: none; }
     .cfg-toast { transition: none; }
 }
+
+/* Section wrapper used by the Radio editor to stack two cards. */
+.cfg-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Inline field used as a fieldset for the freq-mode radio group. */
+.cfg-field--inline {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 10px 14px;
+}
+
+.cfg-field--inline > .cfg-field__label {
+    margin-right: 4px;
+}
+
+.cfg-field__hint {
+    margin: 0;
+    font-size: 12px;
+    color: rgba(243, 244, 246, 0.55);
+    line-height: 1.5;
+}
+
+/* Radio inputs grouped horizontally (e.g. freq mode toggle). */
+.cfg-radio {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: rgba(243, 244, 246, 0.85);
+    cursor: pointer;
+}
+
+.cfg-radio input[type="radio"] {
+    accent-color: var(--brand-amber, #ffb84d);
+    margin: 0;
+}
+
+/* Preset chip selector used by the Radio editor. */
+.cfg-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.cfg-chip {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(243, 244, 246, 0.85);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.cfg-chip:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 184, 77, 0.4);
+}
+
+.cfg-chip--selected {
+    background: rgba(255, 184, 77, 0.18);
+    border-color: var(--brand-amber, #ffb84d);
+    color: var(--brand-amber, #ffb84d);
+}
+
+.cfg-chip__hint {
+    font-size: 10px;
+    color: rgba(243, 244, 246, 0.5);
+    margin-left: 4px;
+}
+
+/* Empty state shared by Configuration cards (e.g. MeshCore offline). */
+.cfg-empty {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px dashed rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    padding: 18px;
+    text-align: center;
+}
+
+.cfg-empty__title {
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(243, 244, 246, 0.8);
+    margin-bottom: 6px;
+}
+
+.cfg-empty__body {
+    margin: 0;
+    font-size: 13px;
+    color: rgba(243, 244, 246, 0.6);
+    line-height: 1.5;
+}
+
+/* MeshCore Configuration card: status lamp, readouts, channel table. */
+.cfg-mc-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.cfg-mc-status__lamp {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #44d39a;
+    box-shadow: 0 0 8px rgba(68, 211, 154, 0.6);
+}
+
+.cfg-mc-status__name {
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 13px;
+    color: rgba(243, 244, 246, 0.85);
+}
+
+.cfg-mc-readouts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.cfg-mc-readout {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cfg-mc-readout__label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: rgba(243, 244, 246, 0.5);
+}
+
+.cfg-mc-readout__value {
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 14px;
+    color: var(--brand-amber, #ffb84d);
+}
+
+.cfg-mc-channels {
+    margin-bottom: 14px;
+}

@@ -2,10 +2,13 @@
  * Configuration panel orchestrator.
  *
  * Single responsibility: load ``/api/config`` once, mount the right
- * card into each Configuration subsection container, and re-render
- * every card on data changes. Cards reuse the existing radio_*
- * implementations where the contract matches; new cards
- * (Transmit, MQTT, GPS) live under ``frontend/js/configuration/``.
+ * editable card into each Configuration subsection container, and
+ * re-render every card on data changes. The seven subsections
+ * (Identity, Radio, Channels, MeshCore, Transmit, MQTT, GPS) all
+ * mount dedicated editable cards from ``frontend/js/configuration/``.
+ * The observational read-only versions (``RadioIdentityCard``,
+ * ``RadioConfigCard``, ``RadioChannels``, ``RadioCompanionCard``)
+ * live on the top-level Radio page only.
  *
  * Each subsection lazy-mounts on first navigation so we don't
  * inflate every form's DOM at boot.
@@ -45,15 +48,15 @@ class ConfigurationPanel {
         if (this._mounted.has(section)) return;
         const api = this._buildApi();
 
-        if (section === 'identity' && window.RadioIdentityCard) {
+        if (section === 'identity' && window.IdentityConfigCard) {
             const host = document.getElementById('cfg-identity-panel');
             if (host) {
                 host.innerHTML = '';
-                const card = new window.RadioIdentityCard(api);
+                const card = new window.IdentityConfigCard(api);
                 card.mount(host);
                 this._cards.set('identity', card);
             }
-        } else if (section === 'radio' && window.RadioConfigCard) {
+        } else if (section === 'radio' && window.RadioConfigEditCard) {
             const host = document.getElementById('cfg-radio-panel');
             if (host) {
                 host.innerHTML = `
@@ -62,7 +65,7 @@ class ConfigurationPanel {
                         <div data-cfg-nodeinfo></div>
                     </div>
                 `;
-                const radio = new window.RadioConfigCard(api);
+                const radio = new window.RadioConfigEditCard(api);
                 radio.mount(host.querySelector('[data-cfg-radio]'));
                 this._cards.set('radio', radio);
                 if (window.RadioNodeInfoCard) {
@@ -71,12 +74,21 @@ class ConfigurationPanel {
                     this._cards.set('nodeinfo', nodeinfo);
                 }
             }
-        } else if (section === 'channels' && window.RadioChannels) {
+        } else if (section === 'channels' && window.ChannelsConfigCard) {
             const host = document.getElementById('cfg-channels-panel');
             if (host) {
                 host.innerHTML = '';
-                const card = new window.RadioChannels(host);
+                const card = new window.ChannelsConfigCard(api);
+                card.mount(host);
                 this._cards.set('channels', card);
+            }
+        } else if (section === 'meshcore' && window.MeshcoreConfigCard) {
+            const host = document.getElementById('cfg-meshcore-panel');
+            if (host) {
+                host.innerHTML = '';
+                const card = new window.MeshcoreConfigCard(api);
+                card.mount(host);
+                this._cards.set('meshcore', card);
             }
         } else if (section === 'transmit' && window.TransmitConfigCard) {
             const host = document.getElementById('cfg-transmit-panel');
@@ -108,13 +120,9 @@ class ConfigurationPanel {
 
     _renderAll() {
         if (!this._config) return;
-        this._cards.forEach((card, key) => {
+        this._cards.forEach((card) => {
             try {
-                if (key === 'channels') {
-                    card.render(this._config.channels);
-                } else {
-                    card.render(this._config);
-                }
+                card.render(this._config);
             } catch (e) {
                 console.error('Configuration card render failed:', e);
             }

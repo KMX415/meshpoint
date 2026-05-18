@@ -1,0 +1,318 @@
+/**
+ * Configuration → MeshCore card.
+ *
+ * Single responsibility: edit the MeshCore companion channel keys
+ * (stored as hex to match the MeshCore native app format) and
+ * surface the two on-demand companion actions, Send Advert and
+ * Refresh. Companion radio readouts (frequency / bandwidth / SF /
+ * TX power) are shown for context but are read-only here.
+ *
+ * The top-level Radio page renders the same readouts plus a
+ * deep-link to this card per the v0.7.4 IA refactor.
+ */
+
+class MeshcoreConfigCard {
+    constructor(api) {
+        this._api = api;
+        this._root = null;
+        this._focusedRow = null;
+    }
+
+    mount(root) {
+        this._root = root;
+        this._root.innerHTML = `
+            <article class="cfg-card" data-mc-card>
+                <header class="cfg-card__head">
+                    <h3 class="cfg-card__title">MeshCore Companion</h3>
+                    <p class="cfg-card__hint">
+                        Channel keys for the USB MeshCore companion.
+                        Keys are stored and shown as hex to match the
+                        MeshCore native app. Save applies at runtime
+                        with no service restart.
+                    </p>
+                </header>
+                <div data-mc-body></div>
+                <p class="cfg-status" data-mc-status aria-live="polite"></p>
+            </article>
+        `;
+        this._body = this._root.querySelector('[data-mc-body]');
+        this._statusEl = this._root.querySelector('[data-mc-status]');
+    }
+
+    render(config) {
+        const mc = (config && config.meshcore) || {};
+        if (!mc.connected) {
+            this._renderOffline();
+            return;
+        }
+        this._renderOnline(mc);
+    }
+
+    _renderOffline() {
+        this._body.innerHTML = `
+            <div class="cfg-empty">
+                <div class="cfg-empty__title">No companion connected</div>
+                <p class="cfg-empty__body">
+                    Plug in a MeshCore USB companion (Heltec V3/V4,
+                    T-Beam, ...) and restart the service to enable
+                    MC messaging.
+                </p>
+            </div>
+        `;
+        this._setStatus('', '');
+    }
+
+    _renderOnline(mc) {
+        const radio = mc.radio || {};
+        const name = this._esc(mc.companion_name || 'Connected');
+        const channelRows = this._buildChannelRows(mc.channel_keys || []);
+
+        this._body.innerHTML = `
+            <div class="cfg-mc-status">
+                <span class="cfg-mc-status__lamp" aria-hidden="true"></span>
+                <span class="cfg-mc-status__name">${name}</span>
+            </div>
+            <div class="cfg-mc-readouts">
+                <div class="cfg-mc-readout">
+                    <span class="cfg-mc-readout__label">Frequency</span>
+                    <span class="cfg-mc-readout__value">${this._fmtFreq(radio.frequency_mhz)}</span>
+                </div>
+                <div class="cfg-mc-readout">
+                    <span class="cfg-mc-readout__label">Bandwidth</span>
+                    <span class="cfg-mc-readout__value">${this._fmtBw(radio.bandwidth_khz)}</span>
+                </div>
+                <div class="cfg-mc-readout">
+                    <span class="cfg-mc-readout__label">SF</span>
+                    <span class="cfg-mc-readout__value">${this._fmtSf(radio.spreading_factor)}</span>
+                </div>
+                <div class="cfg-mc-readout">
+                    <span class="cfg-mc-readout__label">TX Power</span>
+                    <span class="cfg-mc-readout__value">${this._fmtTxPower(radio.tx_power)}</span>
+                </div>
+            </div>
+            <div class="cfg-mc-channels">
+                <table class="ch-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>Key (Hex)</th>
+                        </tr>
+                    </thead>
+                    <tbody data-mc-channels-body>
+                        <tr class="ch-table__row ch-table__row--locked" data-index="0">
+                            <td class="ch-table__idx">0</td>
+                            <td>Public</td>
+                            <td class="ch-table__psk-cell">&mdash;</td>
+                        </tr>
+                        ${channelRows}
+                    </tbody>
+                </table>
+            </div>
+            <div class="cfg-card__actions">
+                <button class="terminal-button terminal-button--danger"
+                        type="button" data-mc-delete style="display:none">
+                    Delete Channel
+                </button>
+                <button class="terminal-button" type="button" data-mc-add>
+                    + Add Channel
+                </button>
+                <button class="terminal-button terminal-button--primary"
+                        type="button" data-mc-save>
+                    Save Channels
+                </button>
+            </div>
+            <div class="cfg-card__actions">
+                <button class="terminal-button" type="button" data-mc-advert>
+                    Send Advert
+                </button>
+                <button class="terminal-button" type="button" data-mc-refresh>
+                    Refresh
+                </button>
+            </div>
+        `;
+        this._focusedRow = null;
+        this._wire();
+        this._updateAddBtn();
+    }
+
+    _buildChannelRows(channelKeys) {
+        return channelKeys.map((ch, i) => {
+            const idx = i + 1;
+            const name = this._esc(ch.name || '');
+            const keyHex = this._esc(ch.key_hex || '');
+            return `
+                <tr class="ch-table__row" data-index="${idx}">
+                    <td class="ch-table__idx">${idx}</td>
+                    <td>
+                        <input class="ch-table__name-input" data-field="name"
+                               value="${name}" placeholder="Channel name" />
+                    </td>
+                    <td class="ch-table__psk-cell">
+                        <input class="ch-table__name-input" data-field="key_hex"
+                               type="password" value="${keyHex}"
+                               placeholder="32-char hex key" />
+                        <button class="ch-table__reveal" type="button"
+                                title="Show/hide key">&#128065;</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    _wire() {
+        this._wireChannelHandlers(this._body);
+
+        const addBtn = this._body.querySelector('[data-mc-add]');
+        if (addBtn) addBtn.addEventListener('click', () => this._addEmptyRow());
+
+        const saveBtn = this._body.querySelector('[data-mc-save]');
+        if (saveBtn) saveBtn.addEventListener('click', () => this._saveChannels());
+
+        const delBtn = this._body.querySelector('[data-mc-delete]');
+        if (delBtn) {
+            delBtn.addEventListener('mousedown', (e) => e.preventDefault());
+            delBtn.addEventListener('click', () => this._deleteRow());
+        }
+
+        const advert = this._body.querySelector('[data-mc-advert]');
+        if (advert) advert.addEventListener('click', () => this._sendAdvert(advert));
+
+        const refresh = this._body.querySelector('[data-mc-refresh]');
+        if (refresh) refresh.addEventListener('click', () => this._api.refresh());
+    }
+
+    _wireChannelHandlers(scope) {
+        scope.querySelectorAll('.ch-table__reveal').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const input = btn.closest('tr').querySelector('[data-field="key_hex"]');
+                if (input) input.type = input.type === 'password' ? 'text' : 'password';
+            });
+        });
+
+        scope.querySelectorAll('.ch-table__row:not(.ch-table__row--locked) input').forEach((input) => {
+            input.addEventListener('focus', () => {
+                this._focusedRow = input.closest('tr');
+                this._syncDeleteBtn();
+            });
+            input.addEventListener('blur', () => {
+                setTimeout(() => {
+                    const tbody = this._body.querySelector('[data-mc-channels-body]');
+                    if (tbody && !tbody.querySelector('input:focus')) {
+                        this._focusedRow = null;
+                        this._syncDeleteBtn();
+                    }
+                }, 0);
+            });
+        });
+    }
+
+    _syncDeleteBtn() {
+        const btn = this._body.querySelector('[data-mc-delete]');
+        if (btn) btn.style.display = this._focusedRow ? '' : 'none';
+    }
+
+    _MC_MAX_CHANNELS = 8;
+
+    _updateAddBtn() {
+        const btn = this._body.querySelector('[data-mc-add]');
+        if (!btn) return;
+        const tbody = this._body.querySelector('[data-mc-channels-body]');
+        const count = tbody
+            ? tbody.querySelectorAll('tr:not(.ch-table__row--locked)').length
+            : 0;
+        const atLimit = count >= this._MC_MAX_CHANNELS;
+        btn.disabled = atLimit;
+        btn.title = atLimit ? `Only ${this._MC_MAX_CHANNELS} channels allowed` : '';
+    }
+
+    _addEmptyRow() {
+        const tbody = this._body.querySelector('[data-mc-channels-body]');
+        if (!tbody) return;
+        const idx = tbody.querySelectorAll('tr').length;
+        const tr = document.createElement('tr');
+        tr.className = 'ch-table__row';
+        tr.dataset.index = idx;
+        tr.innerHTML = `
+            <td class="ch-table__idx">${idx}</td>
+            <td>
+                <input class="ch-table__name-input" data-field="name"
+                       value="" placeholder="Channel name" />
+            </td>
+            <td class="ch-table__psk-cell">
+                <input class="ch-table__name-input" data-field="key_hex"
+                       type="password" value="" placeholder="32-char hex key" />
+                <button class="ch-table__reveal" type="button"
+                        title="Show/hide key">&#128065;</button>
+            </td>
+        `;
+        this._wireChannelHandlers(tr);
+        tbody.appendChild(tr);
+        this._updateAddBtn();
+    }
+
+    _deleteRow() {
+        if (!this._focusedRow) return;
+        if (!confirm('Delete this channel?')) return;
+        this._focusedRow.remove();
+        this._focusedRow = null;
+        this._syncDeleteBtn();
+        this._updateAddBtn();
+    }
+
+    async _saveChannels() {
+        const rows = this._body.querySelectorAll(
+            '[data-mc-channels-body] tr:not(.ch-table__row--locked)',
+        );
+        const channels = [];
+        rows.forEach((row) => {
+            const name = (row.querySelector('[data-field="name"]')?.value || '').trim();
+            const keyHex = (row.querySelector('[data-field="key_hex"]')?.value || '').trim();
+            if (name || keyHex) channels.push({ name, key_hex: keyHex });
+        });
+
+        this._setStatus('pending', 'Saving…');
+        const res = await this._api.put('/api/config/meshcore/channels', { channels });
+        if (res) {
+            this._setStatus('success', 'Channels saved.');
+            this._api.toast('MeshCore channels saved');
+        } else {
+            this._setStatus('error', 'Save failed.');
+        }
+    }
+
+    async _sendAdvert(button) {
+        button.disabled = true;
+        try {
+            const result = await this._api.post('/api/messages/advert', {});
+            if (result && result.success) {
+                this._api.toast('Advert sent');
+            } else if (result) {
+                this._api.toast(
+                    'Advert failed' + (result.error ? `: ${result.error}` : ''),
+                );
+            }
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    _setStatus(kind, message) {
+        if (!this._statusEl) return;
+        this._statusEl.dataset.kind = kind;
+        this._statusEl.textContent = message;
+    }
+
+    _fmtFreq(v)    { return v ? `${v} MHz` : '--'; }
+    _fmtBw(v)      { return v ? `${v} kHz` : '--'; }
+    _fmtSf(v)      { return v ? `SF${v}` : '--'; }
+    _fmtTxPower(v) { return v != null ? `${v} dBm` : '--'; }
+
+    _esc(str) {
+        const el = document.createElement('span');
+        el.textContent = str || '';
+        return el.innerHTML;
+    }
+}
+
+window.MeshcoreConfigCard = MeshcoreConfigCard;
