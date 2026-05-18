@@ -2,9 +2,14 @@
    for the xterm.js host, the title strip, the action bar, the
    command drawer, and the search overlay. xterm internals come
    from the xterm.css bundle; we only style the wrappers around it
-   and the surrounding "tab strip" chrome. */
+   and the surrounding "tab strip" chrome.
 
-.terminal-panel {
+   Token scope note: the --term-* tokens are declared on :root so
+   .terminal-button can be reused in any context (configuration
+   cards, settings panels, etc.). The .terminal-panel selector
+   keeps the layout-specific styles. */
+
+:root {
     --term-bg: #16181f;
     --term-bg-deep: #0d0f15;
     --term-bg-strip: #1a1d27;
@@ -17,6 +22,9 @@
     --term-text: #c0caf5;
     --term-text-dim: rgba(192, 202, 245, 0.6);
     --term-text-faint: rgba(192, 202, 245, 0.4);
+}
+
+.terminal-panel {
     color: var(--term-text);
     height: 100%;
     display: flex;
