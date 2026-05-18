@@ -278,6 +278,7 @@ _BUILDERS = {
     "contact_message": _build_contact_message,
     "channel_message": _build_channel_message,
     "advertisement": _build_advertisement,
+    "new_contact": _build_advertisement,
     "raw_data": _build_raw_data,
     "rx_log_data": _build_rx_log_data,
 }
