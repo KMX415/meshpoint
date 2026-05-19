@@ -493,5 +493,159 @@ class TestMeshcoreUsbStartupRetry(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(source._reconnect_task)
 
 
+class TestMeshcoreUsbSignalStitching(unittest.TestCase):
+    """Verify rx_log_data RSSI/SNR are grafted onto the next parsed event.
+
+    The meshcore companion emits each received frame as two events: an
+    ``rx_log_data`` carrying the raw RF metrics, then a parsed event
+    (``advertisement``, ``channel_message``, or ``contact_message``) that
+    carries the decoded payload but no signal info.  The capture source
+    buffers the rx_log_data signal and grafts it onto the next parsed
+    event so downstream code sees a single Packet with real RSSI/SNR.
+
+    Regression coverage for two bugs reported by woketothetruth: every
+    MeshCore node card pinned at -120 dBm / 0.0 dB / POOR.  The advert
+    path was never stitched at all, and the message path stitched RSSI
+    but lost SNR.
+    """
+
+    def _make_source(self):
+        from src.capture.meshcore_usb_source import MeshcoreUsbCaptureSource
+        return MeshcoreUsbCaptureSource(
+            serial_port="/dev/ttyFAKE", auto_detect=False
+        )
+
+    @staticmethod
+    def _fake_event(etype: str, payload: dict):
+        class _FakeType:
+            def __init__(self, value: str) -> None:
+                self.value = value
+
+        class _FakeEvent:
+            def __init__(self, etype: str, payload: dict) -> None:
+                self.type = _FakeType(etype)
+                self.payload = payload
+
+        return _FakeEvent(etype, payload)
+
+    def _push_rx_log(self, source, rssi: float, snr: float) -> None:
+        rx_log = self._fake_event("rx_log_data", {
+            "rssi": rssi,
+            "snr": snr,
+            "payload": "deadbeef",
+        })
+        result = source._wrap_event(rx_log)
+        self.assertIsNone(result, "rx_log_data should be consumed, not emitted")
+
+    def _wrap_payload(self, source, etype: str, payload: dict):
+        envelope = source._wrap_event(self._fake_event(etype, payload))
+        self.assertIsNotNone(envelope, f"{etype} should emit a RawCapture")
+        body = json.loads(envelope.payload)
+        return envelope, body
+
+    def test_advertisement_inherits_buffered_rssi_and_snr(self):
+        """Primary bug: advert events used to bypass stitching entirely."""
+        source = self._make_source()
+        self._push_rx_log(source, rssi=-72.0, snr=9.5)
+
+        envelope, body = self._wrap_payload(source, "advertisement", {
+            "public_key": "abcdef1234567890abcdef",
+            "adv_name": "TestNode",
+        })
+
+        self.assertEqual(envelope.signal.rssi, -72.0)
+        self.assertEqual(envelope.signal.snr, 9.5)
+        self.assertEqual(body["payload"]["RSSI"], -72.0)
+        self.assertEqual(body["payload"]["SNR"], 9.5)
+        self.assertIsNone(
+            source._last_rf_signal,
+            "buffer must clear so the next event does not inherit stale signal",
+        )
+
+    def test_contact_message_inherits_buffered_snr_not_just_rssi(self):
+        """Latent SNR bug: stitching used to graft RSSI but drop SNR."""
+        source = self._make_source()
+        self._push_rx_log(source, rssi=-88.0, snr=3.25)
+
+        envelope, body = self._wrap_payload(source, "contact_message", {
+            "pubkey_prefix": "aabbccddeeff",
+            "text": "ping",
+        })
+
+        self.assertEqual(envelope.signal.rssi, -88.0)
+        self.assertEqual(envelope.signal.snr, 3.25)
+        self.assertEqual(body["payload"]["RSSI"], -88.0)
+        self.assertEqual(body["payload"]["SNR"], 3.25)
+
+    def test_channel_message_inherits_buffered_snr_not_just_rssi(self):
+        """Same SNR bug, channel-message branch of the same stitching block."""
+        source = self._make_source()
+        self._push_rx_log(source, rssi=-95.5, snr=-1.0)
+
+        envelope, body = self._wrap_payload(source, "channel_message", {
+            "text": "Alice: hi",
+            "channel_idx": 0,
+        })
+
+        self.assertEqual(envelope.signal.rssi, -95.5)
+        self.assertEqual(envelope.signal.snr, -1.0)
+        self.assertEqual(body["payload"]["RSSI"], -95.5)
+        self.assertEqual(body["payload"]["SNR"], -1.0)
+
+    def test_payload_rssi_wins_over_buffered_signal(self):
+        """If the parsed event already carries RSSI, do not overwrite it."""
+        source = self._make_source()
+        self._push_rx_log(source, rssi=-72.0, snr=9.5)
+
+        envelope, body = self._wrap_payload(source, "channel_message", {
+            "text": "hi",
+            "channel_idx": 0,
+            "SNR": 11.25,
+            "RSSI": -60.0,
+        })
+
+        self.assertEqual(envelope.signal.rssi, -60.0)
+        self.assertEqual(envelope.signal.snr, 11.25)
+        self.assertEqual(body["payload"]["RSSI"], -60.0)
+        self.assertEqual(body["payload"]["SNR"], 11.25)
+
+    def test_rx_log_below_floor_is_not_buffered(self):
+        """Floor-only rx_log_data must not poison the next parsed event."""
+        source = self._make_source()
+        self._push_rx_log(source, rssi=-119.5, snr=0.0)
+        self.assertIsNone(
+            source._last_rf_signal,
+            "floor-only rx_log_data should not populate the buffer",
+        )
+
+        envelope, _ = self._wrap_payload(source, "advertisement", {
+            "public_key": "abcdef1234567890abcdef",
+            "adv_name": "TestNode",
+        })
+
+        self.assertLessEqual(envelope.signal.rssi, -119.0)
+
+    def test_buffer_clears_so_second_advert_does_not_steal_signal(self):
+        """One rx_log_data feeds exactly one parsed event, then clears."""
+        source = self._make_source()
+        self._push_rx_log(source, rssi=-72.0, snr=9.5)
+
+        first_env, _ = self._wrap_payload(source, "advertisement", {
+            "public_key": "11111111111111111111aaaa",
+            "adv_name": "NodeOne",
+        })
+        self.assertEqual(first_env.signal.rssi, -72.0)
+
+        second_env, _ = self._wrap_payload(source, "advertisement", {
+            "public_key": "22222222222222222222bbbb",
+            "adv_name": "NodeTwo",
+        })
+        self.assertLessEqual(
+            second_env.signal.rssi, -119.0,
+            "second advert without its own rx_log_data must NOT inherit "
+            "NodeOne's signal",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

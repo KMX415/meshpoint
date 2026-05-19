@@ -395,9 +395,10 @@ class MeshcoreUsbCaptureSource(CaptureSource):
 
         safe_payload = _make_json_safe(payload_dict)
 
-        if etype in ("channel_message", "contact_message"):
+        if etype in ("channel_message", "contact_message", "advertisement"):
             if self._last_rf_signal and signal.rssi <= -119.0:
                 safe_payload["RSSI"] = self._last_rf_signal.rssi
+                safe_payload["SNR"] = self._last_rf_signal.snr
                 signal = self._last_rf_signal
             self._last_rf_signal = None
 
