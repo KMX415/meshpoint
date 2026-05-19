@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 from typing import Awaitable
+from unittest import mock
 
 from src.api.dangerous.actions import (
     DangerousAction,
@@ -16,6 +17,7 @@ from src.api.dangerous.handlers import (
     build_restart_concentrator_action,
     build_restart_service_action,
     build_wipe_phantoms_action,
+    schedule_systemctl_restart,
 )
 
 
@@ -83,18 +85,38 @@ class TestRegistry(unittest.TestCase):
 
 
 class TestRestartHandlers(unittest.TestCase):
-    def test_restart_service_runs_systemctl(self) -> None:
+    def test_restart_service_detached_reports_success(self) -> None:
         runner = _RecorderRunner()
-        action = build_restart_service_action(runner=runner)
+        action = build_restart_service_action(runner=runner, detached=True)
+        with mock.patch(
+            "src.api.dangerous.handlers.schedule_systemctl_restart",
+        ) as mock_schedule:
+            mock_schedule.return_value = mock.Mock(pid=12345)
+            result = action.handler()
+        self.assertTrue(result.success)
+        self.assertIn("initiated", result.message)
+        self.assertTrue(result.details.get("detached"))
+        self.assertEqual(runner.calls, [])
+
+    def test_restart_service_sync_runs_systemctl(self) -> None:
+        runner = _RecorderRunner()
+        action = build_restart_service_action(runner=runner, detached=False)
         result = action.handler()
         self.assertTrue(result.success)
-        self.assertEqual(runner.calls[0][:3], ["sudo", "systemctl", "restart"])
+        self.assertEqual(runner.calls[0][:3], ["sudo", "/usr/bin/systemctl", "restart"])
 
-    def test_restart_service_failure_surfaced(self) -> None:
+    def test_restart_service_sync_failure_surfaced(self) -> None:
         runner = _RecorderRunner(returncode=1)
-        action = build_restart_service_action(runner=runner)
+        action = build_restart_service_action(runner=runner, detached=False)
         result = action.handler()
         self.assertFalse(result.success)
+
+    def test_schedule_systemctl_restart_uses_full_path(self) -> None:
+        with mock.patch("src.api.dangerous.handlers.subprocess.Popen") as popen:
+            schedule_systemctl_restart("meshpoint")
+        popen.assert_called_once()
+        args = popen.call_args[0][0]
+        self.assertEqual(args, ["sudo", "/usr/bin/systemctl", "restart", "meshpoint"])
 
     def test_restart_concentrator_metadata_visible(self) -> None:
         action = build_restart_concentrator_action(runner=_RecorderRunner())

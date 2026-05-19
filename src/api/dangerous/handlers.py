@@ -27,6 +27,18 @@ logger = logging.getLogger(__name__)
 Runner = Callable[[list[str], Optional[float]], tuple[int, str, str]]
 AsyncDispatch = Callable[[Awaitable], object]
 
+_SYSTEMCTL = "/usr/bin/systemctl"
+
+
+def schedule_systemctl_restart(service_name: str) -> subprocess.Popen:
+    """Start a detached restart so this process is not killed mid-wait."""
+    return subprocess.Popen(  # noqa: S603 -- structured argv
+        ["sudo", _SYSTEMCTL, "restart", service_name],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+
 
 def shell_runner(
     args: list[str], timeout_seconds: Optional[float] = 60.0,
@@ -45,16 +57,27 @@ def build_restart_service_action(
     *,
     service_name: str = "meshpoint",
     runner: Runner = shell_runner,
+    detached: bool = True,
 ) -> DangerousAction:
     def handler() -> DangerousActionResult:
-        rc, stdout, stderr = runner(
-            ["sudo", "systemctl", "restart", service_name], 60.0,
-        )
+        cmd = ["sudo", _SYSTEMCTL, "restart", service_name]
+        if detached:
+            proc = schedule_systemctl_restart(service_name)
+            return DangerousActionResult(
+                success=True,
+                message="service restart initiated",
+                details={
+                    "command": shlex.join(cmd),
+                    "detached": True,
+                    "pid": proc.pid,
+                },
+            )
+        rc, stdout, stderr = runner(cmd, 60.0)
         return DangerousActionResult(
             success=rc == 0,
             message="service restarted" if rc == 0 else "restart failed",
             details={
-                "command": shlex.join(["sudo", "systemctl", "restart", service_name]),
+                "command": shlex.join(cmd),
                 "returncode": rc,
                 "stdout": stdout,
                 "stderr": stderr,
@@ -72,11 +95,22 @@ def build_restart_service_action(
 def build_restart_concentrator_action(
     *,
     runner: Runner = shell_runner,
+    detached: bool = True,
 ) -> DangerousAction:
     def handler() -> DangerousActionResult:
-        rc, stdout, stderr = runner(
-            ["sudo", "systemctl", "restart", "meshpoint"], 60.0,
-        )
+        cmd = ["sudo", _SYSTEMCTL, "restart", "meshpoint"]
+        if detached:
+            proc = schedule_systemctl_restart("meshpoint")
+            return DangerousActionResult(
+                success=True,
+                message="concentrator restart initiated",
+                details={
+                    "command": shlex.join(cmd),
+                    "detached": True,
+                    "pid": proc.pid,
+                },
+            )
+        rc, stdout, stderr = runner(cmd, 60.0)
         return DangerousActionResult(
             success=rc == 0,
             message="concentrator + service restarted" if rc == 0 else "restart failed",

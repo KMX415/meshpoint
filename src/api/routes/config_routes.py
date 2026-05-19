@@ -59,6 +59,7 @@ async def get_config():
 
     radio = _config.radio
     tx = _config.transmit
+    relay = _config.relay
     mt = _config.meshtastic
 
     current_preset = preset_from_params(
@@ -134,6 +135,14 @@ async def get_config():
             "long_name": tx.long_name,
             "short_name": tx.short_name,
             "hop_limit": tx.hop_limit,
+            "relay": {
+                "enabled": relay.enabled,
+                "max_relay_per_minute": relay.max_relay_per_minute,
+            },
+        },
+        "relay": {
+            "enabled": relay.enabled,
+            "max_relay_per_minute": relay.max_relay_per_minute,
         },
         "nodeinfo": nodeinfo_routes.build_nodeinfo_status(tx.nodeinfo),
         "channels": channels,
@@ -147,11 +156,17 @@ async def get_config():
     }
 
 
+class RelaySettingsUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    max_relay_per_minute: Optional[int] = None
+
+
 class TransmitUpdate(BaseModel):
     enabled: Optional[bool] = None
     tx_power_dbm: Optional[int] = None
     max_duty_cycle_percent: Optional[float] = None
     hop_limit: Optional[int] = None
+    relay: Optional[RelaySettingsUpdate] = None
 
 
 @router.put("/transmit")
@@ -160,8 +175,10 @@ async def update_transmit(req: TransmitUpdate):
     if _config is None:
         raise HTTPException(503, "Config not loaded")
 
-    updates = {}
+    updates: dict = {}
+    relay_updates: dict = {}
     tx = _config.transmit
+    relay = _config.relay
     restart_needed = False
 
     if req.enabled is not None:
@@ -184,13 +201,38 @@ async def update_transmit(req: TransmitUpdate):
         tx.hop_limit = req.hop_limit
         updates["hop_limit"] = req.hop_limit
 
-    if updates:
-        try:
-            save_section_to_yaml("transmit", updates)
-        except PermissionError as exc:
-            raise HTTPException(403, str(exc))
+    if req.relay is not None:
+        if req.relay.enabled is not None:
+            relay.enabled = req.relay.enabled
+            relay_updates["enabled"] = req.relay.enabled
+            restart_needed = True
+        if req.relay.max_relay_per_minute is not None:
+            if not 0 <= req.relay.max_relay_per_minute <= 600:
+                raise HTTPException(400, "Relay rate must be 0-600 per minute")
+            relay.max_relay_per_minute = req.relay.max_relay_per_minute
+            relay_updates["max_relay_per_minute"] = req.relay.max_relay_per_minute
+            restart_needed = True
 
-    return {"saved": True, "restart_required": restart_needed, "updates": updates}
+    try:
+        if updates:
+            save_section_to_yaml("transmit", updates)
+        if relay_updates:
+            save_section_to_yaml("relay", relay_updates)
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc))
+
+    response_updates = dict(updates)
+    if relay_updates:
+        response_updates["relay"] = relay_updates
+
+    if not response_updates:
+        return {"saved": False, "restart_required": False, "updates": {}}
+
+    return {
+        "saved": True,
+        "restart_required": restart_needed,
+        "updates": response_updates,
+    }
 
 
 class IdentityUpdate(BaseModel):

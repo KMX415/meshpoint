@@ -35,7 +35,7 @@ class TransmitConfigCard {
                         <span class="cfg-field__label">Relay enabled</span>
                     </label>
                     <label class="cfg-field">
-                        <span class="cfg-field__label">Relay max packets / minute</span>
+                        <span class="cfg-field__label">Relay max / minute</span>
                         <input class="cfg-field__input" type="number" min="0" max="600" step="1" data-tx-relay-rate>
                     </label>
                     <div class="cfg-card__actions">
@@ -59,20 +59,27 @@ class TransmitConfigCard {
         if (this._powerEl && tx.tx_power_dbm != null) this._powerEl.value = tx.tx_power_dbm;
         if (this._dutyEl && tx.max_duty_cycle_percent != null) this._dutyEl.value = tx.max_duty_cycle_percent;
         if (this._relayEnable) this._relayEnable.checked = !!(tx.relay && tx.relay.enabled);
-        if (this._relayRate && tx.relay && tx.relay.max_packets_per_minute != null) {
-            this._relayRate.value = tx.relay.max_packets_per_minute;
+        if (this._relayRate && tx.relay && tx.relay.max_relay_per_minute != null) {
+            this._relayRate.value = tx.relay.max_relay_per_minute;
         }
     }
 
     async _onSubmit(event) {
         event.preventDefault();
+        const relay = { enabled: this._relayEnable.checked };
+        const rateRaw = this._relayRate.value.trim();
+        if (rateRaw !== '') {
+            const rate = Number(rateRaw);
+            if (!Number.isFinite(rate)) {
+                this._setStatus('error', 'Relay rate must be a number.');
+                return;
+            }
+            relay.max_relay_per_minute = rate;
+        }
         const payload = {
             tx_power_dbm: Number(this._powerEl.value),
             max_duty_cycle_percent: Number(this._dutyEl.value),
-            relay: {
-                enabled: this._relayEnable.checked,
-                max_packets_per_minute: Number(this._relayRate.value),
-            },
+            relay,
         };
         this._setStatus('pending', 'Saving…');
         const result = await this._api.put('/api/config/transmit', payload);
