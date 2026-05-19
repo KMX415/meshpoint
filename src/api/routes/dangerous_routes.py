@@ -16,6 +16,7 @@ button).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from dataclasses import asdict
@@ -85,7 +86,7 @@ async def invoke_action(
         action=f"dangerous.{action.id}",
         params={"label": action.label},
     ) as ctx:
-        result = registry.invoke(action.id)
+        result = await asyncio.to_thread(registry.invoke, action.id)
         ctx.params["success"] = result.success
         if not result.success:
             ctx.set_result("error")

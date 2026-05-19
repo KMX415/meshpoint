@@ -119,9 +119,36 @@ class TestRestartHandlers(unittest.TestCase):
         self.assertEqual(args, ["sudo", "/usr/bin/systemctl", "restart", "meshpoint"])
 
     def test_restart_concentrator_metadata_visible(self) -> None:
-        action = build_restart_concentrator_action(runner=_RecorderRunner())
+        async def coro():
+            return True
+
+        action = build_restart_concentrator_action(
+            dispatch=self._dispatch_returning(True),
+            restart_coro_factory=coro,
+        )
         self.assertEqual(action.confirmation_text, "restart")
         self.assertEqual(action.id, "restart_concentrator")
+
+    def test_restart_concentrator_reports_success(self) -> None:
+        async def coro():
+            return True
+
+        action = build_restart_concentrator_action(
+            dispatch=self._dispatch_returning(True),
+            restart_coro_factory=coro,
+        )
+        result = action.handler()
+        self.assertTrue(result.success)
+        self.assertIn("restarted", result.message)
+
+    def _dispatch_returning(self, value):
+        def dispatch(coro: Awaitable):
+            try:
+                coro.close()
+            except Exception:
+                pass
+            return _FakeFuture(value)
+        return dispatch
 
 
 class TestAsyncDispatchHandlers(unittest.TestCase):

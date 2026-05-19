@@ -94,28 +94,30 @@ def build_restart_service_action(
 
 def build_restart_concentrator_action(
     *,
-    runner: Runner = shell_runner,
-    detached: bool = True,
+    dispatch: AsyncDispatch,
+    restart_coro_factory: Callable[[], Awaitable[bool]],
 ) -> DangerousAction:
+    """Reload the SX1302 HAL in-process (no systemd unit restart)."""
+
     def handler() -> DangerousActionResult:
-        cmd = ["sudo", _SYSTEMCTL, "restart", "meshpoint"]
-        if detached:
-            proc = schedule_systemctl_restart("meshpoint")
+        try:
+            future = dispatch(restart_coro_factory())
+            ok = future.result(timeout=60) if hasattr(future, "result") else future
             return DangerousActionResult(
-                success=True,
-                message="concentrator restart initiated",
-                details={
-                    "command": shlex.join(cmd),
-                    "detached": True,
-                    "pid": proc.pid,
-                },
+                success=bool(ok),
+                message=(
+                    "concentrator restarted"
+                    if ok
+                    else "concentrator restart unavailable"
+                ),
             )
-        rc, stdout, stderr = runner(cmd, 60.0)
-        return DangerousActionResult(
-            success=rc == 0,
-            message="concentrator + service restarted" if rc == 0 else "restart failed",
-            details={"returncode": rc, "stdout": stdout, "stderr": stderr},
-        )
+        except Exception as exc:
+            logger.exception("restart_concentrator handler failed")
+            return DangerousActionResult(
+                success=False,
+                message=f"concentrator restart failed: {exc}",
+            )
+
     return DangerousAction(
         id="restart_concentrator",
         label="Restart concentrator",

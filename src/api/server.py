@@ -971,15 +971,30 @@ def _init_dangerous_registry(coord: PipelineCoordinator) -> None:
         if nodeinfo_broadcaster is None:
             return False
         try:
-            await nodeinfo_broadcaster.broadcast_now()
-            return True
+            result = await nodeinfo_broadcaster.broadcast_now()
+            return bool(result.success)
         except Exception:
             logger.exception("force_nodeinfo: broadcast failed")
             return False
 
+    async def _restart_concentrator_coro() -> bool:
+        src = _find_concentrator_source(coord)
+        if src is None:
+            logger.warning("restart_concentrator: no concentrator capture source")
+            return False
+        try:
+            await src.restart_pipeline()
+            return True
+        except Exception:
+            logger.exception("restart_concentrator: pipeline reload failed")
+            return False
+
     registry = DangerousActionRegistry([
         build_restart_service_action(),
-        build_restart_concentrator_action(),
+        build_restart_concentrator_action(
+            dispatch=_dispatch,
+            restart_coro_factory=_restart_concentrator_coro,
+        ),
         build_clear_database_action(
             dispatch=_dispatch,
             clear_coro_factory=_clear_database_coro,
