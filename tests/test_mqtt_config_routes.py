@@ -1,0 +1,142 @@
+"""Tests for Configuration → MQTT API routes."""
+
+from __future__ import annotations
+
+import unittest
+from unittest.mock import MagicMock, patch
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from src.api.auth.dependencies import require_admin
+from src.api.auth.jwt_session import ROLE_ADMIN, SessionClaims
+from src.api.routes import mqtt_config_routes as mqtt_module
+from src.config import MqttConfig
+from src.relay.mqtt_publisher import _resolve_gateway_id
+
+
+def _admin_claims() -> SessionClaims:
+    return SessionClaims(subject="admin", role=ROLE_ADMIN, session_version=1)
+
+
+def _build_app() -> FastAPI:
+    app = FastAPI()
+    app.dependency_overrides[require_admin] = _admin_claims
+    app.include_router(mqtt_module.router)
+    return app
+
+
+def _fake_app_config(*, device_name: str = "meshpoint-test"):
+    cfg = MagicMock()
+    cfg.mqtt = MqttConfig(
+        enabled=False,
+        broker="mqtt.meshtastic.org",
+        port=1883,
+        topic_root="msh",
+        region="US",
+    )
+    cfg.device.device_name = device_name
+    return cfg
+
+
+class TestBuildMqttStatus(unittest.TestCase):
+    def test_maps_yaml_fields_to_dashboard_shape(self) -> None:
+        mqtt = MqttConfig(
+            enabled=True,
+            broker="broker.example.com",
+            port=8883,
+            topic_root="msh",
+            region="EU_868",
+            publish_json=True,
+        )
+        status = mqtt_module.build_mqtt_status(mqtt, "My Meshpoint")
+        self.assertTrue(status["enabled"])
+        self.assertEqual(status["broker_host"], "broker.example.com")
+        self.assertEqual(status["broker_port"], 8883)
+        self.assertEqual(status["region_segment"], "EU_868")
+        self.assertFalse(status["encrypted"])
+        self.assertTrue(status["gateway_id"].startswith("!"))
+
+
+class TestUpdateMqttRoute(unittest.TestCase):
+    def setUp(self) -> None:
+        mqtt_module._config = _fake_app_config()
+        self.client = TestClient(_build_app())
+
+    def tearDown(self) -> None:
+        mqtt_module.reset_routes()
+
+    def test_round_trip_persists_yaml(self) -> None:
+        with patch("src.api.routes.mqtt_config_routes.save_section_to_yaml") as mock_save:
+            resp = self.client.put(
+                "/api/config/mqtt",
+                json={
+                    "enabled": True,
+                    "broker_host": "mqtt.example.com",
+                    "broker_port": 1883,
+                    "topic_root": "msh",
+                    "region_segment": "ANZ",
+                    "encrypted": True,
+                    "gateway_id": "",
+                },
+            )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body["saved"])
+        self.assertTrue(body["restart_required"])
+        self.assertEqual(body["mqtt"]["broker_host"], "mqtt.example.com")
+        self.assertEqual(body["mqtt"]["region_segment"], "ANZ")
+        mock_save.assert_called_once()
+        saved = mock_save.call_args[0][1]
+        self.assertEqual(saved["broker"], "mqtt.example.com")
+        self.assertEqual(saved["region"], "ANZ")
+        self.assertFalse(saved["publish_json"])
+
+    def test_invalid_gateway_id_returns_400(self) -> None:
+        resp = self.client.put(
+            "/api/config/mqtt",
+            json={
+                "enabled": False,
+                "broker_host": "mqtt.example.com",
+                "broker_port": 1883,
+                "topic_root": "msh",
+                "region_segment": "US",
+                "encrypted": True,
+                "gateway_id": "not-valid",
+            },
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_custom_gateway_id_normalized(self) -> None:
+        with patch("src.api.routes.mqtt_config_routes.save_section_to_yaml"):
+            resp = self.client.put(
+                "/api/config/mqtt",
+                json={
+                    "enabled": True,
+                    "broker_host": "mqtt.example.com",
+                    "broker_port": 1883,
+                    "topic_root": "msh",
+                    "region_segment": "US",
+                    "encrypted": True,
+                    "gateway_id": "deadbeef",
+                },
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(mqtt_module._config.mqtt.gateway_id, "deadbeef")
+        self.assertEqual(
+            resp.json()["mqtt"]["gateway_id"],
+            "!deadbeef",
+        )
+
+
+class TestResolveGatewayId(unittest.TestCase):
+    def test_override_wins_over_device_name(self) -> None:
+        self.assertEqual(
+            _resolve_gateway_id("aabbccdd", "anything"),
+            "!aabbccdd",
+        )
+
+    def test_auto_derived_when_override_blank(self) -> None:
+        gid = _resolve_gateway_id(None, "meshpoint-alpha")
+        self.assertTrue(gid.startswith("!"))
+        self.assertEqual(len(gid), 9)

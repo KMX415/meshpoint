@@ -16,7 +16,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from src.api.routes import nodeinfo_routes
+from src.api.routes import mqtt_config_routes, nodeinfo_routes
 from src.config import AppConfig, save_section_to_yaml
 from src.models.device_identity import DeviceIdentity
 from src.radio.presets import (
@@ -145,6 +145,9 @@ async def get_config():
             "max_relay_per_minute": relay.max_relay_per_minute,
         },
         "nodeinfo": nodeinfo_routes.build_nodeinfo_status(tx.nodeinfo),
+        "mqtt": mqtt_config_routes.build_mqtt_status(
+            _config.mqtt, _config.device.device_name or "meshpoint"
+        ),
         "channels": channels,
         "meshcore": mc_status,
         "duty_cycle": duty_info,

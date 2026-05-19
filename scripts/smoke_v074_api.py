@@ -27,11 +27,17 @@ PASSWORD = os.environ.get("MESHPOINT_PASSWORD", "")
 DESTRUCTIVE = os.environ.get("SMOKE_DESTRUCTIVE", "") == "1"
 
 FAILURES: list[str] = []
+WARNINGS: list[str] = []
 
 
 def fail(msg: str) -> None:
     FAILURES.append(msg)
     print(f"FAIL: {msg}")
+
+
+def warn(msg: str) -> None:
+    WARNINGS.append(msg)
+    print(f"WARN: {msg}")
 
 
 def ok(msg: str) -> None:
@@ -80,8 +86,10 @@ def main() -> int:
     if st != 200:
         fail(f"config GET {st}")
         return 1
+    ok("config GET")
+
     tx = cfg.get("transmit", {})
-    orig = {"long_name": tx.get("long_name"), "short_name": tx.get("short_name")}
+    orig_identity = {"long_name": tx.get("long_name"), "short_name": tx.get("short_name")}
 
     st, j = req(
         "PUT",
@@ -92,8 +100,155 @@ def main() -> int:
         fail(f"identity PUT {st} {j}")
     else:
         ok("identity round-trip PUT")
+    req("PUT", "/api/config/identity", orig_identity)
 
-    req("PUT", "/api/config/identity", orig)
+    orig_tx_power = tx.get("tx_power_dbm")
+    st, j = req("PUT", "/api/config/transmit", {"tx_power_dbm": 17})
+    if st != 200 or not j.get("saved"):
+        fail(f"transmit tx_power PUT {st} {j}")
+    else:
+        ok("transmit tx_power PUT")
+    if orig_tx_power is not None:
+        req("PUT", "/api/config/transmit", {"tx_power_dbm": orig_tx_power})
+
+    relay = tx.get("relay") or cfg.get("relay") or {}
+    orig_relay_rate = relay.get("max_relay_per_minute")
+    if orig_relay_rate is not None:
+        st, j = req(
+            "PUT",
+            "/api/config/transmit",
+            {"relay": {"max_relay_per_minute": orig_relay_rate}},
+        )
+        if st != 200:
+            fail(f"transmit relay PUT {st} {j}")
+        else:
+            ok("transmit relay round-trip PUT")
+
+    radio = cfg.get("radio", {})
+    orig_hop = tx.get("hop_limit")
+    if orig_hop is not None:
+        st, j = req("PUT", "/api/config/transmit", {"hop_limit": orig_hop})
+        if st != 200:
+            fail(f"transmit hop_limit PUT {st} {j}")
+        else:
+            ok("transmit hop_limit PUT")
+
+    if radio.get("region"):
+        st, j = req(
+            "PUT",
+            "/api/config/radio",
+            {"preset": radio.get("current_preset") or "LONG_FAST"},
+        )
+        if st != 200:
+            fail(f"radio preset PUT {st} {j}")
+        else:
+            ok("radio preset PUT (no region change)")
+
+    channels = cfg.get("channels") or []
+    if channels:
+        ch_payload = [
+            {
+                "index": ch.get("index", -1),
+                "name": ch.get("name", ""),
+                "psk_b64": ch.get("psk_b64", ""),
+                "enabled": ch.get("enabled", True),
+            }
+            for ch in channels
+        ]
+        st, j = req("PUT", "/api/config/channels", {"channels": ch_payload})
+        if st != 200:
+            fail(f"channels PUT {st} {j}")
+        else:
+            ok(f"channels round-trip PUT ({len(ch_payload)} rows)")
+
+    ni = cfg.get("nodeinfo") or {}
+    orig_interval = ni.get("interval_minutes")
+    if orig_interval is not None:
+        test_interval = 180 if orig_interval != 180 else 360
+        st, j = req("PUT", "/api/config/nodeinfo", {"interval_minutes": test_interval})
+        if st != 200:
+            fail(f"nodeinfo interval PUT {st} {j}")
+        else:
+            ok("nodeinfo interval PUT")
+        req("PUT", "/api/config/nodeinfo", {"interval_minutes": orig_interval})
+
+    st, j = req("POST", "/api/config/nodeinfo/send", timeout=45)
+    if st != 200:
+        fail(f"nodeinfo send POST {st} {j}")
+    else:
+        ok("nodeinfo send POST")
+
+    mqtt_orig = cfg.get("mqtt") or {}
+    st, j = req(
+        "PUT",
+        "/api/config/mqtt",
+        {
+            "enabled": mqtt_orig.get("enabled", False),
+            "broker_host": mqtt_orig.get("broker_host", "mqtt.meshtastic.org"),
+            "broker_port": mqtt_orig.get("broker_port", 1883),
+            "topic_root": mqtt_orig.get("topic_root", "msh"),
+            "region_segment": mqtt_orig.get("region_segment", "US"),
+            "encrypted": mqtt_orig.get("encrypted", True),
+            "gateway_id": "",
+        },
+    )
+    if st != 200 or not j.get("saved"):
+        fail(f"mqtt PUT {st} {j}")
+    else:
+        ok("mqtt round-trip PUT")
+
+    st, j = req("PUT", "/api/config/gps", {"source": "static"})
+    if st in (404, 405):
+        ok("gps PUT not wired (expected skip)")
+    elif st == 200:
+        ok("gps PUT (unexpectedly implemented)")
+    else:
+        warn(f"gps PUT status {st}")
+
+    st, j = req(
+        "POST",
+        "/api/auth/change_password",
+        {"current_password": "wrong-password", "new_password": "newpassword1"},
+    )
+    if st != 401:
+        fail(f"change_password wrong current expected 401 got {st}")
+    else:
+        ok("change_password rejects wrong current password")
+
+    st, j = req(
+        "POST",
+        "/api/auth/change_password",
+        {"current_password": PASSWORD, "new_password": "short"},
+    )
+    if st != 400:
+        fail(f"change_password short password expected 400 got {st}")
+    else:
+        ok("change_password rejects short new password")
+
+    st, settings = req("GET", "/api/config/auth_settings")
+    if st != 200:
+        fail(f"auth_settings GET {st}")
+    else:
+        ok(
+            "auth_settings GET "
+            f"attempts={settings.get('lockout_attempts')} "
+            f"cooldown={settings.get('lockout_cooldown_minutes')}"
+        )
+
+    orig_attempts = settings.get("lockout_attempts", 5)
+    orig_cooldown = settings.get("lockout_cooldown_minutes", 5)
+    st, j = req(
+        "PUT",
+        "/api/config/auth_lockout",
+        {
+            "lockout_attempts": orig_attempts,
+            "lockout_cooldown_minutes": orig_cooldown,
+        },
+    )
+    if st != 200:
+        fail(f"auth_lockout PUT {st} {j}")
+    else:
+        ok("auth_lockout round-trip PUT")
 
     st, acts = req("GET", "/api/dangerous/actions")
     ids = [a["id"] for a in acts.get("actions", [])]
@@ -112,8 +267,8 @@ def main() -> int:
             ok(f"{action_id}: {j.get('message')}")
 
     st, cfg2 = req("GET", "/api/config")
-    relay = (cfg2.get("relay") or cfg2.get("transmit", {}).get("relay"))
-    if st == 200 and relay is not None:
+    relay2 = (cfg2.get("relay") or cfg2.get("transmit", {}).get("relay"))
+    if st == 200 and relay2 is not None:
         ok("config GET includes relay settings")
     else:
         fail(f"relay shape {st} {cfg2.get('relay')}")
@@ -125,6 +280,8 @@ def main() -> int:
         else:
             fail(f"clear_database {st} {j}")
 
+    if WARNINGS:
+        print(f"\n{len(WARNINGS)} warning(s) (ship blockers if MQTT/GPS routes missing)")
     if FAILURES:
         print(f"\n{len(FAILURES)} failure(s)")
         return 1

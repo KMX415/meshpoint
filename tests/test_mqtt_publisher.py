@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 
 from src.config import MqttConfig
-from src.relay.mqtt_publisher import MqttPublisher, _generate_gateway_id
+from src.relay.mqtt_publisher import MqttPublisher, _generate_gateway_id, _resolve_gateway_id
 
 
 class TestGatewayId(unittest.TestCase):
@@ -15,6 +15,11 @@ class TestGatewayId(unittest.TestCase):
         self.assertEqual(lower, upper)
         self.assertTrue(lower.startswith("!"))
         self.assertEqual(len(lower), 9)
+
+    def test_config_override_used_by_publisher(self) -> None:
+        cfg = MqttConfig(enabled=True, gateway_id="aabbccdd")
+        pub = MqttPublisher(cfg, device_name="ignored")
+        self.assertEqual(pub.gateway_id, "!aabbccdd")
 
 
 class TestMqttPublisherLogging(unittest.TestCase):

@@ -49,7 +49,7 @@ class MqttPublisher:
         channel_keys: Optional[dict[str, str]] = None,
     ):
         self._config = config
-        self._gateway_id = _generate_gateway_id(device_name)
+        self._gateway_id = _resolve_gateway_id(config.gateway_id, device_name)
         self._client: Optional[paho_mqtt.Client] = None
         self._connected = False
         self._publish_count = 0
@@ -312,6 +312,16 @@ class HomeAssistantDiscovery:
             "source_type": "gps",
         }
         return topic, json.dumps(config)
+
+
+def _resolve_gateway_id(override: Optional[str], device_name: str) -> str:
+    """Use explicit config override or derive from device name."""
+    if override:
+        raw = override.strip()
+        if raw.startswith("!"):
+            return raw.lower()
+        return f"!{raw.lower()}"
+    return _generate_gateway_id(device_name)
 
 
 def _generate_gateway_id(device_name: str) -> str:

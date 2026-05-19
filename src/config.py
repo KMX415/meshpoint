@@ -152,6 +152,8 @@ class MqttConfig:
     password: str = "large4cats"
     topic_root: str = "msh"
     region: str = "US"
+    # Optional ``!xxxxxxxx`` override; blank uses MD5 hash of device name.
+    gateway_id: Optional[str] = None
     publish_channels: list[str] = field(default_factory=lambda: ["LongFast", "MeshCore"])
     publish_json: bool = False
     location_precision: str = "exact"
