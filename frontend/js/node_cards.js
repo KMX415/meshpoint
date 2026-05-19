@@ -4,6 +4,9 @@
  * telemetry chips, role, hardware, and online status.
  */
 class NodeCards {
+    /** Match Meshtastic-style "recently heard" (not cloud device heartbeat at 15 min). */
+    static ONLINE_THRESHOLD_MS = 2 * 60 * 60 * 1000;
+
     constructor(containerId, onCardClick) {
         this._container = document.getElementById(containerId);
         this._onCardClick = onCardClick;
@@ -85,10 +88,11 @@ class NodeCards {
         const avatarColor = this._hashColor(n.node_id || '');
         const proto = n.protocol || 'meshtastic';
         const protoBadge = proto === 'meshcore' ? 'MC' : 'MT';
-        const online = this._isOnline(n.last_heard);
+        const heardAt = n.last_heard || n.last_seen;
+        const online = this._isOnline(heardAt);
         const onlineDot = online
-            ? '<span class="nc-online nc-online--on" title="Online"></span>'
-            : '<span class="nc-online nc-online--off" title="Offline"></span>';
+            ? '<span class="nc-online nc-online--on" title="Heard within 2 hours"></span>'
+            : '<span class="nc-online nc-online--off" title="Not heard within 2 hours"></span>';
 
         const signal = this._buildSignal(n);
         const telemetry = this._buildTelemetry(n);
@@ -99,7 +103,7 @@ class NodeCards {
                 <div class="nc-avatar" style="background:${avatarColor}">${shortLabel}</div>
                 <div class="nc-card__identity">
                     <div class="nc-card__name">${onlineDot} ${name}</div>
-                    <div class="nc-card__heard">${this._timeAgo(n.last_heard)}</div>
+                    <div class="nc-card__heard">${this._timeAgo(heardAt)}</div>
                 </div>
                 <span class="nc-proto nc-proto--${proto}">${protoBadge}</span>
             </div>
@@ -217,15 +221,26 @@ class NodeCards {
         return String(role).toUpperCase();
     }
 
+    _heardMs(ts) {
+        if (!ts) return NaN;
+        const raw = String(ts).trim();
+        const hasTz = /[zZ]$|[+-]\d{2}:\d{2}$/.test(raw);
+        const iso = hasTz ? raw : raw.replace(' ', 'T') + 'Z';
+        const ms = Date.parse(iso);
+        return Number.isNaN(ms) ? NaN : ms;
+    }
+
     _isOnline(lastHeard) {
-        if (!lastHeard) return false;
-        const diff = Date.now() - new Date(lastHeard).getTime();
-        return diff < 15 * 60 * 1000;
+        const ms = this._heardMs(lastHeard);
+        if (Number.isNaN(ms)) return false;
+        return (Date.now() - ms) < NodeCards.ONLINE_THRESHOLD_MS;
     }
 
     _timeAgo(ts) {
         if (!ts) return '--';
-        const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+        const heardMs = this._heardMs(ts);
+        if (Number.isNaN(heardMs)) return '--';
+        const diff = Math.floor((Date.now() - heardMs) / 1000);
         if (diff < 60) return 'Now';
         if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
         if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
