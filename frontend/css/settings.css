@@ -291,6 +291,7 @@
 
 .update-panel {
     color: #f3f4f6;
+    color-scheme: dark;
     padding: 24px clamp(16px, 3vw, 32px);
     overflow-y: auto;
     height: 100%;
