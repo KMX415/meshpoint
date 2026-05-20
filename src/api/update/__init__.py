@@ -8,7 +8,8 @@ flow:
   (``main``, ``feat/v0.7.4``, custom branch). Each carries a label,
   description, and stability tier so the UI can warn when the user
   picks something risky.
-* ``UpdateApplier`` performs ``git fetch`` + ``git checkout`` +
+* ``UpdateApplier`` performs ``git fetch`` + ``git checkout -f`` +
+  ``git reset --hard origin/<branch>`` +
   ``bash scripts/install.sh`` + ``systemctl restart meshpoint`` in
   sequence, capturing stdout/stderr for the dashboard log pane.
 * ``WatchdogMonitor`` polls the API after a successful apply; if

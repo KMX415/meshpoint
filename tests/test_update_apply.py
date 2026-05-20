@@ -50,7 +50,7 @@ class TestUpdateApplier(unittest.TestCase):
             [
                 "git fetch",
                 "git checkout",
-                "git pull",
+                "git reset",
                 "install.sh",
                 "restart service",
             ],
