@@ -1,7 +1,8 @@
 /**
  * Live progress UI for Settings → Updates apply / rollback.
  *
- * Driven by NDJSON stream events from ``/api/update/*/stream`` so each
+ * Driven by NDJSON stream events from the apply/rollback stream endpoints
+ * (``/api/update/apply/stream``, ``/api/update/rollback/stream``) so each
  * git/install step lights up as it runs on the Pi. After the final
  * result, we poll ``/api/device/status`` when the service restarts.
  */
