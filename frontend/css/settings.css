@@ -620,8 +620,11 @@ select.update-field__input option:checked {
 
 .update-release-notes__bullet {
     display: flex;
+    flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: 2px;
+    padding-left: 14px;
+    position: relative;
     font-size: 13px;
     line-height: 1.45;
     color: rgba(243, 244, 246, 0.88);
@@ -641,8 +644,11 @@ select.update-field__input option:checked {
 }
 
 .update-release-notes__bullet-detail {
-    color: rgba(243, 244, 246, 0.65);
-    margin-left: 6px;
+    display: block;
+    font-size: 12px;
+    line-height: 1.4;
+    color: rgba(243, 244, 246, 0.62);
+    max-width: 52rem;
 }
 
 .update-release-notes__empty,

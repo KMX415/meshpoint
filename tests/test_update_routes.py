@@ -123,6 +123,8 @@ _CHANGELOG_FIXTURE = """# Changelog
 
 Queued for the next bump.
 
+### v0.7.4 (May 2026)
+
 - **Smart upgrade indicator landed.** Operators get a what's-coming preview before clicking Apply.
 
 ### v0.7.3.1 (May 13, 2026)
@@ -161,7 +163,7 @@ class TestReleaseNotesRoute(unittest.TestCase):
         audit_deps.reset_audit()
         self.tmp.cleanup()
 
-    def test_rc_channel_returns_unreleased_section(self) -> None:
+    def test_rc_channel_returns_rc_version_section(self) -> None:
         self.client.cookies.set("meshpoint_session", self.admin_token)
         response = self.client.get("/api/update/release_notes?channel_id=rc-074")
         self.assertEqual(response.status_code, 200)
@@ -169,11 +171,16 @@ class TestReleaseNotesRoute(unittest.TestCase):
         self.assertEqual(body["channel_id"], "rc-074")
         self.assertEqual(body["channel_tier"], "rc")
         self.assertIsNotNone(body["preview_section"])
-        self.assertTrue(body["preview_section"]["is_unreleased"])
+        self.assertFalse(body["preview_section"]["is_unreleased"])
+        self.assertEqual(body["preview_section"]["version"], "0.7.4")
         self.assertEqual(len(body["preview_section"]["bullets"]), 1)
         self.assertEqual(
             body["preview_section"]["bullets"][0]["headline"],
             "Smart upgrade indicator landed",
+        )
+        self.assertLessEqual(
+            len(body["preview_section"]["bullets"][0]["detail"]),
+            160,
         )
 
     def test_stable_channel_returns_first_released(self) -> None:

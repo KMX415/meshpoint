@@ -38,6 +38,8 @@ from src.api.update.release_notes import (
     ChangelogBullet,
     ChangelogParser,
     ChangelogSection,
+    format_section_for_preview,
+    sanitize_detail_for_preview,
     select_preview_section,
 )
 from src.api.update.watchdog import RollbackTag, WatchdogMonitor
@@ -56,5 +58,7 @@ __all__ = [
     "StreamCallback",
     "UpdateApplier",
     "WatchdogMonitor",
+    "format_section_for_preview",
+    "sanitize_detail_for_preview",
     "select_preview_section",
 ]

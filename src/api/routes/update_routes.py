@@ -29,7 +29,11 @@ from src.api.auth.dependencies import require_admin
 from src.api.auth.jwt_session import SessionClaims
 from src.api.update.apply import UpdateApplier
 from src.api.update.channels import ReleaseChannelRegistry
-from src.api.update.release_notes import ChangelogParser, select_preview_section
+from src.api.update.release_notes import (
+    ChangelogParser,
+    format_section_for_preview,
+    select_preview_section,
+)
 from src.version import __version__ as INSTALLED_VERSION
 
 logger = logging.getLogger(__name__)
@@ -98,13 +102,20 @@ async def release_notes(
             detail="invalid_channel",
         )
     sections = _load_changelog_sections()
-    preview = select_preview_section(sections, tier=channel.tier)
+    preview = select_preview_section(
+        sections,
+        tier=channel.tier,
+        channel_id=channel.id,
+        installed_version=INSTALLED_VERSION,
+    )
     return {
         "channel_id": channel.id,
         "channel_label": channel.label,
         "channel_tier": channel.tier,
         "current_installed_version": INSTALLED_VERSION,
-        "preview_section": preview.to_dict() if preview is not None else None,
+        "preview_section": (
+            format_section_for_preview(preview) if preview is not None else None
+        ),
     }
 
 

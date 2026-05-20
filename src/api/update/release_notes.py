@@ -30,6 +30,12 @@ _UNRELEASED_RE = re.compile(r"^Unreleased$", re.IGNORECASE)
 _BULLET_RE = re.compile(
     r"^-\s+\*\*(?P<headline>[^*]+?)\*\*\s*(?P<detail>.*)$"
 )
+_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
+# Dashboard preview: full CHANGELOG detail is for maintainers, not operators.
+_PREVIEW_DETAIL_MAX = 140
+_RC_CHANNEL_VERSION: dict[str, str] = {
+    "rc-074": "0.7.4",
+}
 
 
 @dataclass(frozen=True)
@@ -114,24 +120,98 @@ def _section_from_header(body: str) -> ChangelogSection | None:
     return None
 
 
+def sanitize_detail_for_preview(detail: str, *, max_len: int = _PREVIEW_DETAIL_MAX) -> str:
+    """Shorten and de-markdown detail text for the Settings preview."""
+    if not detail:
+        return ""
+    text = _LINK_RE.sub(r"\1", detail)
+    text = text.replace("`", "")
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) <= max_len:
+        return text
+    cut = text[: max_len - 1].rsplit(" ", 1)[0]
+    if len(cut) < max_len // 2:
+        cut = text[: max_len - 1]
+    return cut.rstrip(".,;") + "…"
+
+
+def format_bullet_for_preview(bullet: ChangelogBullet) -> dict:
+    """Serialize one bullet for the dashboard (truncated detail)."""
+    return {
+        "headline": bullet.headline,
+        "detail": sanitize_detail_for_preview(bullet.detail),
+    }
+
+
+def format_section_for_preview(section: ChangelogSection) -> dict:
+    """Serialize a section with operator-friendly bullets."""
+    return {
+        "header": section.header,
+        "version": section.version,
+        "date": section.date,
+        "is_unreleased": section.is_unreleased,
+        "bullets": [format_bullet_for_preview(b) for b in section.bullets],
+    }
+
+
+def _version_tuple(version: str) -> tuple[int, ...]:
+    parts: list[int] = []
+    for piece in version.split("."):
+        if piece.isdigit():
+            parts.append(int(piece))
+    return tuple(parts)
+
+
+def _version_gt(left: str, right: str) -> bool:
+    return _version_tuple(left) > _version_tuple(right)
+
+
 def select_preview_section(
-    sections: list[ChangelogSection], *, tier: str
+    sections: list[ChangelogSection],
+    *,
+    tier: str,
+    channel_id: str | None = None,
+    installed_version: str | None = None,
 ) -> ChangelogSection | None:
     """Pick the right section for the ``release_notes`` endpoint.
 
-    * ``rc``     -> the first ``Unreleased`` section, since that is
-                    the staging area for whatever lands next.
-    * ``stable`` -> the first non-``Unreleased`` section, i.e. the
-                    most recent shipped release.
+    * ``rc``     -> the version block for this RC channel (e.g.
+                    ``rc-074`` -> ``v0.7.4``), else the first
+                    versioned section that still has bullets.
+                    Skips an empty ``Unreleased`` header.
+    * ``stable`` -> the changelog section for ``installed_version``
+                    when present, otherwise the newest section that
+                    is not newer than the installed firmware (so an
+                    in-flight ``v0.7.4`` block does not replace
+                    ``v0.7.3.1`` on production gateways).
     * anything else (e.g. ``custom``) -> ``None``; the dashboard
                     renders a generic "no preview available" notice.
     """
     if tier == "rc":
+        target = _RC_CHANNEL_VERSION.get(channel_id or "")
+        if target:
+            for section in sections:
+                if section.version == target and section.bullets:
+                    return section
         for section in sections:
-            if section.is_unreleased:
+            if section.version and section.bullets:
+                return section
+        for section in sections:
+            if section.is_unreleased and section.bullets:
                 return section
         return None
     if tier == "stable":
+        if installed_version:
+            for section in sections:
+                if section.version == installed_version:
+                    return section
+            for section in sections:
+                if (
+                    section.version
+                    and not section.is_unreleased
+                    and not _version_gt(section.version, installed_version)
+                ):
+                    return section
         for section in sections:
             if not section.is_unreleased:
                 return section

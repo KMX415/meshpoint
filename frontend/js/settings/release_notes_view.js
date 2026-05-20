@@ -79,11 +79,12 @@ class ReleaseNotesView {
         const headline = this._escape(bullet.headline || '').trim();
         const detail = this._escape(bullet.detail || '').trim();
         if (!headline && !detail) return '';
+        const detailHtml = detail
+            ? `<span class="update-release-notes__bullet-detail">${detail}</span>`
+            : '';
         return `<li class="update-release-notes__bullet">
-            <span>
-                <span class="update-release-notes__bullet-headline">${headline}.</span>
-                ${detail ? `<span class="update-release-notes__bullet-detail">${detail}</span>` : ''}
-            </span>
+            <span class="update-release-notes__bullet-headline">${headline}.</span>
+            ${detailHtml}
         </li>`;
     }
 
