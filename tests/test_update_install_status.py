@@ -61,6 +61,22 @@ class TestReadInstallGitRef(unittest.TestCase):
 
 
 class TestBuildInstallStatusPayload(unittest.TestCase):
+    def test_null_branch_does_not_default_to_stable(self) -> None:
+        runner = _FakeGitRunner(branch="", sha="")
+        runner.__call__ = lambda args, cwd, timeout: (1, "", "denied")  # noqa: E731
+        with mock.patch(
+            "src.api.update.install_status.fetch_remote_version_sync",
+            return_value=None,
+        ):
+            payload = build_install_status_payload(
+                registry=ReleaseChannelRegistry(),
+                repo_path="/opt/meshpoint",
+                runner=runner,
+                use_sudo=False,
+            )
+        self.assertIsNone(payload["install_branch"])
+        self.assertIsNone(payload["active_channel_id"])
+
     def test_payload_includes_branch_and_channel(self) -> None:
         runner = _FakeGitRunner()
         with mock.patch(

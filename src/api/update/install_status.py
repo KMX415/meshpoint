@@ -37,27 +37,40 @@ def read_install_git_ref(
     runner: GitRunner = default_git_runner,
     use_sudo: bool = True,
 ) -> tuple[Optional[str], Optional[str]]:
-    """Return ``(branch_name, short_sha)`` for HEAD in the install tree."""
-    prefix = ["sudo"] if use_sudo else []
-    base = [*prefix, "git", "-C", repo_path]
+    """Return ``(branch_name, short_sha)`` for HEAD in the install tree.
 
-    rc, branch_out, _ = runner([*base, "rev-parse", "--abbrev-ref", "HEAD"], None, 10.0)
+    Uses ``cwd=repo_path`` (not ``git -C``) so commands match the
+    passwordless sudoers entries granted to the ``meshpoint`` service
+    user. The apply chain already uses the same pattern.
+    """
+    git = ["sudo", "git"] if use_sudo else ["git"]
+
+    rc, branch_out, _ = runner(
+        [*git, "rev-parse", "--abbrev-ref", "HEAD"], repo_path, 10.0,
+    )
     branch = branch_out.strip() if rc == 0 else None
     if branch == "HEAD":
-        branch = _read_detached_branch_name(base, runner)
+        branch = _read_detached_branch_name(git, repo_path, runner)
 
-    rc, sha_out, _ = runner([*base, "rev-parse", "--short=8", "HEAD"], None, 10.0)
+    rc, sha_out, _ = runner(
+        [*git, "rev-parse", "--short=8", "HEAD"], repo_path, 10.0,
+    )
     sha = sha_out.strip() if rc == 0 else None
+    if branch is None or sha is None:
+        logger.warning(
+            "install_status: could not read git ref in %s (branch=%s sha=%s)",
+            repo_path, branch, sha,
+        )
     return branch or None, sha or None
 
 
 def _read_detached_branch_name(
-    base: list[str], runner: GitRunner,
+    git: list[str], repo_path: str, runner: GitRunner,
 ) -> Optional[str]:
     """Best-effort branch name when HEAD is detached at a remote tip."""
     rc, out, _ = runner(
-        [*base, "rev-parse", "--abbrev-ref", "HEAD@{upstream}"],
-        None,
+        [*git, "rev-parse", "--abbrev-ref", "HEAD@{upstream}"],
+        repo_path,
         10.0,
     )
     if rc != 0:
@@ -127,7 +140,14 @@ def build_install_status_payload(
     branch, sha = read_install_git_ref(
         repo_path, runner=runner, use_sudo=use_sudo,
     )
-    channel_info = match_channel_for_branch(registry, branch or "main")
+    if branch:
+        channel_info = match_channel_for_branch(registry, branch)
+    else:
+        channel_info = {
+            "active_channel_id": None,
+            "active_channel_label": None,
+            "channel_tier": None,
+        }
     remote_version = None
     update_available = False
     if branch:

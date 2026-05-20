@@ -29,6 +29,8 @@ meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git reset --hard *
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git status
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git log *
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git rev-parse HEAD
+# Settings → Updates install_status (read branch + SHA from root-owned tree)
+meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git rev-parse *
 
 # ── Post-update hooks ─────────────────────────────────────────────────
 meshpoint ALL=(ALL) NOPASSWD: /opt/meshpoint/venv/bin/pip install *

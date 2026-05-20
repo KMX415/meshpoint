@@ -119,8 +119,14 @@ class UpdatePanelController {
         const status = this._installStatus || {};
         let channelId = status.active_channel_id
             || sessionStorage.getItem(UPDATE_CHANNEL_STORAGE_KEY);
-        if (!this._channels.some((c) => c.id === channelId)) {
-            channelId = this._channels[0]?.id;
+        if (!channelId && status.install_branch) {
+            const byBranch = this._channels.find(
+                (c) => c.branch === status.install_branch,
+            );
+            if (byBranch) channelId = byBranch.id;
+        }
+        if (channelId && !this._channels.some((c) => c.id === channelId)) {
+            channelId = null;
         }
         if (channelId) {
             this.channelSelect.value = channelId;
