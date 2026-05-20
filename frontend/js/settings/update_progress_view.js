@@ -11,6 +11,7 @@ const APPLY_STEP_DEFS = [
     { key: 'git fetch', label: 'Fetch latest code from GitHub' },
     { key: 'git checkout', label: 'Check out release branch' },
     { key: 'git reset', label: 'Sync install tree to remote' },
+    { key: 'release radio', label: 'Release radio (stop capture, keep dashboard up)' },
     { key: 'install.sh', label: 'Run installer' },
     { key: 'restart service', label: 'Restart Meshpoint service' },
 ];
@@ -59,7 +60,7 @@ class UpdateProgressView {
                 </div>
                 <p class="update-progress__elapsed" data-update-elapsed>Elapsed: 0s</p>
                 <p class="update-progress__hint">
-                    Do not refresh this page. The Meshpoint is updating on the Pi; this usually takes 20–30 seconds.
+                    Do not refresh this page. Progress stays live through git and install; the dashboard goes offline only for the final service restart (usually 20–30 seconds total).
                 </p>
                 <ol class="update-progress__steps">${steps}</ol>
             </div>

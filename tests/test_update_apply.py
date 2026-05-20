@@ -48,18 +48,10 @@ class TestUpdateApplier(unittest.TestCase):
                 "git fetch",
                 "git checkout",
                 "git reset",
-                "stop service",
                 "install.sh",
                 "restart service",
             ],
         )
-        stop_idx = next(
-            i for i, c in enumerate(runner.calls) if "systemctl stop" in " ".join(c)
-        )
-        install_idx = next(
-            i for i, c in enumerate(runner.calls) if "install.sh" in " ".join(c)
-        )
-        self.assertLess(stop_idx, install_idx)
         # Restart is detached; runner is not invoked for systemctl.
         joined = " ".join(" ".join(c) for c in runner.calls)
         self.assertNotIn("systemctl restart", joined)
@@ -84,8 +76,24 @@ class TestUpdateApplier(unittest.TestCase):
         )
         starts = [e for e in events if e[1] == "started"]
         completions = [e for e in events if e[1] == "completed"]
-        self.assertEqual(len(starts), 6)
-        self.assertEqual(len(completions), 6)
+        self.assertEqual(len(starts), 5)
+        self.assertEqual(len(completions), 5)
+
+    def test_apply_runs_pre_install_hook_before_install_sh(self) -> None:
+        runner = _RecorderRunner()
+        calls: list[str] = []
+
+        def hook() -> None:
+            calls.append("hook")
+
+        applier = UpdateApplier(runner=runner, repo_path=".", pre_install_hook=hook)
+        result = applier.apply(branch="main")
+        self.assertTrue(result.success)
+        self.assertEqual(calls, ["hook"])
+        labels = [entry["step"] for entry in result.log]
+        hook_idx = labels.index("release radio")
+        install_idx = labels.index("install.sh")
+        self.assertLess(hook_idx, install_idx)
 
     def test_rollback_runs_reset_then_restart(self) -> None:
         runner = _RecorderRunner()

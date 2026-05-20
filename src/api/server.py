@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -115,6 +116,18 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             _inject_tx_gain_into_source(pipeline)
 
         await pipeline.start()
+        loop = asyncio.get_running_loop()
+
+        def pre_install_release() -> None:
+            if pipeline is None:
+                return
+            fut = asyncio.run_coroutine_threadsafe(
+                _release_capture_for_install(pipeline),
+                loop,
+            )
+            fut.result(timeout=120)
+
+        update_routes.set_pre_install_hook(pre_install_release)
 
         message_repo = MessageRepository(pipeline.database)
         tx_service = _build_tx_service(config, pipeline)
@@ -517,6 +530,16 @@ def _inject_tx_gain_into_source(coord: PipelineCoordinator) -> None:
         )
 
     conc_source.start = _start_with_tx_gain
+
+
+async def _release_capture_for_install(coord: PipelineCoordinator) -> None:
+    """Stop SX1302 / MeshCore capture without tearing down the API process."""
+    count = coord.capture_coordinator.source_count
+    await coord.capture_coordinator.stop()
+    logger.info(
+        "Capture stopped for dashboard install (%d source(s); API still up)",
+        count,
+    )
 
 
 def _find_meshcore_source(coord: PipelineCoordinator):
