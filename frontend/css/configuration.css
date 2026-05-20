@@ -264,6 +264,36 @@
     color: var(--brand-amber, #ffb84d);
 }
 
+.cfg-chip--off {
+    border-style: dashed;
+    color: rgba(243, 244, 246, 0.55);
+}
+
+.cfg-chip--off.cfg-chip--selected {
+    color: var(--brand-amber, #ffb84d);
+}
+
+.cfg-btn--has-pending {
+    position: relative;
+}
+
+.cfg-btn--has-pending::after {
+    content: '';
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--brand-amber, #ffb84d);
+    animation: cfg-btn-pending-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes cfg-btn-pending-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.85); }
+}
+
 .cfg-chip__hint {
     font-size: 10px;
     color: rgba(243, 244, 246, 0.5);

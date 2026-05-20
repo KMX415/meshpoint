@@ -1,10 +1,9 @@
 /**
- * Radio tab — NodeInfo Broadcast card (observational, v0.7.4).
+ * NodeInfo Broadcast card — live countdown + status lamp.
  *
- * Live countdown to the next NodeInfo broadcast plus a status lamp
- * (ACTIVE / IDLE / PAUSED). Read-only: editing the interval and
- * triggering an on-demand broadcast moved to Configuration → Radio
- * in v0.7.4.
+ * Observational for interval (use Configuration → Radio link).
+ * ``Send Now`` fires ``POST /api/config/nodeinfo/send`` without
+ * waiting for the scheduled tick.
  */
 class RadioNodeInfoCard {
     constructor(api) {
@@ -45,11 +44,48 @@ class RadioNodeInfoCard {
                     </span>
                 </div>
             </div>
-            <a class="r-config-link" href="#/configuration/radio">
+            <a class="r-config-link" href="#/configuration/radio"
+               data-cfg-scroll-target="cfg-nodeinfo-interval">
                 <span>Edit broadcast interval</span>
                 <span aria-hidden="true">→</span>
             </a>
+            <div class="r-card__actions">
+                <button type="button" class="r-btn r-btn--secondary"
+                        id="r-ni-send-now">Send Now</button>
+            </div>
         `;
+        this._wire();
+    }
+
+    _wire() {
+        const sendBtn = this._root.querySelector('#r-ni-send-now');
+        if (sendBtn) {
+            sendBtn.addEventListener('click', () => this._sendNow());
+        }
+        const editLink = this._root.querySelector('[data-cfg-scroll-target]');
+        if (editLink) {
+            editLink.addEventListener('click', () => {
+                const id = editLink.getAttribute('data-cfg-scroll-target');
+                if (id) sessionStorage.setItem('cfg-scroll-target', id);
+            });
+        }
+    }
+
+    async _sendNow() {
+        const sendBtn = this._root.querySelector('#r-ni-send-now');
+        if (sendBtn) sendBtn.disabled = true;
+        try {
+            const result = await this._api.post('/api/config/nodeinfo/send');
+            if (!result) return;
+            if (result.success) {
+                this._api.toast('NodeInfo broadcast sent');
+                await this._api.refresh();
+            } else {
+                this._api.toast(`Send failed: ${result.error || 'unknown'}`);
+            }
+        } finally {
+            if (sendBtn) sendBtn.disabled = false;
+        }
     }
 
     render(config) {

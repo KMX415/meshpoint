@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable, Optional
 
+from src.api.dangerous.handlers import schedule_systemctl_restart
+
 logger = logging.getLogger(__name__)
 
 
@@ -38,6 +40,7 @@ class ApplyAttempt:
     args: list[str]
     cwd: Optional[str] = None
     timeout_seconds: float = 600.0
+    detached: bool = False
 
 
 @dataclass
@@ -137,6 +140,7 @@ class UpdateApplier:
             ApplyAttempt(
                 label="restart service",
                 args=["sudo", "systemctl", "restart", self._service_name],
+                detached=True,
             ),
         ]
         for step in steps:
@@ -189,6 +193,7 @@ class UpdateApplier:
                 label="restart service",
                 args=["sudo", "systemctl", "restart", self._service_name],
                 timeout_seconds=60,
+                detached=True,
             ),
         )
 
@@ -197,6 +202,19 @@ class UpdateApplier:
     ) -> dict:
         if on_step:
             on_step(step.label, "started")
+        if step.detached:
+            proc = schedule_systemctl_restart(self._service_name)
+            if on_step:
+                on_step(step.label, "completed")
+            return {
+                "step": step.label,
+                "command": shlex.join(step.args),
+                "returncode": 0,
+                "stdout": "",
+                "stderr": "",
+                "detached": True,
+                "pid": proc.pid,
+            }
         try:
             rc, stdout, stderr = self._runner(
                 step.args, step.cwd, step.timeout_seconds,

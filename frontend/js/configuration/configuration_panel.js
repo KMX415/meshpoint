@@ -31,6 +31,7 @@ class ConfigurationPanel {
         if (!this._config) await this._loadConfig();
         this._mountSection(section);
         this._renderAll();
+        if (section === 'radio') this._scrollToFocusTarget();
     }
 
     async _loadConfig() {
@@ -62,16 +63,22 @@ class ConfigurationPanel {
                 host.innerHTML = `
                     <div class="cfg-section">
                         <div data-cfg-radio></div>
-                        <div data-cfg-nodeinfo></div>
+                        <div data-cfg-nodeinfo-edit></div>
+                        <div data-cfg-nodeinfo-status></div>
                     </div>
                 `;
                 const radio = new window.RadioConfigEditCard(api);
                 radio.mount(host.querySelector('[data-cfg-radio]'));
                 this._cards.set('radio', radio);
+                if (window.NodeInfoConfigCard) {
+                    const edit = new window.NodeInfoConfigCard(api);
+                    edit.mount(host.querySelector('[data-cfg-nodeinfo-edit]'));
+                    this._cards.set('nodeinfo-edit', edit);
+                }
                 if (window.RadioNodeInfoCard) {
-                    const nodeinfo = new window.RadioNodeInfoCard(api);
-                    nodeinfo.mount(host.querySelector('[data-cfg-nodeinfo]'));
-                    this._cards.set('nodeinfo', nodeinfo);
+                    const status = new window.RadioNodeInfoCard(api);
+                    status.mount(host.querySelector('[data-cfg-nodeinfo-status]'));
+                    this._cards.set('nodeinfo-status', status);
                 }
             }
         } else if (section === 'channels' && window.ChannelsConfigCard) {
@@ -160,6 +167,16 @@ class ConfigurationPanel {
             this._toast(`Save failed: ${e.message}`);
             return null;
         }
+    }
+
+    _scrollToFocusTarget() {
+        const targetId = sessionStorage.getItem('cfg-scroll-target');
+        if (!targetId) return;
+        sessionStorage.removeItem('cfg-scroll-target');
+        requestAnimationFrame(() => {
+            const el = document.getElementById(targetId);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
     }
 
     _toast(text) {

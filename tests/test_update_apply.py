@@ -55,6 +55,10 @@ class TestUpdateApplier(unittest.TestCase):
                 "restart service",
             ],
         )
+        # Restart is detached; runner is not invoked for systemctl.
+        joined = " ".join(" ".join(c) for c in runner.calls)
+        self.assertNotIn("systemctl restart", joined)
+        self.assertTrue(result.log[-1].get("detached"))
 
     def test_apply_stops_on_first_failure(self) -> None:
         runner = _RecorderRunner(fail_at="checkout")
@@ -86,6 +90,8 @@ class TestUpdateApplier(unittest.TestCase):
         steps = [entry["step"] for entry in result.log]
         self.assertEqual(steps, ["git reset", "restart service"])
         self.assertIn("deadbeef", " ".join(runner.calls[0]))
+        self.assertEqual(len(runner.calls), 1)
+        self.assertTrue(result.log[-1].get("detached"))
 
     def test_rollback_failure_returns_failed_step(self) -> None:
         runner = _RecorderRunner(fail_at="reset")
