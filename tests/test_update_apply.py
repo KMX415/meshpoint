@@ -79,22 +79,6 @@ class TestUpdateApplier(unittest.TestCase):
         self.assertEqual(len(starts), 5)
         self.assertEqual(len(completions), 5)
 
-    def test_apply_runs_pre_install_hook_before_install_sh(self) -> None:
-        runner = _RecorderRunner()
-        calls: list[str] = []
-
-        def hook() -> None:
-            calls.append("hook")
-
-        applier = UpdateApplier(runner=runner, repo_path=".", pre_install_hook=hook)
-        result = applier.apply(branch="main")
-        self.assertTrue(result.success)
-        self.assertEqual(calls, ["hook"])
-        labels = [entry["step"] for entry in result.log]
-        hook_idx = labels.index("release radio")
-        install_idx = labels.index("install.sh")
-        self.assertLess(hook_idx, install_idx)
-
     def test_rollback_runs_reset_then_restart(self) -> None:
         runner = _RecorderRunner()
         applier = UpdateApplier(runner=runner, repo_path=".")

@@ -5,7 +5,6 @@
 Queued for the next version bump. Bullets in this section will be folded into the release header (and dated) when the version is cut.
 
 - **MeshCore contact roster at startup.** The USB companion often returns 0 contacts on the first fetch right after connect; a deferred ~20s retry logs the full peer list and syncs friendly names into SQLite. Packet-driven enrichment no longer limits name updates to only the node that triggered the last packet.
-- **Dashboard Apply update releases radio before install.sh.** Before `scripts/install.sh`, Apply stops capture in-process (SX1302 + MeshCore USB) so the HAL is not held during installer work, while the API keeps serving the NDJSON progress stream. Service still restarts at the end of the chain (brief dashboard offline only then).
 
 ### v0.7.4 (May 2026)
 

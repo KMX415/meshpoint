@@ -1,13 +1,8 @@
 """Run the multi-step update from the dashboard.
 
 The applier walks ``git fetch`` -> ``git checkout -B`` (hard reset to
-``origin/<branch>``) -> optional in-process radio release -> ``bash
-scripts/install.sh`` -> detached ``systemctl restart meshpoint``.
-
-Radio release stops capture (SX1302 + MeshCore USB) without stopping
-the API process, so the NDJSON apply stream can finish. A full
-``systemctl stop`` mid-chain would kill Uvicorn and break the dashboard
-progress UI. Each step
+``origin/<branch>``) -> ``bash scripts/install.sh`` -> ``systemctl
+restart meshpoint``. Each step
 is its own subprocess invocation so the dashboard can stream a
 running log to the operator and so a step that exits non-zero stops
 the chain immediately with the failing step labelled.
@@ -91,17 +86,11 @@ class UpdateApplier:
         install_script: str = "/opt/meshpoint/scripts/install.sh",
         service_name: str = "meshpoint",
         runner: Runner = shell_runner,
-        pre_install_hook: Optional[Callable[[], None]] = None,
     ) -> None:
         self._repo_path = repo_path
         self._install_script = install_script
         self._service_name = service_name
         self._runner = runner
-        self._pre_install_hook = pre_install_hook
-
-    def set_pre_install_hook(self, hook: Optional[Callable[[], None]]) -> None:
-        """Register a callback to release the radio before ``install.sh``."""
-        self._pre_install_hook = hook
 
     def apply(
         self,
@@ -115,18 +104,6 @@ class UpdateApplier:
         pre_sha = self._capture_head_sha()
         steps = self._build_chain(branch)
         for step in steps:
-            if step.label == "install.sh" and self._pre_install_hook:
-                entry = self._run_pre_install_release(on_step)
-                log.append(entry)
-                if entry["returncode"] != 0:
-                    return ApplyResult(
-                        success=False,
-                        duration_seconds=time.time() - start,
-                        pre_update_sha=pre_sha,
-                        target_branch=branch,
-                        failed_step=entry["step"],
-                        log=log,
-                    )
             entry = self._run_step(step, on_step)
             log.append(entry)
             if entry["returncode"] != 0:
@@ -220,30 +197,6 @@ class UpdateApplier:
                 detached=True,
             ),
         )
-
-    def _run_pre_install_release(
-        self, on_step: Optional[StreamCallback],
-    ) -> dict:
-        label = "release radio"
-        if on_step:
-            on_step(label, "started")
-        try:
-            self._pre_install_hook()
-            rc = 0
-            stderr = ""
-        except Exception as exc:
-            logger.exception("pre-install radio release failed")
-            rc = 1
-            stderr = str(exc)
-        if on_step:
-            on_step(label, "completed" if rc == 0 else "error")
-        return {
-            "step": label,
-            "command": "(in-process capture stop)",
-            "returncode": rc,
-            "stdout": "",
-            "stderr": stderr,
-        }
 
     def _run_step(
         self, step: ApplyAttempt, on_step: Optional[StreamCallback],

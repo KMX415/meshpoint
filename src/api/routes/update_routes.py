@@ -68,12 +68,6 @@ def reset_routes() -> None:
     _changelog_path = None
 
 
-def set_pre_install_hook(hook) -> None:
-    """Wire radio release before ``install.sh`` (set from app lifespan)."""
-    if _applier is not None:
-        _applier.set_pre_install_hook(hook)
-
-
 def _require_initialized() -> tuple[UpdateApplier, ReleaseChannelRegistry]:
     if _applier is None or _registry is None:
         raise HTTPException(
