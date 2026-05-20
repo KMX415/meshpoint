@@ -377,6 +377,22 @@
     font-family: inherit;
 }
 
+/* Native <select> list: OS default highlight was light + inherited white text. */
+select.update-field__input {
+    color-scheme: dark;
+    cursor: pointer;
+}
+
+select.update-field__input option {
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+}
+
+select.update-field__input option:checked {
+    background-color: var(--accent-cyan);
+    color: var(--bg-primary);
+}
+
 .update-version {
     display: flex;
     flex-direction: column;
