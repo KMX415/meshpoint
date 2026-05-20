@@ -221,6 +221,8 @@ class UpdateApplier:
                 step.args, step.cwd, step.timeout_seconds,
             )
         except subprocess.TimeoutExpired:
+            if on_step:
+                on_step(step.label, "error")
             return {
                 "step": step.label,
                 "command": shlex.join(step.args),

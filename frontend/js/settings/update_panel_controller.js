@@ -28,6 +28,9 @@ class UpdatePanelController {
         this.logView = new window.UpdateLogView(
             rootEl.querySelector('[data-update-log]')
         );
+        this.progressView = new window.UpdateProgressView(
+            rootEl.querySelector('[data-update-progress]')
+        );
         this.releaseNotesView = new window.ReleaseNotesView(
             rootEl.querySelector('[data-update-release-notes]')
         );
@@ -147,33 +150,36 @@ class UpdatePanelController {
             + 'The service will restart at the end of the chain.'
         );
         if (!confirmed) return;
-        this._setStatus('pending', 'Applying update… this may take several minutes.');
+        const branch = channel.tier === 'custom' ? customBranch : (channel.branch || '');
+        this.progressView?.start({
+            mode: 'apply',
+            channelLabel: channel.label,
+            branch,
+        });
+        this._setStatus('pending', 'Applying update on the Meshpoint…');
         this.applyBtn.disabled = true;
         this.rollbackBtn.disabled = true;
         try {
-            const response = await fetch('/api/update/apply', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    channel_id: channel.id,
-                    custom_branch: customBranch,
-                }),
-            });
-            const body = await response.json().catch(() => ({}));
-            if (!response.ok) {
-                this._setStatus('error', `Apply failed (HTTP ${response.status}).`);
+            const body = await window.UpdateStreamClient.postNdjson(
+                '/api/update/apply/stream',
+                { channel_id: channel.id, custom_branch: customBranch },
+                (event) => this.progressView?.onStreamEvent(event),
+            );
+            if (!body) {
+                this.progressView?.complete({
+                    success: false,
+                    failed_step: 'stream',
+                    log: [],
+                });
+                this._setStatus('error', 'Update finished without a result payload.');
                 return;
             }
-            this._lastResult = body;
-            this.logView.render(body);
-            if (body.success) {
-                this._setStatus('success', `Applied to ${body.target_branch}.`);
-            } else {
-                this._setStatus('error', `Failed at ${body.failed_step}.`);
-            }
-        } catch (_e) {
-            this._setStatus('error', 'Network error during apply.');
+            await this._finishUpdateResult(body, {
+                successMessage: `Applied to ${body.target_branch}.`,
+                failureMessage: (b) => `Failed at ${b.failed_step}.`,
+            });
+        } catch (err) {
+            await this._handleUpdateStreamError(err);
         } finally {
             this.applyBtn.disabled = false;
             this.rollbackBtn.disabled = !(this._lastResult && this._lastResult.pre_update_sha);
@@ -187,31 +193,83 @@ class UpdatePanelController {
             `Roll back to ${sha.slice(0, 8)}? The service will restart.`
         );
         if (!confirmed) return;
-        this._setStatus('pending', 'Rolling back…');
+        this.progressView?.start({ mode: 'rollback', channelLabel: `commit ${sha.slice(0, 8)}` });
+        this._setStatus('pending', 'Rolling back on the Meshpoint…');
         this.rollbackBtn.disabled = true;
         this.applyBtn.disabled = true;
         try {
-            const response = await fetch('/api/update/rollback', {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sha }),
-            });
-            const body = await response.json().catch(() => ({}));
-            if (!response.ok) {
-                this._setStatus('error', `Rollback failed (HTTP ${response.status}).`);
+            const body = await window.UpdateStreamClient.postNdjson(
+                '/api/update/rollback/stream',
+                { sha },
+                (event) => this.progressView?.onStreamEvent(event),
+            );
+            if (!body) {
+                this.progressView?.complete({
+                    success: false,
+                    failed_step: 'stream',
+                    log: [],
+                });
+                this._setStatus('error', 'Rollback finished without a result payload.');
                 return;
             }
-            this.logView.render(body);
-            this._setStatus(
-                body.success ? 'success' : 'error',
-                body.success ? `Rolled back to ${sha.slice(0, 8)}.` : 'Rollback failed.',
-            );
-        } catch (_e) {
-            this._setStatus('error', 'Network error during rollback.');
+            await this._finishUpdateResult(body, {
+                successMessage: `Rolled back to ${sha.slice(0, 8)}.`,
+                failureMessage: () => 'Rollback failed.',
+            });
+        } catch (err) {
+            await this._handleUpdateStreamError(err);
         } finally {
             this.applyBtn.disabled = false;
+            this.rollbackBtn.disabled = !(this._lastResult && this._lastResult.pre_update_sha);
         }
+    }
+
+    async _finishUpdateResult(body, { successMessage, failureMessage }) {
+        this._lastResult = body;
+        this.progressView?.complete(body);
+        this.logView.render(body);
+        if (body.success) {
+            this._setStatus('success', successMessage);
+            const restarted = (body.log || []).some(
+                (entry) => entry.step === 'restart service' && entry.returncode === 0,
+            );
+            if (restarted) {
+                const online = await this.progressView?.waitForServiceRecovery();
+                if (online) {
+                    window.setTimeout(() => window.location.reload(), 800);
+                }
+            }
+        } else {
+            const msg = typeof failureMessage === 'function'
+                ? failureMessage(body)
+                : failureMessage;
+            this._setStatus('error', msg);
+        }
+    }
+
+    async _handleUpdateStreamError(err) {
+        if (err && err.status) {
+            this.progressView?.complete({
+                success: false,
+                failed_step: 'request',
+                log: [],
+            });
+            this._setStatus('error', `Update request failed (HTTP ${err.status}).`);
+            return;
+        }
+        const recovered = await this.progressView?.waitForServiceRecovery({
+            timeoutMs: 45000,
+        });
+        if (recovered) {
+            window.setTimeout(() => window.location.reload(), 800);
+            return;
+        }
+        this.progressView?.complete({
+            success: false,
+            failed_step: 'network',
+            log: [],
+        });
+        this._setStatus('error', 'Connection lost during update. Check SSH or try again.');
     }
 
     _currentChannel() {

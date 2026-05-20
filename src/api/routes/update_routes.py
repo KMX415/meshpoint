@@ -16,19 +16,23 @@ applier so the suite never shells out.
 
 from __future__ import annotations
 
+import json
 import logging
+from collections.abc import AsyncIterator
 from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from src.api.audit import AuditLogWriter
 from src.api.audit.dependencies import get_audit_writer
 from src.api.auth.dependencies import require_admin
 from src.api.auth.jwt_session import SessionClaims
-from src.api.update.apply import UpdateApplier
+from src.api.update.apply import ApplyResult, UpdateApplier
 from src.api.update.channels import ReleaseChannelRegistry
+from src.api.update.streaming import stream_update
 from src.api.update.release_notes import (
     ChangelogParser,
     format_section_for_preview,
@@ -129,6 +133,14 @@ def _load_changelog_sections() -> list:
         return []
 
 
+def _audit_apply_result(ctx, result: ApplyResult) -> None:
+    ctx.params["success"] = result.success
+    ctx.params["target_branch"] = result.target_branch
+    if not result.success:
+        ctx.params["failed_step"] = result.failed_step
+        ctx.set_result("error")
+
+
 @router.post("/apply")
 async def apply_update(
     payload: ApplyRequest,
@@ -150,12 +162,55 @@ async def apply_update(
         params={"channel_id": payload.channel_id, "branch": branch},
     ) as ctx:
         result = applier.apply(branch=branch)
-        ctx.params["success"] = result.success
-        ctx.params["target_branch"] = result.target_branch
-        if not result.success:
-            ctx.params["failed_step"] = result.failed_step
-            ctx.set_result("error")
+        _audit_apply_result(ctx, result)
     return asdict(result)
+
+
+@router.post("/apply/stream")
+async def apply_update_stream(
+    payload: ApplyRequest,
+    claims: SessionClaims = Depends(require_admin),
+    audit: AuditLogWriter = Depends(get_audit_writer),
+) -> StreamingResponse:
+    """Run apply and stream per-step progress as NDJSON (one object per line)."""
+    applier, registry = _require_initialized()
+    branch = registry.resolve_branch(
+        payload.channel_id, custom_branch=payload.custom_branch,
+    )
+    if not branch:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="invalid_channel_or_branch",
+        )
+
+    async def body() -> AsyncIterator[bytes]:
+        result: ApplyResult | None = None
+        with audit.timed_action(
+            user=claims.subject,
+            action="update.apply.stream",
+            params={"channel_id": payload.channel_id, "branch": branch},
+        ) as ctx:
+            async for chunk in stream_update(
+                applier, mode="apply", branch=branch,
+            ):
+                yield chunk
+                line = chunk.decode("utf-8").strip()
+                if not line:
+                    continue
+                event = json.loads(line)
+                if event.get("type") == "result":
+                    result_dict = event.get("result")
+                    if result_dict:
+                        result = ApplyResult(**result_dict)
+                        _audit_apply_result(ctx, result)
+            if result is None:
+                ctx.set_result("error")
+
+    return StreamingResponse(
+        body(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 @router.post("/rollback")
@@ -176,3 +231,45 @@ async def rollback_update(
             ctx.params["failed_step"] = result.failed_step
             ctx.set_result("error")
     return asdict(result)
+
+
+@router.post("/rollback/stream")
+async def rollback_update_stream(
+    payload: RollbackRequest,
+    claims: SessionClaims = Depends(require_admin),
+    audit: AuditLogWriter = Depends(get_audit_writer),
+) -> StreamingResponse:
+    """Roll back and stream per-step progress as NDJSON."""
+    applier, _registry_instance = _require_initialized()
+
+    async def body() -> AsyncIterator[bytes]:
+        result: ApplyResult | None = None
+        with audit.timed_action(
+            user=claims.subject,
+            action="update.rollback.stream",
+            params={"sha": payload.sha},
+        ) as ctx:
+            async for chunk in stream_update(
+                applier, mode="rollback", sha=payload.sha,
+            ):
+                yield chunk
+                line = chunk.decode("utf-8").strip()
+                if not line:
+                    continue
+                event = json.loads(line)
+                if event.get("type") == "result":
+                    result_dict = event.get("result")
+                    if result_dict:
+                        result = ApplyResult(**result_dict)
+                        ctx.params["success"] = result.success
+                        if not result.success:
+                            ctx.params["failed_step"] = result.failed_step
+                            ctx.set_result("error")
+            if result is None:
+                ctx.set_result("error")
+
+    return StreamingResponse(
+        body(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )

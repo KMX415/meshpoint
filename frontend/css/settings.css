@@ -427,6 +427,168 @@ select.update-field__input option:checked {
 .update-status[data-kind="success"] { color: #44d39a; }
 .update-status[data-kind="pending"] { color: rgba(243, 244, 246, 0.7); }
 
+.update-progress[hidden] {
+    display: none !important;
+}
+
+.update-progress {
+    background: rgba(0, 229, 255, 0.06);
+    border: 1px solid rgba(0, 229, 255, 0.22);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+}
+
+.update-progress[data-state="failed"] {
+    border-color: rgba(255, 107, 107, 0.35);
+    background: rgba(255, 107, 107, 0.06);
+}
+
+.update-progress[data-state="reconnecting"] .update-progress__meter-fill {
+    animation: updateProgressPulse 1.2s ease-in-out infinite;
+}
+
+.update-progress__head {
+    margin-bottom: 12px;
+}
+
+.update-progress__eyebrow {
+    margin: 0 0 4px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-cyan, #00e5ff);
+}
+
+.update-progress__title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: rgba(243, 244, 246, 0.95);
+}
+
+.update-progress__branch {
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: rgba(243, 244, 246, 0.65);
+}
+
+.update-progress__branch code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+}
+
+.update-progress__meter {
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.update-progress__meter-fill {
+    display: block;
+    height: 100%;
+    width: 0%;
+    border-radius: inherit;
+    background: var(--accent-cyan, #00e5ff);
+    transition: width 0.35s ease;
+    box-shadow: 0 0 12px rgba(0, 229, 255, 0.35);
+}
+
+.update-progress__meter-fill--indeterminate {
+    width: 40% !important;
+    background: linear-gradient(90deg, transparent, var(--accent-cyan, #00e5ff), transparent);
+    animation: updateProgressIndeterminate 1.4s ease-in-out infinite;
+}
+
+@keyframes updateProgressIndeterminate {
+    0% { transform: translateX(-120%); }
+    100% { transform: translateX(320%); }
+}
+
+@keyframes updateProgressPulse {
+    0%, 100% { opacity: 0.45; }
+    50% { opacity: 1; }
+}
+
+.update-progress__elapsed {
+    margin: 0 0 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: rgba(243, 244, 246, 0.7);
+}
+
+.update-progress__hint {
+    margin: 0 0 14px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: rgba(243, 244, 246, 0.62);
+}
+
+.update-progress__steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.update-progress__step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: rgba(243, 244, 246, 0.45);
+}
+
+.update-progress__step[data-status="ok"] {
+    color: rgba(243, 244, 246, 0.9);
+}
+
+.update-progress__step[data-status="error"] {
+    color: #ff8a8a;
+}
+
+.update-progress__step-icon {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.update-progress__step[data-status="pending"] .update-progress__step-icon {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.update-progress__step[data-status="active"] {
+    color: rgba(243, 244, 246, 0.95);
+}
+
+.update-progress__step[data-status="active"] .update-progress__step-icon {
+    background: var(--accent-cyan, #00e5ff);
+    box-shadow: 0 0 10px rgba(0, 229, 255, 0.55);
+    animation: updateProgressPulse 1s ease-in-out infinite;
+}
+
+.update-progress__step[data-status="ok"] .update-progress__step-icon {
+    background: #44d39a;
+    box-shadow: 0 0 8px rgba(68, 211, 154, 0.45);
+}
+
+.update-progress__step[data-status="error"] .update-progress__step-icon {
+    background: #ff6b6b;
+}
+
+.update-progress__step-hint {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--accent-cyan, #00e5ff);
+    font-family: 'JetBrains Mono', monospace;
+}
+
 .update-log {
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
