@@ -25,11 +25,11 @@ class _Coord:
 class _MeshCoreTx:
     connected = True
 
+    def __init__(self, contacts):
+        self._contacts = contacts
+
     async def get_contacts(self):
-        return [{
-            "public_key": "e34ef4172778aaaabbbbcccc",
-            "name": "Ridge Repeater",
-        }]
+        return self._contacts
 
 
 class TestMeshCoreContactEnrichment(unittest.TestCase):
@@ -50,8 +50,10 @@ class TestMeshCoreContactEnrichment(unittest.TestCase):
 
         updated = _run(sync_meshcore_contacts_to_nodes(
             self.coord,
-            _MeshCoreTx(),
-            "e34ef4172778",
+            _MeshCoreTx([{
+                "public_key": "e34ef4172778aaaabbbbcccc",
+                "name": "Ridge Repeater",
+            }]),
         ))
 
         node = _run(self.repo.get_by_id("e34ef4172778"))
@@ -59,6 +61,36 @@ class TestMeshCoreContactEnrichment(unittest.TestCase):
         self.assertEqual(node.long_name, "Ridge Repeater")
         self.assertEqual(node.short_name, "Ridg")
         self.assertEqual(node.display_name, "Ridge Repeater")
+
+    def test_sync_applies_all_contacts_not_only_triggering_packet(self):
+        _run(self.repo.upsert(Node(
+            node_id="e34ef4172778",
+            protocol="meshcore",
+        )))
+        _run(self.repo.upsert(Node(
+            node_id="c1871770ebc1",
+            protocol="meshcore",
+        )))
+
+        updated = _run(sync_meshcore_contacts_to_nodes(
+            self.coord,
+            _MeshCoreTx([
+                {
+                    "public_key": "e34ef4172778aaaabbbbcccc",
+                    "name": "Ridge Repeater",
+                },
+                {
+                    "public_key": "c1871770ebc1deadbeef",
+                    "name": "Valley Node",
+                },
+            ]),
+        ))
+
+        self.assertEqual(updated, 2)
+        ridge = _run(self.repo.get_by_id("e34ef4172778"))
+        valley = _run(self.repo.get_by_id("c1871770ebc1"))
+        self.assertEqual(ridge.long_name, "Ridge Repeater")
+        self.assertEqual(valley.long_name, "Valley Node")
 
 
 if __name__ == "__main__":

@@ -28,6 +28,8 @@ from src.api.dangerous.handlers import (
     build_wipe_phantoms_action,
 )
 from src.api.meshcore_contacts import (
+    log_meshcore_contact_peers,
+    schedule_startup_meshcore_contact_sync,
     setup_meshcore_contact_enrichment,
     sync_meshcore_contacts_to_nodes,
 )
@@ -131,8 +133,12 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         setup_meshcore_contact_enrichment(pipeline, meshcore_tx_ref)
         if meshcore_tx_ref and meshcore_tx_ref.connected:
             import asyncio
-            asyncio.get_running_loop().create_task(
+            loop = asyncio.get_running_loop()
+            loop.create_task(
                 sync_meshcore_contacts_to_nodes(pipeline, meshcore_tx_ref)
+            )
+            schedule_startup_meshcore_contact_sync(
+                loop, pipeline, meshcore_tx_ref, mc_source
             )
 
         upstream = UpstreamClient(
@@ -592,12 +598,13 @@ async def _send_meshcore_advert(meshcore_tx, mc_source=None) -> None:
         logger.debug("MeshCore advert failed", exc_info=True)
     try:
         contacts = await meshcore_tx.get_contacts()
-        logger.info("MeshCore contacts: %d peers", len(contacts))
-        for c in contacts:
-            pk = c.get("public_key", "")
-            name = c.get("name", "")
-            if pk and name:
-                logger.info("  %s  %s", pk[:12], name)
+        if contacts:
+            log_meshcore_contact_peers(contacts)
+        else:
+            logger.info(
+                "MeshCore contacts: 0 peers (companion roster still loading; "
+                "will retry in ~20s)",
+            )
     except Exception:
         logger.debug("Startup contact fetch failed", exc_info=True)
     if mc_source:

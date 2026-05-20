@@ -32,6 +32,7 @@ from src.models.packet import Packet, Protocol
 logger = logging.getLogger(__name__)
 
 _SYNC_THROTTLE_SECONDS = 300.0
+_STARTUP_SYNC_DELAY_SECONDS = 20.0
 
 
 class _SyncThrottle:
@@ -77,18 +78,54 @@ def setup_meshcore_contact_enrichment(coord, meshcore_tx=None) -> None:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             return
-        loop.create_task(
-            _throttled_sync(coord, meshcore_tx, packet.source_id)
-        )
+        loop.create_task(_throttled_sync(coord, meshcore_tx))
 
     coord.on_packet(on_meshcore_packet)
 
 
-async def _throttled_sync(coord, meshcore_tx, source_id: str) -> None:
+def schedule_startup_meshcore_contact_sync(
+    loop: asyncio.AbstractEventLoop,
+    coord,
+    meshcore_tx,
+    mc_source=None,
+) -> None:
+    """Retry contact fetch after the companion finishes loading its roster."""
+    loop.create_task(
+        _startup_contact_bootstrap(coord, meshcore_tx, mc_source)
+    )
+
+
+def log_meshcore_contact_peers(contacts: list[dict]) -> None:
+    """Log the companion roster (same lines as startup advert path)."""
+    logger.info("MeshCore contacts: %d peers", len(contacts))
+    for contact in contacts:
+        pk = contact.get("public_key", "")
+        name = contact.get("name", "")
+        if pk and name:
+            logger.info("  %s  %s", pk[:12], name)
+
+
+async def _startup_contact_bootstrap(coord, meshcore_tx, mc_source=None) -> None:
+    await asyncio.sleep(_STARTUP_SYNC_DELAY_SECONDS)
+    if not meshcore_tx or not meshcore_tx.connected:
+        return
+    try:
+        contacts = await meshcore_tx.get_contacts()
+    except Exception:
+        logger.debug("Deferred MeshCore contact fetch failed", exc_info=True)
+        return
+    if contacts:
+        log_meshcore_contact_peers(contacts)
+        await sync_meshcore_contacts_to_nodes(coord, meshcore_tx)
+    if mc_source:
+        await mc_source.restart_auto_fetching()
+
+
+async def _throttled_sync(coord, meshcore_tx) -> None:
     """Wrapper that flips the throttle flags before/after a sync run."""
     _throttle.mark_started()
     try:
-        await sync_meshcore_contacts_to_nodes(coord, meshcore_tx, source_id)
+        await sync_meshcore_contacts_to_nodes(coord, meshcore_tx)
     finally:
         _throttle.mark_done()
 
@@ -96,7 +133,6 @@ async def _throttled_sync(coord, meshcore_tx, source_id: str) -> None:
 async def sync_meshcore_contacts_to_nodes(
     coord,
     meshcore_tx,
-    source_id: str = "",
 ) -> int:
     """Pull the companion's contact list and back-fill matching node rows.
 
@@ -107,7 +143,6 @@ async def sync_meshcore_contacts_to_nodes(
     if not meshcore_tx or not meshcore_tx.connected:
         return 0
 
-    source = source_id.lower().lstrip("!")
     updated = 0
     try:
         contacts = await meshcore_tx.get_contacts()
@@ -121,10 +156,6 @@ async def sync_meshcore_contacts_to_nodes(
         if not pk or not name or _is_hex_identifier(name):
             continue
         prefixes = _meshcore_pubkey_prefixes(pk)
-        if source and not any(
-            source.startswith(p) or p.startswith(source) for p in prefixes
-        ):
-            continue
         short_name = name[:4]
         for prefix in prefixes:
             cursor = await coord.node_repo._db.execute(
