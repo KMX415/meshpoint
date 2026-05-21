@@ -173,7 +173,7 @@ class NodeDrawer {
         const hint = document.createElement('p');
         hint.className = 'nd-metrics__hint';
         hint.textContent =
-            'Built from telemetry packets and signal on every packet we hear from this node.';
+            'Built from telemetry packets and per-packet RSSI. Click legend labels to show or hide lines (RSSI is off by default when there are many points).';
         content.appendChild(hint);
 
         const empty = document.createElement('div');
