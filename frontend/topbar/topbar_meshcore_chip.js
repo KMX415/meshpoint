@@ -11,7 +11,6 @@ class TopbarMeshcoreChip {
     constructor(groupEl, chipEl) {
         this._group = groupEl;
         this._root = chipEl;
-        this._statusEl = chipEl.querySelector('.topbar-meshcore__status');
         this._nameEl = chipEl.querySelector('.topbar-meshcore__name');
         this._freqEl = chipEl.querySelector('.topbar-meshcore__freq');
         this._channelEl = chipEl.querySelector('.topbar-meshcore__channel');
@@ -43,10 +42,10 @@ class TopbarMeshcoreChip {
         );
         if (connected) {
             this._lampEl.classList.add('topbar-meshcore__lamp--online');
-            this._statusEl.textContent = 'ONLINE';
+            this._lampEl.setAttribute('aria-label', 'MeshCore companion connected');
         } else {
             this._lampEl.classList.add('topbar-meshcore__lamp--offline');
-            this._statusEl.textContent = 'OFFLINE';
+            this._lampEl.setAttribute('aria-label', 'MeshCore companion offline');
         }
     }
 

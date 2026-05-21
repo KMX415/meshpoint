@@ -124,26 +124,6 @@
     animation: topbar-meshtastic-blink 0.9s steps(2, end) infinite;
 }
 
-.topbar-meshtastic__status {
-    font-size: 0.58rem;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-}
-
-.topbar-meshtastic--online .topbar-meshtastic__status {
-    color: var(--accent-green, #00e5a0);
-}
-
-.topbar-meshtastic--offline .topbar-meshtastic__status {
-    color: var(--accent-red, #ef4444);
-}
-
-.topbar-meshtastic--reconnecting .topbar-meshtastic__status {
-    color: var(--accent-amber, #f59e0b);
-}
-
 .topbar-meshtastic__call {
     font-size: 0.82rem;
     font-weight: 700;
@@ -276,22 +256,6 @@
     box-shadow:
         0 0 6px rgba(239, 68, 68, 0.55),
         0 0 10px rgba(239, 68, 68, 0.2);
-}
-
-.topbar-meshcore__status {
-    font-size: 0.58rem;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-}
-
-.topbar-meshcore--online .topbar-meshcore__status {
-    color: var(--accent-green, #22c55e);
-}
-
-.topbar-meshcore--offline .topbar-meshcore__status {
-    color: var(--accent-red, #ef4444);
 }
 
 .topbar-meshcore__name {

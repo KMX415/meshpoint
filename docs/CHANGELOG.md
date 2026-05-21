@@ -11,7 +11,7 @@ Queued for the next version bump. Bullets in this section will be folded into th
 - **Sidebar scroll when menus expand.** Nav column now scrolls inside the rail so expanded Configuration items do not clip the telemetry rail or Sign out footer.
 - **Sidebar active accent bar position.** Green route indicator is anchored to the nav list (`top: 0` on the bar plus nav-relative offset math), not the bottom of the menu DOM or the full sidebar column, so it lines up with Dashboard / Stats / Messages instead of sitting down by Settings.
 - **Top bar MeshCore companion chip.** When `meshcore_usb` is enabled, the header shows a purple-grouped readout: green/red online lamp, companion name, frequency, and primary channel name (from configured keys).
-- **Top bar Meshtastic chip.** Replaces the separate ONLINE lamp, CALL badge, and radio pill with one cyan-grouped chip: `Meshtastic |` dashboard connection lamp, short name (no CALL label), region, frequency, and preset. Border glow is always on (not hover-only); MeshCore chip uses the same permanent glow treatment.
+- **Top bar Meshtastic chip.** Replaces the separate ONLINE lamp, CALL badge, and radio pill with one cyan-grouped chip: `Meshtastic |` dashboard connection lamp, short name (no CALL label), region, frequency, and preset. Border glow is always on (not hover-only); MeshCore chip uses the same permanent glow treatment. Protocol chips show connection state with a colored dot only (no ONLINE/OFFLINE text).
 
 ### v0.7.4 (May 2026)
 

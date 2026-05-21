@@ -9,7 +9,6 @@ class TopbarMeshtasticChip {
     constructor(chipEl) {
         this._root = chipEl;
         this._lampEl = chipEl.querySelector('.topbar-meshtastic__lamp');
-        this._statusEl = chipEl.querySelector('.topbar-meshtastic__status');
         this._callEl = chipEl.querySelector('.topbar-meshtastic__call');
         this._regionEl = chipEl.querySelector('.topbar-meshtastic__region');
         this._freqEl = chipEl.querySelector('.topbar-meshtastic__freq');
@@ -35,15 +34,15 @@ class TopbarMeshtasticChip {
         if (state === 'online') {
             this._lampEl.classList.add('topbar-meshtastic__lamp--online');
             this._root.classList.add('topbar-meshtastic--online');
-            this._statusEl.textContent = 'ONLINE';
+            this._lampEl.setAttribute('aria-label', 'Dashboard connected');
         } else if (state === 'offline') {
             this._lampEl.classList.add('topbar-meshtastic__lamp--offline');
             this._root.classList.add('topbar-meshtastic--offline');
-            this._statusEl.textContent = 'OFFLINE';
+            this._lampEl.setAttribute('aria-label', 'Dashboard offline');
         } else {
             this._lampEl.classList.add('topbar-meshtastic__lamp--reconnecting');
             this._root.classList.add('topbar-meshtastic--reconnecting');
-            this._statusEl.textContent = 'RECONNECTING';
+            this._lampEl.setAttribute('aria-label', 'Dashboard reconnecting');
         }
     }
 
