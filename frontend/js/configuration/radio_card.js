@@ -68,8 +68,7 @@ class RadioConfigEditCard {
                     </label>
                     <label class="cfg-field">
                         <span class="cfg-field__label">Hop limit (0-7)</span>
-                        <input class="cfg-field__input" type="number"
-                               min="0" max="7" step="1" data-radio-hop>
+                        <select class="cfg-field__input" data-radio-hop></select>
                     </label>
                     <div class="cfg-card__actions">
                         <button class="terminal-button terminal-button--primary"
@@ -115,11 +114,12 @@ class RadioConfigEditCard {
 
         this._renderRegions();
         this._renderPresets();
+        this._renderHopLimit();
         this._regionEl.value = this._initial.region;
         if (this._initial.frequency_mhz != null) {
             this._freqEl.value = this._initial.frequency_mhz;
         }
-        this._hopEl.value = this._initial.hop_limit;
+        this._hopEl.value = String(this._initial.hop_limit);
         this._setSelectedPreset(this._initial.preset);
         this._syncSlotFromFreq();
     }
@@ -129,6 +129,13 @@ class RadioConfigEditCard {
             const safe = this._esc(r.id);
             const label = this._esc(`${r.name} (${r.frequency_mhz} MHz)`);
             return `<option value="${safe}">${label}</option>`;
+        }).join('');
+    }
+
+    _renderHopLimit() {
+        this._hopEl.innerHTML = Array.from({ length: 8 }, (_, n) => {
+            const label = n === 0 ? '0 (direct only)' : String(n);
+            return `<option value="${n}">${this._esc(label)}</option>`;
         }).join('');
     }
 

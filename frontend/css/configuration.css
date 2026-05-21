@@ -93,6 +93,23 @@
     background: rgba(255, 255, 255, 0.07);
 }
 
+/* Native <select> dropdown list: without color-scheme + option colors,
+   Windows/Chrome paint a white popup with inherited light text. */
+select.cfg-field__input {
+    color-scheme: dark;
+    cursor: pointer;
+}
+
+select.cfg-field__input option {
+    background-color: var(--bg-card, #1a1d27);
+    color: var(--text-primary, #f3f4f6);
+}
+
+select.cfg-field__input option:checked {
+    background-color: var(--accent-cyan, #06b6d4);
+    color: var(--bg-primary, #0d0f15);
+}
+
 .cfg-fieldset {
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 10px;
