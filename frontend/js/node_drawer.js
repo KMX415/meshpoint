@@ -158,12 +158,20 @@ class NodeDrawer {
         const temp = n.latest_temperature;
         const hum = n.latest_humidity;
 
-        if (temp != null) rows.push(['Temperature', `${temp.toFixed(1)}\u00B0F`]);
+        if (temp != null) {
+            const tempLabel = window.MeshpointDisplayUnits
+                ? window.MeshpointDisplayUnits.formatTemperature(temp)
+                : `${temp.toFixed(1)}\u00B0F`;
+            if (tempLabel) rows.push(['Temperature', tempLabel]);
+        }
         if (hum != null) rows.push(['Humidity', `${hum.toFixed(0)}%`]);
 
         if (temp != null && hum != null) {
-            const dp = this._dewPoint(temp, hum);
-            rows.push(['Dew Point', `${dp.toFixed(1)}\u00B0F`]);
+            const dpC = this._dewPointCelsius(temp, hum);
+            const dpLabel = window.MeshpointDisplayUnits
+                ? window.MeshpointDisplayUnits.formatTemperature(dpC)
+                : `${(dpC * 9 / 5 + 32).toFixed(1)}\u00B0F`;
+            if (dpLabel) rows.push(['Dew Point', dpLabel]);
         }
 
         const telem = n._telemetryHistory;
@@ -181,7 +189,12 @@ class NodeDrawer {
         const rows = [];
         if (n.latitude != null) rows.push(['Latitude', n.latitude.toFixed(6)]);
         if (n.longitude != null) rows.push(['Longitude', n.longitude.toFixed(6)]);
-        if (n.altitude != null) rows.push(['Altitude', `${Math.round(n.altitude)} ft`]);
+        if (n.altitude != null) {
+            const altLabel = window.MeshpointDisplayUnits
+                ? window.MeshpointDisplayUnits.formatAltitude(n.altitude)
+                : `${Math.round(n.altitude)} ft`;
+            if (altLabel) rows.push(['Altitude', altLabel]);
+        }
 
         return this._buildSection('Position', rows, rows.length > 0);
     }
@@ -257,12 +270,12 @@ class NodeDrawer {
         return String(role).toUpperCase();
     }
 
-    _dewPoint(tempF, humidity) {
-        const tc = (tempF - 32) * 5 / 9;
-        const a = 17.27, b = 237.7;
-        const alpha = (a * tc) / (b + tc) + Math.log(humidity / 100);
-        const dpC = (b * alpha) / (a - alpha);
-        return dpC * 9 / 5 + 32;
+    /** @param {number} tempC stored Meshtastic environment temperature (Celsius). */
+    _dewPointCelsius(tempC, humidity) {
+        const a = 17.27;
+        const b = 237.7;
+        const alpha = (a * tempC) / (b + tempC) + Math.log(humidity / 100);
+        return (b * alpha) / (a - alpha);
     }
 
     _formatDate(ts) {

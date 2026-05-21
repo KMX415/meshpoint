@@ -45,6 +45,10 @@
     transition: grid-template-columns var(--motion-base) var(--ease-out-expo);
 }
 
+.app > .sidebar {
+    min-height: 0;
+}
+
 .app[data-sidebar="rail"] {
     grid-template-columns: var(--sidebar-rail-width) 1fr;
 }
@@ -60,6 +64,7 @@
     display: flex;
     flex-direction: column;
     height: 100%;
+    min-height: 0;
     overflow: hidden;
     position: relative;
     z-index: 100;
@@ -73,6 +78,7 @@
     padding: 1rem 0.85rem;
     border-bottom: 1px solid var(--sidebar-border);
     min-height: 88px;
+    flex-shrink: 0;
 }
 
 /* Logo "frame": image + animated accent ring + connection pip.
@@ -311,7 +317,8 @@
 
 /* ---- Nav list ---- */
 .sidebar__nav {
-    flex: 1;
+    flex: 1 1 0;
+    min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 0.5rem 0;
@@ -545,6 +552,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
+    flex-shrink: 0;
 }
 
 .sidebar__role {

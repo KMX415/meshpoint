@@ -53,7 +53,7 @@ class GpsConfigCard {
                             <input class="cfg-field__input" type="number" step="0.000001" data-gps-lng>
                         </label>
                     </div>
-                    <p class="cfg-note">Native ``gpsd`` integration ships in v0.7.5.</p>
+                    <p class="cfg-note">Native gpsd integration is planned for v0.7.5.</p>
                     <div class="cfg-card__actions">
                         <button class="terminal-button terminal-button--primary" type="submit">Save GPS</button>
                     </div>

@@ -21,6 +21,9 @@ class NodeCards {
                 this._render();
             });
         }
+        if (window.MeshpointDisplayUnits) {
+            window.MeshpointDisplayUnits.onChange(() => this._render());
+        }
     }
 
     loadNodes(nodes) {
@@ -154,10 +157,20 @@ class NodeCards {
             parts.push(`<span class="nc-chip nc-chip--telem">${this._batteryIcon(battery)} ${battery}%</span>`);
         }
         if (alt != null) {
-            parts.push(`<span class="nc-chip nc-chip--telem">&#9650; ${Math.round(alt)} ft</span>`);
+            const altLabel = window.MeshpointDisplayUnits
+                ? window.MeshpointDisplayUnits.formatAltitude(alt)
+                : `${Math.round(alt)} ft`;
+            if (altLabel) {
+                parts.push(`<span class="nc-chip nc-chip--telem">&#9650; ${altLabel}</span>`);
+            }
         }
         if (temp != null) {
-            parts.push(`<span class="nc-chip nc-chip--telem">&#127777; ${temp.toFixed(1)}&deg;F</span>`);
+            const tempLabel = window.MeshpointDisplayUnits
+                ? window.MeshpointDisplayUnits.formatTemperature(temp)
+                : `${temp.toFixed(1)}\u00B0F`;
+            if (tempLabel) {
+                parts.push(`<span class="nc-chip nc-chip--telem">&#127777; ${tempLabel}</span>`);
+            }
         }
         if (humidity != null) {
             parts.push(`<span class="nc-chip nc-chip--telem">&#128167; ${humidity.toFixed(0)}%</span>`);

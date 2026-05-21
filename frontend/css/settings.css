@@ -850,10 +850,26 @@ select.update-field__input option:checked {
     animation: authPanelFadeIn 320ms ease-out both;
 }
 
+.dangerous-panel__head--secondary {
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.meshpoint-display-card {
+    margin-bottom: 8px;
+    max-width: 520px;
+}
+
 .dangerous-panel__title {
     margin: 0 0 4px;
     font-size: 22px;
     font-weight: 600;
+    color: #f3f4f6;
+}
+
+.dangerous-panel__head--secondary .dangerous-panel__title {
+    font-size: 18px;
     color: #ff8a8a;
 }
 

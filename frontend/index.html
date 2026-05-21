@@ -588,8 +588,39 @@
             <section class="section" data-section="settings/dangerous" style="display:none">
                 <div id="settings-dangerous-panel" class="dangerous-panel">
                     <header class="dangerous-panel__head">
-                        <h2 class="dangerous-panel__title">Meshpoint actions</h2>
-                        <p class="dangerous-panel__subtitle">Service-level operations that can leave the host in a degraded state. Each requires confirmation and is recorded in the audit log.</p>
+                        <h2 class="dangerous-panel__title">Meshpoint</h2>
+                        <p class="dangerous-panel__subtitle">Display preferences for this browser and service-level actions that can leave the host in a degraded state.</p>
+                    </header>
+                    <article class="auth-card meshpoint-display-card" id="meshpoint-display-prefs">
+                        <h3 class="auth-card__title">Display units</h3>
+                        <p class="auth-card__hint">Saved in this browser only. Node cards, the node drawer, and packet details use these units. Telemetry is stored in Celsius and meters on the device.</p>
+                        <fieldset class="cfg-fieldset">
+                            <legend class="cfg-fieldset__legend">Temperature</legend>
+                            <label class="cfg-field cfg-field--toggle">
+                                <input type="radio" name="display-temp" value="fahrenheit" data-display-temp checked>
+                                <span class="cfg-field__label">Fahrenheit (&deg;F)</span>
+                            </label>
+                            <label class="cfg-field cfg-field--toggle">
+                                <input type="radio" name="display-temp" value="celsius" data-display-temp>
+                                <span class="cfg-field__label">Celsius (&deg;C)</span>
+                            </label>
+                        </fieldset>
+                        <fieldset class="cfg-fieldset">
+                            <legend class="cfg-fieldset__legend">Distance and altitude</legend>
+                            <label class="cfg-field cfg-field--toggle">
+                                <input type="radio" name="display-distance" value="imperial" data-display-distance checked>
+                                <span class="cfg-field__label">Miles and feet</span>
+                            </label>
+                            <label class="cfg-field cfg-field--toggle">
+                                <input type="radio" name="display-distance" value="metric" data-display-distance>
+                                <span class="cfg-field__label">Kilometers and meters</span>
+                            </label>
+                        </fieldset>
+                        <p class="auth-status" data-display-units-status aria-live="polite"></p>
+                    </article>
+                    <header class="dangerous-panel__head dangerous-panel__head--secondary">
+                        <h3 class="dangerous-panel__title">Service actions</h3>
+                        <p class="dangerous-panel__subtitle">Each requires confirmation and is recorded in the audit log.</p>
                     </header>
                     <p class="dangerous-panel__status" data-dangerous-status aria-live="polite"></p>
                     <div class="dangerous-panel__list" data-dangerous-list></div>
@@ -605,6 +636,7 @@
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     <script src="js/websocket_client.js"></script>
     <script src="js/components/node_map.js"></script>
+    <script src="js/meshpoint_display_units.js"></script>
     <script src="js/node_cards.js"></script>
     <script src="js/node_drawer.js"></script>
     <script src="js/simple_packet_feed.js"></script>
@@ -632,6 +664,7 @@
     <script src="js/settings/update_stream_client.js"></script>
     <script src="js/settings/release_notes_view.js"></script>
     <script src="js/settings/update_panel_controller.js"></script>
+    <script src="js/settings/meshpoint_display_form.js"></script>
     <script src="js/settings/dangerous_panel_controller.js"></script>
     <script src="js/configuration/identity_card.js"></script>
     <script src="js/configuration/radio_card.js"></script>

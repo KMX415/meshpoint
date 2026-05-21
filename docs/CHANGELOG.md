@@ -5,6 +5,10 @@
 Queued for the next version bump. Bullets in this section will be folded into the release header (and dated) when the version is cut.
 
 - **MeshCore contact roster at startup.** The USB companion often returns 0 contacts on the first fetch right after connect; a deferred ~20s retry logs the full peer list and syncs friendly names into SQLite. Packet-driven enrichment no longer limits name updates to only the node that triggered the last packet.
+- **GPS configuration page crash.** Fixed a template-literal typo in the GPS card that threw `"... Native " is not a function` on load (markdown-style backticks inside a JS string).
+- **Node card temperature units.** Telemetry temperature is stored in Celsius from Meshtastic; the dashboard now converts to Fahrenheit by default instead of labeling Celsius values as °F.
+- **Display unit preferences.** Settings > Meshpoint adds browser-local toggles for °F/°C and miles-feet vs km-m (node cards, drawer, packet feed).
+- **Sidebar scroll when menus expand.** Nav column now scrolls inside the rail so expanded Configuration items do not clip the telemetry rail or Sign out footer.
 
 ### v0.7.4 (May 2026)
 

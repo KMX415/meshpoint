@@ -142,7 +142,12 @@ class SimplePacketFeed {
                 const parts = [];
                 if (p.battery_level != null) parts.push(`batt=${p.battery_level}%`);
                 if (p.voltage != null) parts.push(`${Number(p.voltage).toFixed(1)}V`);
-                if (p.temperature != null) parts.push(`${Number(p.temperature).toFixed(0)}°C`);
+                if (p.temperature != null) {
+                    const t = window.MeshpointDisplayUnits
+                        ? window.MeshpointDisplayUnits.formatTemperature(p.temperature)
+                        : `${Number(p.temperature).toFixed(0)}°C`;
+                    if (t) parts.push(t);
+                }
                 return parts.join(' ') || '--';
             }
             default: return '--';

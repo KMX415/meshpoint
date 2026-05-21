@@ -189,6 +189,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 function _bootDangerousPanel(router) {
     const root = document.getElementById('settings-dangerous-panel');
     if (!root || !window.DangerousPanelController) return;
+    const prefsRoot = document.getElementById('meshpoint-display-prefs');
+    if (prefsRoot && window.MeshpointDisplayForm) {
+        new window.MeshpointDisplayForm(prefsRoot);
+    }
     const controller = new window.DangerousPanelController(root);
     controller.bind();
     let primed = false;
