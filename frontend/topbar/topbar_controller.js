@@ -6,6 +6,7 @@
  *   - TopbarLamp           (websocket connection state)
  *   - TopbarIdentityBadge  (LCD-style short-name)
  *   - TopbarRadioChip      (region · frequency · preset)
+ *   - TopbarMeshcoreChip   (companion lamp · name · MHz · channel)
  *   - TopbarActions        (right-side quick-action buttons)
  *
  * Data sources: /api/config for radio + identity values; the existing
@@ -24,6 +25,10 @@ class TopbarController {
         );
         this._radio = new TopbarRadioChip(
             rootEl.querySelector('.topbar-radio'),
+        );
+        this._meshcore = new TopbarMeshcoreChip(
+            rootEl.querySelector('#topbar-meshcore-group'),
+            rootEl.querySelector('.topbar-meshcore'),
         );
         this._actions = new TopbarActions(
             rootEl.querySelector('.topbar-actions'),
@@ -61,6 +66,7 @@ class TopbarController {
             if (!res.ok) return;
             const cfg = await res.json();
             this._radio.setRadio(cfg.radio || null);
+            this._meshcore.setMeshcore(cfg.meshcore || null);
             const tx = cfg.transmit || {};
             this._identity.setShortName(tx.short_name);
         } catch (_e) { /* swallow; next tick will retry */ }

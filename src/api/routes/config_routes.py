@@ -68,7 +68,12 @@ async def get_config():
 
     channels = _build_channel_list(mt)
 
-    mc_status = {"connected": False, "companion_name": "", "radio": {}}
+    mc_status = {
+        "connected": False,
+        "companion_name": "",
+        "radio": {},
+        "companion_expected": "meshcore_usb" in (_config.capture.sources or []),
+    }
     if _tx_service and hasattr(_tx_service, "_meshcore_tx"):
         mc_tx = _tx_service._meshcore_tx
         if mc_tx and mc_tx.connected:

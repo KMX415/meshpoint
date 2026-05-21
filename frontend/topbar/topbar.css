@@ -232,6 +232,120 @@
     margin-left: 0.1rem;
 }
 
+/* --- MeshCore companion chip (purple group) --------------------- */
+
+.topbar-meshcore {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.25rem 0.55rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    background: rgba(168, 85, 247, 0.06);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    transition: border-color 0.2s, background 0.2s;
+}
+
+.topbar-meshcore:hover {
+    border-color: rgba(168, 85, 247, 0.55);
+}
+
+.topbar-meshcore__brand {
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent-purple);
+    text-shadow: 0 0 8px rgba(168, 85, 247, 0.35);
+    border-right: 1px solid rgba(168, 85, 247, 0.25);
+    padding-right: 0.45rem;
+    margin-right: 0.05rem;
+}
+
+.topbar-meshcore__lamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.topbar-meshcore__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.topbar-meshcore__lamp--online .topbar-meshcore__dot {
+    background: var(--accent-green, #22c55e);
+    box-shadow:
+        0 0 6px rgba(34, 197, 94, 0.65),
+        0 0 12px rgba(34, 197, 94, 0.25);
+}
+
+.topbar-meshcore__lamp--offline .topbar-meshcore__dot {
+    background: var(--accent-red, #ef4444);
+    box-shadow:
+        0 0 6px rgba(239, 68, 68, 0.55),
+        0 0 10px rgba(239, 68, 68, 0.2);
+}
+
+.topbar-meshcore__status {
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.topbar-meshcore--online .topbar-meshcore__status {
+    color: var(--accent-green, #22c55e);
+}
+
+.topbar-meshcore--offline .topbar-meshcore__status {
+    color: var(--accent-red, #ef4444);
+}
+
+.topbar-meshcore__name {
+    font-weight: 600;
+    color: var(--text-primary);
+    max-width: 10rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.topbar-meshcore__sep {
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+.topbar-meshcore__freq {
+    color: var(--accent-purple);
+    text-shadow: 0 0 6px rgba(168, 85, 247, 0.25);
+}
+
+.topbar-meshcore__channel {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    border-left: 1px solid rgba(168, 85, 247, 0.2);
+    padding-left: 0.4rem;
+    margin-left: 0.05rem;
+    max-width: 8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.topbar-meshcore--offline .topbar-meshcore__freq,
+.topbar-meshcore--offline .topbar-meshcore__channel {
+    opacity: 0.55;
+}
+
 /* --- Action group ----------------------------------------------- */
 
 .topbar-actions {
@@ -275,9 +389,11 @@
     .topbar { gap: 0.5rem; padding: 0.35rem 0.7rem; min-height: 44px; }
     .topbar-radio__preset { display: none; }
     .topbar-ident__label { display: none; }
+    .topbar-meshcore__channel { display: none; }
 }
 
 @media (max-width: 600px) {
     .topbar-radio { display: none; }
+    .topbar-meshcore__name { max-width: 5rem; }
     .topbar-ident__value { font-size: 0.82rem; letter-spacing: 0.18em; }
 }
