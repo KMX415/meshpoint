@@ -35,6 +35,7 @@ from src.api.update.apply import ApplyResult, UpdateApplier
 from src.api.update.channels import ReleaseChannelRegistry
 from src.api.update.streaming import stream_update
 from src.api.update.install_status import build_install_status_payload
+from src.api.update.rollback_state import clear_rollback_state, write_rollback_state
 from src.api.update.release_notes import (
     ChangelogParser,
     format_section_for_preview,
@@ -173,9 +174,29 @@ def _load_changelog_sections() -> list:
 def _audit_apply_result(ctx, result: ApplyResult) -> None:
     ctx.params["success"] = result.success
     ctx.params["target_branch"] = result.target_branch
+    if result.pre_update_sha:
+        ctx.params["pre_update_sha"] = result.pre_update_sha
     if not result.success:
         ctx.params["failed_step"] = result.failed_step
         ctx.set_result("error")
+
+
+def _persist_rollback_after_apply(result: ApplyResult) -> None:
+    """Keep rollback SHA across dashboard reload after service restart."""
+    if (
+        result.success
+        and result.pre_update_sha
+        and result.target_branch != "rollback"
+    ):
+        write_rollback_state(
+            result.pre_update_sha,
+            target_branch=result.target_branch,
+        )
+
+
+def _clear_rollback_after_success(result: ApplyResult) -> None:
+    if result.success:
+        clear_rollback_state()
 
 
 @router.post("/apply")
@@ -200,6 +221,7 @@ async def apply_update(
     ) as ctx:
         result = applier.apply(branch=branch)
         _audit_apply_result(ctx, result)
+        _persist_rollback_after_apply(result)
     return asdict(result)
 
 
@@ -240,6 +262,7 @@ async def apply_update_stream(
                     if result_dict:
                         result = ApplyResult(**result_dict)
                         _audit_apply_result(ctx, result)
+                        _persist_rollback_after_apply(result)
             if result is None:
                 ctx.set_result("error")
 
@@ -267,6 +290,7 @@ async def rollback_update(
         if not result.success:
             ctx.params["failed_step"] = result.failed_step
             ctx.set_result("error")
+        _clear_rollback_after_success(result)
     return asdict(result)
 
 
@@ -302,6 +326,7 @@ async def rollback_update_stream(
                         if not result.success:
                             ctx.params["failed_step"] = result.failed_step
                             ctx.set_result("error")
+                        _clear_rollback_after_success(result)
             if result is None:
                 ctx.set_result("error")
 

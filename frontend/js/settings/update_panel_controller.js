@@ -88,6 +88,7 @@ class UpdatePanelController {
             if (!this._installStatus.checked_at) {
                 this._renderSyncHint(null);
             }
+            this._syncRollbackButton();
         } catch (_e) { /* install status is best-effort */ }
     }
 
@@ -387,13 +388,13 @@ class UpdatePanelController {
             await this._handleUpdateStreamError(err);
         } finally {
             this.applyBtn.disabled = false;
-            this.rollbackBtn.disabled = !(this._lastResult && this._lastResult.pre_update_sha);
+            this._syncRollbackButton();
         }
     }
 
     async _rollback() {
-        if (!this._lastResult || !this._lastResult.pre_update_sha) return;
-        const sha = this._lastResult.pre_update_sha;
+        const sha = this._rollbackSha();
+        if (!sha) return;
         const confirmed = window.confirm(
             `Roll back to ${sha.slice(0, 8)}? The service will restart.`
         );
@@ -447,6 +448,7 @@ class UpdatePanelController {
             } else {
                 await this.refresh();
             }
+            this._syncRollbackButton();
         } else {
             const msg = typeof failureMessage === 'function'
                 ? failureMessage(body)

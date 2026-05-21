@@ -244,8 +244,11 @@ class UpdateApplier:
         if not Path(self._repo_path).exists():
             return None
         try:
+            # Match the sudo git pattern used by the apply chain on the Pi.
             rc, stdout, _ = self._runner(
-                ["git", "rev-parse", "HEAD"], self._repo_path, 30,
+                ["sudo", "git", "rev-parse", "HEAD"],
+                self._repo_path,
+                30,
             )
             if rc == 0 and stdout:
                 return stdout.strip()

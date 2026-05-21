@@ -28,6 +28,7 @@ meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git reset --hard *
 # root-owned tree; the terminal catalog surfaces these as buttons.
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git status
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git log *
+meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git rev-list *
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git rev-parse HEAD
 # Settings → Updates install_status (read branch + SHA from root-owned tree)
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git rev-parse *

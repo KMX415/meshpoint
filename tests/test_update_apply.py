@@ -26,7 +26,7 @@ class _RecorderRunner:
     ) -> tuple[int, str, str]:
         self.calls.append(list(args))
         self.cwds.append(cwd)
-        if args[:2] == ["git", "rev-parse"]:
+        if "rev-parse" in args and "HEAD" in args:
             return 0, "abc123\n", ""
         if self._fail_at and self._fail_at in " ".join(args):
             return 1, "", "boom"

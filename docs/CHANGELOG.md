@@ -17,6 +17,8 @@ Queued for the next version bump. Bullets in this section will be folded into th
 - **Updates: Check for updates.** Settings > Updates adds a button that runs `git fetch` and reports how many commits the install is behind the selected channel (e.g. `12 commits behind origin/feat/v0.7.4. Last checked 2 minutes ago.`), so you can decide when to Apply. Compares against the channel picker (not only the branch currently checked out).
 - **Radio preset display after save.** Saving a modem preset now updates in-memory config immediately; the observational Radio tab and Configuration editor refresh when the top bar polls without requiring a full browser hard refresh.
 - **Settings copy.** Post-save restart toasts and terminal hints no longer reference the retired Dangerous label; use Settings > Meshpoint and plain "confirm" wording for high-impact actions.
+- **Updates rollback button.** Roll back last apply stays enabled after a successful apply and dashboard reload. Pre-update SHA is captured with `sudo git` on the Pi and persisted under `data/update_rollback.json`.
+- **Check for updates commit counts.** `git rev-list` is now allowed in `config/sudoers-meshpoint`. Older Pis fall back to `git log --oneline` when `rev-list` is still denied, so "N commits behind" works after fetch.
 
 ### v0.7.4 (May 2026)
 

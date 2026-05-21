@@ -48,11 +48,13 @@ class _FakeGitRunner:
                 return 0, f"{self.remote_sha}\n", ""
             return 0, f"{self.sha}\n", ""
         if "rev-list" in args and "--count" in args:
+            return 1, "", "rev-list not allowed"
+        if "log" in args and "--oneline" in args:
             spec = args[-1]
             if spec.startswith("HEAD.."):
-                return 0, f"{self.behind}\n", ""
+                return 0, ("ab\n" * self.behind), ""
             if spec.startswith("origin/") and spec.endswith("..HEAD"):
-                return 0, f"{self.ahead}\n", ""
+                return 0, ("cd\n" * self.ahead), ""
         return 1, "", "err"
 
 
@@ -145,6 +147,39 @@ class TestBuildInstallStatusPayload(unittest.TestCase):
         self.assertTrue(
             any(len(c) >= 3 and c[:3] == ["git", "fetch", "origin"] for c in runner.calls),
         )
+
+
+class TestRevisionCountFallback(unittest.TestCase):
+    def test_rev_list_denied_uses_git_log(self) -> None:
+        runner = _FakeGitRunner(behind=3, ahead=1)
+        behind, ahead, _ = count_commits_behind_ahead(
+            "/opt/meshpoint",
+            "feat/v0.7.4",
+            runner=runner,
+            use_sudo=False,
+        )
+        self.assertEqual(behind, 3)
+        self.assertEqual(ahead, 1)
+        self.assertTrue(any("log" in c and "--oneline" in c for c in runner.calls))
+
+
+class TestRollbackInInstallStatus(unittest.TestCase):
+    def test_install_status_includes_persisted_rollback_sha(self) -> None:
+        with mock.patch(
+            "src.api.update.install_status.read_rollback_state",
+            return_value={"pre_update_sha": "deadbeefcafebabe", "target_branch": "main"},
+        ):
+            with mock.patch(
+                "src.api.update.install_status.fetch_remote_version_sync",
+                return_value=None,
+            ):
+                payload = build_install_status_payload(
+                    registry=ReleaseChannelRegistry(),
+                    repo_path="/opt/meshpoint",
+                    runner=_FakeGitRunner(),
+                    use_sudo=False,
+                )
+        self.assertEqual(payload["rollback_pre_sha"], "deadbeefcafebabe")
 
 
 class TestResolveCompareBranch(unittest.TestCase):

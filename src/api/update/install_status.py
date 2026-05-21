@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Callable, Optional
 
 from src.api.update.channels import ReleaseChannelRegistry, TIER_CUSTOM
+from src.api.update.rollback_state import read_rollback_state
 from src.version import __version__
 
 logger = logging.getLogger(__name__)
@@ -170,6 +171,44 @@ def git_fetch_origin_branch(
     return True, None
 
 
+def _revision_count(
+    repo_path: str,
+    revision_range: str,
+    *,
+    runner: GitRunner,
+    use_sudo: bool,
+    timeout_seconds: float = 15.0,
+) -> Optional[int]:
+    """Count commits in ``revision_range`` (e.g. ``HEAD..origin/main``).
+
+    Uses ``git rev-list --count`` when sudoers allows it; falls back to
+    ``git log --oneline`` (already whitelisted on older installs) when
+    ``rev-list`` is denied.
+    """
+    git = ["sudo", "git"] if use_sudo else ["git"]
+    rc, out, _ = runner(
+        [*git, "rev-list", "--count", revision_range],
+        repo_path,
+        timeout_seconds,
+    )
+    if rc == 0 and out.strip().isdigit():
+        return int(out.strip())
+
+    rc, log_out, _ = runner(
+        [*git, "log", "--oneline", revision_range],
+        repo_path,
+        timeout_seconds,
+    )
+    if rc != 0:
+        logger.warning(
+            "install_status: could not count revisions for %s "
+            "(rev-list denied and log failed)",
+            revision_range,
+        )
+        return None
+    return sum(1 for line in log_out.splitlines() if line.strip())
+
+
 def count_commits_behind_ahead(
     repo_path: str,
     branch: str,
@@ -181,23 +220,18 @@ def count_commits_behind_ahead(
     git = ["sudo", "git"] if use_sudo else ["git"]
     upstream = f"origin/{branch}"
 
-    rc, behind_out, _ = runner(
-        [*git, "rev-list", "--count", f"HEAD..{upstream}"],
+    behind = _revision_count(
         repo_path,
-        15.0,
+        f"HEAD..{upstream}",
+        runner=runner,
+        use_sudo=use_sudo,
     )
-    behind: Optional[int] = None
-    if rc == 0 and behind_out.strip().isdigit():
-        behind = int(behind_out.strip())
-
-    rc, ahead_out, _ = runner(
-        [*git, "rev-list", "--count", f"{upstream}..HEAD"],
+    ahead = _revision_count(
         repo_path,
-        15.0,
+        f"{upstream}..HEAD",
+        runner=runner,
+        use_sudo=use_sudo,
     )
-    ahead: Optional[int] = None
-    if rc == 0 and ahead_out.strip().isdigit():
-        ahead = int(ahead_out.strip())
 
     rc, sha_out, _ = runner(
         [*git, "rev-parse", "--short=8", upstream],
@@ -274,6 +308,9 @@ def build_install_status_payload(
         except ValueError:
             update_available = False
 
+    rollback = read_rollback_state()
+    rollback_pre_sha = rollback["pre_update_sha"] if rollback else None
+
     return {
         "local_version": __version__,
         "install_branch": branch,
@@ -287,5 +324,6 @@ def build_install_status_payload(
         "sync_error": sync_error,
         "checked_at": checked_at,
         "update_available": update_available,
+        "rollback_pre_sha": rollback_pre_sha,
         **channel_info,
     }
