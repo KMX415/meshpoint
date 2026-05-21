@@ -20,6 +20,7 @@ class SidebarController {
         this._router = router;
         this._app = app || document.querySelector('.app');
         this._sidebar = document.querySelector('.sidebar');
+        this._navEl = this._sidebar?.querySelector('.sidebar__nav') || null;
         this._activeBar = document.querySelector('.sidebar__active-bar');
         this._allLinks = Array.from(document.querySelectorAll('.sidebar__link[data-route], .sidebar__group-toggle[data-group]'));
         this._sectionEls = Array.from(document.querySelectorAll('[data-section]'));
@@ -89,6 +90,13 @@ class SidebarController {
         // affected (sidebar is meant to be persistent there) and mobile
         // already has its own dedicated backdrop element.
         document.addEventListener('click', this._handleDocumentClick);
+
+        if (this._navEl) {
+            this._navEl.addEventListener('scroll', () => {
+                const route = this._router.currentRoute();
+                if (route) this._slideAccentBar(route);
+            }, { passive: true });
+        }
     }
 
     _wireRouterSubscription() {
@@ -122,19 +130,32 @@ class SidebarController {
 
     _slideAccentBar(route) {
         if (!this._activeBar) return;
-        const link = this._sidebar.querySelector(`.sidebar__link[data-route="${route}"]`);
+        if (this._app?.dataset.sidebar === 'rail') {
+            this._activeBar.dataset.visible = 'false';
+            return;
+        }
+        const nav = this._navEl || this._activeBar.parentElement;
+        if (!nav) return;
+        const link = nav.querySelector(`.sidebar__link[data-route="${route}"]`);
         if (!link) {
             this._activeBar.dataset.visible = 'false';
             return;
         }
-        const sidebarRect = this._sidebar.getBoundingClientRect();
+        // Bar lives inside .sidebar__nav (below the header). Offsets must be
+        // relative to the nav scrollport, not the full .sidebar column.
+        const navRect = nav.getBoundingClientRect();
         const linkRect = link.getBoundingClientRect();
-        const offsetTop = linkRect.top - sidebarRect.top + (this._sidebar.scrollTop || 0);
+        const offsetTop = linkRect.top - navRect.top + nav.scrollTop;
         const itemHeight = linkRect.height;
         const barHeight = parseInt(getComputedStyle(this._activeBar).height, 10) || 22;
         const yCenter = offsetTop + (itemHeight - barHeight) / 2;
         this._activeBar.style.transform = `translateY(${yCenter}px)`;
         this._activeBar.dataset.visible = 'true';
+    }
+
+    _refreshAccentBar() {
+        const route = this._router.currentRoute();
+        if (route) this._slideAccentBar(route);
     }
 
     _notifyActivation(route) {
@@ -176,6 +197,7 @@ class SidebarController {
         if (!group) return;
         const expanded = group.dataset.expanded === 'true';
         group.dataset.expanded = expanded ? 'false' : 'true';
+        requestAnimationFrame(() => this._refreshAccentBar());
     }
 
     _handleCollapseToggle() {
@@ -184,6 +206,7 @@ class SidebarController {
         this._app.dataset.sidebar = next;
         try { localStorage.setItem(this._storageKey, next); } catch (_) {}
         this._refreshCollapseAffordance();
+        requestAnimationFrame(() => this._refreshAccentBar());
     }
 
     _refreshCollapseAffordance() {
