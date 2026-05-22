@@ -4,8 +4,7 @@
  * Single responsibility: load ``/api/config`` once, mount the right
  * editable card into each Configuration subsection container, and
  * re-render every card on data changes. The seven subsections
- * (Identity, Radio, Channels, MeshCore, Transmit, MQTT, Meshradar,
- * GPS, Advanced) all
+ * (Identity, Radio, Channels, MeshCore, Transmit, MQTT, GPS, Advanced) all
  * mount dedicated editable cards from ``frontend/js/configuration/``.
  * The observational read-only versions (``RadioIdentityCard``,
  * ``RadioConfigCard``, ``RadioChannels``, ``RadioCompanionCard``)
@@ -113,14 +112,6 @@ class ConfigurationPanel {
                 const card = new window.MqttConfigCard(api);
                 card.mount(host);
                 this._cards.set('mqtt', card);
-            }
-        } else if (section === 'meshradar' && window.MeshradarConfigCard) {
-            const host = document.getElementById('cfg-meshradar-panel');
-            if (host) {
-                host.innerHTML = '';
-                const card = new window.MeshradarConfigCard(api);
-                card.mount(host);
-                this._cards.set('meshradar', card);
             }
         } else if (section === 'gps' && window.GpsConfigCard) {
             const host = document.getElementById('cfg-gps-panel');

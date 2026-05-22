@@ -47,7 +47,6 @@ _ADMIN_SECTIONS: tuple[str, ...] = (
     "configuration.meshcore",
     "configuration.transmit",
     "configuration.mqtt",
-    "configuration.meshradar",
     "configuration.gps",
     "configuration.advanced",
     "settings",

@@ -21,25 +21,72 @@ class MeshcoreConfigCard {
     mount(root) {
         this._root = root;
         this._root.innerHTML = `
-            <article class="cfg-card" data-mc-card>
-                <header class="cfg-card__head">
-                    <h3 class="cfg-card__title">MeshCore Companion</h3>
-                    <p class="cfg-card__hint">
-                        Channel keys for the USB MeshCore companion.
-                        Keys are stored and shown as hex to match the
-                        MeshCore native app. Save applies at runtime
-                        with no service restart.
-                    </p>
-                </header>
-                <div data-mc-body></div>
-                <p class="cfg-status" data-mc-status aria-live="polite"></p>
-            </article>
+            <div class="cfg-section" data-mc-root>
+                <article class="cfg-card">
+                    <header class="cfg-card__head">
+                        <h3 class="cfg-card__title">USB capture source</h3>
+                        <p class="cfg-card__hint">
+                            Enable the MeshCore USB companion serial source (Heltec, T-Beam, etc.).
+                            Requires a service restart after changes.
+                        </p>
+                    </header>
+                    <form class="cfg-form" data-mc-usb-form>
+                        <label class="cfg-field cfg-field--toggle">
+                            <input type="checkbox" data-mc-usb-enable>
+                            <span class="cfg-field__label">Include meshcore_usb capture source</span>
+                        </label>
+                        <label class="cfg-field cfg-field--toggle">
+                            <input type="checkbox" data-mc-usb-autodetect checked>
+                            <span class="cfg-field__label">Auto-detect serial port</span>
+                        </label>
+                        <label class="cfg-field">
+                            <span class="cfg-field__label">Pinned serial port</span>
+                            <input class="cfg-field__input" type="text"
+                                   placeholder="/dev/ttyACM0" data-mc-usb-port>
+                        </label>
+                        <label class="cfg-field cfg-field--narrow">
+                            <span class="cfg-field__label">Baud rate</span>
+                            <input class="cfg-field__input" type="number" data-mc-usb-baud>
+                        </label>
+                        <div class="cfg-card__actions">
+                            <button class="terminal-button terminal-button--primary"
+                                    type="submit">Save USB source</button>
+                        </div>
+                        <p class="cfg-status" data-mc-usb-status aria-live="polite"></p>
+                    </form>
+                </article>
+                <article class="cfg-card" data-mc-card>
+                    <header class="cfg-card__head">
+                        <h3 class="cfg-card__title">MeshCore Companion</h3>
+                        <p class="cfg-card__hint">
+                            Channel keys for the USB companion. Keys are hex to match the
+                            MeshCore native app. Channel save applies at runtime.
+                        </p>
+                    </header>
+                    <div data-mc-body></div>
+                    <p class="cfg-status" data-mc-status aria-live="polite"></p>
+                </article>
+            </div>
         `;
         this._body = this._root.querySelector('[data-mc-body]');
         this._statusEl = this._root.querySelector('[data-mc-status]');
+        this._usbForm = this._root.querySelector('[data-mc-usb-form]');
+        this._usbForm.addEventListener('submit', (e) => this._saveUsbSource(e));
     }
 
     render(config) {
+        const cap = config.capture || {};
+        const mcUsb = cap.meshcore_usb || {};
+        const sources = cap.sources || [];
+        const enableEl = this._root.querySelector('[data-mc-usb-enable]');
+        const autodetectEl = this._root.querySelector('[data-mc-usb-autodetect]');
+        const portEl = this._root.querySelector('[data-mc-usb-port]');
+        const baudEl = this._root.querySelector('[data-mc-usb-baud]');
+        if (enableEl) enableEl.checked = sources.includes('meshcore_usb');
+        if (autodetectEl) autodetectEl.checked = mcUsb.auto_detect !== false;
+        if (portEl) portEl.value = mcUsb.serial_port || '';
+        if (baudEl && mcUsb.baud_rate != null) baudEl.value = mcUsb.baud_rate;
+
         const mc = (config && config.meshcore) || {};
         if (!mc.connected) {
             this._renderOffline();
@@ -48,14 +95,39 @@ class MeshcoreConfigCard {
         this._renderOnline(mc);
     }
 
+    async _saveUsbSource(event) {
+        event.preventDefault();
+        const status = this._root.querySelector('[data-mc-usb-status]');
+        status.dataset.kind = 'pending';
+        status.textContent = 'Saving…';
+        const result = await this._api.put('/api/config/capture/meshcore-usb', {
+            enable_source: this._root.querySelector('[data-mc-usb-enable]').checked,
+            auto_detect: this._root.querySelector('[data-mc-usb-autodetect]').checked,
+            serial_port: this._root.querySelector('[data-mc-usb-port]').value.trim(),
+            baud_rate: Number(this._root.querySelector('[data-mc-usb-baud]').value),
+        });
+        if (result) {
+            status.dataset.kind = 'success';
+            status.textContent = 'Saved.';
+            if (result.restart_required) {
+                this._api.signalRestart('MeshCore USB source updated.');
+            } else {
+                this._api.toast('MeshCore USB source updated');
+            }
+            await this._api.refresh();
+        } else {
+            status.dataset.kind = 'error';
+            status.textContent = 'Save failed.';
+        }
+    }
+
     _renderOffline() {
         this._body.innerHTML = `
             <div class="cfg-empty">
                 <div class="cfg-empty__title">No companion connected</div>
                 <p class="cfg-empty__body">
-                    Plug in a MeshCore USB companion (Heltec V3/V4,
-                    T-Beam, ...) and restart the service to enable
-                    MC messaging.
+                    Enable the USB capture source above, plug in a companion
+                    (Heltec V3/V4, T-Beam, ...), then restart the service.
                 </p>
             </div>
         `;

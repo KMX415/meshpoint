@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             'dashboard', 'stats', 'messages', 'radio', 'terminal',
             'configuration/identity', 'configuration/radio',
             'configuration/channels', 'configuration/transmit',
-            'configuration/mqtt', 'configuration/meshradar',
+            'configuration/mqtt',
             'configuration/gps', 'configuration/advanced',
             'configuration/meshcore',
             'settings/updates', 'settings/auth', 'settings/dangerous',
