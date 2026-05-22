@@ -473,6 +473,9 @@ class UpdatePanelController {
             timeoutMs: 45000,
         });
         if (recovered) {
+            // Apply may have succeeded; rollback is written before git fetch.
+            await this._loadInstallStatus();
+            this._syncRollbackButton();
             window.setTimeout(() => window.location.reload(), 800);
             return;
         }

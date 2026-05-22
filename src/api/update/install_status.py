@@ -66,6 +66,30 @@ def read_install_git_ref(
     return branch or None, sha or None
 
 
+def read_head_full_sha(
+    repo_path: str,
+    *,
+    runner: GitRunner = default_git_runner,
+    use_sudo: bool = True,
+    timeout_seconds: float = 30.0,
+) -> Optional[str]:
+    """Return the full 40-char (or longer) SHA for HEAD in the install tree."""
+    git = ["sudo", "git"] if use_sudo else ["git"]
+    rc, out, stderr = runner(
+        [*git, "rev-parse", "HEAD"], repo_path, timeout_seconds,
+    )
+    if rc != 0:
+        logger.warning(
+            "read_head_full_sha: rev-parse failed in %s (rc=%s): %s",
+            repo_path,
+            rc,
+            (stderr or "").strip()[:300],
+        )
+        return None
+    sha = out.strip()
+    return sha if sha else None
+
+
 def _read_detached_branch_name(
     git: list[str], repo_path: str, runner: GitRunner,
 ) -> Optional[str]:

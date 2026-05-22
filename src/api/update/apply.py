@@ -29,6 +29,8 @@ from pathlib import Path
 from typing import Callable, Iterable, Optional
 
 from src.api.dangerous.handlers import schedule_systemctl_restart
+from src.api.update.install_status import read_head_full_sha
+from src.api.update.rollback_state import write_rollback_state
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +104,17 @@ class UpdateApplier:
         start = time.time()
         log: list[dict] = []
         pre_sha = self._capture_head_sha()
+        if pre_sha:
+            # Persist before mutating the tree. The apply stream often dies when
+            # systemctl restart drops the HTTP connection; route-level persist
+            # on the final NDJSON line then never runs.
+            write_rollback_state(pre_sha, target_branch=branch)
+        else:
+            logger.error(
+                "apply: could not capture pre-update SHA in %s; "
+                "dashboard rollback will stay disabled for this run",
+                self._repo_path,
+            )
         steps = self._build_chain(branch)
         for step in steps:
             entry = self._run_step(step, on_step)
@@ -244,14 +257,15 @@ class UpdateApplier:
         if not Path(self._repo_path).exists():
             return None
         try:
-            # Match the sudo git pattern used by the apply chain on the Pi.
-            rc, stdout, _ = self._runner(
-                ["sudo", "git", "rev-parse", "HEAD"],
+            return read_head_full_sha(
                 self._repo_path,
-                30,
+                runner=self._runner,
+                use_sudo=True,
             )
-            if rc == 0 and stdout:
-                return stdout.strip()
         except Exception:
-            logger.debug("failed to capture pre-update SHA", exc_info=True)
+            logger.warning(
+                "failed to capture pre-update SHA in %s",
+                self._repo_path,
+                exc_info=True,
+            )
         return None

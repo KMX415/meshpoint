@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import unittest
 from typing import Optional
+from unittest.mock import patch
 
 from src.api.update.apply import UpdateApplier
 
@@ -34,6 +35,15 @@ class _RecorderRunner:
 
 
 class TestUpdateApplier(unittest.TestCase):
+    @patch("src.api.update.apply.write_rollback_state")
+    def test_apply_persists_rollback_before_git_steps(self, mock_write) -> None:
+        runner = _RecorderRunner()
+        applier = UpdateApplier(runner=runner, repo_path=".")
+        applier.apply(branch="feat/v0.7.4")
+        mock_write.assert_called_once_with(
+            "abc123", target_branch="feat/v0.7.4",
+        )
+
     def test_apply_runs_full_chain_in_order(self) -> None:
         runner = _RecorderRunner()
         applier = UpdateApplier(runner=runner, repo_path=".")
