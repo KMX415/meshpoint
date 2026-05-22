@@ -36,6 +36,13 @@ class ChannelsConfigCard {
                 </header>
                 <div class="cfg-mc-channels">
                     <table class="ch-table">
+                        <colgroup>
+                            <col class="ch-table__col-idx" />
+                            <col class="ch-table__col-name" />
+                            <col class="ch-table__col-psk" />
+                            <col class="ch-table__col-hash" />
+                            <col class="ch-table__col-state" />
+                        </colgroup>
                         <thead>
                             <tr>
                                 <th>#</th>
@@ -94,14 +101,22 @@ class ChannelsConfigCard {
         const checked = enabled ? 'checked' : '';
         const lockedClass = isPrimary ? ' ch-table__row--locked' : '';
         const pskCell = isPrimary
-            ? '<td class="ch-table__psk-cell ch-table__psk--empty">primary</td>'
+            ? `
+                <td class="ch-table__psk-cell">
+                    <div class="ch-table__psk-inner">
+                        <span class="ch-table__psk-label">primary</span>
+                    </div>
+                </td>
+            `
             : `
                 <td class="ch-table__psk-cell">
-                    <input class="ch-table__name-input" data-field="psk_b64"
-                           type="password" value="${psk}"
-                           placeholder="base64 PSK" />
-                    <button class="ch-table__reveal" type="button"
-                            title="Show/hide key">&#128065;</button>
+                    <div class="ch-table__psk-inner">
+                        <input class="ch-table__name-input" data-field="psk_b64"
+                               type="password" value="${psk}"
+                               placeholder="base64 PSK" />
+                        <button class="ch-table__reveal" type="button"
+                                title="Show/hide key">&#128065;</button>
+                    </div>
                 </td>
             `;
         const enabledCell = isPrimary
@@ -212,10 +227,12 @@ class ChannelsConfigCard {
                        value="" placeholder="Channel name" />
             </td>
             <td class="ch-table__psk-cell">
-                <input class="ch-table__name-input" data-field="psk_b64"
-                       type="password" value="" placeholder="base64 PSK" />
-                <button class="ch-table__reveal" type="button"
-                        title="Show/hide key">&#128065;</button>
+                <div class="ch-table__psk-inner">
+                    <input class="ch-table__name-input" data-field="psk_b64"
+                           type="password" value="" placeholder="base64 PSK" />
+                    <button class="ch-table__reveal" type="button"
+                            title="Show/hide key">&#128065;</button>
+                </div>
             </td>
             <td class="ch-table__hash">--</td>
             <td>
