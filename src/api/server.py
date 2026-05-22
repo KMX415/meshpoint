@@ -33,7 +33,30 @@ from src.api.meshcore_contacts import (
     setup_meshcore_contact_enrichment,
     sync_meshcore_contacts_to_nodes,
 )
-from src.api.routes import analytics, auth_config_routes, auth_routes, config_routes, dangerous_routes, device, identity_routes, messages, mqtt_config_routes, nodeinfo_routes, nodes, packets, public_radar_routes, stats_routes, system_metrics, telemetry, terminal_routes, update_check, update_routes
+from src.api.routes import (
+    analytics,
+    auth_config_routes,
+    auth_routes,
+    config_routes,
+    dangerous_routes,
+    device,
+    device_config_routes,
+    identity_routes,
+    messages,
+    mqtt_config_routes,
+    nodeinfo_routes,
+    nodes,
+    packets,
+    public_radar_routes,
+    stats_routes,
+    system_config_routes,
+    system_metrics,
+    telemetry,
+    terminal_routes,
+    upstream_config_routes,
+    update_check,
+    update_routes,
+)
 from src.api.terminal import CommandCatalog, SessionManager
 from src.api.update import ReleaseChannelRegistry, UpdateApplier
 from src.api.upstream_client import UpstreamClient
@@ -214,6 +237,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(messages.router, dependencies=protected)
     app.include_router(nodeinfo_routes.router, dependencies=protected)
     app.include_router(mqtt_config_routes.router, dependencies=protected)
+    app.include_router(upstream_config_routes.router, dependencies=protected)
+    app.include_router(device_config_routes.router, dependencies=protected)
+    app.include_router(system_config_routes.router, dependencies=protected)
     app.include_router(config_routes.router, dependencies=protected)
     app.include_router(stats_routes.router, dependencies=protected)
 
@@ -935,8 +961,12 @@ def _init_routes(
         config=config,
         crypto=crypto,
         tx_service=tx_service,
+        identity=identity,
     )
     mqtt_config_routes.init_routes(config=config)
+    upstream_config_routes.init_routes(config=config)
+    device_config_routes.init_routes(config=config, identity=identity)
+    system_config_routes.init_routes(config=config)
 
 
 def _init_dangerous_registry(coord: PipelineCoordinator) -> None:

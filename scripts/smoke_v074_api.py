@@ -25,6 +25,7 @@ BASE = os.environ.get("MESHPOINT_BASE", "http://192.168.0.141:8080").rstrip("/")
 USER = os.environ.get("MESHPOINT_USER", "admin")
 PASSWORD = os.environ.get("MESHPOINT_PASSWORD", "")
 DESTRUCTIVE = os.environ.get("SMOKE_DESTRUCTIVE", "") == "1"
+SKIP_DANGEROUS = os.environ.get("SMOKE_SKIP_DANGEROUS", "") == "1"
 
 FAILURES: list[str] = []
 WARNINGS: list[str] = []
@@ -188,8 +189,14 @@ def main() -> int:
             "broker_port": mqtt_orig.get("broker_port", 1883),
             "topic_root": mqtt_orig.get("topic_root", "msh"),
             "region_segment": mqtt_orig.get("region_segment", "US"),
-            "encrypted": mqtt_orig.get("encrypted", True),
-            "gateway_id": "",
+            "gateway_id": mqtt_orig.get("gateway_id") or "",
+            "password_unchanged": True,
+            "publish_channels": mqtt_orig.get("publish_channels") or ["LongFast"],
+            "publish_json": mqtt_orig.get("publish_json", False),
+            "location_precision": mqtt_orig.get("location_precision", "exact"),
+            "homeassistant_discovery": mqtt_orig.get(
+                "homeassistant_discovery", False
+            ),
         },
     )
     if st != 200 or not j.get("saved"):
@@ -197,13 +204,50 @@ def main() -> int:
     else:
         ok("mqtt round-trip PUT")
 
-    st, j = req("PUT", "/api/config/gps", {"source": "static"})
-    if st in (404, 405):
-        ok("gps PUT not wired (expected skip)")
-    elif st == 200:
-        ok("gps PUT (unexpectedly implemented)")
+    device = cfg.get("device") or {}
+    lat = device.get("latitude")
+    lon = device.get("longitude")
+    if lat is None or lon is None:
+        lat, lon = 40.7128, -74.0060
+    st, j = req(
+        "PUT",
+        "/api/config/gps",
+        {
+            "source": "static",
+            "latitude": lat,
+            "longitude": lon,
+            "altitude": device.get("altitude"),
+        },
+    )
+    if st != 200 or not j.get("saved"):
+        fail(f"gps PUT {st} {j}")
     else:
-        warn(f"gps PUT status {st}")
+        ok("gps static PUT")
+
+    st, j = req("PUT", "/api/config/device", {"device_name": device.get("device_name")})
+    if st != 200:
+        warn(f"device PUT round-trip {st} {j}")
+    else:
+        ok("device round-trip PUT")
+
+    upstream = cfg.get("upstream") or {}
+    if upstream:
+        st, j = req(
+            "PUT",
+            "/api/config/upstream",
+            {
+                "url": upstream.get("url", "wss://api.meshradar.io"),
+                "auth_token_unchanged": True,
+                "reconnect_interval_seconds": upstream.get(
+                    "reconnect_interval_seconds", 10
+                ),
+                "buffer_max_size": upstream.get("buffer_max_size", 5000),
+            },
+        )
+        if st != 200:
+            warn(f"upstream PUT {st} {j}")
+        else:
+            ok("upstream PUT (no enabled toggle)")
 
     st, j = req(
         "POST",
@@ -257,14 +301,17 @@ def main() -> int:
     else:
         ok(f"dangerous actions ({len(ids)})")
 
-    for action_id in ("force_nodeinfo", "wipe_phantom_nodes", "restart_concentrator"):
-        st, j = req("POST", "/api/dangerous/invoke", {"action_id": action_id}, timeout=45)
-        if st != 200:
-            fail(f"{action_id} HTTP {st}")
-        elif not j.get("success"):
-            fail(f"{action_id} {j.get('message')}")
-        else:
-            ok(f"{action_id}: {j.get('message')}")
+    if SKIP_DANGEROUS:
+        ok("dangerous invokes skipped (SMOKE_SKIP_DANGEROUS=1)")
+    else:
+        for action_id in ("force_nodeinfo", "wipe_phantom_nodes", "restart_concentrator"):
+            st, j = req("POST", "/api/dangerous/invoke", {"action_id": action_id}, timeout=45)
+            if st != 200:
+                fail(f"{action_id} HTTP {st}")
+            elif not j.get("success"):
+                fail(f"{action_id} {j.get('message')}")
+            else:
+                ok(f"{action_id}: {j.get('message')}")
 
     st, cfg2 = req("GET", "/api/config")
     relay2 = (cfg2.get("relay") or cfg2.get("transmit", {}).get("relay"))

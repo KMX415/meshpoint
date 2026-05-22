@@ -16,7 +16,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from src.api.routes import mqtt_config_routes, nodeinfo_routes
+from src.api.routes import config_enrichment, mqtt_config_routes, nodeinfo_routes
 from src.config import AppConfig, save_section_to_yaml
 from src.models.device_identity import DeviceIdentity
 from src.radio.presets import (
@@ -114,7 +114,7 @@ async def get_config():
 
     node_id_hex = f"!{resolved_node_id:08x}" if resolved_node_id else ""
 
-    return {
+    payload = {
         "radio": {
             "region": radio.region,
             "frequency_mhz": radio.frequency_mhz,
@@ -162,6 +162,7 @@ async def get_config():
             for r, d in REGION_DEFAULTS.items()
         ],
     }
+    return config_enrichment.enrich_config_payload(_config, payload)
 
 
 class RelaySettingsUpdate(BaseModel):

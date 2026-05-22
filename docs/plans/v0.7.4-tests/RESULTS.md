@@ -112,9 +112,48 @@ After a **pass** for an entire feature on a unit, tick the matching README matri
 
 ---
 
+## 2026-05-22 — Agent major-gate automation (`.141`, `2a458e5`)
+
+| Feature | Result | Tester | Notes |
+|---------|--------|--------|-------|
+| Foundation API + pytest | pass | agent | 706 passed; smoke all green (`SMOKE_SKIP_DANGEROUS=1`) |
+| Auth A2–A4 | pass | agent | Wrong password 401; `testpassword` rotate + restore; dual-session `logout_all` |
+| Configuration panels | pass/partial | agent | Playwright loads all cards; channels align; API round-trips in smoke |
+| Updates C1 | pass | agent | `0.7.3.1` up to date on RC channel |
+| Terminal D1–D2 | pass | agent | Connect `connected`; xterm headless garbled; shell OK |
+| Dangerous B2 | pass | agent | `restart_service`; `Meshpoint RAK` identity persisted |
+| Dashboard E1–E3 | pass/partial | agent | Map + `#packet-tbody`; MeshCore topbar name; 429 noise on rapid nav |
+| MQTT journal B5 | pass | agent | Coordinator logs `MQTT disabled` (expected when off) |
+
+Scripts: `scripts/_session_v074_runner.py`, `_session_v074_playwright.py`, `_session_v074_auth_flow.py`, `_session_v074_continue.py`. Live step table: [SESSION-LOG.md](SESSION-LOG.md).
+
+## 2026-05-22 — SenseCap `.15` upgraded to `feat/v0.7.4`
+
+| Field | Value |
+|-------|--------|
+| **Unit** | `.15` (SenseCap M1) |
+| **Commit** | `2a458e5` on `feat/v0.7.4` |
+| **Result** | pass |
+| **Tester** | agent |
+| **Notes** | `git fetch && checkout feat/v0.7.4 && pull`, `pip install -r requirements.txt`, `systemctl restart meshpoint`. Identity HTTP 200, firmware **0.7.3.1**, device `Sensecapm1-Provisiontest1`. Full `smoke_v074_api.py` **all OK** (including mqtt PUT; was 405 on pre-pull `feat/v0.7.3-auth-backend`). No concentrator regressions observed in startup logs. |
+
+## 2026-05-22 — SenseCap `.15` pre-pull (superseded)
+
+| Field | Value |
+|-------|--------|
+| **Unit** | `.15` |
+| **Result** | partial |
+| **Notes** | Was on `0.7.2` / `feat/v0.7.3-auth-backend` before pull; see upgraded row above. |
+
+**.49 fresh SD:** waived for v0.7.4 (see Priority B below).
+
+---
+
 ## Testing queue (before version bump)
 
-Work **only** from [README.md](README.md) matrix + per-feature `*.md` files. Current Pi target: **`7fa894c`** on `.141`.
+**Major gate first:** [MAJOR-GATE.md](MAJOR-GATE.md) — Tier 1 on `.141` only (~90–120 min). Defer polish/axe/GPS/keyboard roving to fleet feedback unless something fails Tier 1.
+
+Work full matrix from [README.md](README.md) when you need formal `[x]` cells. Current Pi target: **`feat/v0.7.4`** — pull latest after the **Configuration kitchen sink** push (full MQTT/Meshradar/Advanced/GPS APIs + UI). Prior baseline was **`2a458e5`** on `.141`.
 
 ### Priority A — finish `.141` matrix rows still `[ ]` or `partial`
 
@@ -131,12 +170,12 @@ Work **only** from [README.md](README.md) matrix + per-feature `*.md` files. Cur
 | 9 | [polish.md](polish.md) | Cross-cutting | Required before tag per README |
 | 10 | [spectral_scan.md](spectral_scan.md) | Spectral / noise floor | §1 pass; §9 browser tooltip |
 
-### Priority B — second unit (after A is green or explicitly waived)
+### Priority B — second unit
 
-| Unit | Minimum bar |
-|------|-------------|
-| `.15` (SenseCap) | Sidebar + viewer + one configuration save path |
-| `.49` (fresh SD) | `install.sh` → `/setup` → login → dashboard (README pre-release gate) |
+| Unit | Minimum bar | Status |
+|------|-------------|--------|
+| `.15` (SenseCap) | Pull `feat/v0.7.4` + restart + full smoke | **pass** — `2a458e5`, smoke all OK |
+| `.49` (fresh SD) | — | **waived v0.7.4** — no installer/wizard changes in RC; fleet upgrades via `git pull` (validated `.141`) |
 
 ### Priority C — only after matrix green
 

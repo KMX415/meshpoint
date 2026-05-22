@@ -76,6 +76,32 @@
     letter-spacing: 0.5px;
 }
 
+.cfg-field__hint {
+    font-size: 12px;
+    color: rgba(243, 244, 246, 0.55);
+    line-height: 1.45;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.cfg-field__hint code {
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 11px;
+    color: var(--brand-amber, #ffb84d);
+}
+
+.cfg-field__textarea {
+    min-height: 88px;
+    resize: vertical;
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.cfg-preview .cfg-preview__value + .cfg-preview__value {
+    margin-top: 6px;
+}
+
 .cfg-field__input {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);

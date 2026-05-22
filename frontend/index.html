@@ -166,7 +166,9 @@
                             <li class="sidebar__subitem"><a href="#/configuration/meshcore" class="sidebar__link" data-route="configuration/meshcore"><span class="sidebar__label">MeshCore</span></a></li>
                             <li class="sidebar__subitem"><a href="#/configuration/transmit" class="sidebar__link" data-route="configuration/transmit"><span class="sidebar__label">Transmit</span></a></li>
                             <li class="sidebar__subitem"><a href="#/configuration/mqtt" class="sidebar__link" data-route="configuration/mqtt"><span class="sidebar__label">MQTT</span></a></li>
+                            <li class="sidebar__subitem"><a href="#/configuration/meshradar" class="sidebar__link" data-route="configuration/meshradar"><span class="sidebar__label">Meshradar</span></a></li>
                             <li class="sidebar__subitem"><a href="#/configuration/gps" class="sidebar__link" data-route="configuration/gps"><span class="sidebar__label">GPS</span></a></li>
+                            <li class="sidebar__subitem"><a href="#/configuration/advanced" class="sidebar__link" data-route="configuration/advanced"><span class="sidebar__label">Advanced</span></a></li>
                         </ul>
                     </li>
 
@@ -437,8 +439,10 @@
             <section class="section" data-section="configuration/channels" style="display:none"><div id="cfg-channels-panel" class="section__placeholder"><h2>Configuration · Channels</h2><p>Skeleton; PSK list + add/remove.</p></div></section>
             <section class="section" data-section="configuration/meshcore" style="display:none"><div id="cfg-meshcore-panel" class="section__placeholder"><h2>Configuration · MeshCore</h2><p>Skeleton; companion channel keys + Send Advert.</p></div></section>
             <section class="section" data-section="configuration/transmit" style="display:none"><div id="cfg-transmit-panel" class="section__placeholder"><h2>Configuration · Transmit</h2><p>Skeleton; TX power + duty cycle + relay.</p></div></section>
-            <section class="section" data-section="configuration/mqtt" style="display:none"><div id="cfg-mqtt-panel" class="section__placeholder"><h2>Configuration · MQTT</h2><p>Skeleton; broker + topic root + region.</p></div></section>
-            <section class="section" data-section="configuration/gps" style="display:none"><div id="cfg-gps-panel" class="section__placeholder"><h2>Configuration · GPS</h2><p>Skeleton; UART vs static. gpsd integration in v0.7.5.</p></div></section>
+            <section class="section" data-section="configuration/mqtt" style="display:none"><div id="cfg-mqtt-panel" class="section__placeholder"><h2>Configuration · MQTT</h2><p>Loading…</p></div></section>
+            <section class="section" data-section="configuration/meshradar" style="display:none"><div id="cfg-meshradar-panel" class="section__placeholder"><h2>Configuration · Meshradar</h2><p>Loading…</p></div></section>
+            <section class="section" data-section="configuration/gps" style="display:none"><div id="cfg-gps-panel" class="section__placeholder"><h2>Configuration · GPS</h2><p>Loading…</p></div></section>
+            <section class="section" data-section="configuration/advanced" style="display:none"><div id="cfg-advanced-panel" class="section__placeholder"><h2>Configuration · Advanced</h2><p>Loading…</p></div></section>
 
             <section class="section" data-section="settings/updates" style="display:none">
                 <div id="settings-updates-panel" class="update-panel">
@@ -686,7 +690,9 @@
     <script src="js/configuration/meshcore_card.js"></script>
     <script src="js/configuration/transmit_card.js"></script>
     <script src="js/configuration/mqtt_card.js"></script>
+    <script src="js/configuration/meshradar_card.js"></script>
     <script src="js/configuration/gps_card.js"></script>
+    <script src="js/configuration/advanced_card.js"></script>
     <script src="js/configuration/configuration_panel.js"></script>
     <script src="/vendor/xterm/xterm.js"></script>
     <script src="/vendor/xterm/xterm-addon-fit.js"></script>

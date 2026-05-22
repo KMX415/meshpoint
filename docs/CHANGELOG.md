@@ -19,6 +19,8 @@ Queued for the next version bump. Bullets in this section will be folded into th
 - **Settings copy.** Post-save restart toasts and terminal hints no longer reference the retired Dangerous label; use Settings > Meshpoint and plain "confirm" wording for high-impact actions.
 - **Updates rollback button.** Roll back last apply stays enabled after a successful apply and dashboard reload. Pre-update SHA is captured with `sudo git` on the Pi and persisted under `data/update_rollback.json`.
 - **Check for updates commit counts.** `git rev-list` is now allowed in `config/sudoers-meshpoint`. Older Pis fall back to `git log --oneline` when `rev-list` is still denied, so "N commits behind" works after fetch.
+- **Configuration kitchen sink (RC).** Dashboard editors for full MQTT (`publish_channels`, JSON mirror, HA discovery, location precision, credentials), Meshradar upstream URL/key/reconnect (no uplink disable toggle), device/GPS placement, storage/relay/radio-advanced/MeshCore USB under **Advanced**, and native TX enable on **Transmit**. `GET /api/config` returns enriched sections for the panel loaders.
+- **MQTT broker TLS (deferred).** Configuration → MQTT exposes broker host, port, credentials, allowlist, JSON mirror, and HA options per `docs/MQTT-AND-MESHRADAR.md`. Transport TLS (`mqtts`, CA bundle, cert validation) is not implemented: `mqtt_publisher.py` uses plain TCP only. Planned for the same release vehicle as **Meshtastic PKI** (shared crypto/config touchpoints). Until then use plain port 1883 (e.g. `mqtt.meshtastic.org`) or a LAN broker without TLS.
 
 ### v0.7.4 (May 2026)
 

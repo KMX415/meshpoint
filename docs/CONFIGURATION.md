@@ -406,6 +406,22 @@ mqtt:
   homeassistant_discovery: false # publish HA auto-discovery configs
 ```
 
+### Transport TLS (not yet available)
+
+Configuration → MQTT does **not** expose TLS/mqtts settings yet. The publisher
+uses plain TCP; port **8883** alone does not enable encryption.
+
+**Planned:** ship broker TLS (`tls_enabled`, optional CA file) in the same
+update as **Meshtastic PKI** (see `ROADMAP.md` in the private repo). Until
+then:
+
+- Public Meshtastic MQTT: `mqtt.meshtastic.org` on port **1883** (default).
+- Private TLS brokers: wait for that release, or terminate TLS on a local
+  reverse proxy in front of a plain MQTT listener.
+
+This is separate from **packet privacy**: undecrypted LoRa packets are never
+published to MQTT regardless of transport settings.
+
 ### Location Precision
 
 Control how much location detail leaves the device via MQTT:

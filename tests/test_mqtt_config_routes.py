@@ -48,14 +48,21 @@ class TestBuildMqttStatus(unittest.TestCase):
             topic_root="msh",
             region="EU_868",
             publish_json=True,
+            publish_channels=["LongFast", "MyPrivate"],
+            location_precision="approximate",
+            homeassistant_discovery=True,
         )
         status = mqtt_module.build_mqtt_status(mqtt, "My Meshpoint")
         self.assertTrue(status["enabled"])
         self.assertEqual(status["broker_host"], "broker.example.com")
         self.assertEqual(status["broker_port"], 8883)
         self.assertEqual(status["region_segment"], "EU_868")
-        self.assertFalse(status["encrypted"])
+        self.assertTrue(status["publish_json"])
+        self.assertEqual(status["publish_channels"], ["LongFast", "MyPrivate"])
+        self.assertEqual(status["location_precision"], "approximate")
+        self.assertTrue(status["homeassistant_discovery"])
         self.assertTrue(status["gateway_id"].startswith("!"))
+        self.assertIn("/2/e/", status["topic_preview_meshtastic"])
 
 
 class TestUpdateMqttRoute(unittest.TestCase):
@@ -74,10 +81,16 @@ class TestUpdateMqttRoute(unittest.TestCase):
                     "enabled": True,
                     "broker_host": "mqtt.example.com",
                     "broker_port": 1883,
+                    "username": "user1",
+                    "password": "secret",
+                    "password_unchanged": False,
                     "topic_root": "msh",
                     "region_segment": "ANZ",
-                    "encrypted": True,
                     "gateway_id": "",
+                    "publish_channels": ["LongFast", "MeshCore"],
+                    "publish_json": False,
+                    "location_precision": "none",
+                    "homeassistant_discovery": False,
                 },
             )
         self.assertEqual(resp.status_code, 200)
@@ -91,6 +104,7 @@ class TestUpdateMqttRoute(unittest.TestCase):
         self.assertEqual(saved["broker"], "mqtt.example.com")
         self.assertEqual(saved["region"], "ANZ")
         self.assertFalse(saved["publish_json"])
+        self.assertEqual(saved["password"], "secret")
 
     def test_invalid_gateway_id_returns_400(self) -> None:
         resp = self.client.put(
@@ -101,32 +115,25 @@ class TestUpdateMqttRoute(unittest.TestCase):
                 "broker_port": 1883,
                 "topic_root": "msh",
                 "region_segment": "US",
-                "encrypted": True,
+                "publish_channels": ["LongFast"],
                 "gateway_id": "not-valid",
             },
         )
         self.assertEqual(resp.status_code, 400)
 
-    def test_custom_gateway_id_normalized(self) -> None:
-        with patch("src.api.routes.mqtt_config_routes.save_section_to_yaml"):
-            resp = self.client.put(
-                "/api/config/mqtt",
-                json={
-                    "enabled": True,
-                    "broker_host": "mqtt.example.com",
-                    "broker_port": 1883,
-                    "topic_root": "msh",
-                    "region_segment": "US",
-                    "encrypted": True,
-                    "gateway_id": "deadbeef",
-                },
-            )
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(mqtt_module._config.mqtt.gateway_id, "deadbeef")
-        self.assertEqual(
-            resp.json()["mqtt"]["gateway_id"],
-            "!deadbeef",
+    def test_empty_publish_channels_returns_422(self) -> None:
+        resp = self.client.put(
+            "/api/config/mqtt",
+            json={
+                "enabled": True,
+                "broker_host": "mqtt.example.com",
+                "broker_port": 1883,
+                "topic_root": "msh",
+                "region_segment": "US",
+                "publish_channels": ["", "  "],
+            },
         )
+        self.assertEqual(resp.status_code, 422)
 
 
 class TestResolveGatewayId(unittest.TestCase):

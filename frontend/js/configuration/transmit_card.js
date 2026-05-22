@@ -22,6 +22,10 @@ class TransmitConfigCard {
                     <p class="cfg-card__hint">Power, duty cycle, and relay behavior. Changes hot-reload on save where possible; some require a restart.</p>
                 </header>
                 <form class="cfg-form" data-tx-form>
+                    <label class="cfg-field cfg-field--toggle">
+                        <input type="checkbox" data-tx-enabled>
+                        <span class="cfg-field__label">Native TX enabled</span>
+                    </label>
                     <label class="cfg-field">
                         <span class="cfg-field__label">TX power (dBm)</span>
                         <input class="cfg-field__input" type="number" min="0" max="30" step="1" data-tx-power>
@@ -46,6 +50,7 @@ class TransmitConfigCard {
             </article>
         `;
         this._form = this._root.querySelector('[data-tx-form]');
+        this._enabledEl = this._root.querySelector('[data-tx-enabled]');
         this._powerEl = this._root.querySelector('[data-tx-power]');
         this._dutyEl = this._root.querySelector('[data-tx-duty]');
         this._relayEnable = this._root.querySelector('[data-tx-relay-enable]');
@@ -56,6 +61,7 @@ class TransmitConfigCard {
 
     render(config) {
         const tx = (config && config.transmit) || {};
+        if (this._enabledEl) this._enabledEl.checked = !!tx.enabled;
         if (this._powerEl && tx.tx_power_dbm != null) this._powerEl.value = tx.tx_power_dbm;
         if (this._dutyEl && tx.max_duty_cycle_percent != null) this._dutyEl.value = tx.max_duty_cycle_percent;
         if (this._relayEnable) this._relayEnable.checked = !!(tx.relay && tx.relay.enabled);
@@ -77,6 +83,7 @@ class TransmitConfigCard {
             relay.max_relay_per_minute = rate;
         }
         const payload = {
+            enabled: this._enabledEl.checked,
             tx_power_dbm: Number(this._powerEl.value),
             max_duty_cycle_percent: Number(this._dutyEl.value),
             relay,

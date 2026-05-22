@@ -181,6 +181,12 @@ Read/write home for everything that lands in `local.yaml`. Six subsections, each
 - [ ] Region change applies; carrier auto-detection still reports SenseCap M1 in the `Hardware` line of `meshpoint status`.
 - [ ] Custom frequency applies cleanly.
 
+## Deferred (not v0.7.4)
+
+- **MQTT broker TLS / mqtts** — Not in v0.7.4 Configuration UI or `mqtt_publisher.py`.
+  Plain TCP only (port 1883 for community broker). Bundle with **Meshtastic PKI**
+  release; tracked in `docs/CHANGELOG.md` (Unreleased) and `ROADMAP.md`.
+
 ## Failure modes to watch
 
 - **Channel reveal returns plaintext without password challenge** — security regression. Halt release.
