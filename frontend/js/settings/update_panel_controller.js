@@ -25,6 +25,7 @@ class UpdatePanelController {
         this.checkBtn = rootEl.querySelector('[data-update-check]');
         this.applyBtn = rootEl.querySelector('[data-update-apply]');
         this.rollbackBtn = rootEl.querySelector('[data-update-rollback]');
+        this.rollbackHintEl = rootEl.querySelector('[data-update-rollback-hint]');
         this.syncHintEl = rootEl.querySelector('[data-update-sync-hint]');
         this.statusEl = rootEl.querySelector('[data-update-status]');
         this.descriptionEl = rootEl.querySelector('[data-update-description]');
@@ -88,8 +89,8 @@ class UpdatePanelController {
             if (!this._installStatus.checked_at) {
                 this._renderSyncHint(null);
             }
-            this._syncRollbackButton();
         } catch (_e) { /* install status is best-effort */ }
+        this._syncRollbackButton();
     }
 
     async _checkForUpdates() {
@@ -138,6 +139,7 @@ class UpdatePanelController {
             this._renderSyncHint({ sync_error: 'network error' });
         } finally {
             if (this.checkBtn) this.checkBtn.disabled = false;
+            this._syncRollbackButton();
         }
     }
 
@@ -497,14 +499,22 @@ class UpdatePanelController {
     }
 
     _syncRollbackButton() {
-        if (!this.rollbackBtn) return;
         const sha = this._rollbackSha();
-        this.rollbackBtn.disabled = !sha;
-        if (sha) {
-            this.rollbackBtn.title = `Restore commit ${sha.slice(0, 8)} from before the last apply`;
-        } else {
-            this.rollbackBtn.title =
-                'Available after a successful Apply (captures the current commit first)';
+        if (this.rollbackBtn) {
+            this.rollbackBtn.disabled = !sha;
+            if (sha) {
+                this.rollbackBtn.title =
+                    `Restore commit ${sha.slice(0, 8)} from before the last apply`;
+            } else {
+                this.rollbackBtn.title =
+                    'Enabled after a successful Apply from this page';
+            }
+        }
+        if (this.rollbackHintEl) {
+            this.rollbackHintEl.textContent = sha
+                ? `Rollback point: ${sha.slice(0, 8)} (from before the last dashboard apply).`
+                : 'Rollback unlocks after you run Apply update successfully. '
+                    + 'Git pull on the Pi does not create a rollback point.';
         }
     }
 

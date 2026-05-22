@@ -220,11 +220,8 @@ function _bootUpdatePanel(router) {
     if (!root || !window.UpdatePanelController) return;
     const controller = new window.UpdatePanelController(root);
     controller.bind();
-    let primed = false;
     router.onRouteChange((route) => {
         if (route !== 'settings/updates') return;
-        if (primed) return;
-        primed = true;
         controller.refresh();
     });
 }
