@@ -6,9 +6,9 @@ Queued for the next version bump.
 
 - **MQTT broker TLS (deferred).** Configuration → MQTT exposes broker host, port, credentials, allowlist, JSON mirror, and HA options per `docs/MQTT-AND-MESHRADAR.md`. Transport TLS (`mqtts`, CA bundle, cert validation) is not implemented: `mqtt_publisher.py` uses plain TCP only. Planned for the same release vehicle as **Meshtastic PKI** (shared crypto/config touchpoints). Until then use plain port 1883 (e.g. `mqtt.meshtastic.org`) or a LAN broker without TLS.
 
-### v0.7.4 (May 2026)
+### v0.7.4 (May 20, 2026)
 
-Major dashboard release on `main`. Builds on v0.7.3 auth: every page and API call stays behind the login cookie. Edge-only, pure Python, no concentrator recompile. **Upgrade:** use the idempotent block in `README.md` (`git pull` + `install.sh` + restart) so jumps from v0.6.x or v0.7.2 pick up venv deps, stale `.so` cleanup, and sudoers. No new Python packages beyond v0.7.3 (`bcrypt`, `PyJWT`). After upgrade on `main`, Settings → Updates defaults the channel picker to **Release candidate (v0.7.5)** for early testers.
+Major dashboard release on `main` (merge `56d4f7c`). Builds on v0.7.3 auth: every page and API call stays behind the login cookie. Edge-only, pure Python, no concentrator recompile. **Upgrade:** use the idempotent block in `README.md` and `docs/COMMON-ERRORS.md` (`git fetch`, `checkout main`, `pull`, `scripts/install.sh`, `systemctl restart`) so jumps from v0.6.x or v0.7.2 pick up venv deps, stale `.so` cleanup, and sudoers. No new Python packages beyond v0.7.3 (`bcrypt`, `PyJWT`). After upgrade on `main`, Settings → Updates defaults the channel picker to **Release candidate (v0.7.5)** for early testers.
 
 #### Dashboard shell and navigation
 
@@ -26,8 +26,10 @@ Major dashboard release on `main`. Builds on v0.7.3 auth: every page and API cal
 
 #### Configuration and MQTT
 
-- **Configuration editors.** Identity (names + pinned node ID), Radio (region, preset, MHz/slot, hop limit), Channels (PSK table with PR #38 delete pattern), MeshCore (companion keys, Send Advert, Refresh), Transmit (TX power, duty, relay limits), and MQTT (broker, topic root, region segment, encryption toggle). Top-level **Radio** tab is observational only; all edits live under Configuration.
-- **MQTT API wired.** `PUT /api/config/mqtt` and `mqtt` on `GET /api/config` map dashboard fields to `local.yaml` (`broker_host`, `region_segment`, `encrypted`, optional `gateway_id`). Service restart required for the publisher to reconnect. GPS editor UI remains a stub (no `PUT /api/config/gps` yet).
+- **Configuration editors.** Identity (names + pinned node ID), Radio (region, preset, MHz/slot via Meshtastic firmware formula, hop limit), Channels (PSK table with per-channel delete ([#38](https://github.com/KMX415/meshpoint/pull/38))), MeshCore (USB source, channel keys, Send Advert, Refresh contacts), Transmit (TX power, duty, native TX enable, relay limits), MQTT (broker, topic root, region segment, encryption, publish allowlist, JSON mirror, HA discovery, location precision), **Advanced** (upstream Meshradar URL/key/reconnect, device placement, storage paths, radio-advanced, MeshCore USB tuning), and GPS (placement UI; `PUT /api/config/gps` still deferred). Top-level **Radio** tab is observational only; all edits live under Configuration.
+- **MQTT API wired.** `PUT /api/config/mqtt` and enriched `GET /api/config` map dashboard fields to `local.yaml`. Service restart required for the publisher to reconnect.
+- **Hierarchical MQTT topic paths** ([#35](https://github.com/KMX415/meshpoint/pull/35)): `topic_root` and `region` segment combine per the Meshtastic spec (`<topic_root>/<region>/2/e/<channel>/<gateway>`) with live preview in Configuration → MQTT. Avoids the double-region footgun (`msh/US/FL/US/...`).
+- **Preset save hot-reload.** Saving a modem preset updates in-memory config immediately; observational Radio tab and top-bar preset readout refresh on the next poll without a hard browser refresh.
 
 #### Web terminal, updates, and Meshpoint actions
 
@@ -37,9 +39,12 @@ Major dashboard release on `main`. Builds on v0.7.3 auth: every page and API cal
 
 #### MeshCore
 
-- **Faster peer discovery** via `NEW_CONTACT` events ([PR #55](https://github.com/KMX415/meshpoint/pull/55)).
-- **Friendly repeater names** instead of pubkey placeholders ([PR #54](https://github.com/KMX415/meshpoint/pull/54), [@timbot18](https://github.com/timbot18)): wider advert name aliases, placeholder cleanup migration, and throttled contact-list enrichment from the USB companion.
-- **Map and signal fixes.** MeshCore advertisements now write lat/lon into the node table; `rx_log_data` RSSI/SNR is stitched onto **advertisement** events (not only DMs); `get_contacts()` tolerates mixed-type companion payloads without crashing.
+- **MeshCore channel configuration** ([#53](https://github.com/KMX415/meshpoint/pull/53)): dashboard editors for companion channel keys, synced from the USB path.
+- **Faster peer discovery** via `NEW_CONTACT` events ([#55](https://github.com/KMX415/meshpoint/pull/55)).
+- **Friendly repeater names** instead of pubkey placeholders ([#54](https://github.com/KMX415/meshpoint/pull/54)): wider advert name aliases, placeholder cleanup migration, and throttled contact-list enrichment from the USB companion.
+- **MeshCore nodes on the local map** ([#51](https://github.com/KMX415/meshpoint/pull/51)): advertisement and position packets write lat/lon into the node table so MeshCore contacts appear on the dashboard map with RSSI/SNR on adverts, not only DMs.
+- **Contact roster at startup.** Deferred ~20s retry after USB connect logs the full peer list and syncs friendly names into SQLite when the first fetch returns zero rows.
+- **`get_contacts()` robustness.** Tolerates mixed-type companion payloads without crashing the sync path.
 
 #### Relay and RF telemetry
 
@@ -48,15 +53,26 @@ Major dashboard release on `main`. Builds on v0.7.3 auth: every page and API cal
 
 #### Sign-off polish and UX
 
-- **MeshCore contact roster at startup.** Deferred ~20s retry after USB connect logs the full peer list and syncs friendly names into SQLite.
-- **Top bar protocol chips.** Meshtastic and MeshCore grouped chips with connection dots; MeshCore shows companion name, frequency, and primary channel when configured.
-- **Node drawer metrics charts.** `GET /api/nodes/{id}/metrics_history` for battery, util, temperature, and RSSI over 1H / 6H / 24H / All.
-- **Display unit preferences.** Settings > Meshpoint: browser-local °F/°C and miles-feet vs km-m.
-- **Updates: commit-behind counts, rollback persistence, expanded Configuration editors** (full MQTT, upstream, device/GPS, Advanced storage/relay, native TX enable). `git rev-list` allowed in sudoers with `git log` fallback.
+- **Top bar protocol chips.** Meshtastic and MeshCore grouped chips with connection dots (no separate ONLINE/OFFLINE text). MeshCore shows companion name, frequency, and primary channel when configured.
+- **Node drawer metrics charts.** `GET /api/nodes/{id}/metrics_history` for battery, voltage, channel/air util, temperature, and RSSI over 1H / 6H / 24H / All.
+- **Display unit preferences.** Settings > Meshpoint: browser-local °F/°C and miles-feet vs km-m for node cards, drawer, and packet feed.
+- **Node card temperature.** Telemetry stored in Celsius from Meshtastic; dashboard converts for display instead of mislabeling Celsius values as °F.
+- **Messages empty-state copy.** Plain instructions (pick a conversation, use All/MT/MC filters) instead of internal jargon.
+- **Sidebar scroll and accent bar.** Nav column scrolls when Configuration submenus expand; green route indicator tracks the active nav item, not the bottom of the sidebar column.
+- **GPS configuration page crash.** Fixed template-literal typo in the GPS card that broke the page on load.
+- **Top bar MeshCore offline state.** Companion chip shows amber when the API or WebSocket path is down, not only when USB is unplugged.
+- **Terminal copy shortcut.** Ctrl+Shift+C uses `preventDefault` in the terminal pane so browser copy works reliably.
+- **Updates rollback persistence.** Pre-update SHA captured with `sudo git` on the Pi and stored under `data/update_rollback.json`; rollback button stays usable after Apply + reload.
+- **Check for updates commit counts.** `git rev-list` allowed in `config/sudoers-meshpoint` with `git log --oneline` fallback when `rev-list` is denied.
+- **`data/` ownership on service start.** systemd `ExecStartPre` chowns `data/` for the `meshpoint` service user so rollback and audit files remain writable after upgrade.
+
+#### Not in this release
+
+- MQTT broker TLS (`mqtts`), gpsd save API, watchdog auto-rollback on failed Apply, MeshCore companion rename from the dashboard (planned for v0.7.5).
 
 #### Internal
 
-- New routes for auth config, terminal PTY, update apply, MQTT/upstream/device config, meshcore contact enrichment, spectral scan, and admin audit. Test suite **700+** passing. Optional LAN smoke: `scripts/smoke_v074_api.py` when `MESHPOINT_PASSWORD` is set.
+- New routes for auth config, terminal PTY, update apply, MQTT/upstream/device config, meshcore contact enrichment, spectral scan, and admin audit. Release channel registry advances RC to `feat/v0.7.5` on `main` at v0.7.4+. Test suite **700+** passing. Optional LAN smoke: `scripts/smoke_v074_api.py` when `MESHPOINT_PASSWORD` is set.
 
 ### v0.7.3.1 (May 13, 2026)
 
