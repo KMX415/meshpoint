@@ -18,17 +18,26 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
+from src.api.audit import AuditLogWriter
+from src.api.audit.dependencies import get_audit_writer
 from src.api.auth.auth_service import (
     AuthService,
+    ChangePasswordFailure,
     LoginFailure,
     LoginSuccess,
     SetupRejected,
     SetupSuccess,
+    ViewerSetupRejected,
 )
-from src.api.auth.dependencies import SESSION_COOKIE_NAME
+from src.api.auth.dependencies import (
+    SESSION_COOKIE_NAME,
+    require_admin,
+    require_auth,
+)
+from src.api.auth.jwt_session import SessionClaims
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +64,15 @@ class SetupRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=64)
+    password: str = Field(..., min_length=1, max_length=512)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=512)
+    new_password: str = Field(..., min_length=1, max_length=512)
+
+
+class ViewerSetupRequest(BaseModel):
     password: str = Field(..., min_length=1, max_length=512)
 
 
@@ -154,3 +172,111 @@ async def login(
 async def logout(response: Response) -> None:
     _clear_session_cookie(response)
     response.status_code = status.HTTP_204_NO_CONTENT
+
+
+@router.post("/change_password")
+async def change_password(
+    payload: ChangePasswordRequest,
+    request: Request,
+    response: Response,
+    claims: SessionClaims = Depends(require_auth),
+    audit: AuditLogWriter = Depends(get_audit_writer),
+) -> dict:
+    """Rotate the caller's password (admin or viewer).
+
+    Persists the new bcrypt hash and rotates ``jwt_secret`` so every
+    other browser session is dropped. The caller's cookie is
+    re-issued so the immediate response reseats a working session.
+    Audit log records the action; never the password values.
+    """
+    with audit.timed_action(
+        user=claims.subject,
+        action="auth.change_password",
+        params={"subject": claims.subject},
+    ) as ctx:
+        result = _service().change_password(
+            subject=claims.subject,
+            current_password=payload.current_password,
+            new_password=payload.new_password,
+        )
+        if isinstance(result, ChangePasswordFailure):
+            ctx.set_result("error")
+            ctx.params["reason"] = result.reason
+            raise _reject_change_password(result)
+        _set_session_cookie(request, response, result.token)
+        ctx.params["role"] = result.role
+        return {"role": result.role}
+
+
+@router.post("/logout_all", status_code=status.HTTP_204_NO_CONTENT)
+async def logout_all(
+    response: Response,
+    claims: SessionClaims = Depends(require_admin),
+    audit: AuditLogWriter = Depends(get_audit_writer),
+) -> None:
+    """Invalidate every outstanding session (admin only).
+
+    Bumps ``session_version`` server-side so every existing JWT fails
+    verification on next request. The caller's cookie is dropped here;
+    the frontend redirects to ``/login`` on the resulting 401.
+    """
+    with audit.timed_action(
+        user=claims.subject,
+        action="auth.logout_all",
+    ) as ctx:
+        new_sv = _service().logout_all_sessions()
+        ctx.params["session_version"] = new_sv
+    _clear_session_cookie(response)
+    response.status_code = status.HTTP_204_NO_CONTENT
+
+
+@router.post("/setup_viewer", status_code=status.HTTP_200_OK)
+async def setup_viewer(
+    payload: ViewerSetupRequest,
+    claims: SessionClaims = Depends(require_admin),
+    audit: AuditLogWriter = Depends(get_audit_writer),
+) -> dict:
+    """Enable the viewer role with a fresh password (admin only)."""
+    with audit.timed_action(
+        user=claims.subject, action="auth.setup_viewer",
+    ) as ctx:
+        result = _service().setup_viewer(payload.password)
+        if isinstance(result, ViewerSetupRejected):
+            ctx.set_result("error")
+            ctx.params["reason"] = result.reason
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result.reason,
+            )
+    return {"viewer_enabled": True}
+
+
+@router.post("/clear_viewer", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_viewer(
+    response: Response,
+    claims: SessionClaims = Depends(require_admin),
+    audit: AuditLogWriter = Depends(get_audit_writer),
+) -> None:
+    """Disable the viewer role (admin only)."""
+    with audit.timed_action(user=claims.subject, action="auth.clear_viewer"):
+        _service().clear_viewer()
+    response.status_code = status.HTTP_204_NO_CONTENT
+
+
+def _reject_change_password(
+    failure: ChangePasswordFailure,
+) -> HTTPException:
+    if failure.reason == "invalid_current_password":
+        return HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid_current_password",
+        )
+    if failure.reason in ("password_too_short", "password_too_long"):
+        return HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=failure.reason,
+        )
+    return HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=failure.reason,
+    )

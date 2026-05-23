@@ -1,0 +1,96 @@
+/* Reconnect storyboard pill. Floats top-right when the websocket
+ * drops or recovers. Stays out of the way until something changes. */
+
+.reconnect-pill {
+    position: fixed;
+    top: 56px;
+    right: 1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
+    background: rgba(15, 22, 36, 0.92);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+    z-index: 1000;
+    opacity: 0;
+    transform: translateY(-6px);
+    pointer-events: none;
+    transition:
+        opacity var(--motion-base) var(--ease-out-expo),
+        transform var(--motion-base) var(--ease-out-expo),
+        border-color var(--motion-fast) var(--ease-out-expo),
+        color var(--motion-fast) var(--ease-out-expo);
+}
+
+.reconnect-pill--visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.reconnect-pill__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: background var(--motion-fast) var(--ease-out-expo),
+                box-shadow var(--motion-fast) var(--ease-out-expo);
+}
+
+.reconnect-pill--reconnecting {
+    border-color: rgba(245, 158, 11, 0.45);
+    color: var(--accent-amber, #f59e0b);
+}
+
+.reconnect-pill--reconnecting .reconnect-pill__dot {
+    background: var(--accent-amber, #f59e0b);
+    animation: reconnect-pill-blink 0.9s steps(2, end) infinite;
+}
+
+.reconnect-pill--syncing {
+    border-color: rgba(6, 182, 212, 0.45);
+    color: var(--accent-cyan, #06b6d4);
+}
+
+.reconnect-pill--syncing .reconnect-pill__dot {
+    background: var(--accent-cyan, #06b6d4);
+    box-shadow: 0 0 10px rgba(6, 182, 212, 0.6);
+    animation: reconnect-pill-pulse 1.1s ease-in-out infinite;
+}
+
+.reconnect-pill--ready {
+    border-color: rgba(0, 229, 160, 0.45);
+    color: var(--accent-green, #00e5a0);
+}
+
+.reconnect-pill--ready .reconnect-pill__dot {
+    background: var(--accent-green, #00e5a0);
+    box-shadow: 0 0 10px rgba(0, 229, 160, 0.6);
+}
+
+@keyframes reconnect-pill-blink {
+    0%   { opacity: 1; }
+    50%  { opacity: 0.3; }
+    100% { opacity: 1; }
+}
+
+@keyframes reconnect-pill-pulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.18); }
+}
+
+@media (max-width: 600px) {
+    .reconnect-pill {
+        right: 0.5rem;
+        top: 52px;
+        font-size: 0.62rem;
+        padding: 0.3rem 0.6rem;
+    }
+}

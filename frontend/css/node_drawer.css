@@ -209,6 +209,68 @@
     font-weight: 500;
 }
 
+/* ---- Metrics chart ---- */
+
+.nd-metrics {
+    padding-bottom: 0.75rem;
+}
+
+.nd-metrics__range {
+    display: flex;
+    gap: 0.35rem;
+    margin-bottom: 0.5rem;
+}
+
+.nd-metrics__range-btn {
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.nd-metrics__range-btn:hover {
+    border-color: rgba(6, 182, 212, 0.4);
+    color: var(--accent-cyan);
+}
+
+.nd-metrics__range-btn--active {
+    background: rgba(6, 182, 212, 0.12);
+    border-color: rgba(6, 182, 212, 0.45);
+    color: var(--accent-cyan);
+}
+
+.nd-metrics__chart-wrap {
+    position: relative;
+    height: 200px;
+    width: 100%;
+    margin-bottom: 0.35rem;
+}
+
+.nd-metrics__canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.nd-metrics__hint {
+    margin: 0;
+    font-size: 0.62rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+}
+
+.nd-metrics__empty {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 0.5rem 0;
+}
+
 /* ---- Backdrop (optional click-outside-to-close) ---- */
 
 .nd-backdrop {

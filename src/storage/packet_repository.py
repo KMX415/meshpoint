@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from src.models.packet import Packet, PacketType, Protocol
 from src.models.signal import SignalMetrics
@@ -56,6 +56,45 @@ class PacketRepository:
             (limit,),
         )
         return [self._row_to_packet(r) for r in rows]
+
+    async def get_signal_history(
+        self,
+        source_id: str,
+        limit: int = 500,
+        hours: float | None = 24,
+    ) -> list[dict]:
+        """RSSI/SNR samples from any packet by this node, oldest-first."""
+        if hours is not None and hours > 0:
+            since = (
+                datetime.now(timezone.utc) - timedelta(hours=hours)
+            ).isoformat()
+            rows = await self._db.fetch_all(
+                """
+                SELECT timestamp, rssi, snr FROM packets
+                WHERE source_id = ? AND rssi IS NOT NULL AND timestamp >= ?
+                ORDER BY timestamp ASC
+                LIMIT ?
+                """,
+                (source_id, since, limit),
+            )
+        else:
+            rows = await self._db.fetch_all(
+                """
+                SELECT timestamp, rssi, snr FROM packets
+                WHERE source_id = ? AND rssi IS NOT NULL
+                ORDER BY timestamp ASC
+                LIMIT ?
+                """,
+                (source_id, limit),
+            )
+        return [
+            {
+                "timestamp": row["timestamp"],
+                "rssi": row["rssi"],
+                "snr": row.get("snr"),
+            }
+            for row in rows
+        ]
 
     async def get_by_source(
         self, source_id: str, limit: int = 100

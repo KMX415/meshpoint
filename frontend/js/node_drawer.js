@@ -9,25 +9,35 @@ class NodeDrawer {
         this._onViewOnMap = options.onViewOnMap || null;
         this._currentNode = null;
         this._sections = {};
+        this._metricsChart = null;
+        this._metricsHours = 24;
     }
 
     async open(node) {
         this._currentNode = node;
+        this._metricsHours = 24;
         this._renderSkeleton(node);
         this._drawer.classList.add('nd-drawer--open');
 
-        const [detail, telemetry] = await Promise.all([
+        const [detail, metrics] = await Promise.all([
             this._fetchDetail(node.node_id),
-            this._fetchTelemetry(node.node_id),
+            this._fetchMetricsHistory(node.node_id, this._metricsHours),
         ]);
 
         const merged = { ...node, ...detail };
-        if (telemetry) merged._telemetryHistory = telemetry;
+        merged._metricsHistory = metrics;
+        if (metrics.telemetry && metrics.telemetry.length > 0) {
+            merged._telemetryHistory = metrics.telemetry.slice().reverse();
+        }
         this._currentNode = merged;
         this._renderFull(merged);
     }
 
     close() {
+        if (this._metricsChart) {
+            this._metricsChart.destroy();
+            this._metricsChart = null;
+        }
         this._drawer.classList.remove('nd-drawer--open');
         this._currentNode = null;
     }
@@ -66,6 +76,7 @@ class NodeDrawer {
 
         body.innerHTML = '';
         body.appendChild(this._buildActions(n));
+        body.appendChild(this._buildMetricsChartSection(n));
         body.appendChild(this._buildInfoSection(n));
         body.appendChild(this._buildSignalSection(n));
         body.appendChild(this._buildDeviceMetrics(n));
@@ -114,6 +125,116 @@ class NodeDrawer {
         return this._buildSection('Node Info', rows, true);
     }
 
+    _buildMetricsChartSection(n) {
+        const section = document.createElement('div');
+        section.className = 'nd-section nd-section--chart';
+
+        const header = document.createElement('div');
+        header.className = 'nd-section__header';
+        header.innerHTML = `<span class="nd-section__title">Metrics over time</span>
+            <span class="nd-section__arrow">\u25BC</span>`;
+
+        const content = document.createElement('div');
+        content.className = 'nd-section__content nd-metrics';
+
+        const range = document.createElement('div');
+        range.className = 'nd-metrics__range';
+        range.setAttribute('role', 'group');
+        range.setAttribute('aria-label', 'Time range');
+        const ranges = [
+            { h: 1, label: '1H' },
+            { h: 6, label: '6H' },
+            { h: 24, label: '24H' },
+            { h: null, label: 'All' },
+        ];
+        ranges.forEach(({ h, label }) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'nd-metrics__range-btn';
+            btn.textContent = label;
+            if (h === this._metricsHours) btn.classList.add('nd-metrics__range-btn--active');
+            if (h === null && this._metricsHours === null) {
+                btn.classList.add('nd-metrics__range-btn--active');
+            }
+            btn.addEventListener('click', () => this._onMetricsRangeChange(n.node_id, h, range));
+            range.appendChild(btn);
+        });
+        content.appendChild(range);
+
+        const wrap = document.createElement('div');
+        wrap.className = 'nd-metrics__chart-wrap';
+        const canvas = document.createElement('canvas');
+        canvas.className = 'nd-metrics__canvas';
+        canvas.setAttribute('role', 'img');
+        canvas.setAttribute('aria-label', 'Node metrics chart');
+        wrap.appendChild(canvas);
+        content.appendChild(wrap);
+
+        const hint = document.createElement('p');
+        hint.className = 'nd-metrics__hint';
+        hint.textContent =
+            'Built from telemetry packets and per-packet RSSI. Click legend labels to show or hide lines (RSSI is off by default when there are many points).';
+        content.appendChild(hint);
+
+        const empty = document.createElement('div');
+        empty.className = 'nd-metrics__empty';
+        empty.style.display = 'none';
+        empty.textContent = 'Not enough history yet. Values appear as telemetry packets arrive.';
+        content.appendChild(empty);
+
+        if (window.NodeMetricsChart) {
+            this._metricsChart = new NodeMetricsChart(canvas);
+            const ok = this._metricsChart.render(n._metricsHistory);
+            if (!ok) {
+                wrap.style.display = 'none';
+                empty.style.display = 'block';
+            }
+        } else {
+            wrap.style.display = 'none';
+            empty.style.display = 'block';
+            empty.textContent = 'Chart library not loaded.';
+        }
+
+        header.addEventListener('click', () => {
+            const visible = content.style.display !== 'none';
+            content.style.display = visible ? 'none' : '';
+            header.querySelector('.nd-section__arrow').textContent = visible ? '\u25B6' : '\u25BC';
+        });
+
+        section.appendChild(header);
+        section.appendChild(content);
+        return section;
+    }
+
+    async _onMetricsRangeChange(nodeId, hours, rangeEl) {
+        this._metricsHours = hours;
+        rangeEl.querySelectorAll('.nd-metrics__range-btn').forEach((btn) => {
+            btn.classList.remove('nd-metrics__range-btn--active');
+        });
+        const labels = { 1: '1H', 6: '6H', 24: '24H' };
+        const activeLabel = hours == null ? 'All' : labels[hours];
+        rangeEl.querySelectorAll('.nd-metrics__range-btn').forEach((btn) => {
+            if (btn.textContent === activeLabel) {
+                btn.classList.add('nd-metrics__range-btn--active');
+            }
+        });
+
+        const metrics = await this._fetchMetricsHistory(nodeId, hours);
+        if (this._currentNode) {
+            this._currentNode._metricsHistory = metrics;
+            this._currentNode._telemetryHistory = (metrics.telemetry || []).slice().reverse();
+        }
+        if (this._metricsChart) {
+            const wrap = this._drawer.querySelector('.nd-metrics__chart-wrap');
+            const empty = this._drawer.querySelector('.nd-metrics__empty');
+            const ok = this._metricsChart.render(metrics);
+            if (wrap && empty) {
+                wrap.style.display = ok ? '' : 'none';
+                empty.style.display = ok ? 'none' : 'block';
+            }
+        }
+    }
+
     _buildSignalSection(n) {
         const rssi = n.latest_rssi ?? n.rssi;
         const snr = n.latest_snr ?? n.snr;
@@ -158,12 +279,20 @@ class NodeDrawer {
         const temp = n.latest_temperature;
         const hum = n.latest_humidity;
 
-        if (temp != null) rows.push(['Temperature', `${temp.toFixed(1)}\u00B0F`]);
+        if (temp != null) {
+            const tempLabel = window.MeshpointDisplayUnits
+                ? window.MeshpointDisplayUnits.formatTemperature(temp)
+                : `${temp.toFixed(1)}\u00B0F`;
+            if (tempLabel) rows.push(['Temperature', tempLabel]);
+        }
         if (hum != null) rows.push(['Humidity', `${hum.toFixed(0)}%`]);
 
         if (temp != null && hum != null) {
-            const dp = this._dewPoint(temp, hum);
-            rows.push(['Dew Point', `${dp.toFixed(1)}\u00B0F`]);
+            const dpC = this._dewPointCelsius(temp, hum);
+            const dpLabel = window.MeshpointDisplayUnits
+                ? window.MeshpointDisplayUnits.formatTemperature(dpC)
+                : `${(dpC * 9 / 5 + 32).toFixed(1)}\u00B0F`;
+            if (dpLabel) rows.push(['Dew Point', dpLabel]);
         }
 
         const telem = n._telemetryHistory;
@@ -181,7 +310,12 @@ class NodeDrawer {
         const rows = [];
         if (n.latitude != null) rows.push(['Latitude', n.latitude.toFixed(6)]);
         if (n.longitude != null) rows.push(['Longitude', n.longitude.toFixed(6)]);
-        if (n.altitude != null) rows.push(['Altitude', `${Math.round(n.altitude)} ft`]);
+        if (n.altitude != null) {
+            const altLabel = window.MeshpointDisplayUnits
+                ? window.MeshpointDisplayUnits.formatAltitude(n.altitude)
+                : `${Math.round(n.altitude)} ft`;
+            if (altLabel) rows.push(['Altitude', altLabel]);
+        }
 
         return this._buildSection('Position', rows, rows.length > 0);
     }
@@ -230,13 +364,16 @@ class NodeDrawer {
         } catch { return {}; }
     }
 
-    async _fetchTelemetry(nodeId) {
+    async _fetchMetricsHistory(nodeId, hours) {
         try {
-            const res = await fetch(`/api/telemetry/${nodeId}`);
-            if (!res.ok) return [];
-            const data = await res.json();
-            return Array.isArray(data) ? data : data.history || [];
-        } catch { return []; }
+            let url = `/api/nodes/${encodeURIComponent(nodeId)}/metrics_history?limit=500`;
+            if (hours != null) url += `&hours=${hours}`;
+            const res = await fetch(url);
+            if (!res.ok) return { telemetry: [], signal: [] };
+            return await res.json();
+        } catch {
+            return { telemetry: [], signal: [] };
+        }
     }
 
     _signalQuality(rssi) {
@@ -257,12 +394,12 @@ class NodeDrawer {
         return String(role).toUpperCase();
     }
 
-    _dewPoint(tempF, humidity) {
-        const tc = (tempF - 32) * 5 / 9;
-        const a = 17.27, b = 237.7;
-        const alpha = (a * tc) / (b + tc) + Math.log(humidity / 100);
-        const dpC = (b * alpha) / (a - alpha);
-        return dpC * 9 / 5 + 32;
+    /** @param {number} tempC stored Meshtastic environment temperature (Celsius). */
+    _dewPointCelsius(tempC, humidity) {
+        const a = 17.27;
+        const b = 237.7;
+        const alpha = (a * tempC) / (b + tempC) + Math.log(humidity / 100);
+        return (b * alpha) / (a - alpha);
     }
 
     _formatDate(ts) {

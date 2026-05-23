@@ -4,6 +4,68 @@
 
 Queued for the next version bump. Bullets in this section will be folded into the release header (and dated) when the version is cut.
 
+- **MeshCore contact roster at startup.** The USB companion often returns 0 contacts on the first fetch right after connect; a deferred ~20s retry logs the full peer list and syncs friendly names into SQLite. Packet-driven enrichment no longer limits name updates to only the node that triggered the last packet.
+- **GPS configuration page crash.** Fixed a template-literal typo in the GPS card that threw `"... Native " is not a function` on load (markdown-style backticks inside a JS string).
+- **Node card temperature units.** Telemetry temperature is stored in Celsius from Meshtastic; the dashboard now converts to Fahrenheit by default instead of labeling Celsius values as °F.
+- **Display unit preferences.** Settings > Meshpoint adds browser-local toggles for °F/°C and miles-feet vs km-m (node cards, drawer, packet feed).
+- **Sidebar scroll when menus expand.** Nav column now scrolls inside the rail so expanded Configuration items do not clip the telemetry rail or Sign out footer.
+- **Sidebar active accent bar position.** Green route indicator is anchored to the nav list (`top: 0` on the bar plus nav-relative offset math), not the bottom of the menu DOM or the full sidebar column, so it lines up with Dashboard / Stats / Messages instead of sitting down by Settings.
+- **Top bar MeshCore companion chip.** When `meshcore_usb` is enabled, the header shows a purple-grouped readout: green/red online lamp, companion name, frequency, and primary channel name (from configured keys).
+- **Top bar Meshtastic chip.** Replaces the separate ONLINE lamp, CALL badge, and radio pill with one cyan-grouped chip: `Meshtastic |` dashboard connection lamp, short name (no CALL label), region, frequency, and preset. Border glow is always on (not hover-only); MeshCore chip uses the same permanent glow treatment. Protocol chips show connection state with a colored dot only (no ONLINE/OFFLINE text).
+- **Messages empty-state copy.** Replaced jargon ("payload", "copy is on") with plain instructions: pick a conversation, use All/MT/MC filters, copy text by highlighting.
+- **Node drawer metrics charts.** New `GET /api/nodes/{id}/metrics_history` returns telemetry rows plus per-packet RSSI history. The node detail drawer plots battery, voltage, channel/air util, temperature, and RSSI over time (1H / 6H / 24H / All), similar to Meshtastic device metrics. Legend click toggles each series; RSSI stays hidden by default when dense so telemetry lines stay readable.
+- **Updates: Check for updates.** Settings > Updates adds a button that runs `git fetch` and reports how many commits the install is behind the selected channel (e.g. `12 commits behind origin/feat/v0.7.4. Last checked 2 minutes ago.`), so you can decide when to Apply. Compares against the channel picker (not only the branch currently checked out).
+- **Radio preset display after save.** Saving a modem preset now updates in-memory config immediately; the observational Radio tab and Configuration editor refresh when the top bar polls without requiring a full browser hard refresh.
+- **Settings copy.** Post-save restart toasts and terminal hints no longer reference the retired Dangerous label; use Settings > Meshpoint and plain "confirm" wording for high-impact actions.
+- **Updates rollback button.** Roll back last apply stays enabled after a successful apply and dashboard reload. Pre-update SHA is captured with `sudo git` on the Pi and persisted under `data/update_rollback.json`.
+- **Check for updates commit counts.** `git rev-list` is now allowed in `config/sudoers-meshpoint`. Older Pis fall back to `git log --oneline` when `rev-list` is still denied, so "N commits behind" works after fetch.
+- **Configuration kitchen sink (RC).** Dashboard editors for full MQTT (`publish_channels`, JSON mirror, HA discovery, location precision, credentials), Meshradar upstream URL/key/reconnect (no uplink disable toggle), device/GPS placement, storage/relay/radio-advanced/MeshCore USB under **Advanced**, and native TX enable on **Transmit**. `GET /api/config` returns enriched sections for the panel loaders.
+- **MQTT broker TLS (deferred).** Configuration → MQTT exposes broker host, port, credentials, allowlist, JSON mirror, and HA options per `docs/MQTT-AND-MESHRADAR.md`. Transport TLS (`mqtts`, CA bundle, cert validation) is not implemented: `mqtt_publisher.py` uses plain TCP only. Planned for the same release vehicle as **Meshtastic PKI** (shared crypto/config touchpoints). Until then use plain port 1883 (e.g. `mqtt.meshtastic.org`) or a LAN broker without TLS.
+
+### v0.7.4 (May 2026)
+
+Major dashboard release on branch `feat/v0.7.4` (pick **Release candidate (v0.7.4)** in Settings > Updates, or `git checkout feat/v0.7.4` on the Pi). Builds on v0.7.3 auth: every page and API call stays behind the login cookie. Edge-only, pure Python, no concentrator recompile. **RC status:** hardware-validated in parts on RAK V2; full sign-off matrix in `docs/plans/v0.7.4-tests/` is not complete yet. Version bump to `0.7.4` and merge to `main` are still pending.
+
+#### Dashboard shell and navigation
+
+- **New sidebar IA.** Persistent nav for Dashboard, Messages, Stats, Radio (read-only RF telemetry), Terminal, Configuration (Identity / Radio / Channels / MeshCore / Transmit / MQTT / GPS), and Settings (Updates / Auth / Meshpoint). FLIP accent bar, `g`+letter shortcuts, tablet click-outside-to-collapse, and a larger framed Meshpoint logo with a websocket status pip.
+- **Top bar chrome.** Connection lamp, device identity, live radio summary chip, build stamp, and sign-out control stay visible on every route.
+- **Polish layer (Sprints A–D).** Sidebar noise-floor sparkline and reconnect storyboard; live browser-tab title; per-page init checklist and route fade-ins; Ctrl+K command palette and `?` keymap overlay; optional sound engine; high-contrast and sunlight themes; terminal ASCII splash and "since you last looked" delta line.
+- **Responsive fixes.** Stats section scrolls on tablet; map keeps zero page-level horizontal scroll; KPI strip scrolls inside its card; packets feed height is bounded so live traffic no longer buries the map; phone landscape keeps map + node panel visible; mobile drawer scrolls end-to-end with `100dvh` and safe-area padding so Sign Out clears the iOS Safari toolbar.
+- **Sidebar badges.** Radio shows a live NodeInfo TX countdown; Messages counts **unread DMs only** (not channel chatter), seeds from the server, and clears when you open a conversation.
+- **Node list online dot.** Green/grey indicator now uses a **2-hour** "recently heard" window (Meshtastic-style) instead of 15 minutes, so nodes at "18m ago" are not mislabeled offline while the timestamp still looks fresh. UTC-safe parsing for SQLite timestamps without a `Z` suffix.
+
+#### Auth (extends v0.7.3)
+
+- **Settings > Auth.** Change admin password (rotates JWT secret and forces re-login), sign out everywhere (bumps session version), enable/configure viewer read-only login, tune failed-login lockout attempts and cooldown, and adjust session lifetime from the dashboard.
+- **Audit trail.** Admin actions append JSON lines to `data/admin_audit.jsonl` (config saves, auth changes, dangerous invokes, terminal commands, update apply). Sensitive fields are redacted.
+
+#### Configuration and MQTT
+
+- **Configuration editors.** Identity (names + pinned node ID), Radio (region, preset, MHz/slot, hop limit), Channels (PSK table with PR #38 delete pattern), MeshCore (companion keys, Send Advert, Refresh), Transmit (TX power, duty, relay limits), and MQTT (broker, topic root, region segment, encryption toggle). Top-level **Radio** tab is observational only; all edits live under Configuration.
+- **MQTT API wired.** `PUT /api/config/mqtt` and `mqtt` on `GET /api/config` map dashboard fields to `local.yaml` (`broker_host`, `region_segment`, `encrypted`, optional `gateway_id`). Service restart required for the publisher to reconnect. GPS editor UI remains a stub (no `PUT /api/config/gps` yet).
+
+#### Web terminal, updates, and Meshpoint actions
+
+- **Web terminal.** Browser-based shell (xterm.js) with Connect/Disconnect, command guide drawer (`?`), search overlay, and admin-only access. Commands are audited; dangerous invocations use a confirm modal (typed confirmation removed in favor of a simpler Confirm/Cancel flow).
+- **In-dashboard updates.** Settings > Updates lists installed version, git branch, and last check; **Apply** runs fetch/checkout/pip/install/restart with streamed progress. Release channel picker includes **Stable (main)**, **Release candidate (v0.7.4)** (`feat/v0.7.4`), and a guarded custom-branch path. Rollback endpoint restores a prior SHA after a failed apply (watchdog auto-rollback is follow-up work).
+- **Settings > Meshpoint** (formerly "Dangerous"). Confirm modal before restart service, clear local database, wipe phantom nodes, force NodeInfo broadcast, or in-process concentrator restart. Service restart uses a detached `systemctl` handoff so the API no longer reports failure while the process is exiting. `GET`/`PUT` transmit config correctly round-trips nested **relay** settings.
+
+#### MeshCore
+
+- **Faster peer discovery** via `NEW_CONTACT` events ([PR #55](https://github.com/KMX415/meshpoint/pull/55)).
+- **Friendly repeater names** instead of pubkey placeholders ([PR #54](https://github.com/KMX415/meshpoint/pull/54), [@timbot18](https://github.com/timbot18)): wider advert name aliases, placeholder cleanup migration, and throttled contact-list enrichment from the USB companion.
+- **Map and signal fixes.** MeshCore advertisements now write lat/lon into the node table; `rx_log_data` RSSI/SNR is stitched onto **advertisement** events (not only DMs); `get_contacts()` tolerates mixed-type companion payloads without crashing.
+
+#### Relay and RF telemetry
+
+- **Native onboard relay (experimental).** Meshtastic packets can be re-broadcast through the onboard SX1302 with identity preserved (`hop_limit` decrements, sender and ciphertext unchanged). Decoder now retains `raw_app_payload` so the relay path is not silently empty. See [docs/CONFIGURATION.md#smart-relay](docs/CONFIGURATION.md#smart-relay).
+- **Noise floor.** Sidebar telemetry uses a rolling minimum of `rssi - snr` (fixes endless "calibrating" on rural single-neighbour links). Optional SX1302 spectral scan when `radio.sx1261_spi_path` is set (off by default on RAK/SenseCap: SX1261 is not on a Pi-visible SPI bus). UI tooltips describe whether the readout is packet-derived or spectral-scan sourced.
+
+#### Internal
+
+- New dependencies and routes for auth config, dangerous actions, terminal PTY, update apply, MQTT config, meshcore contact enrichment, spectral scan service, and admin audit writer. Test suite at **679+** passing on the branch. RC testers: `scripts/smoke_v074_api.py` exercises the main config/auth/dangerous APIs when `MESHPOINT_PASSWORD` is set.
+
 ### v0.7.3.1 (May 13, 2026)
 
 Hotfix on top of v0.7.3 the same day. Reported by Willard on Discord ~3h after release: dashboard stuck on "Reconnecting..." with no data after upgrading. Two compounding bugs in the new auth path; a stale browser tab against an auth-required server is enough to trigger both.

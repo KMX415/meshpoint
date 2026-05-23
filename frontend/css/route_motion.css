@@ -1,0 +1,74 @@
+/* Route-change motion.
+ *
+ * Sprint C of the v0.7.4 polish bundle. When a section becomes
+ * active (via the sidebar router setting .section--active), every
+ * card-like child animates in with a small staggered delay. Pure
+ * CSS — no JavaScript hooks required.
+ *
+ * The .section element already plays a section-fade-in animation;
+ * this file adds finer-grained motion for the cards inside. */
+
+.section--active .stat-card,
+.section--active .panel,
+.section--active .r-card,
+.section--active .r-console,
+.section--active .r-observational-banner,
+.section--active .config-card,
+.section--active .auth-panel,
+.section--active .danger-card,
+.section--active .updates-panel {
+    animation: card-fade-in 220ms var(--ease-out-expo) backwards;
+}
+
+@keyframes card-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Stagger delays. Six steps cover most pages; cards beyond #6
+ * inherit the last delay so very long lists don't drift far behind
+ * the user's eye. */
+.section--active .stat-card:nth-child(1),
+.section--active .panel:nth-child(1),
+.section--active .r-card:nth-child(1) { animation-delay: 0ms; }
+
+.section--active .stat-card:nth-child(2),
+.section--active .panel:nth-child(2),
+.section--active .r-card:nth-child(2) { animation-delay: 35ms; }
+
+.section--active .stat-card:nth-child(3),
+.section--active .panel:nth-child(3),
+.section--active .r-card:nth-child(3) { animation-delay: 70ms; }
+
+.section--active .stat-card:nth-child(4),
+.section--active .panel:nth-child(4),
+.section--active .r-card:nth-child(4) { animation-delay: 105ms; }
+
+.section--active .stat-card:nth-child(5),
+.section--active .panel:nth-child(5),
+.section--active .r-card:nth-child(5) { animation-delay: 140ms; }
+
+.section--active .stat-card:nth-child(n+6),
+.section--active .panel:nth-child(n+6),
+.section--active .r-card:nth-child(n+6) { animation-delay: 175ms; }
+
+/* Honor reduced-motion preferences. */
+@media (prefers-reduced-motion: reduce) {
+    .section--active .stat-card,
+    .section--active .panel,
+    .section--active .r-card,
+    .section--active .r-console,
+    .section--active .r-observational-banner,
+    .section--active .config-card,
+    .section--active .auth-panel,
+    .section--active .danger-card,
+    .section--active .updates-panel {
+        animation: none;
+    }
+}

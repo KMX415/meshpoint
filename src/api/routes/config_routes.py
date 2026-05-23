@@ -7,6 +7,8 @@ flag restart_required in the response.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
 import subprocess
 from typing import Optional
@@ -14,8 +16,9 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from src.api.routes import nodeinfo_routes
+from src.api.routes import config_enrichment, mqtt_config_routes, nodeinfo_routes
 from src.config import AppConfig, save_section_to_yaml
+from src.models.device_identity import DeviceIdentity
 from src.radio.presets import (
     REGION_DEFAULTS,
     SUPPORTED_REGIONS,
@@ -32,17 +35,20 @@ router = APIRouter(prefix="/api/config", tags=["config"])
 _config: AppConfig | None = None
 _crypto = None
 _tx_service = None
+_identity: DeviceIdentity | None = None
 
 
 def init_routes(
     config: AppConfig,
     crypto=None,
     tx_service=None,
+    identity: DeviceIdentity | None = None,
 ) -> None:
-    global _config, _crypto, _tx_service
+    global _config, _crypto, _tx_service, _identity
     _config = config
     _crypto = crypto
     _tx_service = tx_service
+    _identity = identity
 
 
 @router.get("")
@@ -53,6 +59,7 @@ async def get_config():
 
     radio = _config.radio
     tx = _config.transmit
+    relay = _config.relay
     mt = _config.meshtastic
 
     current_preset = preset_from_params(
@@ -61,7 +68,12 @@ async def get_config():
 
     channels = _build_channel_list(mt)
 
-    mc_status = {"connected": False, "companion_name": "", "radio": {}}
+    mc_status = {
+        "connected": False,
+        "companion_name": "",
+        "radio": {},
+        "companion_expected": "meshcore_usb" in (_config.capture.sources or []),
+    }
     if _tx_service and hasattr(_tx_service, "_meshcore_tx"):
         mc_tx = _tx_service._meshcore_tx
         if mc_tx and mc_tx.connected:
@@ -78,6 +90,10 @@ async def get_config():
                     }
             except Exception:
                 pass
+    mc_status["channel_keys"] = [
+        {"name": name, "key_hex": key}
+        for name, key in (_config.meshcore.channel_keys.items() if _config else [])
+    ]
 
     duty_info = {"used_percent": 0.0, "remaining_ms": 0}
     if _tx_service and hasattr(_tx_service, "_duty"):
@@ -98,7 +114,7 @@ async def get_config():
 
     node_id_hex = f"!{resolved_node_id:08x}" if resolved_node_id else ""
 
-    return {
+    payload = {
         "radio": {
             "region": radio.region,
             "frequency_mhz": radio.frequency_mhz,
@@ -124,8 +140,19 @@ async def get_config():
             "long_name": tx.long_name,
             "short_name": tx.short_name,
             "hop_limit": tx.hop_limit,
+            "relay": {
+                "enabled": relay.enabled,
+                "max_relay_per_minute": relay.max_relay_per_minute,
+            },
+        },
+        "relay": {
+            "enabled": relay.enabled,
+            "max_relay_per_minute": relay.max_relay_per_minute,
         },
         "nodeinfo": nodeinfo_routes.build_nodeinfo_status(tx.nodeinfo),
+        "mqtt": mqtt_config_routes.build_mqtt_status(
+            _config.mqtt, _config.device.device_name or "meshpoint"
+        ),
         "channels": channels,
         "meshcore": mc_status,
         "duty_cycle": duty_info,
@@ -135,6 +162,12 @@ async def get_config():
             for r, d in REGION_DEFAULTS.items()
         ],
     }
+    return config_enrichment.enrich_config_payload(_config, payload)
+
+
+class RelaySettingsUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    max_relay_per_minute: Optional[int] = None
 
 
 class TransmitUpdate(BaseModel):
@@ -142,6 +175,7 @@ class TransmitUpdate(BaseModel):
     tx_power_dbm: Optional[int] = None
     max_duty_cycle_percent: Optional[float] = None
     hop_limit: Optional[int] = None
+    relay: Optional[RelaySettingsUpdate] = None
 
 
 @router.put("/transmit")
@@ -150,8 +184,10 @@ async def update_transmit(req: TransmitUpdate):
     if _config is None:
         raise HTTPException(503, "Config not loaded")
 
-    updates = {}
+    updates: dict = {}
+    relay_updates: dict = {}
     tx = _config.transmit
+    relay = _config.relay
     restart_needed = False
 
     if req.enabled is not None:
@@ -174,13 +210,38 @@ async def update_transmit(req: TransmitUpdate):
         tx.hop_limit = req.hop_limit
         updates["hop_limit"] = req.hop_limit
 
-    if updates:
-        try:
-            save_section_to_yaml("transmit", updates)
-        except PermissionError as exc:
-            raise HTTPException(403, str(exc))
+    if req.relay is not None:
+        if req.relay.enabled is not None:
+            relay.enabled = req.relay.enabled
+            relay_updates["enabled"] = req.relay.enabled
+            restart_needed = True
+        if req.relay.max_relay_per_minute is not None:
+            if not 0 <= req.relay.max_relay_per_minute <= 600:
+                raise HTTPException(400, "Relay rate must be 0-600 per minute")
+            relay.max_relay_per_minute = req.relay.max_relay_per_minute
+            relay_updates["max_relay_per_minute"] = req.relay.max_relay_per_minute
+            restart_needed = True
 
-    return {"saved": True, "restart_required": restart_needed, "updates": updates}
+    try:
+        if updates:
+            save_section_to_yaml("transmit", updates)
+        if relay_updates:
+            save_section_to_yaml("relay", relay_updates)
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc))
+
+    response_updates = dict(updates)
+    if relay_updates:
+        response_updates["relay"] = relay_updates
+
+    if not response_updates:
+        return {"saved": False, "restart_required": False, "updates": {}}
+
+    return {
+        "saved": True,
+        "restart_required": restart_needed,
+        "updates": response_updates,
+    }
 
 
 class IdentityUpdate(BaseModel):
@@ -204,11 +265,15 @@ async def update_identity(req: IdentityUpdate):
             raise HTTPException(400, "Long name max 36 characters")
         tx.long_name = req.long_name
         updates["long_name"] = req.long_name
+        if _identity is not None:
+            _identity.long_name = req.long_name
     if req.short_name is not None:
         if len(req.short_name) > 4:
             raise HTTPException(400, "Short name max 4 characters")
         tx.short_name = req.short_name
         updates["short_name"] = req.short_name
+        if _identity is not None:
+            _identity.short_name = req.short_name
     if req.node_id is not None:
         tx.node_id = req.node_id
         updates["node_id"] = req.node_id
@@ -287,6 +352,8 @@ async def update_radio(req: RadioUpdate):
         updates["frequency_mhz"] = REGION_DEFAULTS[req.region]["frequency_mhz"]
 
     if updates:
+        for key, val in updates.items():
+            setattr(radio, key, val)
         try:
             save_section_to_yaml("radio", updates)
         except PermissionError as exc:
@@ -346,6 +413,63 @@ async def update_channels(req: ChannelsUpdate):
         "saved": True,
         "restart_required": False,
         "channel_count": len(channel_keys) + 1,
+    }
+
+
+class McChannelEntry(BaseModel):
+    name: str
+    key_hex: str
+
+
+class McChannelsUpdate(BaseModel):
+    channels: list[McChannelEntry]
+
+
+@router.put("/meshcore/channels")
+async def update_meshcore_channels(req: McChannelsUpdate):
+    """Update MeshCore channel keys (stored as hex). No restart required."""
+    if _config is None:
+        raise HTTPException(503, "Config not loaded")
+
+    channel_keys: dict[str, str] = {}
+    for ch in req.channels:
+        if not ch.name or not ch.key_hex:
+            continue
+        try:
+            binascii.unhexlify(ch.key_hex)
+        except (ValueError, binascii.Error):
+            raise HTTPException(400, f"Invalid hex key for channel '{ch.name}'")
+        channel_keys[ch.name] = ch.key_hex
+
+    _config.meshcore.channel_keys = channel_keys
+    try:
+        save_section_to_yaml("meshcore", {"channel_keys": channel_keys})
+    except PermissionError as exc:
+        raise HTTPException(403, str(exc))
+    logger.info(
+        "MeshCore channels updated: %d channel(s) — %s",
+        len(channel_keys),
+        ", ".join(channel_keys) or "none",
+    )
+
+    if _tx_service and hasattr(_tx_service, "_meshcore_tx"):
+        mc_tx = _tx_service._meshcore_tx
+        if mc_tx and mc_tx.connected:
+            import asyncio
+            asyncio.create_task(mc_tx.sync_channels(channel_keys))
+
+    if _crypto and hasattr(_crypto, "clear_channel_keys"):
+        _crypto.clear_channel_keys()
+        for name, key_b64 in _config.meshtastic.channel_keys.items():
+            _crypto.add_channel_key(name, key_b64)
+        for name, key_hex in channel_keys.items():
+            key_b64 = base64.b64encode(binascii.unhexlify(key_hex)).decode()
+            _crypto.add_channel_key(name, key_b64)
+
+    return {
+        "saved": True,
+        "restart_required": False,
+        "channel_count": len(channel_keys),
     }
 
 

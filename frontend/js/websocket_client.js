@@ -102,13 +102,15 @@ class ConcentratorWebSocket {
     }
 
     _updateStatusIndicator(connected) {
-        const dot = document.getElementById('ws-status');
-        const label = document.getElementById('ws-label');
-        if (dot && label) {
-            dot.className = connected
+        const sidebarDot = document.getElementById('sidebar-status-dot');
+        const sidebarText = document.getElementById('sidebar-status-text');
+        if (sidebarDot) {
+            sidebarDot.className = connected
                 ? 'status-dot status-dot--connected'
                 : 'status-dot status-dot--disconnected';
-            label.textContent = connected ? 'Connected' : 'Reconnecting...';
+        }
+        if (sidebarText && !connected) {
+            sidebarText.textContent = 'reconnecting...';
         }
     }
 }

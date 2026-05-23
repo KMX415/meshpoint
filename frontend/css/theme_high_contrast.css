@@ -1,0 +1,80 @@
+/* High-contrast and sunlight themes.
+ *
+ * Both override the small set of CSS variables that the rest of the
+ * stylesheets read for color decisions. Anything that hardcodes RGB
+ * values stays put — these themes are about lifting contrast for
+ * dim/cluttered/outdoor viewing, not about replacing the palette
+ * wholesale. */
+
+html[data-theme="high-contrast"] {
+    --text-primary: #ffffff;
+    --text-secondary: #e6f1ff;
+    --text-muted: #c0d0e8;
+    --accent-cyan: #5feaff;
+    --accent-amber: #ffc857;
+    --accent-green: #5dffc1;
+    --accent-red: #ff7a7a;
+    --bg-primary: #04060c;
+    --bg-secondary: #0b1424;
+    --sidebar-bg: #050912;
+    --sidebar-border: rgba(255, 255, 255, 0.16);
+    --sidebar-item-hover: rgba(95, 234, 255, 0.12);
+    --sidebar-text: #ffffff;
+    --sidebar-text-muted: #c0d0e8;
+}
+
+html[data-theme="high-contrast"] .stat-card,
+html[data-theme="high-contrast"] .panel,
+html[data-theme="high-contrast"] .r-card {
+    border-color: rgba(255, 255, 255, 0.16) !important;
+    box-shadow:
+        0 0 0 1px rgba(95, 234, 255, 0.08),
+        0 4px 14px rgba(0, 0, 0, 0.7) !important;
+}
+
+html[data-theme="high-contrast"] .since-line,
+html[data-theme="high-contrast"] .keymap__panel,
+html[data-theme="high-contrast"] .cmd-palette__panel {
+    border-color: rgba(95, 234, 255, 0.45) !important;
+}
+
+/* Sunlight: brighter background, thicker strokes, max contrast for
+ * outdoor screen readability. Still dark-ish to avoid a jarring
+ * full inversion. */
+html[data-theme="sunlight"] {
+    --text-primary: #f7fbff;
+    --text-secondary: #d6e5ff;
+    --text-muted: #93a4c1;
+    --accent-cyan: #00f5ff;
+    --accent-amber: #ffd166;
+    --accent-green: #00ffa8;
+    --accent-red: #ff6b6b;
+    --bg-primary: #0a1224;
+    --bg-secondary: #14213b;
+    --sidebar-bg: #0a1428;
+    --sidebar-border: rgba(0, 245, 255, 0.25);
+    --sidebar-item-hover: rgba(0, 245, 255, 0.16);
+    --sidebar-text: #f7fbff;
+    --sidebar-text-muted: #93a4c1;
+}
+
+html[data-theme="sunlight"] .stat-card,
+html[data-theme="sunlight"] .panel,
+html[data-theme="sunlight"] .r-card {
+    border-width: 1.5px !important;
+    border-color: rgba(0, 245, 255, 0.3) !important;
+}
+
+html[data-theme="sunlight"] .stat-card__value,
+html[data-theme="sunlight"] .r-readout-grid dd {
+    text-shadow: 0 0 10px rgba(0, 245, 255, 0.35);
+}
+
+/* Honor system high-contrast preference automatically when the user
+ * hasn't picked a theme. */
+@media (prefers-contrast: more) {
+    html:not([data-theme]) {
+        --text-primary: #ffffff;
+        --text-secondary: #e6f1ff;
+    }
+}

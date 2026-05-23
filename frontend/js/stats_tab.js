@@ -87,8 +87,8 @@ class StatsTab {
 
         if (!this._refreshInterval) {
             this._refreshInterval = setInterval(() => {
-                const tab = document.getElementById('tab-stats');
-                if (tab && tab.classList.contains('tab-content--active')) {
+                const section = document.querySelector('[data-section="stats"]');
+                if (section && section.classList.contains('section--active')) {
                     this.refresh();
                 } else {
                     clearInterval(this._refreshInterval);

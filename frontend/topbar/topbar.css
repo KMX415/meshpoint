@@ -1,0 +1,363 @@
+/* Topbar — chrome strip pinned above every section.
+ *
+ * Layout: Meshtastic + MeshCore protocol chips, spacer, actions.
+ * 48px tall on desktop, 44px under 720px.
+ *
+ * Protocol chips use a permanent border glow (not hover-only). */
+
+.topbar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.4rem 1rem;
+    min-height: 48px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(
+        180deg,
+        rgba(15, 22, 36, 0.85) 0%,
+        rgba(15, 22, 36, 0.65) 100%
+    );
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    position: relative;
+    z-index: 30;
+}
+
+.topbar::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 1px;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(6, 182, 212, 0.45) 50%,
+        transparent 100%
+    );
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.topbar__group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.topbar__spacer {
+    flex: 1 1 auto;
+}
+
+/* --- Meshtastic chip (cyan group, permanent glow) ----------------- */
+
+.topbar-meshtastic {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.25rem 0.55rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(6, 182, 212, 0.45);
+    background: rgba(6, 182, 212, 0.08);
+    box-shadow:
+        0 0 14px rgba(6, 182, 212, 0.22),
+        inset 0 0 18px rgba(6, 182, 212, 0.05);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+.topbar-meshtastic:hover {
+    border-color: rgba(6, 182, 212, 0.55);
+    box-shadow:
+        0 0 18px rgba(6, 182, 212, 0.32),
+        inset 0 0 22px rgba(6, 182, 212, 0.07);
+}
+
+.topbar-meshtastic--unknown { opacity: 0.55; }
+
+.topbar-meshtastic__brand {
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent-cyan);
+    text-shadow: 0 0 8px rgba(6, 182, 212, 0.4);
+    border-right: 1px solid rgba(6, 182, 212, 0.28);
+    padding-right: 0.45rem;
+    margin-right: 0.05rem;
+}
+
+.topbar-meshtastic__lamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.topbar-meshtastic__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.topbar-meshtastic__lamp--online .topbar-meshtastic__dot {
+    background: var(--accent-green, #00e5a0);
+    box-shadow:
+        0 0 8px rgba(0, 229, 160, 0.75),
+        0 0 14px rgba(0, 229, 160, 0.35);
+    animation: topbar-meshtastic-pulse 2.4s ease-in-out infinite;
+}
+
+.topbar-meshtastic__lamp--offline .topbar-meshtastic__dot {
+    background: var(--accent-red, #ef4444);
+    box-shadow:
+        0 0 6px rgba(239, 68, 68, 0.55),
+        0 0 10px rgba(239, 68, 68, 0.2);
+}
+
+.topbar-meshtastic__lamp--reconnecting .topbar-meshtastic__dot {
+    background: var(--accent-amber, #f59e0b);
+    animation: topbar-meshtastic-blink 0.9s steps(2, end) infinite;
+}
+
+.topbar-meshtastic__call {
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--text-primary);
+    text-shadow: 0 0 6px rgba(6, 182, 212, 0.2);
+    min-width: 3ch;
+}
+
+.topbar-meshtastic__call--flicker {
+    animation: topbar-meshtastic-flicker 280ms ease-out;
+}
+
+@keyframes topbar-meshtastic-flicker {
+    0%   { opacity: 1; }
+    20%  { opacity: 0.2; }
+    40%  { opacity: 0.95; }
+    60%  { opacity: 0.4; }
+    100% { opacity: 1; }
+}
+
+@keyframes topbar-meshtastic-pulse {
+    0%, 100% {
+        box-shadow: 0 0 8px rgba(0, 229, 160, 0.75);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 12px rgba(0, 229, 160, 0.95);
+        transform: scale(1.1);
+    }
+}
+
+@keyframes topbar-meshtastic-blink {
+    0% { opacity: 1; }
+    50% { opacity: 0.25; }
+    100% { opacity: 1; }
+}
+
+.topbar-meshtastic__sep {
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+.topbar-meshtastic__sep--bar {
+    opacity: 0.35;
+    margin: 0 0.05rem;
+}
+
+.topbar-meshtastic__region {
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.04em;
+}
+
+.topbar-meshtastic__freq {
+    color: var(--accent-cyan);
+    text-shadow: 0 0 8px rgba(6, 182, 212, 0.35);
+}
+
+.topbar-meshtastic__preset {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    border-left: 1px solid rgba(6, 182, 212, 0.22);
+    padding-left: 0.4rem;
+    margin-left: 0.05rem;
+}
+
+/* --- MeshCore companion chip (purple group, permanent glow) ------- */
+
+.topbar-meshcore {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.25rem 0.55rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(168, 85, 247, 0.45);
+    background: rgba(168, 85, 247, 0.08);
+    box-shadow:
+        0 0 14px rgba(168, 85, 247, 0.22),
+        inset 0 0 18px rgba(168, 85, 247, 0.05);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+.topbar-meshcore:hover {
+    border-color: rgba(168, 85, 247, 0.58);
+    box-shadow:
+        0 0 18px rgba(168, 85, 247, 0.32),
+        inset 0 0 22px rgba(168, 85, 247, 0.07);
+}
+
+.topbar-meshcore__brand {
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent-purple);
+    text-shadow: 0 0 8px rgba(168, 85, 247, 0.35);
+    border-right: 1px solid rgba(168, 85, 247, 0.25);
+    padding-right: 0.45rem;
+    margin-right: 0.05rem;
+}
+
+.topbar-meshcore__lamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.topbar-meshcore__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.topbar-meshcore__lamp--online .topbar-meshcore__dot {
+    background: var(--accent-green, #22c55e);
+    box-shadow:
+        0 0 6px rgba(34, 197, 94, 0.65),
+        0 0 12px rgba(34, 197, 94, 0.25);
+}
+
+.topbar-meshcore__lamp--offline .topbar-meshcore__dot {
+    background: var(--accent-red, #ef4444);
+    box-shadow:
+        0 0 6px rgba(239, 68, 68, 0.55),
+        0 0 10px rgba(239, 68, 68, 0.2);
+}
+
+.topbar-meshcore__lamp--reconnecting .topbar-meshcore__dot {
+    background: var(--accent-amber, #f59e0b);
+    animation: topbar-meshtastic-blink 0.9s steps(2, end) infinite;
+}
+
+.topbar-meshcore--reconnecting {
+    border-color: rgba(245, 158, 11, 0.45);
+    box-shadow:
+        0 0 12px rgba(245, 158, 11, 0.2),
+        inset 0 0 14px rgba(245, 158, 11, 0.04);
+}
+
+.topbar-meshcore__name {
+    font-weight: 600;
+    color: var(--text-primary);
+    max-width: 10rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.topbar-meshcore__sep {
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+.topbar-meshcore__freq {
+    color: var(--accent-purple);
+    text-shadow: 0 0 6px rgba(168, 85, 247, 0.25);
+}
+
+.topbar-meshcore__channel {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    border-left: 1px solid rgba(168, 85, 247, 0.2);
+    padding-left: 0.4rem;
+    margin-left: 0.05rem;
+    max-width: 8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.topbar-meshcore--offline .topbar-meshcore__freq,
+.topbar-meshcore--offline .topbar-meshcore__channel {
+    opacity: 0.55;
+}
+
+/* --- Action group ----------------------------------------------- */
+
+.topbar-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.topbar-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, color 0.15s,
+                transform 0.1s;
+}
+
+.topbar-action:hover {
+    border-color: var(--border);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--accent-cyan);
+}
+
+.topbar-action:active { transform: scale(0.94); }
+
+.topbar-action:focus-visible {
+    outline: none;
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.35);
+}
+
+/* --- Responsive -------------------------------------------------- */
+
+@media (max-width: 900px) {
+    .topbar { gap: 0.5rem; padding: 0.35rem 0.7rem; min-height: 44px; }
+    .topbar-meshtastic__preset { display: none; }
+    .topbar-meshcore__channel { display: none; }
+}
+
+@media (max-width: 600px) {
+    .topbar-meshtastic__region,
+    .topbar-meshtastic__freq,
+    .topbar-meshtastic__sep--bar,
+    .topbar-meshtastic__preset { display: none; }
+    .topbar-meshcore__name { max-width: 5rem; }
+    .topbar-meshtastic__call { font-size: 0.78rem; }
+}

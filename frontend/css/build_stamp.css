@@ -1,0 +1,51 @@
+/* Build/version stamp — muted bottom-right anchor on every page.
+ * Stays out of the way until you look for it. */
+
+.build-stamp {
+    position: fixed;
+    right: 0.75rem;
+    bottom: 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(15, 22, 36, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    pointer-events: none;
+    z-index: 25;
+    opacity: 0.55;
+    transition: opacity 0.2s;
+}
+
+.build-stamp:hover { opacity: 0.95; }
+
+.build-stamp__app {
+    color: var(--text-secondary);
+    letter-spacing: 0.1em;
+}
+
+.build-stamp__sep { color: var(--text-muted); opacity: 0.5; }
+
+.build-stamp__version {
+    color: var(--accent-cyan);
+    text-shadow: 0 0 6px rgba(6, 182, 212, 0.18);
+    letter-spacing: 0.04em;
+}
+
+/* Messages + Terminal keep primary actions at bottom-right; hide the stamp there */
+body:has(.section[data-section="messages"].section--active) .build-stamp,
+body:has(.section[data-section="terminal"].section--active) .build-stamp {
+    display: none;
+}
+
+@media (max-width: 600px) {
+    .build-stamp { display: none; }
+}

@@ -12,12 +12,54 @@ from src._so_compat_check import warn_if_stale_so_files
 from src.analytics.network_mapper import NetworkMapper
 from src.analytics.signal_analyzer import SignalAnalyzer
 from src.analytics.traffic_monitor import TrafficMonitor
+from src.api.audit import AuditLogWriter
+from src.api.audit import dependencies as audit_deps
 from src.api.auth import dependencies as auth_deps
 from src.api.auth.auth_bootstrap import AuthSubsystem, build_auth_subsystem
 from src.api.auth.dependencies import SESSION_COOKIE_NAME, require_auth
 from src.api.auth.jwt_session import JwtSessionService
 from src.api.auth.ws_guard import WS_AUTH_CLOSE_CODE, authenticate_websocket
-from src.api.routes import analytics, auth_routes, config_routes, device, identity_routes, messages, nodeinfo_routes, nodes, packets, stats_routes, system_metrics, telemetry, update_check
+from src.api.dangerous import DangerousActionRegistry
+from src.api.dangerous.handlers import (
+    build_clear_database_action,
+    build_force_nodeinfo_action,
+    build_restart_concentrator_action,
+    build_restart_service_action,
+    build_wipe_phantoms_action,
+)
+from src.api.meshcore_contacts import (
+    log_meshcore_contact_peers,
+    schedule_startup_meshcore_contact_sync,
+    setup_meshcore_contact_enrichment,
+    sync_meshcore_contacts_to_nodes,
+)
+from src.api.routes import (
+    analytics,
+    auth_config_routes,
+    auth_routes,
+    config_routes,
+    dangerous_routes,
+    device,
+    device_config_routes,
+    identity_routes,
+    messages,
+    mqtt_config_routes,
+    nodeinfo_routes,
+    nodes,
+    packets,
+    public_radar_routes,
+    stats_routes,
+    system_config_routes,
+    system_metrics,
+    telemetry,
+    terminal_routes,
+    upstream_config_routes,
+    update_check,
+    update_routes,
+)
+from src.api.terminal import CommandCatalog, SessionManager
+from src.api.update import ReleaseChannelRegistry, UpdateApplier
+from src.api.update.rollback_state import resolve_rollback_state_path
 from src.api.upstream_client import UpstreamClient
 from src.api.websocket_manager import WebSocketManager
 from src.config import AppConfig, load_config, validate_activation
@@ -26,6 +68,8 @@ from src.log_format import print_banner, print_packet, setup_logging
 from src.models.device_identity import DeviceIdentity, _stable_device_id
 from src.models.packet import Packet
 from src.storage.message_repository import MessageRepository
+from src.api.telemetry.noise_floor import NoiseFloorTracker
+from src.api.telemetry.spectral_scan_service import SpectralScanService
 from src.transmit.nodeinfo_broadcaster import (
     NodeInfoBroadcaster,
     clamp_interval_minutes,
@@ -40,6 +84,9 @@ ws_manager = WebSocketManager()
 pipeline: PipelineCoordinator | None = None
 upstream: UpstreamClient | None = None
 nodeinfo_broadcaster: NodeInfoBroadcaster | None = None
+noise_floor_tracker = NoiseFloorTracker()
+_noise_floor_emitter_task = None
+_spectral_scan_service: SpectralScanService | None = None
 
 
 def create_app(config: AppConfig | None = None) -> FastAPI:
@@ -48,7 +95,31 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     auth_subsystem = build_auth_subsystem(config)
     auth_routes.init_routes(auth_subsystem.service)
+    auth_config_routes.init_routes(auth_subsystem.service)
     auth_deps.init_auth(auth_subsystem.jwt_service)
+    audit_writer = AuditLogWriter()
+    audit_deps.init_audit(audit_writer)
+    session_manager = SessionManager(cwd="/opt/meshpoint")
+    terminal_routes.init_routes(
+        session_manager=session_manager,
+        command_catalog=CommandCatalog(),
+        jwt_service=auth_subsystem.jwt_service,
+        audit_writer=audit_writer,
+    )
+    update_routes.init_routes(
+        applier=UpdateApplier(
+            rollback_state_path=resolve_rollback_state_path(
+                config.storage.database_path,
+            ),
+        ),
+        registry=ReleaseChannelRegistry(),
+        changelog_path=Path(__file__).resolve().parents[2] / "docs" / "CHANGELOG.md",
+        rollback_state_path=resolve_rollback_state_path(
+            config.storage.database_path,
+        ),
+    )
+    # Dangerous registry is wired in lifespan so clear-db / wipe-phantoms /
+    # force-nodeinfo can close over the live pipeline objects.
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -58,6 +129,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         identity = DeviceIdentity(
             device_id=_stable_device_id(config.device.device_id),
             device_name=config.device.device_name,
+            long_name=config.transmit.long_name,
+            short_name=config.transmit.short_name,
             latitude=config.device.latitude,
             longitude=config.device.longitude,
             altitude=config.device.altitude,
@@ -67,6 +140,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         pipeline = _build_pipeline(config)
         pipeline.on_packet(_on_packet_received)
         pipeline.on_packet(lambda pkt: print_packet(pkt))
+        pipeline.on_packet(public_radar_routes.public_radar_packet_callback)
 
         if config.transmit.enabled:
             _inject_tx_gain_into_source(pipeline)
@@ -87,6 +161,16 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         _setup_message_interception(
             pipeline, message_repo, config, meshcore_tx_ref
         )
+        setup_meshcore_contact_enrichment(pipeline, meshcore_tx_ref)
+        if meshcore_tx_ref and meshcore_tx_ref.connected:
+            import asyncio
+            loop = asyncio.get_running_loop()
+            loop.create_task(
+                sync_meshcore_contacts_to_nodes(pipeline, meshcore_tx_ref)
+            )
+            schedule_startup_meshcore_contact_sync(
+                loop, pipeline, meshcore_tx_ref, mc_source
+            )
 
         upstream = UpstreamClient(
             config.upstream, identity,
@@ -99,16 +183,41 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         if nodeinfo_broadcaster is not None:
             await nodeinfo_broadcaster.start()
 
+        _wire_native_relay(pipeline, tx_service)
+
+        global _noise_floor_emitter_task
+        import asyncio
+        _noise_floor_emitter_task = asyncio.get_running_loop().create_task(
+            _noise_floor_emitter_loop(noise_floor_tracker, ws_manager)
+        )
+
+        global _spectral_scan_service
+        _spectral_scan_service = _build_spectral_scan_service(
+            pipeline, config, noise_floor_tracker,
+        )
+        if _spectral_scan_service is not None:
+            await _spectral_scan_service.start()
+
         _init_routes(
             pipeline, config, identity, auth_subsystem, tx_service, message_repo
         )
+        _init_dangerous_registry(pipeline)
         print_banner(config)
         logger.info("Meshpoint started -- listening for packets")
         yield
+        if _spectral_scan_service is not None:
+            await _spectral_scan_service.stop()
+        if _noise_floor_emitter_task is not None:
+            _noise_floor_emitter_task.cancel()
+            try:
+                await _noise_floor_emitter_task
+            except BaseException:
+                pass
         if nodeinfo_broadcaster is not None:
             await nodeinfo_broadcaster.stop()
         await upstream.stop()
         await pipeline.stop()
+        session_manager.shutdown()
         logger.info("Meshpoint stopped")
 
     app = FastAPI(
@@ -119,6 +228,11 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
     app.include_router(auth_routes.router)
     app.include_router(identity_routes.router)
+    app.include_router(auth_config_routes.router)
+    app.include_router(public_radar_routes.router)
+    app.include_router(terminal_routes.router)
+    app.include_router(update_routes.router)
+    app.include_router(dangerous_routes.router)
 
     protected = [Depends(require_auth)]
     app.include_router(nodes.router, dependencies=protected)
@@ -130,6 +244,10 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(update_check.router, dependencies=protected)
     app.include_router(messages.router, dependencies=protected)
     app.include_router(nodeinfo_routes.router, dependencies=protected)
+    app.include_router(mqtt_config_routes.router, dependencies=protected)
+    app.include_router(upstream_config_routes.router, dependencies=protected)
+    app.include_router(device_config_routes.router, dependencies=protected)
+    app.include_router(system_config_routes.router, dependencies=protected)
     app.include_router(config_routes.router, dependencies=protected)
     app.include_router(stats_routes.router, dependencies=protected)
 
@@ -220,6 +338,7 @@ def _add_concentrator_source(
                 spi_path=config.capture.concentrator_spi_device,
                 syncword=config.radio.sync_word,
                 radio_config=config.radio,
+                sx1261_spi_path=config.radio.sx1261_spi_path,
             )
         )
     except Exception:
@@ -272,6 +391,11 @@ def _build_tx_service(
         meshcore_tx.set_source(mc_source)
         meshcore_tx.set_post_command_callback(mc_source.restart_auto_fetching)
 
+        async def _sync_channels_on_connect():
+            await meshcore_tx.sync_channels(config.meshcore.channel_keys)
+
+        mc_source.set_connected_callback(_sync_channels_on_connect)
+
     wrapper = _get_concentrator_wrapper(coord)
     crypto = coord._crypto if hasattr(coord, "_crypto") else None
     channel_plan = _get_channel_plan(config)
@@ -292,6 +416,46 @@ def _build_tx_service(
         tx_svc.meshtastic_enabled, tx_svc.meshcore_enabled,
     )
     return tx_svc
+
+
+def _wire_native_relay(
+    coord: PipelineCoordinator, tx_service: TxService | None
+) -> None:
+    """Hook the native onboard SX1302 path into the relay manager.
+
+    When ``transmit.enabled`` is true the onboard radio is the
+    preferred relay backend: it preserves the original sender's
+    identity, shares duty-cycle accounting with outbound messaging,
+    and removes the need for a second USB-attached node.
+
+    The legacy ``MeshtasticTransmitter`` (USB-companion) wired by
+    :class:`PipelineCoordinator._setup_relay_transmitter` is left in
+    place; if both backends end up present, the native one wins
+    because it is registered second. A future cleanup can drop the
+    USB-companion path entirely once hardware-validated.
+    """
+    if tx_service is None or not tx_service.meshtastic_enabled:
+        return
+    relay = coord.relay_manager
+    if not relay.enabled:
+        return
+
+    async def _native_relay(packet):
+        from src.models.packet import Protocol
+        if packet.protocol != Protocol.MESHTASTIC:
+            return
+        if not packet.raw_radio_packet:
+            return
+        result = await tx_service.send_raw_relay(packet.raw_radio_packet)
+        if not result.success:
+            logger.debug(
+                "Native relay TX skipped: %s", result.error,
+            )
+
+    relay.set_transmit_function(_native_relay)
+    logger.info(
+        "Relay backend: native onboard SX1302 (identity-preserving)"
+    )
 
 
 def _build_nodeinfo_broadcaster(
@@ -411,6 +575,42 @@ def _get_concentrator_wrapper(coord: PipelineCoordinator):
     return src._wrapper if src else None
 
 
+def _build_spectral_scan_service(
+    coord: PipelineCoordinator,
+    config: AppConfig,
+    tracker: NoiseFloorTracker,
+) -> SpectralScanService | None:
+    """Build the spectral scan service if hardware + config allow.
+
+    Returns None when:
+      - The concentrator is not present (e.g. test container)
+      - radio.spectral_scan_interval_seconds is 0 (user disabled)
+      - The loaded HAL does not expose spectral scan symbols (the
+        service itself will detect this and no-op on start, but we
+        also early-return to avoid the log noise)
+    """
+    interval = config.radio.spectral_scan_interval_seconds
+    if interval is None or interval <= 0:
+        logger.info("Spectral scan disabled via radio.spectral_scan_interval_seconds")
+        return None
+    wrapper = _get_concentrator_wrapper(coord)
+    if wrapper is None:
+        return None
+    if not wrapper.spectral_scan_supported:
+        return None
+    freq_mhz = config.radio.frequency_mhz
+    if freq_mhz is None:
+        logger.warning("Spectral scan: no resolved radio.frequency_mhz; skipping")
+        return None
+    return SpectralScanService(
+        wrapper=wrapper,
+        tracker=tracker,
+        frequency_hz=int(freq_mhz * 1_000_000),
+        bandwidth_khz=config.radio.bandwidth_khz,
+        interval_seconds=float(interval),
+    )
+
+
 def _get_channel_plan(config: AppConfig):
     """Build a channel plan for TX frequency/modulation parameters."""
     try:
@@ -432,12 +632,13 @@ async def _send_meshcore_advert(meshcore_tx, mc_source=None) -> None:
         logger.debug("MeshCore advert failed", exc_info=True)
     try:
         contacts = await meshcore_tx.get_contacts()
-        logger.info("MeshCore contacts: %d peers", len(contacts))
-        for c in contacts:
-            pk = c.get("public_key", "")
-            name = c.get("name", "")
-            if pk and name:
-                logger.info("  %s  %s", pk[:12], name)
+        if contacts:
+            log_meshcore_contact_peers(contacts)
+        else:
+            logger.info(
+                "MeshCore contacts: 0 peers (companion roster still loading; "
+                "will retry in ~20s)",
+            )
     except Exception:
         logger.debug("Startup contact fetch failed", exc_info=True)
     if mc_source:
@@ -553,7 +754,10 @@ def _setup_message_interception(
         if is_broadcast:
             if our_node_hex and source == our_node_hex:
                 return
-            ch_idx = channel_hash_map.get(packet.channel_hash, 0)
+            if packet.protocol == Protocol.MESHCORE:
+                ch_idx = packet.channel_hash or 0
+            else:
+                ch_idx = channel_hash_map.get(packet.channel_hash, 0)
             node_id = f"broadcast:{packet.protocol.value}:{ch_idx}"
             direction = "received"
         elif is_for_us:
@@ -724,7 +928,12 @@ def _init_routes(
     signal_analyzer = SignalAnalyzer(coord.packet_repo)
     traffic_monitor = TrafficMonitor(coord.packet_repo)
 
-    nodes.init_routes(coord.node_repo, network_mapper)
+    nodes.init_routes(
+        coord.node_repo,
+        network_mapper,
+        packet_repo=coord.packet_repo,
+        telemetry_repo=coord.telemetry_repo,
+    )
     packets.init_routes(coord.packet_repo)
     analytics.init_routes(signal_analyzer, traffic_monitor, coord.packet_repo)
     device.init_routes(identity, ws_manager, coord.relay_manager)
@@ -760,7 +969,90 @@ def _init_routes(
         config=config,
         crypto=crypto,
         tx_service=tx_service,
+        identity=identity,
     )
+    mqtt_config_routes.init_routes(config=config)
+    upstream_config_routes.init_routes(config=config)
+    device_config_routes.init_routes(config=config, identity=identity)
+    system_config_routes.init_routes(config=config)
+
+
+def _init_dangerous_registry(coord: PipelineCoordinator) -> None:
+    """Compose the Settings → Dangerous registry now that the pipeline is live.
+
+    Restart actions don't need pipeline state -- they go through
+    ``systemctl`` -- but database / phantom / nodeinfo operations
+    have to close over the running coordinator. Doing this from the
+    lifespan keeps the wiring honest: by the time these handlers
+    fire, every collaborator has been instantiated.
+    """
+    import asyncio
+    loop = asyncio.get_running_loop()
+
+    def _dispatch(coro):
+        return asyncio.run_coroutine_threadsafe(coro, loop)
+
+    async def _clear_database_coro() -> int:
+        db = coord.database
+        removed = 0
+        for table in ("packets", "messages", "nodes"):
+            try:
+                rc = await db.execute(f"DELETE FROM {table}")
+                if rc and getattr(rc, "rowcount", 0):
+                    removed += int(rc.rowcount)
+            except Exception:
+                logger.exception("clear_database: failed on table %s", table)
+        try:
+            await db.commit()
+        except Exception:
+            pass
+        return removed
+
+    async def _wipe_phantoms_coro() -> int:
+        return await coord.node_repo.delete_phantom_rows()
+
+    async def _force_nodeinfo_coro() -> bool:
+        if nodeinfo_broadcaster is None:
+            return False
+        try:
+            result = await nodeinfo_broadcaster.broadcast_now()
+            return bool(result.success)
+        except Exception:
+            logger.exception("force_nodeinfo: broadcast failed")
+            return False
+
+    async def _restart_concentrator_coro() -> bool:
+        src = _find_concentrator_source(coord)
+        if src is None:
+            logger.warning("restart_concentrator: no concentrator capture source")
+            return False
+        try:
+            await src.restart_pipeline()
+            return True
+        except Exception:
+            logger.exception("restart_concentrator: pipeline reload failed")
+            return False
+
+    registry = DangerousActionRegistry([
+        build_restart_service_action(),
+        build_restart_concentrator_action(
+            dispatch=_dispatch,
+            restart_coro_factory=_restart_concentrator_coro,
+        ),
+        build_clear_database_action(
+            dispatch=_dispatch,
+            clear_coro_factory=_clear_database_coro,
+        ),
+        build_wipe_phantoms_action(
+            dispatch=_dispatch,
+            wipe_coro_factory=_wipe_phantoms_coro,
+        ),
+        build_force_nodeinfo_action(
+            dispatch=_dispatch,
+            broadcast_coro_factory=_force_nodeinfo_coro,
+        ),
+    ])
+    dangerous_routes.init_routes(registry)
 
 
 async def _gate_ws_or_close(
@@ -815,8 +1107,36 @@ def _serve_auth_page(static_dir: Path, filename: str) -> FileResponse:
 
 def _on_packet_received(packet: Packet) -> None:
     import asyncio
+    if packet.signal is not None:
+        noise_floor_tracker.update(
+            rssi_dbm=packet.signal.rssi,
+            snr_db=packet.signal.snr,
+            bandwidth_khz=packet.signal.bandwidth_khz,
+        )
     try:
         loop = asyncio.get_running_loop()
         loop.create_task(ws_manager.broadcast("packet", packet.to_dict()))
     except RuntimeError:
+        pass
+
+
+async def _noise_floor_emitter_loop(
+    tracker: NoiseFloorTracker, manager: WebSocketManager,
+    interval_seconds: float = 1.0,
+) -> None:
+    """Broadcast the current noise floor snapshot once per second.
+
+    Runs for the lifetime of the FastAPI app. Cancelled cleanly on
+    shutdown via the lifespan context manager.
+    """
+    import asyncio
+    try:
+        while True:
+            await asyncio.sleep(interval_seconds)
+            try:
+                await manager.broadcast("noise_floor", tracker.snapshot())
+            except Exception:
+                # Never let a single broadcast error kill the loop.
+                pass
+    except asyncio.CancelledError:
         pass

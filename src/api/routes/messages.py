@@ -198,6 +198,16 @@ async def get_channels():
             "name": "Public",
             "node_id": f"{BROADCAST_NODE_MC}:0",
         })
+        if _config:
+            for i, (name, _key) in enumerate(
+                _config.meshcore.channel_keys.items(), start=1
+            ):
+                channels.append({
+                    "protocol": "meshcore",
+                    "channel": i,
+                    "name": name,
+                    "node_id": f"{BROADCAST_NODE_MC}:{i}",
+                })
 
     return channels
 

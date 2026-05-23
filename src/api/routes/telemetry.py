@@ -23,6 +23,8 @@ async def latest_telemetry(node_id: str):
 
 
 @router.get("/{node_id}/history")
-async def telemetry_history(node_id: str, limit: int = 50):
-    records = await _telemetry_repo.get_history(node_id, limit)
+async def telemetry_history(
+    node_id: str, limit: int = 300, hours: float | None = None
+):
+    records = await _telemetry_repo.get_history(node_id, limit, hours)
     return [t.to_dict() for t in records]

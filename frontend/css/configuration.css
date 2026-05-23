@@ -1,0 +1,441 @@
+/* Configuration subsections shared chrome.
+
+   Single responsibility: layout and form styling for the cards
+   mounted under each Configuration > * subsection. Reused across
+   Transmit / MQTT / GPS; the existing radio_*.css continues to
+   style the migrated radio cards. */
+
+[data-section^="configuration/"] {
+    color: #f3f4f6;
+    overflow-y: auto;
+    padding: 24px clamp(16px, 3vw, 32px);
+}
+
+[data-section^="configuration/"] .section__placeholder {
+    color: rgba(243, 244, 246, 0.55);
+}
+
+.cfg-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 16px;
+    animation: cfgFadeIn 320ms ease-out both;
+}
+
+.cfg-card__head {
+    margin-bottom: 14px;
+}
+
+.cfg-card__title {
+    margin: 0 0 4px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.cfg-card__hint {
+    margin: 0;
+    font-size: 13px;
+    color: rgba(243, 244, 246, 0.65);
+    line-height: 1.5;
+}
+
+.cfg-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.cfg-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+}
+
+.cfg-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cfg-field--toggle {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.cfg-field--narrow {
+    max-width: 140px;
+}
+
+.cfg-field__label {
+    font-size: 12px;
+    color: rgba(243, 244, 246, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.cfg-field__hint {
+    font-size: 12px;
+    color: rgba(243, 244, 246, 0.55);
+    line-height: 1.45;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.cfg-field__hint--block {
+    display: block;
+    margin: 0 0 10px;
+}
+
+.cfg-field__hint code {
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 11px;
+    color: var(--brand-amber, #ffb84d);
+}
+
+.cfg-field__textarea {
+    min-height: 88px;
+    resize: vertical;
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.cfg-preview .cfg-preview__value + .cfg-preview__value {
+    margin-top: 6px;
+}
+
+.cfg-field__input {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #f3f4f6;
+    font-family: inherit;
+    font-size: 14px;
+    padding: 10px 12px;
+    transition: border-color 160ms ease, background 160ms ease;
+}
+
+.cfg-field__input:focus {
+    outline: none;
+    border-color: var(--brand-amber, #ffb84d);
+    background: rgba(255, 255, 255, 0.07);
+}
+
+/* Native <select> dropdown list: without color-scheme + option colors,
+   Windows/Chrome paint a white popup with inherited light text. */
+select.cfg-field__input {
+    color-scheme: dark;
+    cursor: pointer;
+}
+
+select.cfg-field__input option {
+    background-color: var(--bg-card, #1a1d27);
+    color: var(--text-primary, #f3f4f6);
+}
+
+select.cfg-field__input option:checked {
+    background-color: var(--accent-cyan, #06b6d4);
+    color: var(--bg-primary, #0d0f15);
+}
+
+.cfg-fieldset {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cfg-fieldset__legend {
+    color: rgba(243, 244, 246, 0.6);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 0 4px;
+}
+
+.cfg-card__actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.cfg-status {
+    margin: 0;
+    font-size: 13px;
+    min-height: 1.4em;
+}
+
+.cfg-status[data-kind="error"] { color: #ff6b6b; }
+.cfg-status[data-kind="success"] { color: #44d39a; }
+.cfg-status[data-kind="pending"] { color: rgba(243, 244, 246, 0.7); }
+
+.cfg-preview {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cfg-preview__label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: rgba(243, 244, 246, 0.5);
+}
+
+.cfg-preview__value {
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 13px;
+    color: var(--brand-amber, #ffb84d);
+}
+
+.cfg-note {
+    margin: 0;
+    padding: 10px 14px;
+    background: rgba(255, 184, 77, 0.08);
+    border: 1px solid rgba(255, 184, 77, 0.2);
+    border-radius: 8px;
+    color: var(--brand-amber, #ffb84d);
+    font-size: 12px;
+}
+
+.cfg-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(15, 18, 24, 0.96);
+    color: #f3f4f6;
+    padding: 12px 18px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 14px;
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 240ms ease, opacity 240ms ease;
+    z-index: 100;
+}
+
+.cfg-toast--visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+@keyframes cfgFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cfg-card { animation: none; }
+    .cfg-toast { transition: none; }
+}
+
+/* Section wrapper used by the Radio editor to stack two cards. */
+.cfg-section {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* Inline field used as a fieldset for the freq-mode radio group. */
+.cfg-field--inline {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 10px 14px;
+}
+
+.cfg-field--inline > .cfg-field__label {
+    margin-right: 4px;
+}
+
+.cfg-field__hint {
+    margin: 0;
+    font-size: 12px;
+    color: rgba(243, 244, 246, 0.55);
+    line-height: 1.5;
+}
+
+/* Radio inputs grouped horizontally (e.g. freq mode toggle). */
+.cfg-radio {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: rgba(243, 244, 246, 0.85);
+    cursor: pointer;
+}
+
+.cfg-radio input[type="radio"] {
+    accent-color: var(--brand-amber, #ffb84d);
+    margin: 0;
+}
+
+/* Preset chip selector used by the Radio editor. */
+.cfg-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.cfg-chip {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(243, 244, 246, 0.85);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.cfg-chip:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 184, 77, 0.4);
+}
+
+.cfg-chip--selected {
+    background: rgba(255, 184, 77, 0.18);
+    border-color: var(--brand-amber, #ffb84d);
+    color: var(--brand-amber, #ffb84d);
+}
+
+.cfg-chip--off {
+    border-style: dashed;
+    color: rgba(243, 244, 246, 0.55);
+}
+
+.cfg-chip--off.cfg-chip--selected {
+    color: var(--brand-amber, #ffb84d);
+}
+
+.cfg-btn--has-pending {
+    position: relative;
+}
+
+.cfg-btn--has-pending::after {
+    content: '';
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--brand-amber, #ffb84d);
+    animation: cfg-btn-pending-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes cfg-btn-pending-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+.cfg-chip__hint {
+    font-size: 10px;
+    color: rgba(243, 244, 246, 0.5);
+    margin-left: 4px;
+}
+
+/* Empty state shared by Configuration cards (e.g. MeshCore offline). */
+.cfg-empty {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px dashed rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    padding: 18px;
+    text-align: center;
+}
+
+.cfg-empty__title {
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(243, 244, 246, 0.8);
+    margin-bottom: 6px;
+}
+
+.cfg-empty__body {
+    margin: 0;
+    font-size: 13px;
+    color: rgba(243, 244, 246, 0.6);
+    line-height: 1.5;
+}
+
+/* MeshCore Configuration card: status lamp, readouts, channel table. */
+.cfg-mc-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.cfg-mc-status__lamp {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #44d39a;
+    box-shadow: 0 0 8px rgba(68, 211, 154, 0.6);
+}
+
+.cfg-mc-status__name {
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 13px;
+    color: rgba(243, 244, 246, 0.85);
+}
+
+.cfg-mc-readouts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.cfg-mc-readout {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cfg-mc-readout__label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: rgba(243, 244, 246, 0.5);
+}
+
+.cfg-mc-readout__value {
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 14px;
+    color: var(--brand-amber, #ffb84d);
+}
+
+/* MeshCore: channel save row + companion actions in a stable 2-column grid */
+.cfg-mc-toolbar {
+    display: grid;
+    grid-template-columns: repeat(2, max-content);
+    gap: 10px;
+    justify-content: start;
+    align-items: center;
+}
+
+.cfg-mc-toolbar [data-mc-delete] {
+    grid-column: 1 / -1;
+}
+
+.cfg-mc-channels {
+    margin-bottom: 14px;
+}

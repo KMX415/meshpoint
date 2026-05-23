@@ -19,22 +19,44 @@ class MessagingChat {
         this._conversation = null;
         this._messages = [];
         this._allLoaded = false;
-        this._messagesEl.innerHTML = '<div class="msg-chat__empty">Select a conversation</div>';
+        this._renderEmptyState();
         this._headerName.textContent = '';
+        this._headerSubtitle.textContent = '';
         this._headerBadge.textContent = '';
+        this._headerAvatar.textContent = '';
+        this._headerAvatar.className = 'msg-chat__avatar';
+        this._container.classList.add('msg-chat--empty');
+        this._input.disabled = true;
+        this._sendBtn.disabled = true;
     }
 
     setConversation(convo) {
         this._conversation = convo;
         this._messages = [];
         this._allLoaded = false;
-        this._headerName.textContent = convo.node_name || convo.node_id;
-        this._headerBadge.textContent = convo.protocol === 'meshcore' ? 'MC' : 'MT';
+
+        const name = convo.node_name || convo.node_id || '';
+        const isChannel = (convo.node_id || '').startsWith('broadcast:');
+        const proto = convo.protocol === 'meshcore' ? 'MC' : 'MT';
+
+        this._headerName.textContent = name;
+        this._headerSubtitle.textContent = isChannel
+            ? 'Public channel · all listeners on this PSK'
+            : 'Direct message';
+        this._headerBadge.textContent = proto;
         this._headerBadge.className = 'msg-chat__protocol-badge ' +
             (convo.protocol === 'meshcore' ? 'msg-chat__protocol-badge--mc' : 'msg-chat__protocol-badge--mt');
 
+        this._headerAvatar.textContent = isChannel ? '#' : this._initials(name);
+        this._headerAvatar.className = 'msg-chat__avatar' + (
+            isChannel ? ' msg-chat__avatar--channel'
+            : convo.protocol === 'meshcore' ? ' msg-chat__avatar--mc'
+            : ' msg-chat__avatar--mt'
+        );
+
         this._messagesEl.innerHTML = '';
         this._lastDayKey = null;
+        this._container.classList.remove('msg-chat--empty');
         this._input.disabled = false;
         this._sendBtn.disabled = false;
         this._input.focus();
@@ -76,14 +98,7 @@ class MessagingChat {
     }
 
     clear() {
-        this._conversation = null;
-        this._messages = [];
-        this._messagesEl.innerHTML = '';
-        this._headerName.textContent = 'Select a conversation';
-        this._headerBadge.textContent = '';
-        this._headerBadge.className = 'msg-chat__protocol-badge';
-        this._input.disabled = true;
-        this._sendBtn.disabled = true;
+        this.clearChat();
     }
 
     async _loadMessages() {
@@ -98,7 +113,7 @@ class MessagingChat {
 
             this._messagesEl.innerHTML = '';
             if (messages.length === 0) {
-                this._messagesEl.innerHTML = '<div class="msg-chat__empty">No messages yet. Say hello!</div>';
+                this._renderConversationEmptyState();
             } else {
                 messages.forEach(msg => this._appendBubble(msg));
                 this._scrollToBottom();
@@ -112,6 +127,63 @@ class MessagingChat {
         } finally {
             this._loading = false;
         }
+    }
+
+    _renderEmptyState() {
+        this._messagesEl.innerHTML = `
+            <div class="msg-chat__placeholder">
+                <div class="msg-chat__placeholder-icon" aria-hidden="true">
+                    <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M14 18a6 6 0 016-6h24a6 6 0 016 6v18a6 6 0 01-6 6H28l-9 8v-8h-1a6 6 0 01-4-2"
+                              stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+                        <circle cx="26" cy="27" r="1.8" fill="currentColor" />
+                        <circle cx="32" cy="27" r="1.8" fill="currentColor" />
+                        <circle cx="38" cy="27" r="1.8" fill="currentColor" />
+                    </svg>
+                </div>
+                <h3 class="msg-chat__placeholder-title">No conversation selected</h3>
+                <p class="msg-chat__placeholder-body">
+                    Choose a channel or direct message in the list on the left,
+                    or tap <span class="msg-chat__placeholder-cta">+ New</span>
+                    to start a DM with a specific node.
+                </p>
+                <p class="msg-chat__placeholder-hint">
+                    Filter the list with
+                    <span class="msg-chat__placeholder-tag msg-chat__placeholder-tag--all">All</span>,
+                    <span class="msg-chat__placeholder-tag msg-chat__placeholder-tag--mt">MT</span>
+                    (Meshtastic), or
+                    <span class="msg-chat__placeholder-tag msg-chat__placeholder-tag--mc">MC</span>
+                    (MeshCore). Open a thread to read messages; highlight text
+                    to copy like any web page.
+                </p>
+            </div>
+        `;
+    }
+
+    _renderConversationEmptyState() {
+        this._messagesEl.innerHTML = `
+            <div class="msg-chat__placeholder msg-chat__placeholder--inset">
+                <div class="msg-chat__placeholder-icon msg-chat__placeholder-icon--small" aria-hidden="true">
+                    <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M10 14a4 4 0 014-4h20a4 4 0 014 4v14a4 4 0 01-4 4H22l-7 6v-6h-1a4 4 0 01-4-4V14z"
+                              stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                    </svg>
+                </div>
+                <p class="msg-chat__placeholder-body">
+                    No messages in this thread yet. Type below and send
+                    when you are ready.
+                </p>
+            </div>
+        `;
+    }
+
+    _initials(name) {
+        if (!name) return '?';
+        const trimmed = name.trim();
+        const parts = trimmed.split(/[\s_\-.]+/).filter(Boolean);
+        if (parts.length === 0) return trimmed[0].toUpperCase();
+        if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     }
 
     _appendBubble(msg) {
@@ -164,23 +236,35 @@ class MessagingChat {
     }
 
     _build() {
+        this._container.classList.add('msg-chat', 'msg-chat--empty');
         this._container.innerHTML = `
             <div class="msg-chat__header">
-                <span class="msg-chat__name">Select a conversation</span>
+                <span class="msg-chat__avatar" aria-hidden="true"></span>
+                <div class="msg-chat__header-text">
+                    <span class="msg-chat__name"></span>
+                    <span class="msg-chat__subtitle"></span>
+                </div>
                 <span class="msg-chat__protocol-badge"></span>
             </div>
             <div class="msg-chat__messages"></div>
             <div class="msg-compose">
-                <input class="msg-compose__input" placeholder="Type a message..." disabled maxlength="228" />
-                <button class="msg-compose__send" disabled>Send</button>
+                <input class="msg-compose__input" placeholder="Type a message…" disabled maxlength="228" />
+                <button class="msg-compose__send" type="button" disabled>
+                    <span class="msg-compose__send-label">Send</span>
+                    <span class="msg-compose__send-arrow" aria-hidden="true">→</span>
+                </button>
             </div>
         `;
 
         this._headerName = this._container.querySelector('.msg-chat__name');
+        this._headerSubtitle = this._container.querySelector('.msg-chat__subtitle');
         this._headerBadge = this._container.querySelector('.msg-chat__protocol-badge');
+        this._headerAvatar = this._container.querySelector('.msg-chat__avatar');
         this._messagesEl = this._container.querySelector('.msg-chat__messages');
         this._input = this._container.querySelector('.msg-compose__input');
         this._sendBtn = this._container.querySelector('.msg-compose__send');
+
+        this._renderEmptyState();
 
         this._sendBtn.addEventListener('click', () => this._handleSend());
         this._input.addEventListener('keydown', (e) => {

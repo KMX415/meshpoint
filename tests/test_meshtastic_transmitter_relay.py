@@ -20,7 +20,71 @@ def _make_packet(packet_id: str = "abc123") -> Packet:
         packet_type=PacketType.TEXT,
         encrypted_payload=None,
         decoded_payload=None,
+        # decrypted=True with raw_app_payload=None exercises the
+        # "we have a real packet but somehow no inner bytes" path
+        # the dedup-warning logic was written to cover.
+        decrypted=True,
+        raw_app_payload=None,
     )
+
+
+class TestRelayPositivePath(unittest.TestCase):
+    """Verifies that a normally-decoded TEXT packet produces an
+    actual sendData call. This is the regression test for the
+    long-standing 'relay never worked end-to-end' bug — the
+    decoder now hands the inner application bytes through
+    Packet.raw_app_payload and the transmitter forwards them.
+    """
+
+    def test_decoded_text_packet_calls_send_data(self):
+        config = RelayConfig(enabled=True, serial_port="/dev/null")
+        tx = MeshtasticTransmitter(config)
+        tx._connected = True
+        tx._interface = MagicMock()
+
+        packet = Packet(
+            packet_id="abc123",
+            source_id="11111111",
+            destination_id="ffffffff",
+            protocol=Protocol.MESHTASTIC,
+            packet_type=PacketType.TEXT,
+            hop_limit=2,
+            channel_hash=8,
+            decrypted=True,
+            decoded_payload={"text": "hello"},
+            raw_app_payload=b"hello",
+        )
+
+        tx.transmit(packet)
+
+        tx._interface.sendData.assert_called_once()
+        kwargs = tx._interface.sendData.call_args.kwargs
+        args = tx._interface.sendData.call_args.args
+        self.assertEqual(args[0], b"hello")
+        self.assertEqual(kwargs["portNum"], 1)
+        # Hop limit decrements by 1 on relay so we don't extend mesh
+        # reach beyond what the originator authorised.
+        self.assertEqual(kwargs["hopLimit"], 1)
+        self.assertEqual(kwargs["channelIndex"], 8)
+
+    def test_undecrypted_packet_is_not_relayed(self):
+        config = RelayConfig(enabled=True, serial_port="/dev/null")
+        tx = MeshtasticTransmitter(config)
+        tx._connected = True
+        tx._interface = MagicMock()
+
+        packet = Packet(
+            packet_id="abc123",
+            source_id="11111111",
+            destination_id="ffffffff",
+            protocol=Protocol.MESHTASTIC,
+            packet_type=PacketType.ENCRYPTED,
+            encrypted_payload=b"\xde\xad\xbe\xef",
+            decrypted=False,
+        )
+
+        tx.transmit(packet)
+        tx._interface.sendData.assert_not_called()
 
 
 class TestNoPayloadWarnDedup(unittest.TestCase):

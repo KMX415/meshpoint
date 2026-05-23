@@ -11,6 +11,14 @@ from src.storage.database import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
+# Rows created from corrupted RX (no decoded NodeInfo). Matches COMMON-ERRORS
+# manual cleanup minus the 7-day guard (dashboard wipe is explicit user intent).
+PHANTOM_ROW_PREDICATE = """
+    packet_count = 0
+    AND (long_name IS NULL OR TRIM(long_name) = '')
+    AND (short_name IS NULL OR TRIM(short_name) = '')
+"""
+
 
 class NodeRepository:
     """CRUD operations for mesh nodes."""
@@ -27,7 +35,16 @@ class NodeRepository:
                 altitude, last_heard, first_seen, packet_count
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(node_id) DO UPDATE SET
-                long_name = COALESCE(excluded.long_name, nodes.long_name),
+                long_name = CASE
+                    WHEN excluded.long_name IS NULL OR excluded.long_name = ''
+                        THEN nodes.long_name
+                    WHEN nodes.long_name IS NULL OR nodes.long_name = ''
+                        THEN excluded.long_name
+                    WHEN nodes.protocol = 'meshcore'
+                         AND LOWER(nodes.long_name) = LOWER(nodes.node_id)
+                        THEN excluded.long_name
+                    ELSE nodes.long_name
+                END,
                 short_name = COALESCE(excluded.short_name, nodes.short_name),
                 hardware_model = COALESCE(excluded.hardware_model, nodes.hardware_model),
                 firmware_version = COALESCE(excluded.firmware_version, nodes.firmware_version),
@@ -139,6 +156,21 @@ class NodeRepository:
             (datetime.now(timezone.utc).isoformat(), node_id),
         )
         await self._db.commit()
+
+    async def count_phantom_rows(self) -> int:
+        """Count node rows with no packets and no identifying names."""
+        row = await self._db.fetch_one(
+            f"SELECT COUNT(*) AS cnt FROM nodes WHERE {PHANTOM_ROW_PREDICATE}"
+        )
+        return int(row["cnt"]) if row else 0
+
+    async def delete_phantom_rows(self) -> int:
+        """Delete phantom node rows; returns number of rows removed."""
+        result = await self._db.execute(
+            f"DELETE FROM nodes WHERE {PHANTOM_ROW_PREDICATE}"
+        )
+        await self._db.commit()
+        return int(getattr(result, "rowcount", 0) or 0)
 
     @staticmethod
     def _row_to_node(row: dict) -> Node:

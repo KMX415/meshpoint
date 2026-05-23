@@ -49,7 +49,7 @@ class MqttPublisher:
         channel_keys: Optional[dict[str, str]] = None,
     ):
         self._config = config
-        self._gateway_id = _generate_gateway_id(device_name)
+        self._gateway_id = _resolve_gateway_id(config.gateway_id, device_name)
         self._client: Optional[paho_mqtt.Client] = None
         self._connected = False
         self._publish_count = 0
@@ -74,6 +74,7 @@ class MqttPublisher:
             location_precision=config.location_precision,
         )
         self._ha_discovery: Optional[HomeAssistantDiscovery] = None
+        self._topic_prefix = self._resolve_topic_prefix()
 
     @property
     def gateway_id(self) -> str:
@@ -117,6 +118,10 @@ class MqttPublisher:
             logger.info(
                 "MQTT connecting to %s:%d as %s",
                 self._config.broker, self._config.port, self._gateway_id,
+            )
+            logger.info(
+                "MQTT topic prefix resolved: %s",
+                self._topic_prefix,
             )
             return True
         except Exception:
@@ -197,7 +202,8 @@ class MqttPublisher:
     def _on_connect(self, client, userdata, flags, rc) -> None:
         if rc == 0:
             self._connected = True
-            logger.info("MQTT connected to %s as %s", self._config.broker, self._gateway_id)
+            logger.info("MQTT publisher started as %s", self._gateway_id)
+            logger.debug("MQTT connected to broker=%s", self._config.broker)
             if self._config.homeassistant_discovery and self._client:
                 self._ha_discovery = HomeAssistantDiscovery(self._client, self._gateway_id)
         else:
@@ -208,6 +214,22 @@ class MqttPublisher:
         self._connected = False
         if rc != 0:
             logger.warning("MQTT unexpected disconnect (rc=%d), auto-reconnecting", rc)
+
+    def _resolve_topic_prefix(self) -> str:
+        root = (self._config.topic_root or "").strip().strip("/")
+        region = (self._config.region or "").strip().strip("/")
+        if not root and not region:
+            return "msh/US"
+        if not region:
+            return root
+        if not root:
+            return region
+        root_lower = root.lower()
+        region_lower = region.lower()
+        if root_lower == region_lower or root_lower.endswith(f"/{region_lower}"):
+            return root
+        return f"{root}/{region}"
+
 
 class HomeAssistantDiscovery:
     """Publishes HA auto-discovery configs for mesh node sensors."""
@@ -290,6 +312,16 @@ class HomeAssistantDiscovery:
             "source_type": "gps",
         }
         return topic, json.dumps(config)
+
+
+def _resolve_gateway_id(override: Optional[str], device_name: str) -> str:
+    """Use explicit config override or derive from device name."""
+    if override:
+        raw = override.strip()
+        if raw.startswith("!"):
+            return raw.lower()
+        return f"!{raw.lower()}"
+    return _generate_gateway_id(device_name)
 
 
 def _generate_gateway_id(device_name: str) -> str:

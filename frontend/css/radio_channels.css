@@ -6,7 +6,12 @@
  * scope). Loaded by frontend/index.html alongside radio.css and
  * radio_cards.css. */
 
-.ch-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.ch-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+    table-layout: fixed;
+}
 
 .ch-table th {
     text-align: left;
@@ -20,27 +25,52 @@
     border-bottom: 1px solid var(--border);
 }
 
+.ch-table__col-idx { width: 2.25rem; }
+.ch-table__col-hash { width: 4.25rem; }
+.ch-table__col-state { width: 5.5rem; }
+
 .ch-table td {
     padding: 0.4rem 0.5rem;
     border-bottom: 1px solid rgba(35, 48, 73, 0.5);
     vertical-align: middle;
+    overflow: hidden;
 }
 
 .ch-table__idx {
-    width: 30px;
     color: var(--text-muted);
     font-family: var(--font-mono);
     font-size: 0.7rem;
 }
 
 .ch-table__hash {
-    width: 70px;
     color: var(--accent-cyan);
     font-family: var(--font-mono);
     font-size: 0.78rem;
 }
 
-.ch-table__psk-cell { display: flex; align-items: center; gap: 0.3rem; }
+/* Flex on <td> breaks column alignment across rows; use an inner wrapper. */
+.ch-table__psk-cell {
+    vertical-align: middle;
+}
+
+.ch-table__psk-inner {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-width: 0;
+}
+
+.ch-table__psk-label {
+    font-style: italic;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+
+.ch-table__psk-inner .ch-table__name-input {
+    flex: 1;
+    min-width: 0;
+    width: auto;
+}
 
 .ch-table__reveal {
     background: none;

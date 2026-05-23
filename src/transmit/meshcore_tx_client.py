@@ -214,9 +214,18 @@ class MeshCoreTxClient:
 
     @staticmethod
     def _normalize_contact_payload(payload) -> list[dict]:
-        """Accept both dict-keyed-by-pubkey and list formats."""
+        """Accept both dict-keyed-by-pubkey and list formats.
+
+        Defensively filters values to dicts only. Some firmware
+        revisions of the MeshCore companion return a payload like
+        ``{"contact_count": 5, ...}`` where some values are ints
+        and some are nested dicts; we only want the nested-dict
+        contact entries. Non-dict values (ints, strings, lists)
+        are silently dropped so a payload-shape change in the
+        companion firmware can never crash get_contacts.
+        """
         if isinstance(payload, dict):
-            return list(payload.values())
+            return [v for v in payload.values() if isinstance(v, dict)]
         if isinstance(payload, list):
             return [e for e in payload if isinstance(e, dict)]
         return []
@@ -247,8 +256,96 @@ class MeshCoreTxClient:
             logger.exception("Failed to read MeshCore radio info")
             return None
 
+    async def sync_channels(self, channel_keys: dict) -> None:
+        """Sync configured channels to the companion device.
+
+        Writes each channel from channel_keys to a numbered slot (0, 1, …),
+        then clears any slots beyond that count that still hold a name on the
+        device. channel_keys maps channel name → hex-encoded 16-byte secret.
+        """
+        if not self.connected:
+            logger.debug("sync_channels: not connected, skipping")
+            return
+        try:
+            from meshcore import EventType
+        except ImportError:
+            logger.warning("sync_channels: meshcore library unavailable")
+            return
+
+        _MAX_SLOTS = 8
+
+        # Read current device slots.
+        device_slots: dict[int, tuple[str, bytes]] = {}
+        for i in range(_MAX_SLOTS):
+            try:
+                result = await asyncio.wait_for(
+                    self._mc.commands.get_channel(i), timeout=5.0
+                )
+            except asyncio.TimeoutError:
+                logger.warning("sync_channels: timeout reading slot %d, stopping probe", i)
+                break
+            except Exception:
+                logger.exception("sync_channels: error reading slot %d", i)
+                break
+            if result.type == EventType.ERROR:
+                break
+            p = result.payload
+            device_slots[i] = (
+                p.get("channel_name", ""),
+                p.get("channel_secret", b""),
+            )
+
+        desired = list(channel_keys.items())  # [(name, key_hex), …]
+
+        # Write desired channels.
+        for idx, (name, key_hex) in enumerate(desired):
+            if idx >= _MAX_SLOTS:
+                logger.warning("sync_channels: more than %d channels configured, ignoring extras", _MAX_SLOTS)
+                break
+            try:
+                secret = bytes.fromhex(key_hex)
+            except ValueError:
+                logger.warning("sync_channels: invalid hex key for '%s', skipping", name)
+                continue
+            dev_name, dev_secret = device_slots.get(idx, ("", b""))
+            if dev_name == name and dev_secret == secret:
+                logger.debug("sync_channels: slot %d already correct (%s)", idx, name)
+                continue
+            try:
+                await asyncio.wait_for(
+                    self._mc.commands.set_channel(idx, name, secret), timeout=5.0
+                )
+                logger.info("sync_channels: set slot %d → %s", idx, name)
+            except Exception:
+                logger.exception("sync_channels: failed to set slot %d (%s)", idx, name)
+
+        # Clear any extra populated slots on the device.
+        for idx in range(len(desired), _MAX_SLOTS):
+            dev = device_slots.get(idx)
+            if dev is None:
+                break
+            dev_name, _ = dev
+            if not dev_name:
+                continue
+            try:
+                await asyncio.wait_for(
+                    self._mc.commands.set_channel(idx, "", b"\x00" * 16), timeout=5.0
+                )
+                logger.info("sync_channels: cleared slot %d", idx)
+            except Exception:
+                logger.exception("sync_channels: failed to clear slot %d", idx)
+
+        await self._run_post_command()
+        logger.info("sync_channels: done (%d configured)", len(desired))
+
     async def get_contacts(self) -> list[dict]:
-        """Retrieve the companion's contact list."""
+        """Retrieve the companion's contact list.
+
+        Each entry inside the response can shape-shift between
+        firmware versions, so the per-entry parse is wrapped in
+        a defensive isinstance check + try/except so one weird
+        contact never poisons the whole list.
+        """
         if not self.connected:
             return []
         try:
@@ -257,8 +354,15 @@ class MeshCoreTxClient:
                 timeout=10.0,
             )
             entries = self._normalize_contact_payload(result.payload)
-            contacts = []
-            for i, entry in enumerate(entries):
+        except Exception:
+            logger.exception("Failed to retrieve MeshCore contacts")
+            return []
+
+        contacts: list[dict] = []
+        for i, entry in enumerate(entries):
+            if not isinstance(entry, dict):
+                continue
+            try:
                 name = (
                     entry.get("adv_name")
                     or entry.get("name")
@@ -272,8 +376,11 @@ class MeshCoreTxClient:
                         "public_key": pk,
                         "last_seen": entry.get("lastmod", 0),
                     })
-            logger.info("get_contacts: %d contacts parsed", len(contacts))
-            return contacts
-        except Exception:
-            logger.exception("Failed to retrieve MeshCore contacts")
-            return []
+            except Exception:
+                logger.debug(
+                    "get_contacts: skipping malformed entry at index %d",
+                    i, exc_info=True,
+                )
+                continue
+        logger.info("get_contacts: %d contacts parsed", len(contacts))
+        return contacts

@@ -24,6 +24,8 @@ radio:
   sync_word: 0x2B              # 0x2B = Meshtastic. Don't change unless you know why.
   preamble_length: 16          # 16 = Meshtastic standard
   tx_power_dbm: 22             # SX1302 concentrator output power
+  spectral_scan_interval_seconds: 60   # noise floor sampler cadence (0 disables)
+  sx1261_spi_path: ""          # SX1261 SPI device for spectral scan (empty = disabled)
 ```
 
 The region sets the base frequency, spreading factor, and bandwidth automatically. You only need `region` in most cases. Override `frequency_mhz`, `spreading_factor`, or `bandwidth_khz` individually to tune for non-default presets (MediumFast, ShortFast, etc.) or custom frequency slots.
@@ -40,6 +42,41 @@ The region sets the base frequency, spreading factor, and bandwidth automaticall
 | `SG_923` | 917.875 MHz | 917.0 - 925.0 MHz |
 
 If `frequency_mhz` falls outside the region's band limits, the service will reject it at startup. Omit `frequency_mhz` entirely to tune to the region default.
+
+### Spectral Scan (Noise Floor)
+
+The dashboard's sidebar shows a live noise-floor reading. There are two ways the service can produce that number; which one applies depends on your concentrator hardware.
+
+**Hardware capability matrix:**
+
+| Carrier board | SX1261 reachable from Pi? | Spectral scan supported? |
+|---|---|---|
+| Semtech SX1302CXXXGW1 reference kit | yes (own SPI line) | yes |
+| RAK2287 / RAK5146 / SenseCap M1 / most off-the-shelf concentrators | no (SX1261 is wired behind the SX1302's SPI router, not directly to the Pi) | no — packet-derived fallback only |
+| Custom carriers with SX1261 on a dedicated CE line | yes | yes, after configuring `sx1261_spi_path` |
+
+**Default behaviour (works everywhere):** `sx1261_spi_path` is empty, so the service skips the SX1261 init entirely and derives the noise floor from packet metadata — specifically a rolling minimum of `RSSI − SNR` across recently-decoded frames. This is a *loose upper bound* on the true noise floor (it tracks the quietest signal we managed to demodulate), but on a normally-operating link it converges to within a few dB of the real ambient floor and is good enough to spot RF interference, broken antennas, or unusually noisy bands.
+
+**Opting in to true spectral scan:** if you have a board that exposes the SX1261 directly to the Pi (the Semtech reference kit is the common case), add this to `config/local.yaml`:
+
+```yaml
+radio:
+  sx1261_spi_path: "/dev/spidev0.1"
+  spectral_scan_interval_seconds: 60
+```
+
+When enabled, every `spectral_scan_interval_seconds` (default 60, minimum 5) the SX1261 samples ambient channel power on the radio's frequency for roughly 50 ms and the service reports the 10th-percentile reading as the noise floor. At 60 s cadence that is ~0.08% of receive time. If you set `spectral_scan_interval_seconds: 0`, scanning is disabled entirely and the packet-derived fallback is used.
+
+**Detecting an unsupported board.** If you set `sx1261_spi_path` on a carrier where the SX1261 isn't directly reachable, `libloragw` will log lines like:
+
+```
+ERROR: sx1261_check_status: SX1261 status is not as expected: got:0x00 expected:0x22
+ERROR: failed to patch sx1261 radio for LBT/Spectral Scan
+```
+
+…and `lgw_start()` may then refuse to bring up the concentrator. If you see that, revert `sx1261_spi_path` to `""`, restart the service, and stay on the packet-derived fallback.
+
+If your `libloragw` build does not expose the spectral scan symbols at all (older HAL revisions), the service logs a single info line at startup and falls back automatically.
 
 ### Standard Meshtastic Presets
 
@@ -149,18 +186,40 @@ MeshCore uses its own default channel key, configurable separately:
 ```yaml
 meshcore:
   default_key_b64: null              # leave null to use the MeshCore built-in default
-  channel_keys: {}                   # reserved for future multi-channel support
+  channel_keys: 
+    SomeChannelName: "32-BytePSK"      # Meshcore Channel Name with 32-Byte Hex PSK. One channel per line            
 ```
-
-> Multi-key decryption for MeshCore is on the roadmap but not yet implemented. Currently only the default MeshCore key is tried at decode time.
+Any Channels listed in the YAML will show in the UI. Changes made in the UI will be written to the YAML config file and pushed to the USB Companion device. Additionally, all channels will be pushed to the USB Companion device upon Meshpoint startup. Maximum of 8 Channels can by configured at this time. THis limit may be adjusted at a later date. 
 
 ---
 
 ## Smart Relay
 
-> **Status: experimental.** The smart relay path has not been hardware-validated end-to-end and is not recommended for production use yet. Treat this section as a configuration reference. Hardware-validated relay support will be called out in a release note when it lands.
+> **Status: experimental — native onboard relay added in v0.7.4.** When `transmit.enabled: true` the Meshpoint now relays through its own SX1302 concentrator using identity-preserving re-broadcast (original `source_id` and `packet_id` survive, only `hop_limit` is decremented). No second radio required. **Hardware validation is still in progress** — please report results in Discord or via a Github issue.
 
-Connect a separate radio (T-Beam, Heltec, RAK4631) via USB to re-broadcast captured packets:
+### Native onboard relay (preferred)
+
+Set both `transmit` and `relay` to enabled. The same SX1302 that handles outgoing messages re-broadcasts captured packets, sharing duty-cycle accounting so relay traffic can never crowd out user TX:
+
+```yaml
+transmit:
+  enabled: true
+  # ... see Transmit (Native Messaging) below for the full block
+
+relay:
+  enabled: true
+  max_relay_per_minute: 20
+  burst_size: 5
+  min_relay_rssi: -110.0
+  max_relay_rssi: -50.0
+  # serial_port intentionally omitted — native path is used
+```
+
+Encrypted packets (no key match locally) and MeshCore packets are intentionally skipped on the native path to avoid emitting garbage on the air.
+
+### Legacy USB-companion relay
+
+The original v0.7.0–v0.7.3 path is preserved for setups that already have a second Meshtastic radio attached. Only used when `transmit.enabled: false` and `relay.serial_port` is set:
 
 ```yaml
 relay:
@@ -347,6 +406,22 @@ mqtt:
   homeassistant_discovery: false # publish HA auto-discovery configs
 ```
 
+### Transport TLS (not yet available)
+
+Configuration → MQTT does **not** expose TLS/mqtts settings yet. The publisher
+uses plain TCP; port **8883** alone does not enable encryption.
+
+**Planned:** ship broker TLS (`tls_enabled`, optional CA file) in the same
+update as **Meshtastic PKI** (see `ROADMAP.md` in the private repo). Until
+then:
+
+- Public Meshtastic MQTT: `mqtt.meshtastic.org` on port **1883** (default).
+- Private TLS brokers: wait for that release, or terminate TLS on a local
+  reverse proxy in front of a plain MQTT listener.
+
+This is separate from **packet privacy**: undecrypted LoRa packets are never
+published to MQTT regardless of transport settings.
+
 ### Location Precision
 
 Control how much location detail leaves the device via MQTT:
@@ -419,6 +494,7 @@ radio:                 # LoRa physical layer
   sync_word: 0x2B
   preamble_length: 16
   tx_power_dbm: 22
+  spectral_scan_interval_seconds: 60   # noise floor sampler; 0 disables
 
 meshtastic:            # Meshtastic protocol settings
   primary_channel_name: "LongFast"

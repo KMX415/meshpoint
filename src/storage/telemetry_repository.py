@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from src.models.telemetry import Telemetry
 from src.storage.database import DatabaseManager
@@ -44,12 +44,33 @@ class TelemetryRepository:
         return self._row_to_telemetry(row)
 
     async def get_history(
-        self, node_id: str, limit: int = 100
+        self,
+        node_id: str,
+        limit: int = 300,
+        hours: float | None = None,
     ) -> list[Telemetry]:
-        rows = await self._db.fetch_all(
-            "SELECT * FROM telemetry WHERE node_id = ? ORDER BY timestamp DESC LIMIT ?",
-            (node_id, limit),
-        )
+        """Return telemetry oldest-first for charting (ASC)."""
+        if hours is not None and hours > 0:
+            since = (
+                datetime.now(timezone.utc) - timedelta(hours=hours)
+            ).isoformat()
+            rows = await self._db.fetch_all(
+                """
+                SELECT * FROM telemetry
+                WHERE node_id = ? AND timestamp >= ?
+                ORDER BY timestamp ASC
+                LIMIT ?
+                """,
+                (node_id, since, limit),
+            )
+        else:
+            rows = await self._db.fetch_all(
+                """
+                SELECT * FROM telemetry
+                WHERE node_id = ? ORDER BY timestamp ASC LIMIT ?
+                """,
+                (node_id, limit),
+            )
         return [self._row_to_telemetry(r) for r in rows]
 
     @staticmethod

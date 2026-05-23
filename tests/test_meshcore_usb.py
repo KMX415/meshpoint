@@ -13,8 +13,10 @@ from src.config import (
     MeshcoreUsbConfig,
     _merge_dataclass,
 )
+from src.decode.crypto_service import CryptoService
+from src.decode.meshcore_decoder import MeshcoreDecoder
 from src.decode.meshcore_event_adapter import adapt_event
-from src.models.packet import PacketType, Protocol
+from src.models.packet import Packet, PacketType, Protocol
 from src.models.signal import SignalMetrics
 
 
@@ -107,6 +109,41 @@ class TestMeshcoreEventAdapter(unittest.TestCase):
         self.assertAlmostEqual(pkt.decoded_payload["latitude"], 43.9091)
         self.assertAlmostEqual(pkt.decoded_payload["longitude"], -72.2207)
 
+    def test_advertisement_accepts_name_alias(self):
+        raw = self._make_envelope("advertisement", {
+            "public_key": "abcdef1234567890abcdef",
+            "name": "AliasNode",
+        })
+        pkt = adapt_event(raw)
+        self.assertIsNotNone(pkt)
+        self.assertEqual(pkt.packet_type, PacketType.NODEINFO)
+        self.assertEqual(pkt.source_id, "abcdef123456")
+        self.assertEqual(pkt.decoded_payload["long_name"], "AliasNode")
+        self.assertEqual(pkt.decoded_payload["short_name"], "Alia")
+
+    def test_advertisement_accepts_nested_name_alias(self):
+        raw = self._make_envelope("advertisement", {
+            "public_key": "abcdef1234567890abcdef",
+            "advert": {"longName": "NestedRepeater"},
+        })
+        pkt = adapt_event(raw)
+        self.assertIsNotNone(pkt)
+        self.assertEqual(pkt.packet_type, PacketType.NODEINFO)
+        self.assertEqual(pkt.source_id, "abcdef123456")
+        self.assertEqual(pkt.decoded_payload["long_name"], "NestedRepeater")
+        self.assertEqual(pkt.decoded_payload["short_name"], "Nest")
+
+    def test_advertisement_without_real_name_does_not_store_id_as_name(self):
+        raw = self._make_envelope("advertisement", {
+            "public_key": "abcdef1234567890abcdef",
+        })
+        pkt = adapt_event(raw)
+        self.assertIsNotNone(pkt)
+        self.assertEqual(pkt.packet_type, PacketType.NODEINFO)
+        self.assertEqual(pkt.source_id, "abcdef123456")
+        self.assertNotIn("long_name", pkt.decoded_payload)
+        self.assertNotIn("short_name", pkt.decoded_payload)
+
     def test_advertisement_no_coords(self):
         raw = self._make_envelope("advertisement", {
             "public_key": "abcdef1234567890abcdef",
@@ -197,6 +234,87 @@ class TestMeshcoreEventAdapter(unittest.TestCase):
         pkt = adapt_event(raw)
         self.assertIsNotNone(pkt.timestamp)
         self.assertEqual(pkt.timestamp.tzinfo, timezone.utc)
+
+
+class TestMeshcoreDecoderNodeExtraction(unittest.TestCase):
+    """Verify ``extract_node_update`` lifts MeshCore advert position onto Node.
+
+    Regression coverage for the bug where MeshCore nodes never appeared on
+    the dashboard map: their lat/lon rides on the advertisement (classified
+    by the event adapter as ``PacketType.NODEINFO``), but the extractor only
+    consumed positions from ``PacketType.POSITION`` packets, so the lat/lon
+    silently dropped on the floor before the node repository write.
+    """
+
+    def setUp(self) -> None:
+        self._decoder = MeshcoreDecoder(CryptoService())
+
+    @staticmethod
+    def _make_envelope(event_type: str, payload: dict) -> bytes:
+        return json.dumps({
+            "event_type": event_type,
+            "payload": payload,
+        }).encode("utf-8")
+
+    def _adapt_advertisement(self, payload: dict) -> Packet:
+        pkt = adapt_event(self._make_envelope("advertisement", payload))
+        assert pkt is not None, "advertisement should adapt to a Packet"
+        return pkt
+
+    def test_advertisement_with_position_yields_positioned_node(self):
+        pkt = self._adapt_advertisement({
+            "public_key": "abcdef1234567890abcdef",
+            "adv_name": "TestNode",
+            "adv_lat": 43.9091,
+            "adv_lon": -72.2207,
+        })
+
+        node = self._decoder.extract_node_update(pkt)
+
+        self.assertIsNotNone(node)
+        self.assertTrue(node.has_position)
+        self.assertAlmostEqual(node.latitude, 43.9091)
+        self.assertAlmostEqual(node.longitude, -72.2207)
+        self.assertEqual(node.long_name, "TestNode")
+        self.assertEqual(node.protocol, Protocol.MESHCORE.value)
+
+    def test_advertisement_without_position_yields_node_without_position(self):
+        pkt = self._adapt_advertisement({
+            "public_key": "abcdef1234567890abcdef",
+            "adv_name": "TestNode",
+            "adv_lat": 0.0,
+            "adv_lon": 0.0,
+        })
+
+        node = self._decoder.extract_node_update(pkt)
+
+        self.assertIsNotNone(node)
+        self.assertFalse(node.has_position)
+        self.assertIsNone(node.latitude)
+        self.assertIsNone(node.longitude)
+        self.assertEqual(node.long_name, "TestNode")
+
+    def test_position_packet_still_extracts_lat_lon(self):
+        """Regression guard for the original ``PacketType.POSITION`` path."""
+        from datetime import datetime, timezone
+
+        pkt = Packet(
+            packet_id="0001",
+            source_id="abcd",
+            destination_id="broadcast",
+            protocol=Protocol.MESHCORE,
+            packet_type=PacketType.POSITION,
+            decoded_payload={"latitude": 12.34, "longitude": -56.78},
+            timestamp=datetime.now(timezone.utc),
+            decrypted=True,
+        )
+
+        node = self._decoder.extract_node_update(pkt)
+
+        self.assertIsNotNone(node)
+        self.assertTrue(node.has_position)
+        self.assertAlmostEqual(node.latitude, 12.34)
+        self.assertAlmostEqual(node.longitude, -56.78)
 
 
 class TestMeshcoreUsbConfig(unittest.TestCase):
@@ -373,6 +491,160 @@ class TestMeshcoreUsbStartupRetry(unittest.IsolatedAsyncioTestCase):
         await reconnect_started.wait()
         await asyncio.wait_for(source.stop(), timeout=2.0)
         self.assertIsNone(source._reconnect_task)
+
+
+class TestMeshcoreUsbSignalStitching(unittest.TestCase):
+    """Verify rx_log_data RSSI/SNR are grafted onto the next parsed event.
+
+    The meshcore companion emits each received frame as two events: an
+    ``rx_log_data`` carrying the raw RF metrics, then a parsed event
+    (``advertisement``, ``channel_message``, or ``contact_message``) that
+    carries the decoded payload but no signal info.  The capture source
+    buffers the rx_log_data signal and grafts it onto the next parsed
+    event so downstream code sees a single Packet with real RSSI/SNR.
+
+    Regression coverage for two bugs reported by woketothetruth: every
+    MeshCore node card pinned at -120 dBm / 0.0 dB / POOR.  The advert
+    path was never stitched at all, and the message path stitched RSSI
+    but lost SNR.
+    """
+
+    def _make_source(self):
+        from src.capture.meshcore_usb_source import MeshcoreUsbCaptureSource
+        return MeshcoreUsbCaptureSource(
+            serial_port="/dev/ttyFAKE", auto_detect=False
+        )
+
+    @staticmethod
+    def _fake_event(etype: str, payload: dict):
+        class _FakeType:
+            def __init__(self, value: str) -> None:
+                self.value = value
+
+        class _FakeEvent:
+            def __init__(self, etype: str, payload: dict) -> None:
+                self.type = _FakeType(etype)
+                self.payload = payload
+
+        return _FakeEvent(etype, payload)
+
+    def _push_rx_log(self, source, rssi: float, snr: float) -> None:
+        rx_log = self._fake_event("rx_log_data", {
+            "rssi": rssi,
+            "snr": snr,
+            "payload": "deadbeef",
+        })
+        result = source._wrap_event(rx_log)
+        self.assertIsNone(result, "rx_log_data should be consumed, not emitted")
+
+    def _wrap_payload(self, source, etype: str, payload: dict):
+        envelope = source._wrap_event(self._fake_event(etype, payload))
+        self.assertIsNotNone(envelope, f"{etype} should emit a RawCapture")
+        body = json.loads(envelope.payload)
+        return envelope, body
+
+    def test_advertisement_inherits_buffered_rssi_and_snr(self):
+        """Primary bug: advert events used to bypass stitching entirely."""
+        source = self._make_source()
+        self._push_rx_log(source, rssi=-72.0, snr=9.5)
+
+        envelope, body = self._wrap_payload(source, "advertisement", {
+            "public_key": "abcdef1234567890abcdef",
+            "adv_name": "TestNode",
+        })
+
+        self.assertEqual(envelope.signal.rssi, -72.0)
+        self.assertEqual(envelope.signal.snr, 9.5)
+        self.assertEqual(body["payload"]["RSSI"], -72.0)
+        self.assertEqual(body["payload"]["SNR"], 9.5)
+        self.assertIsNone(
+            source._last_rf_signal,
+            "buffer must clear so the next event does not inherit stale signal",
+        )
+
+    def test_contact_message_inherits_buffered_snr_not_just_rssi(self):
+        """Latent SNR bug: stitching used to graft RSSI but drop SNR."""
+        source = self._make_source()
+        self._push_rx_log(source, rssi=-88.0, snr=3.25)
+
+        envelope, body = self._wrap_payload(source, "contact_message", {
+            "pubkey_prefix": "aabbccddeeff",
+            "text": "ping",
+        })
+
+        self.assertEqual(envelope.signal.rssi, -88.0)
+        self.assertEqual(envelope.signal.snr, 3.25)
+        self.assertEqual(body["payload"]["RSSI"], -88.0)
+        self.assertEqual(body["payload"]["SNR"], 3.25)
+
+    def test_channel_message_inherits_buffered_snr_not_just_rssi(self):
+        """Same SNR bug, channel-message branch of the same stitching block."""
+        source = self._make_source()
+        self._push_rx_log(source, rssi=-95.5, snr=-1.0)
+
+        envelope, body = self._wrap_payload(source, "channel_message", {
+            "text": "Alice: hi",
+            "channel_idx": 0,
+        })
+
+        self.assertEqual(envelope.signal.rssi, -95.5)
+        self.assertEqual(envelope.signal.snr, -1.0)
+        self.assertEqual(body["payload"]["RSSI"], -95.5)
+        self.assertEqual(body["payload"]["SNR"], -1.0)
+
+    def test_payload_rssi_wins_over_buffered_signal(self):
+        """If the parsed event already carries RSSI, do not overwrite it."""
+        source = self._make_source()
+        self._push_rx_log(source, rssi=-72.0, snr=9.5)
+
+        envelope, body = self._wrap_payload(source, "channel_message", {
+            "text": "hi",
+            "channel_idx": 0,
+            "SNR": 11.25,
+            "RSSI": -60.0,
+        })
+
+        self.assertEqual(envelope.signal.rssi, -60.0)
+        self.assertEqual(envelope.signal.snr, 11.25)
+        self.assertEqual(body["payload"]["RSSI"], -60.0)
+        self.assertEqual(body["payload"]["SNR"], 11.25)
+
+    def test_rx_log_below_floor_is_not_buffered(self):
+        """Floor-only rx_log_data must not poison the next parsed event."""
+        source = self._make_source()
+        self._push_rx_log(source, rssi=-119.5, snr=0.0)
+        self.assertIsNone(
+            source._last_rf_signal,
+            "floor-only rx_log_data should not populate the buffer",
+        )
+
+        envelope, _ = self._wrap_payload(source, "advertisement", {
+            "public_key": "abcdef1234567890abcdef",
+            "adv_name": "TestNode",
+        })
+
+        self.assertLessEqual(envelope.signal.rssi, -119.0)
+
+    def test_buffer_clears_so_second_advert_does_not_steal_signal(self):
+        """One rx_log_data feeds exactly one parsed event, then clears."""
+        source = self._make_source()
+        self._push_rx_log(source, rssi=-72.0, snr=9.5)
+
+        first_env, _ = self._wrap_payload(source, "advertisement", {
+            "public_key": "11111111111111111111aaaa",
+            "adv_name": "NodeOne",
+        })
+        self.assertEqual(first_env.signal.rssi, -72.0)
+
+        second_env, _ = self._wrap_payload(source, "advertisement", {
+            "public_key": "22222222222222222222bbbb",
+            "adv_name": "NodeTwo",
+        })
+        self.assertLessEqual(
+            second_env.signal.rssi, -119.0,
+            "second advert without its own rx_log_data must NOT inherit "
+            "NodeOne's signal",
+        )
 
 
 if __name__ == "__main__":

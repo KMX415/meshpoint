@@ -15,10 +15,16 @@ from dataclasses import dataclass
 from typing import Optional
 
 from src.hal.concentrator_config import ConcentratorChannelPlan
+from src.hal.sx1302_signatures import apply_signatures
+from src.hal.sx1302_spectral_scan import (
+    SpectralScanResult,
+    SX1302SpectralScan,
+)
 from src.hal.sx1302_types import (
     LgwConfBoardS,
     LgwConfRxifS,
     LgwConfRxrfS,
+    LgwConfSx1261S,
     LgwPktRxS,
     LgwPktTxS,
     LgwTxGainLutS,
@@ -91,15 +97,19 @@ class SX1302Wrapper:
         self,
         lib_path: Optional[str] = None,
         spi_path: str = "/dev/spidev0.0",
+        sx1261_spi_path: str = "",
     ):
         self._lib: Optional[ctypes.CDLL] = None
         self._lib_path = lib_path or self._find_library()
         self._spi_path = spi_path
+        self._sx1261_spi_path = sx1261_spi_path
         self._started = False
         self._debug_rx = os.getenv("MESHPOINT_DEBUG_RX") == "1"
         self._crc_bad_count = 0
         self._no_crc_count = 0
         self._unknown_status_count = 0
+        self._spectral_scan: Optional[SX1302SpectralScan] = None
+        self._sx1261_configured = False
 
     def load(self) -> None:
         if not self._lib_path or not os.path.exists(self._lib_path):
@@ -154,6 +164,7 @@ class SX1302Wrapper:
         self._configure_board()
         self._configure_rf_chains(plan)
         self._configure_if_channels(plan)
+        self._configure_sx1261_for_spectral_scan()
         logger.info("Concentrator configured with %d IF channels",
                      len(plan.multi_sf_channels) + (1 if plan.single_sf_channel else 0))
 
@@ -364,6 +375,41 @@ class SX1302Wrapper:
             raise RuntimeError("Library not loaded")
         return self._lib.lgw_time_on_air(ctypes.byref(tx_pkt))
 
+    def run_spectral_scan(
+        self,
+        frequency_hz: int,
+        nb_scan: int = 1024,
+    ) -> Optional[SpectralScanResult]:
+        """Run one spectral scan at the given frequency.
+
+        Returns None if the HAL build does not expose spectral scan
+        or if the scan failed for any reason. Caller is responsible
+        for serialising scans (no concurrent calls on this wrapper).
+        """
+        if self._lib is None:
+            self.load()
+        if self._spectral_scan is None:
+            self._spectral_scan = SX1302SpectralScan(self._lib)
+        if not self._spectral_scan.supported:
+            return None
+        if not self._started:
+            logger.debug("Skipping spectral scan: concentrator not started")
+            return None
+        return self._spectral_scan.run(frequency_hz, nb_scan=nb_scan)
+
+    @property
+    def spectral_scan_supported(self) -> bool:
+        """True if the HAL supports spectral scan AND the SX1261 was
+        successfully configured for it during ``configure()``."""
+        if self._lib is None:
+            try:
+                self.load()
+            except Exception:
+                return False
+        if self._spectral_scan is None:
+            self._spectral_scan = SX1302SpectralScan(self._lib)
+        return self._spectral_scan.supported and self._sx1261_configured
+
     # ── Private: HAL configuration ──────────────────────────────────
 
     def _configure_board(self) -> None:
@@ -424,65 +470,67 @@ class SX1302Wrapper:
             if result != LGW_HAL_SUCCESS:
                 raise RuntimeError(f"lgw_rxif_setconf({LGW_MULTI_NB}) failed")
 
-    # ── Private: function signatures ────────────────────────────────
+    def _configure_sx1261_for_spectral_scan(self) -> None:
+        """Enable the SX1261 companion radio so spectral scan works.
+
+        The Semtech HAL gates ``lgw_spectral_scan_*`` on the SX1261
+        being explicitly enabled via ``lgw_sx1261_setconf``. Without
+        this, every scan attempt returns -1 with the HAL stderr line
+        ``ERROR: sx1261 is not enabled, no spectral scan``.
+
+        Best-effort and safety-first: if anything in this routine
+        fails — missing symbol, wrong SPI path, struct-layout
+        mismatch in our patched HAL, or the call itself returning
+        non-zero — we log loudly and return without raising. Every
+        other concentrator path (RX, TX, native relay) must keep
+        working even if spectral scan is unavailable.
+        """
+        if self._sx1261_spi_path is None or self._sx1261_spi_path == "":
+            logger.info(
+                "SX1261 spi_path empty; spectral scan disabled, "
+                "falling back to packet-derived noise floor",
+            )
+            return
+        if not hasattr(self._lib, "lgw_sx1261_setconf"):
+            logger.info(
+                "libloragw lacks lgw_sx1261_setconf; "
+                "spectral scan unavailable",
+            )
+            return
+
+        try:
+            conf = LgwConfSx1261S()
+            conf.enable = True
+            conf.spi_path = self._sx1261_spi_path.encode("ascii")
+            conf.rssi_offset = 0
+            conf.lbt_conf.enable = False
+            conf.lbt_conf.rssi_target = 0
+            conf.lbt_conf.nb_channel = 0
+            rc = self._lib.lgw_sx1261_setconf(ctypes.byref(conf))
+        except BaseException as exc:
+            logger.warning(
+                "lgw_sx1261_setconf raised (%s: %s); "
+                "spectral scan disabled, falling back to packet-derived noise floor",
+                type(exc).__name__, exc,
+            )
+            return
+
+        if rc != LGW_HAL_SUCCESS:
+            logger.warning(
+                "lgw_sx1261_setconf(spi=%s) failed (rc=%d); "
+                "spectral scan disabled, falling back to packet-derived noise floor",
+                self._sx1261_spi_path, rc,
+            )
+            return
+
+        self._sx1261_configured = True
+        logger.info(
+            "SX1261 companion configured for spectral scan (spi=%s)",
+            self._sx1261_spi_path,
+        )
 
     def _setup_function_signatures(self) -> None:
-        lib = self._lib
-
-        lib.lgw_board_setconf.restype = ctypes.c_int
-        lib.lgw_board_setconf.argtypes = [ctypes.POINTER(LgwConfBoardS)]
-
-        lib.lgw_rxrf_setconf.restype = ctypes.c_int
-        lib.lgw_rxrf_setconf.argtypes = [
-            ctypes.c_uint8,
-            ctypes.POINTER(LgwConfRxrfS),
-        ]
-
-        lib.lgw_rxif_setconf.restype = ctypes.c_int
-        lib.lgw_rxif_setconf.argtypes = [
-            ctypes.c_uint8,
-            ctypes.POINTER(LgwConfRxifS),
-        ]
-
-        lib.lgw_start.restype = ctypes.c_int
-        lib.lgw_start.argtypes = []
-
-        lib.lgw_stop.restype = ctypes.c_int
-        lib.lgw_stop.argtypes = []
-
-        lib.lgw_receive.restype = ctypes.c_int
-        lib.lgw_receive.argtypes = [
-            ctypes.c_uint8,
-            ctypes.POINTER(LgwPktRxS),
-        ]
-
-        lib.sx1302_lora_syncword.restype = ctypes.c_int
-        lib.sx1302_lora_syncword.argtypes = [
-            ctypes.c_bool,
-            ctypes.c_uint8,
-        ]
-
-        lib.lgw_txgain_setconf.restype = ctypes.c_int
-        lib.lgw_txgain_setconf.argtypes = [
-            ctypes.c_uint8,
-            ctypes.POINTER(LgwTxGainLutS),
-        ]
-
-        lib.lgw_send.restype = ctypes.c_int
-        lib.lgw_send.argtypes = [ctypes.POINTER(LgwPktTxS)]
-
-        lib.lgw_status.restype = ctypes.c_int
-        lib.lgw_status.argtypes = [
-            ctypes.c_uint8,
-            ctypes.c_uint8,
-            ctypes.POINTER(ctypes.c_uint8),
-        ]
-
-        lib.lgw_abort_tx.restype = ctypes.c_int
-        lib.lgw_abort_tx.argtypes = [ctypes.c_uint8]
-
-        lib.lgw_time_on_air.restype = ctypes.c_uint32
-        lib.lgw_time_on_air.argtypes = [ctypes.POINTER(LgwPktTxS)]
+        apply_signatures(self._lib)
 
     @staticmethod
     def _find_library() -> str:

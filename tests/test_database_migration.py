@@ -179,6 +179,38 @@ class TestCrossProtocolNameCleanup(unittest.TestCase):
             os.unlink(db_path)
 
 
+class TestMeshCorePlaceholderNameCleanup(unittest.TestCase):
+    def test_runs_during_connect(self):
+        fd, db_path = tempfile.mkstemp(suffix=".db")
+        import os
+        os.close(fd)
+        try:
+            db = DatabaseManager(db_path)
+            _run(db.connect())
+            now = datetime.now(timezone.utc).isoformat()
+            _run(db.execute(
+                "INSERT INTO nodes (node_id, long_name, short_name, protocol, "
+                "last_heard, first_seen) VALUES "
+                "('e34ef4172778', 'e34ef4172778', 'e34e', 'meshcore', ?, ?)",
+                (now, now),
+            ))
+            _run(db.commit())
+            _run(db.disconnect())
+
+            db2 = DatabaseManager(db_path)
+            _run(db2.connect())
+            row = _run(db2.fetch_one(
+                "SELECT long_name, short_name FROM nodes WHERE node_id = ?",
+                ("e34ef4172778",),
+            ))
+            self.assertIsNotNone(row)
+            self.assertIsNone(row["long_name"])
+            self.assertIsNone(row["short_name"])
+            _run(db2.disconnect())
+        finally:
+            os.unlink(db_path)
+
+
 class TestRelayNodeMigration(unittest.TestCase):
     """Validate the ``packets.relay_node`` ALTER TABLE migration.
 

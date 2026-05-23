@@ -25,10 +25,27 @@ def _stable_device_id(configured_id: Optional[str] = None) -> str:
 
 @dataclass
 class DeviceIdentity:
-    """This edge device's identity for upstream registration."""
+    """This edge device's identity for upstream registration.
+
+    Naming surfaces (kept distinct because they mean different things):
+    * ``device_name``   -- internal label for the edge device itself.
+                           Rarely customized; defaults to "Meshpoint".
+    * ``long_name``     -- the name broadcast over RF in NodeInfo and
+                           shown on meshradar / meshmap / neighbour
+                           dashboards. This is the user-facing "what
+                           shows up on the map" name.
+    * ``short_name``    -- the 4-character call sign broadcast on the
+                           same NodeInfo and shown in the topbar lamp.
+
+    The dashboard prefers ``long_name`` for the sidebar label so the
+    name visible to the operator matches what other devices and
+    meshradar see.
+    """
 
     device_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     device_name: str = "Meshpoint"
+    long_name: str = "Meshpoint"
+    short_name: str = "MPNT"
     auth_token: Optional[str] = None
 
     latitude: Optional[float] = None
@@ -42,6 +59,8 @@ class DeviceIdentity:
         return {
             "device_id": self.device_id,
             "device_name": self.device_name,
+            "long_name": self.long_name,
+            "short_name": self.short_name,
             "latitude": self.latitude,
             "longitude": self.longitude,
             "altitude": self.altitude,

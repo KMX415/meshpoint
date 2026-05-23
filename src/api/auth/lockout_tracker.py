@@ -58,6 +58,25 @@ class LockoutTracker:
     def max_attempts(self) -> int:
         return self._max_attempts
 
+    @property
+    def cooldown_minutes(self) -> int:
+        return self._cooldown_seconds // 60
+
+    def reconfigure(self, max_attempts: int, cooldown_minutes: int) -> None:
+        """Apply new threshold + cooldown without dropping in-flight state.
+
+        Active lockouts (``locked_until > now``) keep their existing
+        cooldown so a configuration change cannot be used as a way to
+        instantly unlock a key that was just locked.
+        """
+        if max_attempts < 1:
+            raise ValueError("max_attempts must be >= 1")
+        if cooldown_minutes < 1:
+            raise ValueError("cooldown_minutes must be >= 1")
+        with self._lock:
+            self._max_attempts = max_attempts
+            self._cooldown_seconds = cooldown_minutes * 60
+
     def remaining_seconds(self, key: str) -> Optional[int]:
         """Return seconds until ``key`` unlocks, or ``None`` if not locked."""
         if not key:

@@ -123,6 +123,12 @@ Meshtastic server (`mqtt.meshtastic.org:1883`, `meshdev` / `large4cats`).
 Your Meshpoint appears on community maps with a unique gateway ID generated
 from your node identity.
 
+**Transport TLS (mqtts):** not implemented yet. The publisher uses plain TCP;
+setting port 8883 does not enable encryption. Configuration → MQTT (v0.7.4+)
+covers application settings (credentials, allowlist, JSON mirror, HA) but not
+TLS. Broker TLS is planned for the same release as Meshtastic PKI; see
+`docs/CONFIGURATION.md` (Transport TLS) and `docs/CHANGELOG.md` (Unreleased).
+
 ### Verifying it is publishing
 
 After enabling and restarting:

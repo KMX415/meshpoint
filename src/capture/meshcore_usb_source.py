@@ -62,6 +62,7 @@ class MeshcoreUsbCaptureSource(CaptureSource):
         self._reconnect_task: Optional[asyncio.Task] = None
         self._last_rf_signal: Optional[SignalMetrics] = None
         self._last_event_at: float = 0.0
+        self._on_connected_callback = None
 
     @property
     def name(self) -> str:
@@ -184,7 +185,8 @@ class MeshcoreUsbCaptureSource(CaptureSource):
                 EventType.RAW_DATA,
                 EventType.CONTACT_MSG_RECV,
                 EventType.CHANNEL_MSG_RECV,
-                EventType.ADVERTISEMENT,
+                EventType.ADVERTISEMENT,                
+                EventType.NEW_CONTACT,
                 EventType.DISCONNECTED,
             ):
                 sub = self._meshcore.subscribe(event_type, self._on_event)
@@ -195,6 +197,11 @@ class MeshcoreUsbCaptureSource(CaptureSource):
                 "MeshCore USB source started on %s @ %d baud",
                 port, self._baud_rate,
             )
+            if self._on_connected_callback:
+                asyncio.create_task(
+                    self._on_connected_callback(),
+                    name="meshcore-on-connected",
+                )
         except Exception:
             logger.exception(
                 "Failed to start MeshCore USB source on %s", port
@@ -388,9 +395,10 @@ class MeshcoreUsbCaptureSource(CaptureSource):
 
         safe_payload = _make_json_safe(payload_dict)
 
-        if etype in ("channel_message", "contact_message"):
+        if etype in ("channel_message", "contact_message", "advertisement"):
             if self._last_rf_signal and signal.rssi <= -119.0:
                 safe_payload["RSSI"] = self._last_rf_signal.rssi
+                safe_payload["SNR"] = self._last_rf_signal.snr
                 signal = self._last_rf_signal
             self._last_rf_signal = None
 
@@ -404,6 +412,10 @@ class MeshcoreUsbCaptureSource(CaptureSource):
             capture_source="meshcore_usb",
             protocol_hint=Protocol.MESHCORE,
         )
+
+    def set_connected_callback(self, callback) -> None:
+        """Register a coroutine called after every successful connection."""
+        self._on_connected_callback = callback
 
     async def restart_auto_fetching(self) -> None:
         """Re-enable auto message fetching after TX operations."""
