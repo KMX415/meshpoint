@@ -7,10 +7,14 @@ import re
 import subprocess
 import urllib.request
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable, Optional
 
 from src.api.update.channels import ReleaseChannelRegistry, TIER_CUSTOM
-from src.api.update.rollback_state import read_rollback_state
+from src.api.update.rollback_state import (
+    DEFAULT_ROLLBACK_STATE_PATH,
+    read_rollback_state,
+)
 from src.version import __version__
 
 logger = logging.getLogger(__name__)
@@ -275,6 +279,7 @@ def build_install_status_payload(
     sync_remote: bool = False,
     channel_id: Optional[str] = None,
     custom_branch: Optional[str] = None,
+    rollback_state_path: Path | None = None,
 ) -> dict:
     """Assemble install/update status JSON for the dashboard."""
     branch, sha = read_install_git_ref(
@@ -332,7 +337,8 @@ def build_install_status_payload(
         except ValueError:
             update_available = False
 
-    rollback = read_rollback_state()
+    rb_path = rollback_state_path or DEFAULT_ROLLBACK_STATE_PATH
+    rollback = read_rollback_state(path=rb_path)
     rollback_pre_sha = rollback["pre_update_sha"] if rollback else None
 
     return {

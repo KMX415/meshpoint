@@ -15,38 +15,75 @@ class TopbarMeshcoreChip {
         this._freqEl = chipEl.querySelector('.topbar-meshcore__freq');
         this._channelEl = chipEl.querySelector('.topbar-meshcore__channel');
         this._lampEl = chipEl.querySelector('.topbar-meshcore__lamp');
+        this._lastMc = null;
+        this._dashboardReachable = false;
     }
 
     setMeshcore(meshcore) {
-        const mc = meshcore || {};
+        this._lastMc = meshcore || {};
+        this._paint();
+    }
+
+    /** When false, lamp shows reconnecting (API down); do not imply USB is up. */
+    setDashboardReachable(reachable) {
+        this._dashboardReachable = Boolean(reachable);
+        this._paint();
+    }
+
+    _paint() {
+        const mc = this._lastMc || {};
         const expected = Boolean(mc.companion_expected);
         this._group.hidden = !expected;
         if (!expected) return;
 
-        const connected = Boolean(mc.connected);
-        this._setLamp(connected);
-
         const radio = mc.radio || {};
-        this._nameEl.textContent = this._formatName(mc, connected);
-        this._freqEl.textContent = this._formatFreq(radio.frequency_mhz);
-        this._channelEl.textContent = this._formatChannel(mc.channel_keys);
+        const connected = Boolean(mc.connected);
+        const showCompanion = this._dashboardReachable && connected;
 
-        this._root.classList.toggle('topbar-meshcore--online', connected);
-        this._root.classList.toggle('topbar-meshcore--offline', !connected);
+        if (!this._dashboardReachable) {
+            this._setLamp('reconnecting');
+        } else {
+            this._setLamp(connected ? 'online' : 'offline');
+        }
+
+        if (!this._dashboardReachable) {
+            this._nameEl.textContent = 'Reconnecting…';
+            this._freqEl.textContent = '--';
+            this._channelEl.textContent = '--';
+        } else {
+            this._nameEl.textContent = this._formatName(mc, showCompanion);
+            this._freqEl.textContent = this._formatFreq(radio.frequency_mhz);
+            this._channelEl.textContent = this._formatChannel(mc.channel_keys);
+        }
+
+        this._root.classList.remove(
+            'topbar-meshcore--online',
+            'topbar-meshcore--offline',
+            'topbar-meshcore--reconnecting',
+        );
+        if (!this._dashboardReachable) {
+            this._root.classList.add('topbar-meshcore--reconnecting');
+        } else if (connected) {
+            this._root.classList.add('topbar-meshcore--online');
+        } else {
+            this._root.classList.add('topbar-meshcore--offline');
+        }
     }
 
-    _setLamp(connected) {
+    _setLamp(state) {
         this._lampEl.classList.remove(
             'topbar-meshcore__lamp--online',
             'topbar-meshcore__lamp--offline',
+            'topbar-meshcore__lamp--reconnecting',
         );
-        if (connected) {
-            this._lampEl.classList.add('topbar-meshcore__lamp--online');
-            this._lampEl.setAttribute('aria-label', 'MeshCore companion connected');
-        } else {
-            this._lampEl.classList.add('topbar-meshcore__lamp--offline');
-            this._lampEl.setAttribute('aria-label', 'MeshCore companion offline');
-        }
+        const cls = `topbar-meshcore__lamp--${state}`;
+        this._lampEl.classList.add(cls);
+        const labels = {
+            online: 'MeshCore companion connected',
+            offline: 'MeshCore companion offline',
+            reconnecting: 'MeshCore status unknown (dashboard reconnecting)',
+        };
+        this._lampEl.setAttribute('aria-label', labels[state] || labels.reconnecting);
     }
 
     _formatName(mc, connected) {

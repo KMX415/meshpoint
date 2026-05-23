@@ -53,7 +53,9 @@ class TerminalChrome {
 
     flashCopyToast(byteCount = 0) {
         if (!this.toastEl) return;
-        const label = byteCount ? `copied ${byteCount} char${byteCount === 1 ? '' : 's'}` : 'copied';
+        const label = byteCount
+            ? `copied ${byteCount} char${byteCount === 1 ? '' : 's'}`
+            : 'nothing selected';
         this.toastEl.textContent = label;
         this.toastEl.classList.add('terminal-toast--visible');
         if (this._toastTimer) clearTimeout(this._toastTimer);

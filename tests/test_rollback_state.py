@@ -10,18 +10,25 @@ from pathlib import Path
 from src.api.update.rollback_state import (
     clear_rollback_state,
     read_rollback_state,
+    resolve_rollback_state_path,
     write_rollback_state,
 )
 
 
 class TestRollbackState(unittest.TestCase):
+    def test_resolve_path_next_to_database(self) -> None:
+        path = resolve_rollback_state_path("data/concentrator.db")
+        self.assertEqual(path, Path("/opt/meshpoint/data/update_rollback.json"))
+
     def test_write_read_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "update_rollback.json"
-            write_rollback_state(
-                "abc123deadbeef",
-                target_branch="feat/v0.7.4",
-                path=path,
+            self.assertTrue(
+                write_rollback_state(
+                    "abc123deadbeef",
+                    target_branch="feat/v0.7.4",
+                    path=path,
+                ),
             )
             data = read_rollback_state(path=path)
             self.assertIsNotNone(data)

@@ -50,24 +50,29 @@ router = APIRouter(prefix="/api/update", tags=["update"])
 _applier: UpdateApplier | None = None
 _registry: ReleaseChannelRegistry | None = None
 _changelog_path: Path | None = None
+_rollback_state_path: Path = Path("/opt/meshpoint/data/update_rollback.json")
 
 
 def init_routes(
     applier: UpdateApplier,
     registry: ReleaseChannelRegistry,
     changelog_path: Path | None = None,
+    rollback_state_path: Path | None = None,
 ) -> None:
-    global _applier, _registry, _changelog_path
+    global _applier, _registry, _changelog_path, _rollback_state_path
     _applier = applier
     _registry = registry
     _changelog_path = changelog_path
+    if rollback_state_path is not None:
+        _rollback_state_path = rollback_state_path
 
 
 def reset_routes() -> None:
-    global _applier, _registry, _changelog_path
+    global _applier, _registry, _changelog_path, _rollback_state_path
     _applier = None
     _registry = None
     _changelog_path = None
+    _rollback_state_path = Path("/opt/meshpoint/data/update_rollback.json")
 
 
 def _require_initialized() -> tuple[UpdateApplier, ReleaseChannelRegistry]:
@@ -109,7 +114,10 @@ async def install_status(
 ) -> dict:
     """Live install branch, matched channel, and upstream version on that branch."""
     _applier_instance, registry = _require_initialized()
-    return build_install_status_payload(registry=registry)
+    return build_install_status_payload(
+        registry=registry,
+        rollback_state_path=_rollback_state_path,
+    )
 
 
 @router.post("/check")
@@ -127,6 +135,7 @@ async def check_for_updates(
             sync_remote=True,
             channel_id=req.channel_id,
             custom_branch=req.custom_branch,
+            rollback_state_path=_rollback_state_path,
         ),
     )
 
@@ -191,12 +200,13 @@ def _persist_rollback_after_apply(result: ApplyResult) -> None:
         write_rollback_state(
             result.pre_update_sha,
             target_branch=result.target_branch,
+            path=_rollback_state_path,
         )
 
 
 def _clear_rollback_after_success(result: ApplyResult) -> None:
     if result.success:
-        clear_rollback_state()
+        clear_rollback_state(path=_rollback_state_path)
 
 
 @router.post("/apply")

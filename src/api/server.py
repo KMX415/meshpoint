@@ -59,6 +59,7 @@ from src.api.routes import (
 )
 from src.api.terminal import CommandCatalog, SessionManager
 from src.api.update import ReleaseChannelRegistry, UpdateApplier
+from src.api.update.rollback_state import resolve_rollback_state_path
 from src.api.upstream_client import UpstreamClient
 from src.api.websocket_manager import WebSocketManager
 from src.config import AppConfig, load_config, validate_activation
@@ -106,9 +107,16 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         audit_writer=audit_writer,
     )
     update_routes.init_routes(
-        applier=UpdateApplier(),
+        applier=UpdateApplier(
+            rollback_state_path=resolve_rollback_state_path(
+                config.storage.database_path,
+            ),
+        ),
         registry=ReleaseChannelRegistry(),
         changelog_path=Path(__file__).resolve().parents[2] / "docs" / "CHANGELOG.md",
+        rollback_state_path=resolve_rollback_state_path(
+            config.storage.database_path,
+        ),
     )
     # Dangerous registry is wired in lifespan so clear-db / wipe-phantoms /
     # force-nodeinfo can close over the live pipeline objects.

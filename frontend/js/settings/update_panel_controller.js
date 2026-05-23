@@ -516,8 +516,8 @@ class UpdatePanelController {
         if (this.rollbackHintEl) {
             this.rollbackHintEl.textContent = sha
                 ? `Rollback point: ${sha.slice(0, 8)} (from before the last dashboard apply).`
-                : 'Rollback unlocks after you run Apply update successfully. '
-                    + 'Git pull on the Pi does not create a rollback point.';
+                : 'Rollback unlocks after Apply update runs once from this page '
+                    + '(even when already up to date). Git pull alone does not count.';
         }
     }
 

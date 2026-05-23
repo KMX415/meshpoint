@@ -40,24 +40,35 @@ class TopbarController {
     _wireWebSocket() {
         if (!this._ws) {
             this._meshtastic.setConnectionState('offline');
+            this._meshcore.setDashboardReachable(false);
             return;
         }
         this._ws.on('connected', () => {
             this._meshtastic.setConnectionState('online');
+            this._meshcore.setDashboardReachable(true);
+            this._refreshConfig();
         });
         this._ws.on('disconnected', () => {
             this._meshtastic.setConnectionState('reconnecting');
+            this._meshcore.setDashboardReachable(false);
         });
         if (this._ws.socket && this._ws.socket.readyState === 1) {
             this._meshtastic.setConnectionState('online');
+            this._meshcore.setDashboardReachable(true);
+        } else {
+            this._meshcore.setDashboardReachable(false);
         }
     }
 
     async _refreshConfig() {
         try {
             const res = await fetch('/api/config', { credentials: 'same-origin' });
-            if (!res.ok) return;
+            if (!res.ok) {
+                this._meshcore.setDashboardReachable(false);
+                return;
+            }
             const cfg = await res.json();
+            this._meshcore.setDashboardReachable(true);
             const tx = cfg.transmit || {};
             this._meshtastic.setMeshtastic({
                 shortName: tx.short_name,
@@ -67,7 +78,9 @@ class TopbarController {
             document.dispatchEvent(
                 new CustomEvent('meshpoint:configUpdated', { detail: cfg }),
             );
-        } catch (_e) { /* swallow; next tick will retry */ }
+        } catch (_e) {
+            this._meshcore.setDashboardReachable(false);
+        }
     }
 
     registerAction(spec) {

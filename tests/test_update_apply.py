@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import unittest
 from typing import Optional
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from src.api.update.apply import UpdateApplier
 
@@ -41,7 +41,7 @@ class TestUpdateApplier(unittest.TestCase):
         applier = UpdateApplier(runner=runner, repo_path=".")
         applier.apply(branch="feat/v0.7.4")
         mock_write.assert_called_once_with(
-            "abc123", target_branch="feat/v0.7.4",
+            "abc123", target_branch="feat/v0.7.4", path=ANY,
         )
 
     def test_apply_runs_full_chain_in_order(self) -> None:

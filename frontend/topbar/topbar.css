@@ -258,6 +258,18 @@
         0 0 10px rgba(239, 68, 68, 0.2);
 }
 
+.topbar-meshcore__lamp--reconnecting .topbar-meshcore__dot {
+    background: var(--accent-amber, #f59e0b);
+    animation: topbar-meshtastic-blink 0.9s steps(2, end) infinite;
+}
+
+.topbar-meshcore--reconnecting {
+    border-color: rgba(245, 158, 11, 0.45);
+    box-shadow:
+        0 0 12px rgba(245, 158, 11, 0.2),
+        inset 0 0 14px rgba(245, 158, 11, 0.04);
+}
+
 .topbar-meshcore__name {
     font-weight: 600;
     color: var(--text-primary);

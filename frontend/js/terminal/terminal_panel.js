@@ -49,7 +49,11 @@ class TerminalPanelController {
         this.searchBtn?.addEventListener('click', () => this._toggleSearch());
         this.copyBtn?.addEventListener('click', () => this._copySelection());
         this._wireClientCallbacks();
-        document.addEventListener('keydown', (event) => this._maybeGlobalShortcut(event));
+        document.addEventListener(
+            'keydown',
+            (event) => this._maybeGlobalShortcut(event),
+            true,
+        );
     }
 
     async refresh() {
@@ -163,25 +167,41 @@ class TerminalPanelController {
 
     _copySelection() {
         if (!this.renderer) return;
-        const sel = this.renderer.term?.getSelection();
+        const sel = this.renderer._readSelectionText?.() || this.renderer.term?.getSelection();
         if (!sel) {
             this.chrome.flashCopyToast(0);
             return;
         }
         navigator.clipboard.writeText(sel).then(() => {
             this.chrome.flashCopyToast(sel.length);
-        }).catch(() => {});
+        }).catch(() => {
+            this.chrome.flashCopyToast(0);
+        });
     }
 
     _maybeGlobalShortcut(event) {
-        if (!this.renderer) return;
-        if (!this.root.contains(document.activeElement) && document.activeElement !== document.body) {
+        if (!this.renderer || event.type !== 'keydown') return;
+        if (!(event.ctrlKey && event.shiftKey)) return;
+        if (!this._terminalFocused()) return;
+        const key = event.key.toLowerCase();
+        if (key === 'f') {
+            event.preventDefault();
+            event.stopPropagation();
+            this._toggleSearch();
             return;
         }
-        if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'f') {
+        if (key === 'c') {
             event.preventDefault();
-            this._toggleSearch();
+            event.stopPropagation();
+            this._copySelection();
         }
+    }
+
+    _terminalFocused() {
+        const active = document.activeElement;
+        if (!this.root || !active) return false;
+        if (this.root.contains(active)) return true;
+        return active.classList?.contains('xterm-helper-textarea') === true;
     }
 }
 

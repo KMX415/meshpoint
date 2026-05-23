@@ -60,7 +60,7 @@ These are deliberately listed once here rather than duplicated in each file. Eac
 
 For every admin-mutating endpoint:
 
-- [ ] During the feature walkthrough, run `tail -F /opt/meshpoint/data/admin_audit.jsonl` in another terminal.
+- [ ] During the feature walkthrough, run `sudo tail -F /opt/meshpoint/data/admin_audit.jsonl` in another SSH session.
 - [ ] Each click that mutates state writes exactly one row.
 - [ ] Each row has `ts`, `user`, `action`, `params`, `result`, `duration_ms`.
 - [ ] `user` matches the logged-in admin's username.

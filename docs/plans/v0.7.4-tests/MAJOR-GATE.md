@@ -18,7 +18,7 @@ Hard-refresh the dashboard after pull (`Ctrl+Shift+R`). Frontend-only commits do
 **Parallel terminal (audit):**
 
 ```bash
-tail -F /opt/meshpoint/data/admin_audit.jsonl
+sudo tail -F /opt/meshpoint/data/admin_audit.jsonl
 ```
 
 ---

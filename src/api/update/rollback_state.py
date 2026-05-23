@@ -16,6 +16,19 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 DEFAULT_ROLLBACK_STATE_PATH = Path("/opt/meshpoint/data/update_rollback.json")
+DEFAULT_REPO_ROOT = "/opt/meshpoint"
+
+
+def resolve_rollback_state_path(
+    database_path: str,
+    *,
+    repo_root: str = DEFAULT_REPO_ROOT,
+) -> Path:
+    """Same directory as the SQLite DB (``data/update_rollback.json`` by default)."""
+    db = Path(database_path)
+    if not db.is_absolute():
+        db = Path(repo_root) / db
+    return db.parent / "update_rollback.json"
 
 
 def read_rollback_state(
@@ -45,11 +58,11 @@ def write_rollback_state(
     *,
     target_branch: str = "",
     path: Path = DEFAULT_ROLLBACK_STATE_PATH,
-) -> None:
+) -> bool:
     """Store the SHA to restore on the next dashboard rollback."""
     sha = (pre_update_sha or "").strip()
     if not sha:
-        return
+        return False
     payload = {
         "pre_update_sha": sha,
         "target_branch": target_branch or None,
@@ -61,8 +74,21 @@ def write_rollback_state(
             json.dumps(payload, separators=(",", ":")),
             encoding="utf-8",
         )
+        logger.info(
+            "rollback_state: saved pre-update SHA %s for branch %s at %s",
+            sha[:12],
+            target_branch or "?",
+            path,
+        )
+        return True
     except OSError as exc:
-        logger.warning("rollback_state: could not write %s: %s", path, exc)
+        logger.error(
+            "rollback_state: could not write %s (%s). "
+            "Ensure /opt/meshpoint/data is owned by meshpoint:meshpoint.",
+            path,
+            exc,
+        )
+        return False
 
 
 def clear_rollback_state(path: Path = DEFAULT_ROLLBACK_STATE_PATH) -> None:

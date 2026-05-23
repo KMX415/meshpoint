@@ -73,7 +73,7 @@ class TerminalSplash {
         lines.push(
             `  ${dim}Type ${reset}${cyan}help${reset}${dim} for shell tips.`
             + `  ${reset}${cyan}Ctrl+Shift+F${reset}${dim} find.`
-            + `  ${reset}${cyan}Ctrl+Shift+C${reset}${dim} copy.${reset}`,
+            + `  ${reset}${cyan}Ctrl+Shift+C${reset}${dim} copy selection (or Copy button).${reset}`,
         );
         lines.push('');
         return lines;

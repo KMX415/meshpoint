@@ -169,22 +169,54 @@ class TerminalRenderer {
         if (event.type !== 'keydown') return true;
         if (event.ctrlKey && event.shiftKey) {
             const key = event.key.toLowerCase();
-            if (key === 'c') return this._copySelection();
-            if (key === 'v') return this._pasteFromClipboard();
-            if (key === 'f') return this._toggleSearch();
+            if (key === 'c' || key === 'v' || key === 'f') {
+                // xterm returns false to skip its handler but does not call
+                // preventDefault; Chrome/Cursor still bind Ctrl+Shift+C to
+                // devtools unless we block the browser default here.
+                event.preventDefault();
+                event.stopPropagation();
+                if (key === 'c') return this._copySelection();
+                if (key === 'v') return this._pasteFromClipboard();
+                if (key === 'f') return this._toggleSearch();
+            }
         }
         return true;
     }
 
     _copySelection() {
-        const selection = this.term?.getSelection();
-        if (!selection) return true;
+        const selection = this._readSelectionText();
+        if (!selection) {
+            this.onSelectionCopy(0);
+            return false;
+        }
         try {
             navigator.clipboard.writeText(selection).then(() => {
                 this.onSelectionCopy(selection.length);
-            }).catch(() => {});
-        } catch (_) {}
+            }).catch(() => {
+                this.onSelectionCopy(0);
+            });
+        } catch (_) {
+            this.onSelectionCopy(0);
+        }
         return false;
+    }
+
+    /** xterm selection first; fall back to DOM selection inside the host. */
+    _readSelectionText() {
+        const fromTerm = (this.term?.getSelection() || '').trim();
+        if (fromTerm) return fromTerm;
+        try {
+            const dom = window.getSelection();
+            if (!dom || dom.isCollapsed || !dom.toString().trim()) return '';
+            const anchor = dom.anchorNode;
+            const focus = dom.focusNode;
+            if (!this.hostEl) return '';
+            if (anchor && !this.hostEl.contains(anchor)) return '';
+            if (focus && !this.hostEl.contains(focus)) return '';
+            return dom.toString();
+        } catch (_) {
+            return '';
+        }
     }
 
     _pasteFromClipboard() {

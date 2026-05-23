@@ -30,7 +30,10 @@ from typing import Callable, Iterable, Optional
 
 from src.api.dangerous.handlers import schedule_systemctl_restart
 from src.api.update.install_status import read_head_full_sha
-from src.api.update.rollback_state import write_rollback_state
+from src.api.update.rollback_state import (
+    DEFAULT_ROLLBACK_STATE_PATH,
+    write_rollback_state,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -88,11 +91,15 @@ class UpdateApplier:
         install_script: str = "/opt/meshpoint/scripts/install.sh",
         service_name: str = "meshpoint",
         runner: Runner = shell_runner,
+        rollback_state_path: Path | None = None,
     ) -> None:
         self._repo_path = repo_path
         self._install_script = install_script
         self._service_name = service_name
         self._runner = runner
+        self._rollback_state_path = (
+            rollback_state_path or DEFAULT_ROLLBACK_STATE_PATH
+        )
 
     def apply(
         self,
@@ -108,7 +115,15 @@ class UpdateApplier:
             # Persist before mutating the tree. The apply stream often dies when
             # systemctl restart drops the HTTP connection; route-level persist
             # on the final NDJSON line then never runs.
-            write_rollback_state(pre_sha, target_branch=branch)
+            if not write_rollback_state(
+                pre_sha,
+                target_branch=branch,
+                path=self._rollback_state_path,
+            ):
+                logger.error(
+                    "apply: rollback state not saved under %s",
+                    self._rollback_state_path,
+                )
         else:
             logger.error(
                 "apply: could not capture pre-update SHA in %s; "
