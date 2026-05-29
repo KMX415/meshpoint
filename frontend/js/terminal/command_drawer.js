@@ -90,6 +90,9 @@ class CommandDrawer {
             <span class="terminal-drawer__button-cmd"><code>${this._escape(entry.command)}</code></span>
             <span class="terminal-drawer__button-desc">${this._escape(entry.description || '')}</span>
         `;
+        // Keep focus in the shell: a focused drawer button treats Enter as
+        // another click and inserts the command a second time.
+        button.addEventListener('mousedown', (event) => event.preventDefault());
         button.addEventListener('click', () => this._handleClick(entry));
         return button;
     }
