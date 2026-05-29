@@ -13,89 +13,98 @@
  * the 5 MB browser quota) and prevents accidental accumulation if a user
  * mass-favorites every node they see during a busy mesh event. When the
  * cap is hit, the oldest entry is dropped on the next add.
+ *
+ * IIFE wrap: top-level `const` and `let` in a classic <script> share the
+ * global lexical environment with sibling scripts. meshpoint_display_units.js
+ * already declares STORAGE_KEY / CHANGE_EVENT at the top scope, so an
+ * un-wrapped redeclaration here throws SyntaxError and the whole module
+ * fails to register window.MeshpointNodeFavorites. Wrapping in an IIFE
+ * gives this module its own scope.
  */
 
-const STORAGE_KEY = 'meshpoint.nodeFavorites';
-const CHANGE_EVENT = 'meshpoint:node-favorites';
-const MAX_FAVORITES = 200;
+(function () {
+    const STORAGE_KEY = 'meshpoint.nodeFavorites';
+    const CHANGE_EVENT = 'meshpoint:node-favorites';
+    const MAX_FAVORITES = 200;
 
-function _load() {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) return [];
-        return parsed.filter((v) => typeof v === 'string' && v.length > 0);
-    } catch (_e) {
-        return [];
-    }
-}
-
-let _favorites = _load();
-
-function _save() {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(_favorites));
-    } catch (_e) {
-        /* private mode / quota -- best-effort persistence */
-    }
-}
-
-function _emit() {
-    window.dispatchEvent(new CustomEvent(CHANGE_EVENT, {
-        detail: { list: [..._favorites] },
-    }));
-}
-
-class MeshpointNodeFavorites {
-    /** @returns {string[]} a copy of the favorites list (no live reference). */
-    static list() {
-        return [..._favorites];
+    function _load() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) return [];
+            return parsed.filter((v) => typeof v === 'string' && v.length > 0);
+        } catch (_e) {
+            return [];
+        }
     }
 
-    /** @param {string} nodeId */
-    static has(nodeId) {
-        if (!nodeId) return false;
-        return _favorites.includes(String(nodeId));
+    let _favorites = _load();
+
+    function _save() {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(_favorites));
+        } catch (_e) {
+            /* private mode / quota -- best-effort persistence */
+        }
     }
 
-    /**
-     * Toggle membership. Returns true if the node is now favorited,
-     * false if it was just removed.
-     * @param {string} nodeId
-     */
-    static toggle(nodeId) {
-        if (!nodeId) return false;
-        const id = String(nodeId);
-        const idx = _favorites.indexOf(id);
-        if (idx >= 0) {
-            _favorites.splice(idx, 1);
+    function _emit() {
+        window.dispatchEvent(new CustomEvent(CHANGE_EVENT, {
+            detail: { list: [..._favorites] },
+        }));
+    }
+
+    class MeshpointNodeFavorites {
+        /** @returns {string[]} a copy of the favorites list (no live reference). */
+        static list() {
+            return [..._favorites];
+        }
+
+        /** @param {string} nodeId */
+        static has(nodeId) {
+            if (!nodeId) return false;
+            return _favorites.includes(String(nodeId));
+        }
+
+        /**
+         * Toggle membership. Returns true if the node is now favorited,
+         * false if it was just removed.
+         * @param {string} nodeId
+         */
+        static toggle(nodeId) {
+            if (!nodeId) return false;
+            const id = String(nodeId);
+            const idx = _favorites.indexOf(id);
+            if (idx >= 0) {
+                _favorites.splice(idx, 1);
+                _save();
+                _emit();
+                return false;
+            }
+            if (_favorites.length >= MAX_FAVORITES) {
+                console.warn(
+                    `MeshpointNodeFavorites: cap of ${MAX_FAVORITES} reached, ` +
+                    'dropping oldest entry to make room.'
+                );
+                _favorites.shift();
+            }
+            _favorites.push(id);
             _save();
             _emit();
-            return false;
+            return true;
         }
-        if (_favorites.length >= MAX_FAVORITES) {
-            console.warn(
-                `MeshpointNodeFavorites: cap of ${MAX_FAVORITES} reached, ` +
-                'dropping oldest entry to make room.'
-            );
-            _favorites.shift();
+
+        /**
+         * Subscribe to favorite-list changes.
+         * @param {(event: CustomEvent) => void} handler
+         * @returns {() => void} unsubscribe function
+         */
+        static onChange(handler) {
+            window.addEventListener(CHANGE_EVENT, handler);
+            return () => window.removeEventListener(CHANGE_EVENT, handler);
         }
-        _favorites.push(id);
-        _save();
-        _emit();
-        return true;
     }
 
-    /**
-     * Subscribe to favorite-list changes.
-     * @param {(event: CustomEvent) => void} handler
-     * @returns {() => void} unsubscribe function
-     */
-    static onChange(handler) {
-        window.addEventListener(CHANGE_EVENT, handler);
-        return () => window.removeEventListener(CHANGE_EVENT, handler);
-    }
-}
-
-window.MeshpointNodeFavorites = MeshpointNodeFavorites;
+    window.MeshpointNodeFavorites = MeshpointNodeFavorites;
+})();
