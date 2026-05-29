@@ -11,6 +11,10 @@ class NodeDrawer {
         this._sections = {};
         this._metricsChart = null;
         this._metricsHours = 24;
+
+        if (window.MeshpointNodeFavorites) {
+            window.MeshpointNodeFavorites.onChange(() => this._refreshFavoriteButton());
+        }
     }
 
     async open(node) {
@@ -50,6 +54,10 @@ class NodeDrawer {
         const name = this._esc(node.display_name || node.long_name || node.short_name || node.node_id);
         const shortLabel = this._esc(node.short_name || (node.node_id || '').slice(-4)).toUpperCase();
         const color = this._hashColor(node.node_id || '');
+        const isFav = !!(window.MeshpointNodeFavorites && window.MeshpointNodeFavorites.has(node.node_id));
+        const favClass = isFav ? ' nd-header__favorite--on' : '';
+        const favTitle = isFav ? 'Remove favorite' : 'Add favorite';
+        const favGlyph = isFav ? '\u2605' : '\u2606';
 
         this._drawer.innerHTML = `
             <div class="nd-header">
@@ -60,6 +68,11 @@ class NodeDrawer {
                         <div class="nd-header__id">!${this._esc(node.node_id)}</div>
                     </div>
                 </div>
+                <button class="nd-header__favorite${favClass}"
+                        data-favorite-toggle
+                        aria-pressed="${isFav ? 'true' : 'false'}"
+                        aria-label="${favTitle}"
+                        title="${favTitle}">${favGlyph}</button>
                 <button class="nd-close" title="Close">&times;</button>
             </div>
             <div class="nd-body">
@@ -68,6 +81,27 @@ class NodeDrawer {
         `;
 
         this._drawer.querySelector('.nd-close').addEventListener('click', () => this.close());
+        const favBtn = this._drawer.querySelector('[data-favorite-toggle]');
+        if (favBtn) {
+            favBtn.addEventListener('click', () => {
+                if (!this._currentNode || !window.MeshpointNodeFavorites) return;
+                window.MeshpointNodeFavorites.toggle(this._currentNode.node_id);
+            });
+        }
+    }
+
+    _refreshFavoriteButton() {
+        if (!this._currentNode) return;
+        const btn = this._drawer.querySelector('[data-favorite-toggle]');
+        if (!btn) return;
+        const isFav = !!(window.MeshpointNodeFavorites
+            && window.MeshpointNodeFavorites.has(this._currentNode.node_id));
+        btn.classList.toggle('nd-header__favorite--on', isFav);
+        btn.setAttribute('aria-pressed', isFav ? 'true' : 'false');
+        const title = isFav ? 'Remove favorite' : 'Add favorite';
+        btn.setAttribute('aria-label', title);
+        btn.setAttribute('title', title);
+        btn.innerHTML = isFav ? '\u2605' : '\u2606';
     }
 
     _renderFull(n) {

@@ -333,6 +333,10 @@
                                         <option value="hops">Sort: Hops</option>
                                         <option value="name">Sort: Name</option>
                                     </select>
+                                    <button id="node-favorites-toggle" type="button"
+                                            class="nc-pill nc-pill--star"
+                                            aria-pressed="false"
+                                            title="Show only favorited nodes">&#9734;</button>
                                     <div class="nc-controls__filter" role="group" aria-label="Filter by hop count">
                                         <button type="button" class="nc-pill nc-pill--active" data-filter="all">All</button>
                                         <button type="button" class="nc-pill" data-filter="direct">Direct</button>
@@ -665,6 +669,8 @@
     <script src="js/websocket_client.js"></script>
     <script src="js/components/node_map.js"></script>
     <script src="js/meshpoint_display_units.js"></script>
+    <script src="js/meshpoint_node_favorites.js"></script>
+    <script src="js/node_cards_sort.js"></script>
     <script src="js/node_cards.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="js/node_metrics_chart.js"></script>

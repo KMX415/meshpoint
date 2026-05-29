@@ -305,6 +305,12 @@ html, body {
     opacity: 0.85;
 }
 
+.node-marker__diamond--fav {
+    border-color: #f59e0b;
+    border-width: 2px;
+    opacity: 1;
+}
+
 .node-marker__diamond--recent {
     border-color: #00ff88;
     border-width: 2px;

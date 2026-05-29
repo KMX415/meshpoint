@@ -87,6 +87,14 @@ class NodeMap {
 
         this._map.on('moveend', () => this._saveCurrentView());
         this._map.on('zoomend', () => this._saveCurrentView());
+
+        if (window.MeshpointNodeFavorites) {
+            window.MeshpointNodeFavorites.onChange(() => {
+                if (this._lastNodes) {
+                    this.loadNodes(this._lastNodes, this._lastDevice);
+                }
+            });
+        }
     }
 
     _loadSavedView() {
@@ -124,6 +132,9 @@ class NodeMap {
 
     loadNodes(nodes, device) {
         if (!this._initialized) return;
+
+        this._lastNodes = nodes;
+        this._lastDevice = device;
 
         this._markerGroup.clearLayers();
         this._markers = {};
@@ -186,23 +197,29 @@ class NodeMap {
 
         const heard = n.last_heard || n.last_seen;
         const isRecent = heard && (Date.now() - new Date(heard).getTime()) < 60000;
+        const isFav = !!(window.MeshpointNodeFavorites && window.MeshpointNodeFavorites.has(n.node_id));
 
         let marker;
         if (isMeshtastic) {
+            // Order of border color precedence: recent (green) > favorite (amber) > protocol (cyan).
+            let borderColor = protoColor;
+            if (isFav) borderColor = '#f59e0b';
+            if (isRecent) borderColor = '#00ff88';
             marker = L.circleMarker([n.latitude, n.longitude], {
                 radius: 6,
                 fillColor: protoColor,
                 fillOpacity: 0.8,
-                color: isRecent ? '#00ff88' : protoColor,
-                weight: isRecent ? 2 : 1,
+                color: borderColor,
+                weight: (isRecent || isFav) ? 2 : 1,
                 className: isRecent ? 'node-pulse' : '',
             });
             marker._meshpointKind = 'circle';
         } else {
             const recentClass = isRecent ? ' node-marker__diamond--recent' : '';
+            const favClass = isFav ? ' node-marker__diamond--fav' : '';
             marker = L.marker([n.latitude, n.longitude], {
                 icon: L.divIcon({
-                    html: `<div class="node-marker__diamond${recentClass}"></div>`,
+                    html: `<div class="node-marker__diamond${favClass}${recentClass}"></div>`,
                     className: '',
                     iconSize: [12, 12],
                     iconAnchor: [6, 6],
@@ -325,7 +342,12 @@ class NodeMap {
         marker.setStyle({ color: '#00ff88', weight: 2 });
         this._drawPacketLine(marker);
         setTimeout(() => {
-            marker.setStyle({ color: proto, weight: 1 });
+            const isFav = !!(window.MeshpointNodeFavorites
+                && window.MeshpointNodeFavorites.has(packet.source_id));
+            marker.setStyle({
+                color: isFav ? '#f59e0b' : proto,
+                weight: isFav ? 2 : 1,
+            });
         }, 5000);
     }
 

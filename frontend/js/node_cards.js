@@ -10,6 +10,7 @@ class NodeCards {
     static FILTER_KEYS = new Set(['all', 'direct', 'relayed']);
     static SORT_STORAGE_KEY = 'meshpoint.nodeCards.sortBy';
     static FILTER_STORAGE_KEY = 'meshpoint.nodeCards.filter';
+    static FAVORITES_ONLY_STORAGE_KEY = 'meshpoint.nodeCards.favoritesOnly';
 
     constructor(containerId, onCardClick) {
         this._container = document.getElementById(containerId);
@@ -18,6 +19,7 @@ class NodeCards {
         this._searchQuery = '';
         this._sortBy = this._loadSavedSort();
         this._filter = this._loadSavedFilter();
+        this._favoritesOnly = this._loadSavedFavoritesOnly();
 
         const searchEl = document.getElementById('node-search');
         if (searchEl) {
@@ -28,8 +30,12 @@ class NodeCards {
         }
         this._wireSort();
         this._wireFilter();
+        this._wireFavoritesToggle();
         if (window.MeshpointDisplayUnits) {
             window.MeshpointDisplayUnits.onChange(() => this._render());
+        }
+        if (window.MeshpointNodeFavorites) {
+            window.MeshpointNodeFavorites.onChange(() => this._render());
         }
     }
 
@@ -51,6 +57,14 @@ class NodeCards {
         }
     }
 
+    _loadSavedFavoritesOnly() {
+        try {
+            return localStorage.getItem(NodeCards.FAVORITES_ONLY_STORAGE_KEY) === '1';
+        } catch (_e) {
+            return false;
+        }
+    }
+
     _saveSort(value) {
         try { localStorage.setItem(NodeCards.SORT_STORAGE_KEY, value); }
         catch (_e) { /* private mode / quota -- best-effort */ }
@@ -59,6 +73,12 @@ class NodeCards {
     _saveFilter(value) {
         try { localStorage.setItem(NodeCards.FILTER_STORAGE_KEY, value); }
         catch (_e) { /* private mode / quota -- best-effort */ }
+    }
+
+    _saveFavoritesOnly(value) {
+        try {
+            localStorage.setItem(NodeCards.FAVORITES_ONLY_STORAGE_KEY, value ? '1' : '0');
+        } catch (_e) { /* private mode / quota -- best-effort */ }
     }
 
     _wireSort() {
@@ -90,6 +110,26 @@ class NodeCards {
                 this._render();
             });
         });
+    }
+
+    _wireFavoritesToggle() {
+        const btn = document.getElementById('node-favorites-toggle');
+        if (!btn) return;
+        this._reflectFavoritesToggle(btn);
+        btn.addEventListener('click', () => {
+            this._favoritesOnly = !this._favoritesOnly;
+            this._saveFavoritesOnly(this._favoritesOnly);
+            this._reflectFavoritesToggle(btn);
+            this._render();
+        });
+    }
+
+    _reflectFavoritesToggle(btn) {
+        const on = this._favoritesOnly;
+        btn.classList.toggle('nc-pill--active', on);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        btn.innerHTML = on ? '\u2605' : '\u2606';
+        btn.title = on ? 'Showing favorites only (click to clear)' : 'Show only favorited nodes';
     }
 
     loadNodes(nodes) {
@@ -144,6 +184,17 @@ class NodeCards {
 
         this._container.innerHTML = working.map(n => this._buildCard(n)).join('');
 
+        this._container.querySelectorAll('[data-favorite-toggle]').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const card = btn.closest('.nc-card');
+                const nodeId = card?.dataset?.nodeId;
+                if (nodeId && window.MeshpointNodeFavorites) {
+                    window.MeshpointNodeFavorites.toggle(nodeId);
+                }
+            });
+        });
+
         this._container.querySelectorAll('.nc-card').forEach(el => {
             el.addEventListener('click', () => {
                 const nodeId = el.dataset.nodeId;
@@ -154,72 +205,24 @@ class NodeCards {
     }
 
     _applyFilter(nodes) {
-        if (this._filter === 'direct') {
-            return nodes.filter(n => Number(n.latest_hops ?? n.hop_count ?? 0) === 0);
+        const filtered = window.MeshpointNodeCardsSort
+            ? window.MeshpointNodeCardsSort.applyFilter(nodes, this._filter)
+            : nodes;
+        if (this._favoritesOnly && window.MeshpointNodeFavorites) {
+            const favs = new Set(window.MeshpointNodeFavorites.list());
+            return filtered.filter((n) => favs.has(n.node_id));
         }
-        if (this._filter === 'relayed') {
-            return nodes.filter(n => Number(n.latest_hops ?? n.hop_count ?? 0) > 0);
-        }
-        return nodes;
+        return filtered;
     }
 
     _applySort(nodes) {
-        const cmp = this._comparator();
-        return nodes.slice().sort(cmp);
-    }
-
-    _comparator() {
-        const heardDesc = (a, b) => this._compareLastHeardDesc(a, b);
-        switch (this._sortBy) {
-            case 'signal':
-                return (a, b) => this._compareNumDesc(
-                    a.latest_rssi ?? a.rssi, b.latest_rssi ?? b.rssi
-                ) || heardDesc(a, b);
-            case 'hops':
-                return (a, b) => this._compareNumAsc(
-                    a.latest_hops ?? a.hop_count, b.latest_hops ?? b.hop_count
-                ) || heardDesc(a, b);
-            case 'name':
-                return (a, b) => this._compareName(a, b);
-            case 'last_heard':
-            default:
-                return heardDesc;
+        const favs = window.MeshpointNodeFavorites
+            ? new Set(window.MeshpointNodeFavorites.list())
+            : new Set();
+        if (window.MeshpointNodeCardsSort) {
+            return window.MeshpointNodeCardsSort.applySort(nodes, this._sortBy, favs);
         }
-    }
-
-    _compareNumDesc(a, b) {
-        const an = (a == null || Number.isNaN(Number(a))) ? null : Number(a);
-        const bn = (b == null || Number.isNaN(Number(b))) ? null : Number(b);
-        if (an === null && bn === null) return 0;
-        if (an === null) return 1;
-        if (bn === null) return -1;
-        return bn - an;
-    }
-
-    _compareNumAsc(a, b) {
-        const an = (a == null || Number.isNaN(Number(a))) ? null : Number(a);
-        const bn = (b == null || Number.isNaN(Number(b))) ? null : Number(b);
-        if (an === null && bn === null) return 0;
-        if (an === null) return 1;
-        if (bn === null) return -1;
-        return an - bn;
-    }
-
-    _compareLastHeardDesc(a, b) {
-        const am = this._heardMs(a.last_heard || a.last_seen);
-        const bm = this._heardMs(b.last_heard || b.last_seen);
-        const aMissing = Number.isNaN(am);
-        const bMissing = Number.isNaN(bm);
-        if (aMissing && bMissing) return 0;
-        if (aMissing) return 1;
-        if (bMissing) return -1;
-        return bm - am;
-    }
-
-    _compareName(a, b) {
-        const an = (a.long_name || a.short_name || a.node_id || '').toString();
-        const bn = (b.long_name || b.short_name || b.node_id || '').toString();
-        return an.localeCompare(bn, undefined, { sensitivity: 'base' });
+        return nodes.slice();
     }
 
     _buildCard(n) {
@@ -233,18 +236,28 @@ class NodeCards {
         const onlineDot = online
             ? '<span class="nc-online nc-online--on" title="Heard within 2 hours"></span>'
             : '<span class="nc-online nc-online--off" title="Not heard within 2 hours"></span>';
+        const isFav = !!(window.MeshpointNodeFavorites && window.MeshpointNodeFavorites.has(n.node_id));
+        const favClass = isFav ? ' nc-card__favorite--on' : '';
+        const favTitle = isFav ? 'Remove favorite' : 'Add favorite';
+        const favGlyph = isFav ? '\u2605' : '\u2606';
 
         const signal = this._buildSignal(n);
         const telemetry = this._buildTelemetry(n);
         const meta = this._buildMeta(n);
 
-        return `<div class="nc-card" data-node-id="${this._esc(n.node_id)}">
+        return `<div class="nc-card${isFav ? ' nc-card--fav' : ''}" data-node-id="${this._esc(n.node_id)}">
             <div class="nc-card__top">
                 <div class="nc-avatar" style="background:${avatarColor}">${shortLabel}</div>
                 <div class="nc-card__identity">
                     <div class="nc-card__name">${onlineDot} ${name}</div>
                     <div class="nc-card__heard">${this._timeAgo(heardAt)}</div>
                 </div>
+                <button type="button"
+                        class="nc-card__favorite${favClass}"
+                        data-favorite-toggle
+                        aria-label="${favTitle}"
+                        aria-pressed="${isFav ? 'true' : 'false'}"
+                        title="${favTitle}">${favGlyph}</button>
                 <span class="nc-proto nc-proto--${proto}">${protoBadge}</span>
             </div>
             ${signal}
