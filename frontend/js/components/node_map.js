@@ -2,6 +2,11 @@
  * Leaflet map with marker clustering for the local Meshpoint dashboard.
  * Displays the Meshpoint device and captured nodes with protocol-colored markers.
  */
+
+const MAP_VIEW_STORAGE_KEY = 'meshpoint.nodeMap.view';
+const MAP_DEFAULT_CENTER = [39.8, -98.5];
+const MAP_DEFAULT_ZOOM = 4;
+
 class NodeMap {
     constructor(containerId) {
         this._containerId = containerId;
@@ -21,7 +26,16 @@ class NodeMap {
         this._map = L.map(this._containerId, {
             zoomControl: true,
             scrollWheelZoom: true,
-        }).setView([39.8, -98.5], 4);
+        });
+
+        const savedView = this._loadSavedView();
+        if (savedView) {
+            this._map.setView(savedView.center, savedView.zoom);
+            // Honor the user's saved view; skip the first-load auto-fit.
+            this._hasFitBounds = true;
+        } else {
+            this._map.setView(MAP_DEFAULT_CENTER, MAP_DEFAULT_ZOOM);
+        }
 
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; CARTO',
@@ -70,6 +84,42 @@ class NodeMap {
         });
 
         this._initialized = true;
+
+        this._map.on('moveend', () => this._saveCurrentView());
+        this._map.on('zoomend', () => this._saveCurrentView());
+    }
+
+    _loadSavedView() {
+        try {
+            const raw = localStorage.getItem(MAP_VIEW_STORAGE_KEY);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            const lat = Number(parsed.lat);
+            const lon = Number(parsed.lon);
+            const zoom = Number(parsed.zoom);
+            if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(zoom)) {
+                return null;
+            }
+            if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+            if (zoom < 0 || zoom > 19) return null;
+            return { center: [lat, lon], zoom };
+        } catch (_e) {
+            return null;
+        }
+    }
+
+    _saveCurrentView() {
+        if (!this._map) return;
+        try {
+            const c = this._map.getCenter();
+            localStorage.setItem(MAP_VIEW_STORAGE_KEY, JSON.stringify({
+                lat: c.lat,
+                lon: c.lng,
+                zoom: this._map.getZoom(),
+            }));
+        } catch (_e) {
+            /* private mode / quota -- best-effort persistence */
+        }
     }
 
     loadNodes(nodes, device) {
@@ -132,32 +182,65 @@ class NodeMap {
 
     _addNodeMarker(n) {
         const isMeshtastic = (n.protocol || 'meshtastic') === 'meshtastic';
-        const color = isMeshtastic ? '#06b6d4' : '#a855f7';
+        const protoColor = isMeshtastic ? '#06b6d4' : '#a855f7';
 
         const heard = n.last_heard || n.last_seen;
         const isRecent = heard && (Date.now() - new Date(heard).getTime()) < 60000;
 
-        const marker = L.circleMarker([n.latitude, n.longitude], {
-            radius: 6,
-            fillColor: color,
-            fillOpacity: 0.8,
-            color: isRecent ? '#00ff88' : color,
-            weight: isRecent ? 2 : 1,
-            className: isRecent ? 'node-pulse' : '',
-        });
+        let marker;
+        if (isMeshtastic) {
+            marker = L.circleMarker([n.latitude, n.longitude], {
+                radius: 6,
+                fillColor: protoColor,
+                fillOpacity: 0.8,
+                color: isRecent ? '#00ff88' : protoColor,
+                weight: isRecent ? 2 : 1,
+                className: isRecent ? 'node-pulse' : '',
+            });
+            marker._meshpointKind = 'circle';
+        } else {
+            const recentClass = isRecent ? ' node-marker__diamond--recent' : '';
+            marker = L.marker([n.latitude, n.longitude], {
+                icon: L.divIcon({
+                    html: `<div class="node-marker__diamond${recentClass}"></div>`,
+                    className: '',
+                    iconSize: [12, 12],
+                    iconAnchor: [6, 6],
+                }),
+            });
+            marker._meshpointKind = 'diamond';
+        }
 
         const name = n.long_name || n.name || n.node_id || '--';
         const rssi = (n.rssi ?? n.latest_rssi) != null
             ? `${Number(n.rssi ?? n.latest_rssi).toFixed(0)} dBm` : '--';
+        const lastHeard = this._formatRelativeTime(heard);
 
         marker.bindPopup(
             `<strong>${this._esc(name)}</strong><br>` +
             `Protocol: ${n.protocol || 'meshtastic'}<br>` +
-            `RSSI: ${rssi}`
+            `RSSI: ${rssi}<br>` +
+            `Last heard: ${lastHeard}`
         );
 
         this._markerGroup.addLayer(marker);
         this._markers[n.node_id] = marker;
+    }
+
+    _formatRelativeTime(timestamp) {
+        if (!timestamp) return 'unknown';
+        const t = new Date(timestamp).getTime();
+        if (Number.isNaN(t)) return 'unknown';
+        const diffMs = Date.now() - t;
+        if (diffMs < 0) return 'just now';
+        const sec = Math.floor(diffMs / 1000);
+        if (sec < 60) return `${sec}s ago`;
+        const min = Math.floor(sec / 60);
+        if (min < 60) return `${min}m ago`;
+        const hr = Math.floor(min / 60);
+        if (hr < 24) return `${hr}h ago`;
+        const days = Math.floor(hr / 24);
+        return `${days}d ago`;
     }
 
     drawFocusLine(sourceNodeId) {
@@ -222,14 +305,28 @@ class NodeMap {
     updateFromPacket(packet) {
         if (!packet.source_id || !this._initialized) return;
         const marker = this._markers[packet.source_id];
-        if (marker) {
-            marker.setStyle({ color: '#00ff88', weight: 2 });
+        if (!marker) return;
+
+        const isMeshtastic = (packet.protocol || 'meshtastic') === 'meshtastic';
+        const proto = isMeshtastic ? '#06b6d4' : '#a855f7';
+
+        if (marker._meshpointKind === 'diamond') {
+            const el = marker.getElement()?.querySelector('.node-marker__diamond');
+            if (el) el.classList.add('node-marker__diamond--recent');
             this._drawPacketLine(marker);
             setTimeout(() => {
-                const proto = (packet.protocol || 'meshtastic') === 'meshtastic' ? '#06b6d4' : '#a855f7';
-                marker.setStyle({ color: proto, weight: 1 });
+                const el2 = marker.getElement()?.querySelector('.node-marker__diamond');
+                if (el2) el2.classList.remove('node-marker__diamond--recent');
             }, 5000);
+            return;
         }
+
+        // Default: circleMarker (Meshtastic).
+        marker.setStyle({ color: '#00ff88', weight: 2 });
+        this._drawPacketLine(marker);
+        setTimeout(() => {
+            marker.setStyle({ color: proto, weight: 1 });
+        }, 5000);
     }
 
     _drawPacketLine(sourceMarker) {

@@ -292,6 +292,25 @@ html, body {
     box-shadow: 0 0 10px var(--accent-green), 0 0 20px rgba(0, 229, 160, 0.3);
 }
 
+/* MeshCore node marker (Meshtastic uses circleMarker; diamond visually
+   distinguishes the two protocols on the local map per Kaylee's
+   request, Discord May 2026). */
+.node-marker__diamond {
+    width: 10px;
+    height: 10px;
+    background: #a855f7;
+    border: 1px solid #a855f7;
+    border-radius: 2px;
+    transform: rotate(45deg);
+    opacity: 0.85;
+}
+
+.node-marker__diamond--recent {
+    border-color: #00ff88;
+    border-width: 2px;
+    animation: pulseRing 1.5s ease-out infinite;
+}
+
 .packet-line {
     filter: drop-shadow(0 0 4px rgba(0, 229, 160, 0.6));
 }
