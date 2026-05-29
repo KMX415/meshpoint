@@ -6,13 +6,18 @@
 class NodeCards {
     /** Match Meshtastic-style "recently heard" (not cloud device heartbeat at 15 min). */
     static ONLINE_THRESHOLD_MS = 2 * 60 * 60 * 1000;
+    static SORT_KEYS = new Set(['last_heard', 'signal', 'hops', 'name']);
+    static FILTER_KEYS = new Set(['all', 'direct', 'relayed']);
+    static SORT_STORAGE_KEY = 'meshpoint.nodeCards.sortBy';
+    static FILTER_STORAGE_KEY = 'meshpoint.nodeCards.filter';
 
     constructor(containerId, onCardClick) {
         this._container = document.getElementById(containerId);
         this._onCardClick = onCardClick;
         this._nodes = [];
         this._searchQuery = '';
-        this._sortBy = 'last_heard';
+        this._sortBy = this._loadSavedSort();
+        this._filter = this._loadSavedFilter();
 
         const searchEl = document.getElementById('node-search');
         if (searchEl) {
@@ -21,9 +26,70 @@ class NodeCards {
                 this._render();
             });
         }
+        this._wireSort();
+        this._wireFilter();
         if (window.MeshpointDisplayUnits) {
             window.MeshpointDisplayUnits.onChange(() => this._render());
         }
+    }
+
+    _loadSavedSort() {
+        try {
+            const v = localStorage.getItem(NodeCards.SORT_STORAGE_KEY);
+            return NodeCards.SORT_KEYS.has(v) ? v : 'last_heard';
+        } catch (_e) {
+            return 'last_heard';
+        }
+    }
+
+    _loadSavedFilter() {
+        try {
+            const v = localStorage.getItem(NodeCards.FILTER_STORAGE_KEY);
+            return NodeCards.FILTER_KEYS.has(v) ? v : 'all';
+        } catch (_e) {
+            return 'all';
+        }
+    }
+
+    _saveSort(value) {
+        try { localStorage.setItem(NodeCards.SORT_STORAGE_KEY, value); }
+        catch (_e) { /* private mode / quota -- best-effort */ }
+    }
+
+    _saveFilter(value) {
+        try { localStorage.setItem(NodeCards.FILTER_STORAGE_KEY, value); }
+        catch (_e) { /* private mode / quota -- best-effort */ }
+    }
+
+    _wireSort() {
+        const select = document.getElementById('node-sort');
+        if (!select) return;
+        select.value = this._sortBy;
+        select.addEventListener('change', (e) => {
+            const next = e.target.value;
+            if (!NodeCards.SORT_KEYS.has(next)) return;
+            this._sortBy = next;
+            this._saveSort(next);
+            this._render();
+        });
+    }
+
+    _wireFilter() {
+        const buttons = document.querySelectorAll('[data-filter]');
+        if (!buttons.length) return;
+        buttons.forEach((btn) => {
+            const value = btn.dataset.filter;
+            btn.classList.toggle('nc-pill--active', value === this._filter);
+            btn.addEventListener('click', () => {
+                if (!NodeCards.FILTER_KEYS.has(value)) return;
+                this._filter = value;
+                this._saveFilter(value);
+                buttons.forEach((b) => {
+                    b.classList.toggle('nc-pill--active', b.dataset.filter === value);
+                });
+                this._render();
+            });
+        });
     }
 
     loadNodes(nodes) {
@@ -59,22 +125,24 @@ class NodeCards {
     }
 
     _render() {
-        let filtered = this._nodes;
+        let working = this._nodes;
         if (this._searchQuery) {
-            filtered = filtered.filter(n => {
+            working = working.filter(n => {
                 const name = (n.long_name || n.short_name || '').toLowerCase();
                 const id = (n.node_id || '').toLowerCase();
                 return name.includes(this._searchQuery) || id.includes(this._searchQuery);
             });
         }
+        working = this._applyFilter(working);
+        working = this._applySort(working);
 
-        if (filtered.length === 0) {
+        if (working.length === 0) {
             this._container.innerHTML =
                 '<div class="nc-empty">No nodes found</div>';
             return;
         }
 
-        this._container.innerHTML = filtered.map(n => this._buildCard(n)).join('');
+        this._container.innerHTML = working.map(n => this._buildCard(n)).join('');
 
         this._container.querySelectorAll('.nc-card').forEach(el => {
             el.addEventListener('click', () => {
@@ -83,6 +151,75 @@ class NodeCards {
                 if (node && this._onCardClick) this._onCardClick(node);
             });
         });
+    }
+
+    _applyFilter(nodes) {
+        if (this._filter === 'direct') {
+            return nodes.filter(n => Number(n.latest_hops ?? n.hop_count ?? 0) === 0);
+        }
+        if (this._filter === 'relayed') {
+            return nodes.filter(n => Number(n.latest_hops ?? n.hop_count ?? 0) > 0);
+        }
+        return nodes;
+    }
+
+    _applySort(nodes) {
+        const cmp = this._comparator();
+        return nodes.slice().sort(cmp);
+    }
+
+    _comparator() {
+        const heardDesc = (a, b) => this._compareLastHeardDesc(a, b);
+        switch (this._sortBy) {
+            case 'signal':
+                return (a, b) => this._compareNumDesc(
+                    a.latest_rssi ?? a.rssi, b.latest_rssi ?? b.rssi
+                ) || heardDesc(a, b);
+            case 'hops':
+                return (a, b) => this._compareNumAsc(
+                    a.latest_hops ?? a.hop_count, b.latest_hops ?? b.hop_count
+                ) || heardDesc(a, b);
+            case 'name':
+                return (a, b) => this._compareName(a, b);
+            case 'last_heard':
+            default:
+                return heardDesc;
+        }
+    }
+
+    _compareNumDesc(a, b) {
+        const an = (a == null || Number.isNaN(Number(a))) ? null : Number(a);
+        const bn = (b == null || Number.isNaN(Number(b))) ? null : Number(b);
+        if (an === null && bn === null) return 0;
+        if (an === null) return 1;
+        if (bn === null) return -1;
+        return bn - an;
+    }
+
+    _compareNumAsc(a, b) {
+        const an = (a == null || Number.isNaN(Number(a))) ? null : Number(a);
+        const bn = (b == null || Number.isNaN(Number(b))) ? null : Number(b);
+        if (an === null && bn === null) return 0;
+        if (an === null) return 1;
+        if (bn === null) return -1;
+        return an - bn;
+    }
+
+    _compareLastHeardDesc(a, b) {
+        const am = this._heardMs(a.last_heard || a.last_seen);
+        const bm = this._heardMs(b.last_heard || b.last_seen);
+        const aMissing = Number.isNaN(am);
+        const bMissing = Number.isNaN(bm);
+        if (aMissing && bMissing) return 0;
+        if (aMissing) return 1;
+        if (bMissing) return -1;
+        return bm - am;
+    }
+
+    _compareName(a, b) {
+        const an = (a.long_name || a.short_name || a.node_id || '').toString();
+        const bn = (b.long_name || b.short_name || b.node_id || '').toString();
+        return an.localeCompare(bn, undefined, { sensitivity: 'base' });
     }
 
     _buildCard(n) {

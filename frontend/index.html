@@ -326,6 +326,19 @@
                                     <span>Nodes</span>
                                     <input type="text" id="node-search" class="node-search" placeholder="Search..." />
                                 </div>
+                                <div class="nc-controls" role="group" aria-label="Sort and filter nodes">
+                                    <select id="node-sort" class="nc-controls__sort" aria-label="Sort nodes by">
+                                        <option value="last_heard">Sort: Last heard</option>
+                                        <option value="signal">Sort: Signal</option>
+                                        <option value="hops">Sort: Hops</option>
+                                        <option value="name">Sort: Name</option>
+                                    </select>
+                                    <div class="nc-controls__filter" role="group" aria-label="Filter by hop count">
+                                        <button type="button" class="nc-pill nc-pill--active" data-filter="all">All</button>
+                                        <button type="button" class="nc-pill" data-filter="direct">Direct</button>
+                                        <button type="button" class="nc-pill" data-filter="relayed">Relayed</button>
+                                    </div>
+                                </div>
                                 <div class="panel__body" id="node-list"></div>
                             </div>
                         </section>
