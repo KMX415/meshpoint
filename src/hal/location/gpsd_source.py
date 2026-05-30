@@ -75,6 +75,9 @@ class GpsdSource(LocationSource):
         self._latest_fix: Optional[LocationFix] = None
         self._latest_sats: Optional[SatellitesView] = None
         self._latest_device: Optional[GpsDeviceInfo] = None
+        # DOP fields are published in SKY, position fields in TPV. Cache
+        # DOP separately so a fresh TPV does not strip DOP we already have.
+        self._latest_dop: dict[str, float] = {}
         self._last_update: Optional[datetime] = None
         self._connected = False
         self._last_error: Optional[str] = None
@@ -246,51 +249,59 @@ class GpsdSource(LocationSource):
             epx_m=_optional_float(payload, "epx"),
             epy_m=_optional_float(payload, "epy"),
             epv_m=_optional_float(payload, "epv"),
-            hdop=_optional_float(payload, "hdop"),
-            pdop=_optional_float(payload, "pdop"),
-            vdop=_optional_float(payload, "vdop"),
+            hdop=self._latest_dop.get("hdop"),
+            pdop=self._latest_dop.get("pdop"),
+            vdop=self._latest_dop.get("vdop"),
         )
 
     def _handle_sky(self, payload: dict) -> None:
-        raw_sats = payload.get("satellites") or []
-        sats: list[Satellite] = []
-        for entry in raw_sats:
-            sats.append(
-                Satellite(
-                    prn=int(entry.get("PRN", 0)),
-                    azimuth=_optional_float(entry, "az"),
-                    elevation=_optional_float(entry, "el"),
-                    snr_dbhz=_optional_float(entry, "ss"),
-                    used=bool(entry.get("used", False)),
-                    gnss=classify_gnss_id(entry.get("gnssid")),
+        # gpsd alternates between full SKY (with ``satellites`` array)
+        # and partial SKY (DOP-only, ``uSat``/``nSat`` totals). Only
+        # replace the cached satellite list when the payload actually
+        # carries one; otherwise we'd flicker between a real list and
+        # an empty list every report cycle.
+        if "satellites" in payload:
+            raw_sats = payload.get("satellites") or []
+            sats: list[Satellite] = []
+            for entry in raw_sats:
+                sats.append(
+                    Satellite(
+                        prn=int(entry.get("PRN", 0)),
+                        azimuth=_optional_float(entry, "az"),
+                        elevation=_optional_float(entry, "el"),
+                        snr_dbhz=_optional_float(entry, "ss"),
+                        used=bool(entry.get("used", False)),
+                        gnss=classify_gnss_id(entry.get("gnssid")),
+                    )
                 )
-            )
-        self._latest_sats = SatellitesView.from_satellites(sats)
+            self._latest_sats = SatellitesView.from_satellites(sats)
 
-        # SKY also carries DOP fields on some gpsd builds; merge into
-        # the fix snapshot if present and we have a fix.
-        if self._latest_fix is not None:
-            updated_fields = {}
-            for key in ("hdop", "pdop", "vdop"):
-                value = _optional_float(payload, key)
-                if value is not None:
-                    updated_fields[key] = value
-            if updated_fields:
-                self._latest_fix = LocationFix(
-                    mode=self._latest_fix.mode,
-                    latitude=self._latest_fix.latitude,
-                    longitude=self._latest_fix.longitude,
-                    altitude_m=self._latest_fix.altitude_m,
-                    speed_mps=self._latest_fix.speed_mps,
-                    track_deg=self._latest_fix.track_deg,
-                    time=self._latest_fix.time,
-                    epx_m=self._latest_fix.epx_m,
-                    epy_m=self._latest_fix.epy_m,
-                    epv_m=self._latest_fix.epv_m,
-                    hdop=updated_fields.get("hdop", self._latest_fix.hdop),
-                    pdop=updated_fields.get("pdop", self._latest_fix.pdop),
-                    vdop=updated_fields.get("vdop", self._latest_fix.vdop),
-                )
+        # DOP fields ride on every SKY (full or partial). Cache them
+        # separately so the next TPV-derived ``LocationFix`` keeps
+        # them instead of resetting hdop/pdop/vdop to ``None``.
+        for key in ("hdop", "pdop", "vdop"):
+            value = _optional_float(payload, key)
+            if value is not None:
+                self._latest_dop[key] = value
+
+        # Merge DOP into the current fix snapshot so the dashboard sees
+        # them on the next get_status() without waiting for a fresh TPV.
+        if self._latest_fix is not None and self._latest_dop:
+            self._latest_fix = LocationFix(
+                mode=self._latest_fix.mode,
+                latitude=self._latest_fix.latitude,
+                longitude=self._latest_fix.longitude,
+                altitude_m=self._latest_fix.altitude_m,
+                speed_mps=self._latest_fix.speed_mps,
+                track_deg=self._latest_fix.track_deg,
+                time=self._latest_fix.time,
+                epx_m=self._latest_fix.epx_m,
+                epy_m=self._latest_fix.epy_m,
+                epv_m=self._latest_fix.epv_m,
+                hdop=self._latest_dop.get("hdop", self._latest_fix.hdop),
+                pdop=self._latest_dop.get("pdop", self._latest_fix.pdop),
+                vdop=self._latest_dop.get("vdop", self._latest_fix.vdop),
+            )
 
     def _handle_devices(self, payload: dict) -> None:
         devices = payload.get("devices") or []

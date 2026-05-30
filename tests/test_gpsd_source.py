@@ -81,6 +81,8 @@ class TestGpsdSourceTpvHandling(unittest.IsolatedAsyncioTestCase):
     """TPV reports populate ``LocationFix`` and surface through ``get_status``."""
 
     async def test_3d_fix_publishes_position(self) -> None:
+        # Real gpsd publishes DOP on SKY, not TPV. TPV here carries
+        # only position fields; DOP is asserted separately via SKY.
         tpv = {
             "class": "TPV",
             "mode": 3,
@@ -93,7 +95,6 @@ class TestGpsdSourceTpvHandling(unittest.IsolatedAsyncioTestCase):
             "epx": 1.5,
             "epy": 1.6,
             "epv": 2.4,
-            "hdop": 0.9,
         }
         reader = _FakeReader([_line(tpv)])
         writer = _FakeWriter()
@@ -112,7 +113,8 @@ class TestGpsdSourceTpvHandling(unittest.IsolatedAsyncioTestCase):
             self.assertAlmostEqual(status.fix.latitude, 40.7128)
             self.assertAlmostEqual(status.fix.longitude, -74.0060)
             self.assertAlmostEqual(status.fix.altitude_m, 12.3)
-            self.assertEqual(status.fix.hdop, 0.9)
+            self.assertAlmostEqual(status.fix.epx_m, 1.5)
+            self.assertAlmostEqual(status.fix.epy_m, 1.6)
 
             reader.close()
             await source.stop()
@@ -232,6 +234,78 @@ class TestGpsdSourceSkyHandling(unittest.IsolatedAsyncioTestCase):
             status = source.get_status()
             self.assertEqual(status.fix.hdop, 1.2)
             self.assertEqual(status.fix.pdop, 1.7)
+
+            reader.close()
+            await source.stop()
+
+    async def test_partial_sky_does_not_clobber_satellite_list(self) -> None:
+        # gpsd alternates between full SKY (carries ``satellites`` array)
+        # and partial SKY (DOP-only, ``uSat`` total). The partial form
+        # must not blank out the satellite list we just received, or the
+        # skyplot flickers between full and empty every report cycle.
+        full_sky = {
+            "class": "SKY",
+            "satellites": [
+                {"PRN": 5, "az": 150.0, "el": 65.0, "ss": 42.0, "used": True, "gnssid": 0},
+                {"PRN": 12, "az": 220.0, "el": 30.0, "ss": 35.0, "used": True, "gnssid": 0},
+            ],
+            "hdop": 1.0,
+            "pdop": 1.5,
+        }
+        partial_sky = {
+            "class": "SKY",
+            "uSat": 2,
+            "hdop": 1.0,
+            "pdop": 1.5,
+        }
+        reader = _FakeReader([_line(full_sky), _line(partial_sky)])
+        writer = _FakeWriter()
+        with patch(
+            "asyncio.open_connection",
+            new=AsyncMock(return_value=(reader, writer)),
+        ):
+            source = GpsdSource()
+            await source.start()
+            await asyncio.sleep(0.05)
+
+            status = source.get_status()
+            self.assertIsNotNone(status.satellites)
+            self.assertEqual(status.satellites.in_view, 2)
+            self.assertEqual(status.satellites.used, 2)
+
+            reader.close()
+            await source.stop()
+
+    async def test_dop_survives_subsequent_tpv(self) -> None:
+        # Real gpsd: TPV has no DOP fields, only SKY does. If a fresh
+        # TPV arrives after a SKY-with-DOP, the cached DOP must carry
+        # over into the new LocationFix instead of being reset to None.
+        tpv1 = {"class": "TPV", "mode": 3, "lat": 40.0, "lon": -74.0, "altMSL": 10.0}
+        sky = {
+            "class": "SKY",
+            "satellites": [
+                {"PRN": 5, "az": 150.0, "el": 65.0, "ss": 42.0, "used": True, "gnssid": 0},
+            ],
+            "hdop": 0.9,
+            "pdop": 1.4,
+            "vdop": 1.1,
+        }
+        tpv2 = {"class": "TPV", "mode": 3, "lat": 40.0001, "lon": -74.0001, "altMSL": 10.5}
+        reader = _FakeReader([_line(tpv1), _line(sky), _line(tpv2)])
+        writer = _FakeWriter()
+        with patch(
+            "asyncio.open_connection",
+            new=AsyncMock(return_value=(reader, writer)),
+        ):
+            source = GpsdSource()
+            await source.start()
+            await asyncio.sleep(0.05)
+
+            status = source.get_status()
+            self.assertAlmostEqual(status.fix.latitude, 40.0001)
+            self.assertEqual(status.fix.hdop, 0.9)
+            self.assertEqual(status.fix.pdop, 1.4)
+            self.assertEqual(status.fix.vdop, 1.1)
 
             reader.close()
             await source.stop()
