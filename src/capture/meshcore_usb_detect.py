@@ -3,6 +3,11 @@
 Scans /dev/ttyUSB* and /dev/ttyACM* for devices that respond to
 MeshCore serial commands.  Used at startup for plug-and-play support
 and by the setup wizard for hardware discovery.
+
+Ports that the USB classifier identifies as known GPS receivers
+(u-blox VID 0x1546 etc.) are filtered out before probing so plugging
+in a USB GPS stick does not waste 5 s per port on a doomed handshake
+or briefly steal the device from gpsd.
 """
 
 from __future__ import annotations
@@ -11,6 +16,8 @@ import asyncio
 import glob
 import logging
 from typing import Optional
+
+from src.hal.usb_classifier import PortClass, UsbPortClassifier
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +28,33 @@ _PROBE_TIMEOUT_SECONDS = 5.0
 def find_serial_candidates(
     exclude_ports: frozenset[str] = frozenset(),
 ) -> list[str]:
-    """List USB serial ports that could be MeshCore devices."""
+    """List USB serial ports that could be MeshCore devices.
+
+    Excludes ports the classifier identifies as known GPS receivers.
+    """
     candidates: list[str] = []
     for pattern in _USB_SERIAL_PATTERNS:
         candidates.extend(glob.glob(pattern))
-    return sorted(p for p in candidates if p not in exclude_ports)
+
+    classifier = UsbPortClassifier()
+    gps_ports = {
+        info.device
+        for info in classifier.list_ports()
+        if info.port_class is PortClass.GPS_KNOWN
+    }
+    if gps_ports:
+        skipped = sorted(p for p in candidates if p in gps_ports)
+        if skipped:
+            logger.info(
+                "Skipping known GPS device(s) during MeshCore probe: %s",
+                ", ".join(skipped),
+            )
+
+    return sorted(
+        p
+        for p in candidates
+        if p not in exclude_ports and p not in gps_ports
+    )
 
 
 async def probe_meshcore_device(

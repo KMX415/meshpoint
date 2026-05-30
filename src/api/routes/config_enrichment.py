@@ -6,13 +6,14 @@ from src.config import AppConfig
 
 
 def enrich_config_payload(cfg: AppConfig, base: dict) -> dict:
-    """Merge device, upstream, storage, capture, and extended relay/radio into *base*."""
+    """Merge device, upstream, storage, capture, location, and extended relay/radio into *base*."""
     device = cfg.device
     upstream = cfg.upstream
     storage = cfg.storage
     capture = cfg.capture
     relay = cfg.relay
     radio = cfg.radio
+    location = cfg.location
     mc_usb = capture.meshcore_usb
 
     token = (upstream.auth_token or "").strip()
@@ -55,5 +56,12 @@ def enrich_config_payload(cfg: AppConfig, base: dict) -> dict:
     base["radio_advanced"] = {
         "spectral_scan_interval_seconds": radio.spectral_scan_interval_seconds,
         "sx1261_spi_path": radio.sx1261_spi_path or "",
+    }
+    base["location"] = {
+        "source": location.source,
+        "gpsd_host": location.gpsd_host,
+        "gpsd_port": location.gpsd_port,
+        "update_interval_seconds": location.update_interval_seconds,
+        "min_fix_quality": location.min_fix_quality,
     }
     return base

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -53,12 +54,30 @@ class DeviceUpdate(BaseModel):
 
 
 class GpsUpdate(BaseModel):
-    """GPS card payload: static coordinates map to ``device`` in yaml."""
+    """GPS card payload.
+
+    The GPS card supports three source modes:
+
+    * ``static`` -- coordinates are entered by the user and live in the
+      ``device:`` section of ``local.yaml``. Position is stationary.
+    * ``gpsd`` -- live position from a running gpsd daemon (defaults to
+      127.0.0.1:2947). The ``location:`` section of ``local.yaml`` holds
+      the connection details and update cadence.
+    * ``uart`` -- placeholder for the on-board RAK Pi HAT GPS module.
+      Not yet wired in v0.7.5; falls back to static.
+    """
 
     source: str = "static"
+    # Static-mode fields
     latitude: Optional[float] = Field(None, ge=-90, le=90)
     longitude: Optional[float] = Field(None, ge=-180, le=180)
     altitude: Optional[float] = Field(None, ge=-500, le=10_000)
+    # gpsd-mode fields (all optional; sensible defaults in LocationConfig)
+    gpsd_host: Optional[str] = Field(None, min_length=1, max_length=253)
+    gpsd_port: Optional[int] = Field(None, ge=1, le=65535)
+    update_interval_seconds: Optional[int] = Field(None, ge=1, le=300)
+    min_fix_quality: Optional[int] = Field(None, ge=1, le=3)
+    # uart-mode fields (kept for forward-compat; not yet wired)
     baud: Optional[int] = Field(None, ge=9600, le=921600)
     timeout_seconds: Optional[int] = Field(None, ge=1, le=3600)
 
@@ -115,39 +134,117 @@ async def update_device(
     }
 
 
+_VALID_GPS_SOURCES = ("static", "gpsd", "uart")
+
+
 @router.put("/gps")
 async def update_gps(
     req: GpsUpdate,
     _claims: SessionClaims = Depends(require_admin),
     audit: AuditLogWriter = Depends(get_audit_writer),
 ):
-    """Persist map coordinates. UART source is informational until gpsd lands."""
+    """Persist map coordinates and/or live-GPS connection settings.
+
+    Switching ``source`` requires a service restart because the
+    ``LocationSource`` is built once at coordinator startup. Editing
+    only the static coordinates while staying on ``static`` is a
+    runtime-hot-reload (no restart needed).
+    """
     if _config is None:
         raise HTTPException(503, "Config not loaded")
 
-    if req.source not in ("uart", "static"):
-        raise HTTPException(400, "source must be uart or static")
+    if req.source not in _VALID_GPS_SOURCES:
+        raise HTTPException(
+            400,
+            f"source must be one of {_VALID_GPS_SOURCES}",
+        )
 
-    if req.source == "uart":
-        return {
-            "saved": True,
-            "restart_required": False,
-            "gps": {"source": "uart", "note": "Live UART GPS uses the on-board module; edit coordinates under static mode."},
-        }
+    location = _config.location
+    device = _config.device
+    source_changed = req.source != location.source
 
-    if req.latitude is None or req.longitude is None:
-        raise HTTPException(400, "latitude and longitude are required for static GPS")
+    location_updates: dict = {}
+    device_updates: dict = {}
 
-    device_req = DeviceUpdate(
-        latitude=req.latitude,
-        longitude=req.longitude,
-        altitude=req.altitude,
-    )
-    result = await update_device(device_req, _claims, audit)
-    result["gps"] = {
-        "source": "static",
-        "latitude": req.latitude,
-        "longitude": req.longitude,
-        "altitude": req.altitude,
+    # ------------------------------------------------------------------
+    # Branch by source: collect all updates, write yaml at the end.
+    # ------------------------------------------------------------------
+    if req.source == "static":
+        if req.latitude is None or req.longitude is None:
+            raise HTTPException(
+                400,
+                "latitude and longitude are required for source=static",
+            )
+        device.latitude = req.latitude
+        device.longitude = req.longitude
+        device_updates["latitude"] = req.latitude
+        device_updates["longitude"] = req.longitude
+        if req.altitude is not None:
+            device.altitude = req.altitude
+            device_updates["altitude"] = req.altitude
+        if source_changed:
+            location.source = "static"
+            location_updates["source"] = "static"
+
+    elif req.source == "gpsd":
+        if source_changed:
+            location.source = "gpsd"
+            location_updates["source"] = "gpsd"
+        if req.gpsd_host is not None and req.gpsd_host != location.gpsd_host:
+            location.gpsd_host = req.gpsd_host
+            location_updates["gpsd_host"] = req.gpsd_host
+        if req.gpsd_port is not None and req.gpsd_port != location.gpsd_port:
+            location.gpsd_port = req.gpsd_port
+            location_updates["gpsd_port"] = req.gpsd_port
+        if (
+            req.update_interval_seconds is not None
+            and req.update_interval_seconds != location.update_interval_seconds
+        ):
+            location.update_interval_seconds = req.update_interval_seconds
+            location_updates["update_interval_seconds"] = req.update_interval_seconds
+        if (
+            req.min_fix_quality is not None
+            and req.min_fix_quality != location.min_fix_quality
+        ):
+            location.min_fix_quality = req.min_fix_quality
+            location_updates["min_fix_quality"] = req.min_fix_quality
+
+    else:  # uart
+        if source_changed:
+            location.source = "uart"
+            location_updates["source"] = "uart"
+
+    # ------------------------------------------------------------------
+    # Persist whatever changed.
+    # ------------------------------------------------------------------
+    audit_keys = list(location_updates.keys()) + [
+        f"device.{k}" for k in device_updates.keys()
+    ]
+    if audit_keys:
+        with audit.timed_action(
+            user=_claims.subject,
+            action="config.gps_update",
+            params={"source": req.source, "keys": audit_keys},
+        ):
+            try:
+                if location_updates:
+                    save_section_to_yaml("location", asdict(location))
+                if device_updates:
+                    save_section_to_yaml("device", device_updates)
+            except PermissionError as exc:
+                raise HTTPException(403, str(exc)) from exc
+
+    return {
+        "saved": bool(audit_keys),
+        "restart_required": source_changed,
+        "gps": {
+            "source": location.source,
+            "latitude": device.latitude,
+            "longitude": device.longitude,
+            "altitude": device.altitude,
+            "gpsd_host": location.gpsd_host,
+            "gpsd_port": location.gpsd_port,
+            "update_interval_seconds": location.update_interval_seconds,
+            "min_fix_quality": location.min_fix_quality,
+        },
     }
-    return result

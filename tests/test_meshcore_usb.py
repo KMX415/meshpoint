@@ -362,6 +362,32 @@ class TestFindSerialCandidates(unittest.TestCase):
         for port in result:
             self.assertNotEqual(port, "/dev/ttyUSB0")
 
+    def test_known_gps_port_is_excluded(self):
+        """A u-blox GPS at /dev/ttyACM0 must not be MeshCore-probed."""
+        from unittest.mock import MagicMock, patch
+        from src.capture.meshcore_usb_detect import find_serial_candidates
+
+        gps_entry = MagicMock()
+        gps_entry.device = "/dev/ttyACM0"
+        gps_entry.vid = 0x1546
+        gps_entry.pid = 0x01A7
+        gps_entry.manufacturer = "u-blox AG"
+        gps_entry.product = "u-blox 7 - GPS/GNSS Receiver"
+
+        with patch(
+            "glob.glob",
+            side_effect=lambda pattern: (
+                ["/dev/ttyACM0"] if "ACM" in pattern else ["/dev/ttyUSB0"]
+            ),
+        ), patch(
+            "serial.tools.list_ports.comports",
+            return_value=[gps_entry],
+        ):
+            result = find_serial_candidates()
+
+        self.assertNotIn("/dev/ttyACM0", result)
+        self.assertIn("/dev/ttyUSB0", result)
+
 
 class TestMeshcoreUsbStartupRetry(unittest.IsolatedAsyncioTestCase):
     """Verify the source schedules a background reconnect on initial fail."""
