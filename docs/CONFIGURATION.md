@@ -93,6 +93,26 @@ To match a Meshtastic preset, set `spreading_factor` and `bandwidth_khz` togethe
 | LongModerate | 11 | 125 |
 | LongSlow | 12 | 125 |
 
+### Custom presets (Configuration → Radio)
+
+The dashboard's **Configuration → Radio** card includes a **Custom**
+chip alongside the named preset buttons. Selecting Custom reveals
+inputs for spreading factor (5-12), bandwidth (125 / 250 / 500 kHz),
+and coding rate (4/5, 4/6, 4/7, 4/8). Use it for combinations that
+don't appear in the named-preset table above (for example
+SF11 / BW125 / CR4/8 for an extra-resilient long-range link, or
+SF7 / BW500 / CR4/5 to mirror the deprecated ShortTurbo).
+
+When `current_preset` in the radio configuration is empty (because
+the saved SF / BW / CR doesn't match any named preset), the card
+opens on Custom automatically and pre-fills the three inputs from
+the values in `local.yaml` so you can see exactly what you're on.
+
+Modem changes always require a service restart; the dashboard
+prompts you when one is needed. Off-spec combinations (anything
+not in the named table) may be silently dropped by neighboring
+nodes, so set the same Custom values on the receiving side too.
+
 ### Changing Region
 
 ```yaml
