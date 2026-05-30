@@ -227,15 +227,20 @@ class MeshCoreTxClient:
     async def set_companion_name(self, name: str) -> SendResult:
         """Rename the USB companion via CMD_SET_ADVERT_NAME (0x08).
 
-        On OK we follow up with ``send_appstart()`` so the cached
-        ``self_info`` (which feeds get_radio_info -> Configuration card,
-        top-bar chip, and packet attribution) reflects the new name
-        without waiting for the next reconnect. ``set_name`` itself
-        only returns OK/ERROR; it does not emit a fresh SELF_INFO.
+        On OK we mutate the cached ``self_info["name"]`` so the
+        Configuration card, top-bar chip, and packet attribution all
+        reflect the rename without waiting for the next reconnect.
+        ``set_name`` itself only returns OK/ERROR; it does not emit a
+        fresh SELF_INFO, and meshcore 2.3.x exposes no public method to
+        re-poll the device (``self_info`` is seeded once during the
+        ``connect`` handshake's appstart and never auto-refreshed).
+        Updating the dict locally is safe because the firmware just
+        acknowledged the new name via ``command_ok``; the next
+        reconnect will reseed ``self_info`` from the device anyway.
 
         Validation lives here so route handlers, future CLI callers,
-        and the eventual ``meshcore.companion_name`` yaml-on-connect
-        path all use the same ceiling.
+        and the ``meshcore.companion_name`` yaml-on-connect path all
+        use the same ceiling.
         """
         if not self.connected:
             return SendResult(success=False, error="Not connected")
@@ -283,15 +288,22 @@ class MeshCoreTxClient:
             return SendResult(success=False, error=error)
 
         # OK path: refresh self_info so callers see the new name immediately.
-        # send_appstart failure should not turn a successful set_name into an
-        # error -- the rename already stuck on the device; only the local
-        # cache lags. Worst case the next reconnect reseeds it.
+        # The meshcore library does not expose a method to re-poll the
+        # device's identity (self_info is seeded once during connect's
+        # appstart handshake and never automatically refreshed). Since
+        # the firmware just acknowledged the rename via command_ok, we
+        # know the new name is what the device holds: mutate the cached
+        # dict directly so /api/config -> get_radio_info() returns the
+        # new value on the next dashboard refresh. The next reconnect
+        # will reseed self_info from the device anyway.
         try:
-            await asyncio.wait_for(self._mc.send_appstart(), timeout=5.0)
+            cache = getattr(self._mc, "self_info", None)
+            if isinstance(cache, dict):
+                cache["name"] = cleaned
         except Exception:
-            logger.warning(
-                "set_companion_name: send_appstart refresh failed; "
-                "self_info cache may lag until reconnect",
+            logger.debug(
+                "set_companion_name: could not update self_info cache; "
+                "dashboard will lag by one reconnect cycle",
                 exc_info=True,
             )
 

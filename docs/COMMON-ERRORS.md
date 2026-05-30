@@ -768,6 +768,41 @@ The rename is atomic: a rejection means the on-device name is
 unchanged, and `local.yaml` is **not** updated. Your dashboard
 readout will still show the old name on the next refresh.
 
+### Dashboard still shows old companion name after a successful rename
+
+**Symptom:** Renaming the companion from **Configuration → MeshCore
+→ Companion name** appears to succeed (the Save button reports OK,
+neighbors see the new advert), but the dashboard input field and
+the Companion card readout keep showing the old name even after
+refreshing the page or restarting the service.
+
+**Affects:** Meshpoint v0.7.5 builds between commits `e082819` and
+`15bdc1d` (early ship of the rename feature). Fixed in the
+follow-up to this release.
+
+**Cause:** Early v0.7.5 builds tried to refresh the local
+`self_info` cache by calling a `send_appstart()` method that does
+not exist in `meshcore` 2.3.x. The rename itself wrote to flash
+correctly (this is why neighbors see the new advert and
+`local.yaml` shows `companion_name: <new>`), but the cache the
+dashboard reads from never got updated. Look for
+`AttributeError: 'MeshCore' object has no attribute 'send_appstart'`
+in `journalctl -u meshpoint`.
+
+**Fix:** Pull `main` (or the latest `feat/v0.7.5`) and restart the
+service:
+
+```bash
+cd /opt/meshpoint
+sudo git pull
+sudo systemctl restart meshpoint
+```
+
+The first reconnect after the restart reseeds `self_info` from the
+device's actual on-flash name, so the dashboard will catch up
+automatically. Subsequent renames update the cache directly with no
+library-method dependency.
+
 ### Companion reverts to its old name on reboot
 
 **Symptom:** You renamed the companion from the dashboard, the rename

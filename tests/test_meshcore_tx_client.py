@@ -222,9 +222,10 @@ class TestSetCompanionName(unittest.IsolatedAsyncioTestCase):
         self.client = MeshCoreTxClient()
         self.mc = MagicMock()
         self.set_name_mock = AsyncMock()
-        self.send_appstart_mock = AsyncMock()
         self.mc.commands.set_name = self.set_name_mock
-        self.mc.send_appstart = self.send_appstart_mock
+        # self_info is a plain dict on the real meshcore client. Seed it
+        # with a stale name so we can prove set_companion_name updates it.
+        self.mc.self_info = {"name": "old-name", "adv_type": 1}
         self.client.set_connection(self.mc)
         self.client._run_post_command = AsyncMock()
         self._meshcore_mod = MagicMock(EventType=_FakeEventType)
@@ -283,12 +284,17 @@ class TestSetCompanionName(unittest.IsolatedAsyncioTestCase):
         self.assertIn("36 bytes", result.error)
         self.set_name_mock.assert_not_called()
 
-    async def test_ok_path_calls_set_name_and_send_appstart(self):
+    async def test_ok_path_updates_self_info_cache(self):
         self.set_name_mock.return_value = self._ok_result()
         result = await self._run("Mesh Lab East")
         self.assertTrue(result.success)
         self.set_name_mock.assert_awaited_once_with("Mesh Lab East")
-        self.send_appstart_mock.assert_awaited_once()
+        # The dashboard reads name from self_info; verify the rename
+        # is reflected immediately so /api/config refresh shows the new
+        # name without waiting for a USB reconnect.
+        self.assertEqual(self.mc.self_info["name"], "Mesh Lab East")
+        # Other self_info fields stay untouched.
+        self.assertEqual(self.mc.self_info["adv_type"], 1)
 
     async def test_ok_path_strips_whitespace_before_sending(self):
         self.set_name_mock.return_value = self._ok_result()
@@ -301,8 +307,10 @@ class TestSetCompanionName(unittest.IsolatedAsyncioTestCase):
         result = await self._run("Mesh Lab East")
         self.assertFalse(result.success)
         self.assertIn("name in use", result.error)
-        # send_appstart must NOT run if the rename was rejected.
-        self.send_appstart_mock.assert_not_called()
+        # Cache must NOT update if the rename was rejected -- otherwise
+        # the dashboard would show a name the device doesn't actually
+        # have.
+        self.assertEqual(self.mc.self_info["name"], "old-name")
 
     async def test_error_with_string_payload(self):
         self.set_name_mock.return_value = self._error_result("rejected")
@@ -335,13 +343,17 @@ class TestSetCompanionName(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(result.success)
         self.assertIn("timed out", result.error)
-        self.send_appstart_mock.assert_not_called()
+        # On timeout we don't know whether the firmware accepted the
+        # name; do not update the cache.
+        self.assertEqual(self.mc.self_info["name"], "old-name")
 
-    async def test_send_appstart_failure_does_not_break_ok(self):
+    async def test_ok_path_tolerates_missing_self_info_dict(self):
+        # If meshcore ever changes self_info to None or a non-dict,
+        # the rename must still succeed -- the cache update is a best
+        # effort, not a contract.
         self.set_name_mock.return_value = self._ok_result()
-        self.send_appstart_mock.side_effect = RuntimeError("appstart blew up")
+        self.mc.self_info = None
         result = await self._run("Mesh Lab East")
-        # Rename already stuck on the device; cache lag is acceptable.
         self.assertTrue(result.success)
 
 
