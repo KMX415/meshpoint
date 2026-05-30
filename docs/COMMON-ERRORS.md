@@ -855,6 +855,103 @@ v4.0/v4.1.
 
 ---
 
+## Location and GPS
+
+### Configuration → GPS shows "no fix" with source set to gpsd
+
+**Cause:** The Meshpoint reached `gpsd` on `127.0.0.1:2947` but the
+daemon has no device attached, or the attached receiver hasn't
+acquired enough satellites for a 2D fix yet.
+
+**Fix:**
+
+1. Confirm `gpsd` is running and reachable:
+
+   ```bash
+   systemctl status gpsd.socket
+   gpsdctl get
+   cgps   # ctrl-C to exit; from gpsd-clients
+   ```
+
+2. If `gpsdctl get` returns no devices, plug a recognized USB GPS
+   receiver and wait 5–10 seconds for udev to call
+   `/lib/udev/rules.d/60-gpsd.rules`. `dmesg | tail` should show
+   `cdc_acm` enumerating `/dev/ttyACM0`.
+
+3. If a device is attached but `cgps` shows zero satellites, the
+   receiver still needs sky view. Cold-start time-to-first-fix on
+   u-blox 7 / 8 sticks is **30–90 seconds outdoors** and can be
+   indefinite indoors. The dashboard skyplot will show satellites
+   appearing one by one as the receiver tracks them; the fix-mode
+   lamp turns green when a 3D fix is achieved.
+
+4. If `gpsdctl get` shows the device but `gpsd` keeps logging
+   `device disconnected` / re-attach loops, the receiver is on
+   the wrong baud rate or the firmware is broken. Try a different
+   USB port, then a different cable, then a different stick.
+
+### `gpsd` not picking up my u-blox stick at all
+
+**Cause:** Either `gpsd` is not installed, or `USBAUTO="true"` is
+missing from `/etc/default/gpsd`. The Meshpoint installer adds
+both on every run as of v0.7.5+, so re-running it usually fixes
+this.
+
+**Fix:**
+
+```bash
+cd /opt/meshpoint
+sudo /opt/meshpoint/scripts/install.sh
+```
+
+Verify the configuration:
+
+```bash
+grep -E '^(START_DAEMON|USBAUTO|DEVICES|GPSD_OPTIONS)=' \
+    /etc/default/gpsd
+```
+
+You should see all four settings. If you customized
+`/etc/default/gpsd` by hand and the installer rewrote it, the
+desired settings (USB hotplug + no-wait mode) are now in place.
+Re-add any custom flags after the installer runs.
+
+### Live GPS coordinates not updating on the dashboard map / NodeInfo
+
+**Cause:** `location.source` in `local.yaml` is still `static`
+(or unset, which defaults to static). The Meshpoint is reading
+the wizard-time lat/lon/alt and ignoring `gpsd` even though the
+daemon is happily tracking satellites.
+
+**Fix:** Open Configuration → GPS and switch the source to
+**gpsd**, then click **Save**. Or edit `local.yaml`:
+
+```yaml
+location:
+  source: "gpsd"
+```
+
+Restart the service. The live fix flows into `device.latitude` /
+`device.longitude` / `device.altitude` once the receiver has a
+2D fix or better. The static wizard-time values are still in
+`device.*` but the coordinator overwrites them with the live fix
+on every update interval (default 5 s).
+
+### MeshCore USB companion connection fails after plugging in a GPS
+
+**Cause:** Pre-v0.7.5 the MeshCore USB auto-detect path probed
+every `/dev/ttyACM*` looking for a companion handshake. u-blox
+GPS sticks (VID `0x1546`) hung the probe for ~5 s each before
+timing out, occasionally producing a `meshcore: no companion
+found` log line and delayed startup.
+
+**Fix:** Update to v0.7.5 or later. `UsbPortClassifier` now
+classifies u-blox VIDs as `gps_known` and the MeshCore detector
+skips them entirely. Plugging a GPS in alongside a Heltec V3 / V4
+companion is fully supported and the two devices co-exist.
+
+---
+
 ## MQTT
 
 ### MQTT enabled but no traffic on the broker, no MQTT lines in logs
