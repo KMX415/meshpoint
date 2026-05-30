@@ -244,8 +244,34 @@ class RadioConfigEditCard {
     }
 
     _onCustomBwChange() {
-        // _slotBandwidth() reads this._bwEl.value live; just re-render slot.
-        this._syncSlotFromFreq();
+        if (this._currentMode() === 'slot') {
+            // Slot mode: slot is the authoritative input. Keep it and
+            // recompute the frequency at the new bandwidth, rather than
+            // blanking it when the old freq does not sit on the new grid.
+            // Clamp to numSlots-at-new-BW so we never produce an
+            // out-of-band frequency (e.g. slot 100 at BW250 -> BW500).
+            let slot = parseInt(this._slotEl.value, 10);
+            if (Number.isFinite(slot) && slot >= 1) {
+                const max = this._maxSlot();
+                if (max != null && slot > max) {
+                    slot = max;
+                    this._slotEl.value = String(slot);
+                }
+                const freq = this._slotToFreq(slot);
+                if (freq != null) this._freqEl.value = freq.toFixed(4);
+            }
+        } else {
+            // MHz mode: freq is authoritative. Slot field is hidden, but
+            // we still update the underlying value for consistency.
+            this._syncSlotFromFreq();
+        }
+    }
+
+    _maxSlot() {
+        const band = this._regionBand(this._regionEl.value);
+        const bw = this._slotBandwidth();
+        if (!band || !bw) return null;
+        return Math.floor((band.end - band.start) / (bw / 1000));
     }
 
     _onRegionChange() {
