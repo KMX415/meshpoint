@@ -237,27 +237,15 @@ class RadioConfigEditCard {
 
     _onPresetChip(name) {
         this._setSelectedPreset(name);
-        if (name === RadioConfigEditCard.CUSTOM_VALUE) {
-            // Switching to Custom: keep whatever SF/BW/CR are already on the
-            // form (initial fill or user edits). Resync slot off the current BW.
-            this._syncSlotFromFreq();
-            return;
-        }
-        const preset = this._presets.find((p) => p.name === name);
-        if (preset && preset.bandwidth_khz) {
-            this._initial.bandwidth_khz = Number(preset.bandwidth_khz);
-            this._syncSlotFromFreq();
-        }
+        // Slot math is driven by _slotBandwidth() which reads the live form
+        // state, so changing chips does not need to mutate this._initial
+        // (which is the immutable diff baseline used by _onSubmit).
+        this._syncSlotFromFreq();
     }
 
     _onCustomBwChange() {
-        const bw = parseInt(this._bwEl.value, 10);
-        if (Number.isFinite(bw)) {
-            // Slot ↔ MHz math depends on bandwidth; the slot field needs to
-            // re-render whenever BW changes while Custom is active.
-            this._initial.bandwidth_khz = bw;
-            this._syncSlotFromFreq();
-        }
+        // _slotBandwidth() reads this._bwEl.value live; just re-render slot.
+        this._syncSlotFromFreq();
     }
 
     _onRegionChange() {
@@ -302,7 +290,7 @@ class RadioConfigEditCard {
 
     _slotToFreq(slot) {
         const band = this._regionBand(this._regionEl.value);
-        const bw = this._initial.bandwidth_khz;
+        const bw = this._slotBandwidth();
         if (!band || !bw) return null;
         const spacing = bw / 1000;
         const start = band.start + (slot - 1) * spacing + spacing / 2;
@@ -311,7 +299,7 @@ class RadioConfigEditCard {
 
     _freqToSlot(freq) {
         const band = this._regionBand(this._regionEl.value);
-        const bw = this._initial.bandwidth_khz;
+        const bw = this._slotBandwidth();
         if (!band || !bw || ![125, 250, 500].includes(bw)) return null;
         const spacing = bw / 1000;
         const numSlots = Math.floor((band.end - band.start) / spacing);
@@ -319,6 +307,24 @@ class RadioConfigEditCard {
         const n = Math.round(raw);
         if (n >= 1 && n <= numSlots && Math.abs(raw - n) < 0.001) return n;
         return null;
+    }
+
+    _slotBandwidth() {
+        // Slot <-> MHz math needs the bandwidth that matches what will be
+        // saved, not the bandwidth that was loaded. Priority:
+        //   1. Custom selected -> live <select> value (lets user preview slot
+        //      moves while editing without losing the diff baseline);
+        //   2. named preset selected -> that preset's bandwidth_khz;
+        //   3. nothing selected yet -> the loaded baseline.
+        const sel = this._selectedPreset();
+        if (sel === RadioConfigEditCard.CUSTOM_VALUE) {
+            const bw = parseInt(this._bwEl.value, 10);
+            if (Number.isFinite(bw)) return bw;
+        } else if (sel) {
+            const preset = this._presets.find((p) => p.name === sel);
+            if (preset && preset.bandwidth_khz) return Number(preset.bandwidth_khz);
+        }
+        return this._initial.bandwidth_khz;
     }
 
     _regionBand(regionId) {
