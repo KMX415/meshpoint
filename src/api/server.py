@@ -43,6 +43,7 @@ from src.api.routes import (
     device_config_routes,
     identity_routes,
     messages,
+    meshcore_config_routes,
     mqtt_config_routes,
     nodeinfo_routes,
     nodes,
@@ -248,6 +249,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(upstream_config_routes.router, dependencies=protected)
     app.include_router(device_config_routes.router, dependencies=protected)
     app.include_router(system_config_routes.router, dependencies=protected)
+    app.include_router(meshcore_config_routes.router, dependencies=protected)
     app.include_router(config_routes.router, dependencies=protected)
     app.include_router(stats_routes.router, dependencies=protected)
 
@@ -975,6 +977,7 @@ def _init_routes(
     upstream_config_routes.init_routes(config=config)
     device_config_routes.init_routes(config=config, identity=identity)
     system_config_routes.init_routes(config=config)
+    meshcore_config_routes.init_routes(config=config, tx_service=tx_service)
 
 
 def _init_dangerous_registry(coord: PipelineCoordinator) -> None:
