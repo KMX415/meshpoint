@@ -19,6 +19,15 @@ def _read_cpu_temp() -> float | None:
         return None
 
 
+def _read_load_avg() -> tuple[float, float, float] | None:
+    """Read the 1/5/15-minute load averages from /proc/loadavg (Linux)."""
+    try:
+        fields = Path("/proc/loadavg").read_text().split()
+        return float(fields[0]), float(fields[1]), float(fields[2])
+    except (FileNotFoundError, ValueError, OSError, IndexError):
+        return None
+
+
 def _read_uptime_seconds() -> float:
     """Read system uptime from /proc/uptime (Linux)."""
     try:
@@ -34,6 +43,7 @@ async def system_metrics():
     mem = psutil.virtual_memory()
     disk = shutil.disk_usage("/")
     cpu_temp = _read_cpu_temp()
+    load_avg = _read_load_avg()
 
     return {
         "cpu_percent": psutil.cpu_percent(interval=0.5),
@@ -44,5 +54,6 @@ async def system_metrics():
         "disk_used_gb": round(disk.used / (1024 ** 3), 1),
         "disk_total_gb": round(disk.total / (1024 ** 3), 1),
         "cpu_temp_c": round(cpu_temp, 1) if cpu_temp is not None else None,
+        "load_avg": [round(v, 2) for v in load_avg] if load_avg is not None else None,
         "system_uptime_seconds": int(_read_uptime_seconds()),
     }
