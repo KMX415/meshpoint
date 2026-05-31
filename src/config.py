@@ -90,12 +90,23 @@ class MeshcoreUsbConfig:
 
 
 @dataclass
+class MeshtasticdConfig:
+    """Local meshtasticd TCP bridge (WisMesh Node / PORTDUINO platforms)."""
+
+    host: str = "127.0.0.1"
+    port: int = 4403
+    mac_address_source: str = "eth0"
+    preset: str = "lora-RAK6421-13300-slot1.yaml"
+
+
+@dataclass
 class CaptureConfig:
     sources: list[str] = field(default_factory=lambda: ["mock"])
     serial_port: Optional[str] = None
     serial_baud: int = 115200
     concentrator_spi_device: str = "/dev/spidev0.0"
     meshcore_usb: MeshcoreUsbConfig = field(default_factory=MeshcoreUsbConfig)
+    meshtasticd: MeshtasticdConfig = field(default_factory=MeshtasticdConfig)
 
 
 @dataclass

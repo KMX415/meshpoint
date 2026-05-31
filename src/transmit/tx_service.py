@@ -66,6 +66,7 @@ class TxService:
         channel_plan=None,
         transmit_config=None,
         meshcore_tx=None,
+        meshtasticd_tx=None,
         duty_tracker: Optional[DutyCycleTracker] = None,
         radio_config=None,
         primary_channel_name: str = "",
@@ -77,6 +78,7 @@ class TxService:
         self._channel_plan = channel_plan
         self._config = transmit_config
         self._meshcore_tx = meshcore_tx
+        self._meshtasticd_tx = meshtasticd_tx
         self._duty = duty_tracker
         self._radio_config = radio_config
         self._primary_channel_name = primary_channel_name
@@ -90,11 +92,9 @@ class TxService:
 
     @property
     def meshtastic_enabled(self) -> bool:
-        return (
-            self._config is not None
-            and self._config.enabled
-            and self._wrapper is not None
-        )
+        if self._config is None or not self._config.enabled:
+            return False
+        return self._wrapper is not None or self._meshtasticd_tx is not None
 
     @property
     def meshcore_enabled(self) -> bool:
@@ -146,6 +146,11 @@ class TxService:
                 success=False,
                 protocol="meshtastic",
                 error="Meshtastic TX not available",
+            )
+
+        if self._meshtasticd_tx is not None:
+            return await self._meshtasticd_tx.send_nodeinfo(
+                long_name, short_name, hw_model=hw_model
             )
 
         builder = self._get_builder()
@@ -232,12 +237,17 @@ class TxService:
         channel: int,
         want_ack: bool,
     ) -> SendResult:
-        """Build and transmit a Meshtastic packet via the SX1261."""
+        """Build and transmit a Meshtastic packet via SX1261 or meshtasticd."""
         if not self.meshtastic_enabled:
             return SendResult(
                 success=False,
                 protocol="meshtastic",
                 error="Meshtastic TX not available",
+            )
+
+        if self._meshtasticd_tx is not None:
+            return await self._meshtasticd_tx.send_text(
+                text, destination, channel, want_ack
             )
 
         builder = self._get_builder()

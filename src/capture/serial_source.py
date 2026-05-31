@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
 from typing import AsyncIterator, Optional
 
 from src.capture.base import CaptureSource
+from src.capture.meshtastic_packet_adapter import packet_dict_to_raw_capture
 from src.models.packet import RawCapture
-from src.models.signal import SignalMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +92,7 @@ class SerialCaptureSource(CaptureSource):
             return
 
         try:
-            raw_capture = self._packet_to_raw_capture(packet)
+            raw_capture = packet_dict_to_raw_capture(packet, "serial")
             if raw_capture:
                 try:
                     self._queue.put_nowait(raw_capture)
@@ -102,63 +101,3 @@ class SerialCaptureSource(CaptureSource):
         except Exception:
             logger.debug("Failed to convert serial packet", exc_info=True)
 
-    def _packet_to_raw_capture(self, packet: dict) -> Optional[RawCapture]:
-        """Convert a meshtastic-python packet dict to a RawCapture."""
-        raw_bytes = packet.get("raw", b"")
-        if isinstance(raw_bytes, str):
-            raw_bytes = bytes.fromhex(raw_bytes)
-
-        if not raw_bytes and "decoded" in packet:
-            raw_bytes = self._reconstruct_raw(packet)
-
-        if not raw_bytes:
-            return None
-
-        signal = SignalMetrics(
-            rssi=float(packet.get("rxRssi", packet.get("rssi", -100))),
-            snr=float(packet.get("rxSnr", packet.get("snr", 0))),
-            frequency_mhz=906.875,
-            spreading_factor=11,
-            bandwidth_khz=250.0,
-        )
-
-        return RawCapture(
-            payload=raw_bytes,
-            signal=signal,
-            capture_source="serial",
-            timestamp=datetime.now(timezone.utc),
-        )
-
-    @staticmethod
-    def _reconstruct_raw(packet: dict) -> bytes:
-        """Build a minimal raw frame from a decoded meshtastic packet.
-
-        When the meshtastic library provides already-decoded data
-        without raw bytes, we reconstruct the header so the pipeline
-        can process it. The payload portion will be empty/encrypted.
-        """
-        import struct
-
-        dest = packet.get("to", 0xFFFFFFFF)
-        source = packet.get("from", 0)
-        pkt_id = packet.get("id", 0)
-
-        hop_limit = packet.get("hopLimit", 3)
-        hop_start = packet.get("hopStart", 3)
-        want_ack = packet.get("wantAck", False)
-
-        flags = (hop_limit & 0x07)
-        if want_ack:
-            flags |= 0x08
-        flags |= (hop_start & 0x07) << 5
-
-        channel = packet.get("channel", 0)
-
-        header = struct.pack("<III", dest, source, pkt_id)
-        header += bytes([flags, channel, 0, 0])
-
-        encoded = packet.get("encoded", b"")
-        if isinstance(encoded, str):
-            encoded = bytes.fromhex(encoded)
-
-        return header + encoded

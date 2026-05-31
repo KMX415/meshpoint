@@ -142,7 +142,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         pipeline.on_packet(lambda pkt: print_packet(pkt))
         pipeline.on_packet(public_radar_routes.public_radar_packet_callback)
 
-        if config.transmit.enabled:
+        if config.transmit.enabled and not _is_node_platform(config):
             _inject_tx_gain_into_source(pipeline)
 
         await pipeline.start()
@@ -305,14 +305,21 @@ def _build_pipeline(config: AppConfig) -> PipelineCoordinator:
             _add_concentrator_source(coordinator, config)
         elif source_name == "meshcore_usb":
             _add_meshcore_usb_source(coordinator, config)
+        elif source_name == "meshtasticd":
+            _add_meshtasticd_source(coordinator, config)
 
     if (
         "meshcore_usb" not in config.capture.sources
         and config.capture.meshcore_usb.auto_detect
+        and not _is_node_platform(config)
     ):
         _add_meshcore_usb_source(coordinator, config)
 
     return coordinator
+
+
+def _is_node_platform(config: AppConfig) -> bool:
+    return config.device.platform == "node"
 
 
 def _add_serial_source(coordinator: PipelineCoordinator, config: AppConfig):
@@ -364,6 +371,26 @@ def _add_meshcore_usb_source(
         )
 
 
+def _add_meshtasticd_source(
+    coordinator: PipelineCoordinator, config: AppConfig
+):
+    try:
+        from src.capture.meshtasticd_bridge_source import MeshtasticdBridgeSource
+
+        md_cfg = config.capture.meshtasticd
+        coordinator.capture_coordinator.add_source(
+            MeshtasticdBridgeSource(
+                host=md_cfg.host,
+                port=md_cfg.port,
+                default_frequency_mhz=config.radio.frequency_mhz or 906.875,
+            )
+        )
+    except ImportError:
+        logger.warning(
+            "meshtasticd bridge unavailable -- meshtastic package not installed"
+        )
+
+
 def _build_tx_service(
     config: AppConfig, coord: PipelineCoordinator
 ) -> TxService | None:
@@ -374,6 +401,7 @@ def _build_tx_service(
 
     from src.transmit.duty_cycle import DutyCycleTracker, resolve_max_duty_percent
     from src.transmit.meshcore_tx_client import MeshCoreTxClient
+    from src.transmit.meshtasticd_tx_client import MeshtasticdTxClient
 
     duty = DutyCycleTracker(
         region=config.radio.region,
@@ -396,6 +424,11 @@ def _build_tx_service(
 
         mc_source.set_connected_callback(_sync_channels_on_connect)
 
+    meshtasticd_tx = MeshtasticdTxClient()
+    md_source = _find_meshtasticd_source(coord)
+    if md_source:
+        meshtasticd_tx.set_source(md_source)
+
     wrapper = _get_concentrator_wrapper(coord)
     crypto = coord._crypto if hasattr(coord, "_crypto") else None
     channel_plan = _get_channel_plan(config)
@@ -406,6 +439,7 @@ def _build_tx_service(
         channel_plan=channel_plan,
         transmit_config=config.transmit,
         meshcore_tx=meshcore_tx,
+        meshtasticd_tx=meshtasticd_tx if md_source else None,
         duty_tracker=duty,
         radio_config=config.radio,
         primary_channel_name=config.meshtastic.primary_channel_name,
@@ -434,7 +468,7 @@ def _wire_native_relay(
     because it is registered second. A future cleanup can drop the
     USB-companion path entirely once hardware-validated.
     """
-    if tx_service is None or not tx_service.meshtastic_enabled:
+    if tx_service is None or _get_concentrator_wrapper(coord) is None:
         return
     relay = coord.relay_manager
     if not relay.enabled:
@@ -557,6 +591,14 @@ def _find_meshcore_source(coord: PipelineCoordinator):
     """Find the MeshCore USB capture source if it exists."""
     for src in coord.capture_coordinator._sources:
         if src.name == "meshcore_usb":
+            return src
+    return None
+
+
+def _find_meshtasticd_source(coord: PipelineCoordinator):
+    """Find the meshtasticd bridge capture source if it exists."""
+    for src in coord.capture_coordinator._sources:
+        if src.name == "meshtasticd":
             return src
     return None
 

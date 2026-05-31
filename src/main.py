@@ -60,6 +60,24 @@ def _add_meshcore_usb_source(coordinator: PipelineCoordinator, config) -> None:
         )
 
 
+def _add_meshtasticd_source(coordinator: PipelineCoordinator, config) -> None:
+    try:
+        from src.capture.meshtasticd_bridge_source import MeshtasticdBridgeSource
+
+        md_cfg = config.capture.meshtasticd
+        coordinator.capture_coordinator.add_source(
+            MeshtasticdBridgeSource(
+                host=md_cfg.host,
+                port=md_cfg.port,
+                default_frequency_mhz=config.radio.frequency_mhz or 906.875,
+            )
+        )
+    except ImportError:
+        logger.warning(
+            "meshtasticd bridge unavailable -- meshtastic package not installed"
+        )
+
+
 async def run_standalone() -> None:
     """Run the pipeline without the web dashboard (CLI mode)."""
     config = load_config()
@@ -73,10 +91,13 @@ async def run_standalone() -> None:
             _add_concentrator_source(coordinator, config)
         elif source_name == "meshcore_usb":
             _add_meshcore_usb_source(coordinator, config)
+        elif source_name == "meshtasticd":
+            _add_meshtasticd_source(coordinator, config)
 
     if (
         "meshcore_usb" not in config.capture.sources
         and config.capture.meshcore_usb.auto_detect
+        and config.device.platform != "node"
     ):
         _add_meshcore_usb_source(coordinator, config)
 

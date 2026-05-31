@@ -11,12 +11,31 @@ cd /opt/meshpoint
 sudo git fetch origin
 sudo git checkout feat/wismesh-hat
 sudo git pull origin feat/wismesh-hat
-sudo ./scripts/install.sh --platform node   # when Phase 1 lands; until then standard install
+sudo ./scripts/install.sh --platform node
 sudo meshpoint setup
-sudo systemctl restart meshpoint
+sudo systemctl restart meshtasticd meshpoint
 ```
 
-Requires **meshtasticd** installed and configured per RAK's WisMesh quickstart before Meshpoint can capture RF (Phase 2 bridge).
+`install.sh --platform node` will:
+
+- Skip the SX1302 HAL build
+- Install and configure **meshtasticd** (Debian 12/13 OBS repo)
+- Copy the RAK6421 LoRa preset and set `MACAddressSource`
+- Install `meshpoint-node.service` (starts **after** meshtasticd)
+
+The setup wizard writes `device.platform: node` and `capture.sources: [meshtasticd]`.
+
+## Verify
+
+```bash
+systemctl status meshtasticd meshpoint
+/opt/meshpoint/venv/bin/meshtastic --host localhost:4403 --info
+journalctl -u meshpoint -n 30 --no-pager | grep meshtasticd
+```
+
+## Migrate between platforms
+
+See [`docs/MIGRATE-GATEWAY-TO-NODE.md`](../MIGRATE-GATEWAY-TO-NODE.md) and `meshpoint migrate-platform --to node|gateway`.
 
 ## Switch back to Gateway (concentrator)
 
@@ -24,8 +43,14 @@ Requires **meshtasticd** installed and configured per RAK's WisMesh quickstart b
 cd /opt/meshpoint
 sudo git checkout main
 sudo git pull origin main
-sudo ./scripts/install.sh
+sudo meshpoint migrate-platform --to gateway --force
+sudo ./scripts/install.sh --platform gateway
 sudo systemctl restart meshpoint
 ```
 
 Preserve `config/local.yaml` if you want the same `device_id` and API key.
+
+## Related docs
+
+- [`wisemesh-node-meshtasticd.md`](wisemesh-node-meshtasticd.md): meshtasticd IPC spike notes
+- [`MIGRATE-GATEWAY-TO-NODE.md`](../MIGRATE-GATEWAY-TO-NODE.md): migration runbook

@@ -33,6 +33,11 @@ capture:
     serial_port: null
     baud_rate: 115200
     auto_detect: true
+  meshtasticd:
+    host: "127.0.0.1"
+    port: 4403
+    mac_address_source: "eth0"
+    preset: "lora-RAK6421-13300-slot1.yaml"
 
 storage:
   database_path: "data/concentrator.db"

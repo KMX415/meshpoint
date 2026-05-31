@@ -10,7 +10,11 @@
 #   5. systemd service installation
 #
 # Usage:
-#   sudo ./scripts/install.sh
+#   sudo ./scripts/install.sh [--platform gateway|node|auto]
+#
+#   --platform auto   detect WisMesh HAT vs concentrator (default)
+#   --platform node   WisMesh Node: meshtasticd, skip SX1302 HAL
+#   --platform gateway  SX1302 concentrator path (RAK V2, SenseCap M1, DIY)
 #
 # After completion, reboot then run:  meshpoint setup
 #
@@ -44,6 +48,43 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 info "Source directory: ${SCRIPT_DIR}"
+
+# ── Platform selection ─────────────────────────────────────────────
+
+PLATFORM="auto"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --platform)
+            PLATFORM="${2:-auto}"
+            shift 2
+            ;;
+        *)
+            warn "Unknown argument: $1 (ignored)"
+            shift
+            ;;
+    esac
+done
+
+_detect_install_platform() {
+    if [[ "$PLATFORM" != "auto" ]]; then
+        echo "$PLATFORM"
+        return
+    fi
+    if [ -f /proc/device-tree/hat/product ]; then
+        hat_product="$(tr -d '\0' < /proc/device-tree/hat/product 2>/dev/null || true)"
+        if [[ "$hat_product" == *"6421"* ]]; then
+            echo "node"
+            return
+        fi
+    fi
+    echo "gateway"
+}
+
+INSTALL_PLATFORM="$(_detect_install_platform)"
+if [[ "$INSTALL_PLATFORM" != "gateway" && "$INSTALL_PLATFORM" != "node" ]]; then
+    fail "Invalid --platform ${INSTALL_PLATFORM}. Use gateway, node, or auto."
+fi
+info "Install platform: ${INSTALL_PLATFORM}"
 
 # Detect upgrade vs fresh install for the post-install banner.
 # An existing local.yaml or an enabled meshpoint service is the
@@ -107,8 +148,9 @@ if [ -f "$BOOT_CONFIG" ]; then
     fi
 fi
 
-# ── 4. Build SX1302 HAL ───────────────────────────────────────────
+# ── 4. Build SX1302 HAL (Gateway only) ─────────────────────────────
 
+if [ "$INSTALL_PLATFORM" = "gateway" ]; then
 if [ -f "/usr/local/lib/libloragw.so" ]; then
     info "libloragw.so already installed, skipping HAL build"
 else
@@ -366,6 +408,10 @@ if [ -f "$HAL_SRC" ]; then
     bash "${SCRIPT_DIR}/scripts/patch_hal.sh"
 fi
 
+else
+    info "Skipping SX1302 HAL build (Node platform uses meshtasticd)"
+fi
+
 # ── 5. Install Meshpoint application ──────────────────────────────
 
 info "Installing Meshpoint to ${MESHPOINT_DIR}..."
@@ -450,6 +496,14 @@ cp "${MESHPOINT_DIR}/config/journald-meshpoint.conf" /etc/systemd/journald.conf.
 systemctl restart systemd-journald 2>/dev/null || warn "Could not restart journald"
 
 # ── 10. Install systemd service ────────────────────────────────────
+
+if [ "$INSTALL_PLATFORM" = "node" ]; then
+    SERVICE_FILE="scripts/meshpoint-node.service"
+    info "Setting up meshtasticd for WisMesh Node..."
+    bash "${SCRIPT_DIR}/scripts/install_meshtasticd.sh"
+else
+    SERVICE_FILE="scripts/meshpoint.service"
+fi
 
 info "Installing systemd service..."
 cp "${MESHPOINT_DIR}/${SERVICE_FILE}" /etc/systemd/system/meshpoint.service
