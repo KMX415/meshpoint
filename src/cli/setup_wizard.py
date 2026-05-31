@@ -195,6 +195,16 @@ def _step_capture_source(config: dict, report: HardwareReport) -> None:
             "sources": [source],
             "concentrator_spi_device": spi_device,
         }
+        config.setdefault("device", {})["platform"] = "gateway"
+        config.setdefault("device", {})["hardware_description"] = (
+            report.hardware_description
+        )
+    elif report.platform == "node" or report.wismesh_hat_detected:
+        print("        WisMesh Pi HAT detected (RAK6421)")
+        print("        Platform: Node (meshtasticd)")
+        print("        RF capture uses meshtasticd (install per RAK WisMesh guide).")
+        config["capture"] = {"sources": ["meshtasticd"]}
+        config.setdefault("device", {})["platform"] = "node"
         config.setdefault("device", {})["hardware_description"] = (
             report.hardware_description
         )

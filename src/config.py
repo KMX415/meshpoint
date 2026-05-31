@@ -125,6 +125,8 @@ class UpstreamConfig:
 class DeviceConfig:
     device_id: Optional[str] = None
     device_name: str = "Meshpoint"
+    # gateway = SX1302/SX1303 concentrator; node = WisMesh HAT + meshtasticd
+    platform: str = "gateway"
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     altitude: Optional[float] = None

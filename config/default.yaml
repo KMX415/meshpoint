@@ -46,6 +46,7 @@ dashboard:
 
 device:
   device_name: "Meshpoint"
+  platform: gateway   # gateway | node (WisMesh HAT + meshtasticd)
   latitude: 0.0
   longitude: 0.0
   altitude: 25
