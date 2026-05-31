@@ -1149,7 +1149,11 @@ def _serve_auth_page(static_dir: Path, filename: str) -> FileResponse:
 
 def _on_packet_received(packet: Packet) -> None:
     import asyncio
-    if packet.signal is not None:
+    if (
+        packet.signal is not None
+        and packet.signal.rssi is not None
+        and packet.signal.snr is not None
+    ):
         noise_floor_tracker.update(
             rssi_dbm=packet.signal.rssi,
             snr_db=packet.signal.snr,

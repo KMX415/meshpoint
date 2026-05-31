@@ -88,7 +88,7 @@ class RelayManager:
         if packet.packet_type not in RELAY_WORTHY_TYPES:
             return RelayDecision(False, "non_relayable_type")
 
-        if packet.signal:
+        if packet.signal and packet.signal.rssi is not None:
             if packet.signal.rssi > self._max_rssi:
                 return RelayDecision(False, "signal_too_strong")
             if packet.signal.rssi < self._min_rssi:
@@ -137,7 +137,7 @@ class RelayManager:
             packet.source_id,
             packet.destination_id,
             packet.packet_type.value,
-            packet.signal.rssi if packet.signal else 0,
+            packet.signal.rssi if packet.signal and packet.signal.rssi is not None else 0,
         )
 
         try:

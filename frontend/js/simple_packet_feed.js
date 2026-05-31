@@ -45,9 +45,9 @@ class SimplePacketFeed {
         const sig = packet.signal || {};
         const rawRssi = sig.rssi != null ? sig.rssi : packet.rssi;
         const rawSnr = sig.snr != null ? sig.snr : packet.snr;
-        const rssiVal = rawRssi != null ? Number(rawRssi).toFixed(0) : null;
+        const rssiVal = this._displayRssi(rawRssi);
         const rssi = rssiVal != null ? rssiVal : '--';
-        const snr = rawSnr != null ? `${Number(rawSnr).toFixed(1)}` : '--';
+        const snr = this._displaySnr(rawRssi, rawSnr);
         const type = packet.packet_type || '--';
         const protocol = packet.protocol || 'meshtastic';
         const details = this._summarize(packet);
@@ -157,9 +157,28 @@ class SimplePacketFeed {
     _rssiClass(val) {
         if (val == null) return '';
         const n = Number(val);
+        if (!Number.isFinite(n) || n >= 0) return '';
         if (n >= -90) return 'rssi-good';
         if (n >= -110) return 'rssi-mid';
         return 'rssi-bad';
+    }
+
+    _displayRssi(rawRssi) {
+        if (rawRssi == null) return null;
+        const n = Number(rawRssi);
+        if (!Number.isFinite(n) || n >= 0) return null;
+        return n.toFixed(0);
+    }
+
+    _displaySnr(rawRssi, rawSnr) {
+        if (rawSnr == null) return '--';
+        const snr = Number(rawSnr);
+        if (!Number.isFinite(snr)) return '--';
+        const rssi = rawRssi == null ? null : Number(rawRssi);
+        if (snr === 0 && (rssi == null || !Number.isFinite(rssi) || rssi >= 0)) {
+            return '--';
+        }
+        return snr.toFixed(1);
     }
 
     _resolveRelay(relayByte) {

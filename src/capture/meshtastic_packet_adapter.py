@@ -59,12 +59,38 @@ def _signal_from_packet(
         if snr is None:
             snr = getattr(raw_field, "rx_snr", None)
     return SignalMetrics(
-        rssi=float(rssi if rssi is not None else -100),
-        snr=float(snr if snr is not None else 0),
+        rssi=_normalize_rssi(rssi),
+        snr=_normalize_snr(snr, rssi=_normalize_rssi(rssi)),
         frequency_mhz=default_frequency_mhz,
         spreading_factor=11,
         bandwidth_khz=250.0,
     )
+
+
+def _normalize_rssi(value: Any) -> Optional[float]:
+    """Map meshtastic unset/zero RSSI to unknown (LoRa RSSI is always negative)."""
+    if value is None:
+        return None
+    try:
+        rssi = float(value)
+    except (TypeError, ValueError):
+        return None
+    if rssi >= 0.0:
+        return None
+    return rssi
+
+
+def _normalize_snr(value: Any, *, rssi: Optional[float]) -> Optional[float]:
+    """SNR 0 with no RSSI is meshtastic's unset sentinel on the TCP bridge."""
+    if value is None:
+        return None
+    try:
+        snr = float(value)
+    except (TypeError, ValueError):
+        return None
+    if rssi is None and snr == 0.0:
+        return None
+    return snr
 
 
 def _coerce_lora_bytes(packet: dict) -> Optional[bytes]:

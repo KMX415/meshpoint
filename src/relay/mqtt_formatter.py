@@ -104,8 +104,9 @@ class MeshtasticMqttFormatter:
         if packet.destination_id and _is_hex(packet.destination_id):
             mesh_pkt.to = int(packet.destination_id, 16) & 0xFFFFFFFF
 
-        if packet.signal:
+        if packet.signal and packet.signal.rssi is not None:
             mesh_pkt.rx_rssi = int(packet.signal.rssi)
+        if packet.signal and packet.signal.snr is not None:
             mesh_pkt.rx_snr = packet.signal.snr
 
         mesh_pkt.decoded.portnum = portnum
@@ -175,8 +176,9 @@ class MeshtasticMqttFormatter:
             "hop_limit": packet.hop_limit,
             "hop_start": packet.hop_start,
         }
-        if packet.signal:
+        if packet.signal and packet.signal.rssi is not None:
             result["rssi"] = packet.signal.rssi
+        if packet.signal and packet.signal.snr is not None:
             result["snr"] = packet.signal.snr
         if packet.decoded_payload:
             payload_copy = dict(packet.decoded_payload)
@@ -222,8 +224,9 @@ class MeshCoreMqttFormatter:
             "sender": self._gateway_id,
             "timestamp": int(packet.timestamp.timestamp()),
         }
-        if packet.signal:
+        if packet.signal and packet.signal.rssi is not None:
             payload["rssi"] = packet.signal.rssi
+        if packet.signal and packet.signal.snr is not None:
             payload["snr"] = packet.signal.snr
         if packet.decoded_payload:
             payload_copy = dict(packet.decoded_payload)

@@ -95,8 +95,11 @@ def setup_logging(level: int = logging.INFO) -> None:
 
 # ── RSSI signal bar ─────────────────────────────────────────────────
 
-def _rssi_bar(rssi: float) -> str:
+def _rssi_bar(rssi: float | None) -> str:
     """Render a 10-segment signal-strength bar, color-graded by RSSI."""
+    if rssi is None:
+        return f"{DIM}{_BAR_EMPTY * _BAR_SEGMENTS}{RESET}"
+
     clamped = max(-120.0, min(-50.0, rssi))
     filled = round(((clamped + 120.0) / 70.0) * _BAR_SEGMENTS)
     filled = max(0, min(_BAR_SEGMENTS, filled))
@@ -202,9 +205,11 @@ def print_packet(packet: Packet) -> None:
     proto = packet.protocol.value
     proto_color = BLUE if proto == "meshtastic" else MAGENTA
 
-    rssi = packet.signal.rssi if packet.signal else 0.0
-    snr = packet.signal.snr if packet.signal else 0.0
+    rssi = packet.signal.rssi if packet.signal else None
+    snr = packet.signal.snr if packet.signal else None
     bar = _rssi_bar(rssi)
+    rssi_str = f"{rssi:>6.1f}" if rssi is not None else f"{'--':>6}"
+    snr_str = f"{snr:>5.1f}" if snr is not None else f"{'--':>5}"
 
     ptype = packet.packet_type.value.upper()
     summary = _payload_summary(packet)
@@ -217,8 +222,8 @@ def print_packet(packet: Packet) -> None:
         f"{WHITE}{packet.source_id}{RESET} -> "
         f"{WHITE}{packet.destination_id}{RESET}  "
         f"{YELLOW}{ptype:<12}{RESET} "
-        f"{DIM}rssi{RESET} {rssi:>6.1f} {bar} "
-        f"{DIM}snr{RESET} {snr:>5.1f}"
+        f"{DIM}rssi{RESET} {rssi_str} {bar} "
+        f"{DIM}snr{RESET} {snr_str}"
         f"{summary_str}"
     )
     print(line, flush=True)

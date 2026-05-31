@@ -96,6 +96,19 @@ class TestMeshtasticPacketAdapter(unittest.TestCase):
     def test_empty_packet_returns_none(self):
         self.assertIsNone(packet_dict_to_raw_capture({}, "meshtasticd"))
 
+    def test_unset_meshtasticd_rssi_snr_are_unknown(self):
+        packet = {
+            "from": 0x9EA7E9D9,
+            "decoded": {"portnum": "TELEMETRY_APP"},
+            "rxRssi": 0,
+            "rxSnr": 0.0,
+        }
+        raw = packet_dict_to_raw_capture(packet, "meshtasticd")
+        self.assertIsNotNone(raw)
+        assert raw is not None
+        self.assertIsNone(raw.signal.rssi)
+        self.assertIsNone(raw.signal.snr)
+
 
 if __name__ == "__main__":
     unittest.main()
