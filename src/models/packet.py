@@ -42,6 +42,8 @@ class RawCapture:
     capture_source: str
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     protocol_hint: Optional[Protocol] = None
+    # Pre-parsed meshtastic-python receive dict (meshtasticd / TCP path).
+    meshtastic_api_packet: Optional[dict[str, Any]] = None
 
 
 @dataclass

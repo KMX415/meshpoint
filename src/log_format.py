@@ -253,6 +253,7 @@ _SOURCE_DESCRIPTIONS = {
     "concentrator": "concentrator (SX1302 8-ch)",
     "serial": "serial radio",
     "meshcore_usb": "MeshCore USB node",
+    "meshtasticd": "meshtasticd bridge",
     "mock": "mock source",
 }
 
@@ -263,7 +264,8 @@ def _describe_sources(config: AppConfig) -> str:
         _SOURCE_DESCRIPTIONS.get(s, s) for s in config.capture.sources
     ]
     if (
-        "meshcore_usb" not in config.capture.sources
+        config.device.platform != "node"
+        and "meshcore_usb" not in config.capture.sources
         and config.capture.meshcore_usb.auto_detect
     ):
         parts.append("MeshCore USB (auto-detect)")

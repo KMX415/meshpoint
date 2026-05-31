@@ -84,3 +84,18 @@ class PacketRouter:
                 result.protocol.value, result.source_id, len(raw_bytes),
             )
         return result
+
+    def decode_meshtastic_api(
+        self,
+        packet: dict,
+        signal: Optional[SignalMetrics] = None,
+    ) -> Optional[Packet]:
+        packet_obj = self._meshtastic.decode_from_api_packet(packet, signal)
+        if packet_obj:
+            logger.info(
+                "Meshtastic packet (api) type=%s src=%s decrypted=%s",
+                packet_obj.packet_type.value,
+                packet_obj.source_id,
+                packet_obj.decrypted,
+            )
+        return packet_obj
