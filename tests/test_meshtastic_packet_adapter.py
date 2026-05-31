@@ -68,6 +68,31 @@ class TestMeshtasticPacketAdapter(unittest.TestCase):
         self.assertEqual(raw.payload, b"")
         self.assertIs(raw.meshtastic_api_packet, packet)
 
+    def test_meshtastic_python_decoded_payload_not_reencrypted(self):
+        """Regression: decoded payload must not be wrapped as fake LoRa ciphertext."""
+        packet = {
+            "from": 0x9EA7E9D9,
+            "to": 0xFFFFFFFF,
+            "id": 12345,
+            "hopLimit": 3,
+            "hopStart": 3,
+            "channel": 0,
+            "decoded": {
+                "portnum": "NODEINFO_APP",
+                "payload": b"\x08\x01",
+                "user": {
+                    "longName": "Mesh Node",
+                    "shortName": "MNOD",
+                    "hwModel": "PORTDUINO",
+                },
+            },
+            "raw": MagicMock(WhichOneof=MagicMock(return_value="decoded")),
+        }
+        raw = packet_dict_to_raw_capture(packet, "meshtasticd")
+        self.assertIsNotNone(raw)
+        self.assertIs(raw.meshtastic_api_packet, packet)
+        self.assertEqual(raw.payload, b"")
+
     def test_empty_packet_returns_none(self):
         self.assertIsNone(packet_dict_to_raw_capture({}, "meshtasticd"))
 

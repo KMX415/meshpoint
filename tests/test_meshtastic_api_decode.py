@@ -32,6 +32,32 @@ class TestMeshtasticApiDecode(unittest.TestCase):
         self.assertEqual(result.source_id, "aabbccdd")
         self.assertEqual(result.decoded_payload.get("text"), "hello mesh")
 
+    def test_decode_nodeinfo_from_api_user_block(self):
+        packet = {
+            "from": 0x9EA7E9D9,
+            "to": 0xFFFFFFFF,
+            "id": 0x01020304,
+            "hopLimit": 3,
+            "hopStart": 3,
+            "channel": 0,
+            "decoded": {
+                "portnum": "NODEINFO_APP",
+                "payload": b"",
+                "user": {
+                    "longName": "Mesh Node",
+                    "shortName": "MNOD",
+                    "hwModel": "PORTDUINO",
+                },
+            },
+        }
+        result = self.decoder.decode_from_api_packet(packet)
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertTrue(result.decrypted)
+        self.assertEqual(result.packet_type, PacketType.NODEINFO)
+        self.assertEqual(result.source_id, "9ea7e9d9")
+        self.assertEqual(result.decoded_payload.get("long_name"), "Mesh Node")
+
 
 if __name__ == "__main__":
     unittest.main()

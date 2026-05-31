@@ -22,16 +22,10 @@ def packet_dict_to_raw_capture(
 ) -> Optional[RawCapture]:
     """Map a meshtastic-python receive callback packet to RawCapture."""
     signal = _signal_from_packet(packet, default_frequency_mhz)
-    lora_bytes = _coerce_lora_bytes(packet)
 
-    if lora_bytes is not None:
-        return RawCapture(
-            payload=lora_bytes,
-            signal=signal,
-            capture_source=capture_source,
-            timestamp=datetime.now(timezone.utc),
-        )
-
+    # meshtasticd / meshtastic-python already decrypt locally and populate
+    # packet["decoded"]. Never round-trip that through the LoRa byte decoder:
+    # rebuilding header + plaintext and AES-decrypting it always yields ENCRYPTED.
     if _has_decoded_api_payload(packet):
         return RawCapture(
             payload=b"",
@@ -41,15 +35,32 @@ def packet_dict_to_raw_capture(
             meshtastic_api_packet=packet,
         )
 
+    lora_bytes = _coerce_lora_bytes(packet)
+    if lora_bytes is not None:
+        return RawCapture(
+            payload=lora_bytes,
+            signal=signal,
+            capture_source=capture_source,
+            timestamp=datetime.now(timezone.utc),
+        )
+
     return None
 
 
 def _signal_from_packet(
     packet: dict, default_frequency_mhz: float
 ) -> SignalMetrics:
+    rssi = packet.get("rxRssi", packet.get("rx_rssi", packet.get("rssi")))
+    snr = packet.get("rxSnr", packet.get("rx_snr", packet.get("snr")))
+    raw_field = packet.get("raw")
+    if _is_mesh_packet_proto(raw_field):
+        if rssi is None:
+            rssi = getattr(raw_field, "rx_rssi", None)
+        if snr is None:
+            snr = getattr(raw_field, "rx_snr", None)
     return SignalMetrics(
-        rssi=float(packet.get("rxRssi", packet.get("rssi", -100))),
-        snr=float(packet.get("rxSnr", packet.get("snr", 0))),
+        rssi=float(rssi if rssi is not None else -100),
+        snr=float(snr if snr is not None else 0),
         frequency_mhz=default_frequency_mhz,
         spreading_factor=11,
         bandwidth_khz=250.0,
@@ -73,9 +84,6 @@ def _coerce_lora_bytes(packet: dict) -> Optional[bytes]:
             return bytes.fromhex(raw_field)
         except ValueError:
             return None
-
-    if "decoded" in packet:
-        return _reconstruct_raw(packet)
 
     return None
 
@@ -129,50 +137,10 @@ def _mesh_packet_to_lora_bytes(mesh_packet) -> Optional[bytes]:
 
 def _has_decoded_api_payload(packet: dict) -> bool:
     decoded = packet.get("decoded")
-    return isinstance(decoded, dict) and bool(decoded.get("portnum"))
-
-
-def _reconstruct_raw(packet: dict) -> Optional[bytes]:
-    """Build a minimal raw frame when only dict fields are available."""
-    dest = packet.get("to", 0xFFFFFFFF)
-    source = packet.get("from", 0)
-    pkt_id = packet.get("id", 0)
-
-    hop_limit = packet.get("hopLimit", 3)
-    hop_start = packet.get("hopStart", 3)
-    want_ack = packet.get("wantAck", False)
-    via_mqtt = packet.get("viaMqtt", False)
-
-    flags = hop_limit & 0x07
-    if want_ack:
-        flags |= 0x08
-    if via_mqtt:
-        flags |= 0x10
-    flags |= (hop_start & 0x07) << 5
-
-    channel = packet.get("channel", 0) & 0xFF
-    next_hop = packet.get("nextHop", packet.get("next_hop", 0)) & 0xFF
-    relay_node = packet.get("relayNode", packet.get("relay_node", 0)) & 0xFF
-
-    header = struct.pack("<III", dest, source, pkt_id)
-    header += bytes([flags, channel, next_hop, relay_node])
-
-    encoded = packet.get("encoded", b"")
-    if isinstance(encoded, str):
-        try:
-            encoded = bytes.fromhex(encoded)
-        except ValueError:
-            encoded = b""
-
-    decoded = packet.get("decoded") or {}
-    payload = decoded.get("payload", encoded)
-    if isinstance(payload, str):
-        try:
-            payload = bytes.fromhex(payload)
-        except ValueError:
-            payload = b""
-
-    if not payload:
-        return None
-
-    return header + bytes(payload)
+    if not isinstance(decoded, dict):
+        return False
+    if decoded.get("portnum"):
+        return True
+    return any(
+        key in decoded for key in ("text", "user", "position", "telemetry")
+    )
