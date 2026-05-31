@@ -147,6 +147,7 @@ Preserve `config/local.yaml` if you want the same `device_id` and API key.
 | `meshtastic --host` while Meshpoint runs | Second client corrupts stream | Stop Meshpoint before CLI probe |
 | meshtasticd crash: blank MAC | Missing MAC source | `General.MACAddressSource: eth0` in `/etc/meshtasticd/config.yaml` |
 | meshtasticd crash: no preset | Missing HAT preset | Copy `lora-RAK6421-13300-slot1.yaml` to `config.d/` |
+| Dashboard Apply fails at `install.sh` | Interrupted dpkg or git synced but install did not finish | `sudo dpkg --configure -a`, then Apply again. Current branch heals dpkg and skips dist-upgrade on upgrade |
 
 ## Tests
 

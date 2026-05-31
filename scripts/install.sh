@@ -104,9 +104,19 @@ INSTALL_VERSION="$(
 
 # ── 1. System packages ─────────────────────────────────────────────
 
-info "Updating system packages..."
-apt-get update -qq
-apt-get upgrade -y -qq
+# Dashboard Apply runs install.sh on every pull. Heal interrupted dpkg
+# before apt (common after a prior apply killed mid-upgrade) and skip
+# full dist-upgrade on existing installs to keep applies fast and reliable.
+if [ "$IS_UPGRADE" = "1" ]; then
+    info "Checking for interrupted dpkg state..."
+    dpkg --configure -a
+    info "Refreshing package index (upgrade mode: skipping dist-upgrade)..."
+    apt-get update -qq
+else
+    info "Updating system packages..."
+    apt-get update -qq
+    apt-get upgrade -y -qq
+fi
 
 info "Installing build tools and dependencies..."
 apt-get install -y -qq \
@@ -441,7 +451,11 @@ fi
 # ── 6. Python virtual environment ──────────────────────────────────
 
 info "Setting up Python virtual environment..."
-python3 -m venv "${MESHPOINT_DIR}/venv"
+if [ -d "${MESHPOINT_DIR}/venv" ]; then
+    info "Reusing existing venv at ${MESHPOINT_DIR}/venv"
+else
+    python3 -m venv "${MESHPOINT_DIR}/venv"
+fi
 source "${MESHPOINT_DIR}/venv/bin/activate"
 
 pip install --upgrade pip -q

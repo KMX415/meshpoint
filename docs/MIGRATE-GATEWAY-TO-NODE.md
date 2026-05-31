@@ -67,6 +67,7 @@ Look for `meshtasticd bridge connected to 127.0.0.1:4403` and `Meshtastic DM ide
 | meshtasticd crash: blank MAC | Ensure `/etc/meshtasticd/config.yaml` has `General.MACAddressSource: eth0` (or `wlan0`) |
 | meshtasticd crash: no preset | Copy `lora-RAK6421-13300-slot1.yaml` from `/etc/meshtasticd/available.d/` to `config.d/` |
 | Meshpoint cannot connect to 4403 | Start meshtasticd first: `sudo systemctl restart meshtasticd` then `sudo systemctl restart meshpoint` |
+| Dashboard Apply fails at install.sh | Git may still be current while install failed. Run `sudo dpkg --configure -a`, then Apply again or `sudo bash scripts/install.sh` + restart |
 | Wrong platform detected | Override with `sudo ./scripts/install.sh --platform node` or edit `device.platform` in `local.yaml` |
 | OTA packets in logs then silence | Restart both services; do not run `meshtastic --host` while Meshpoint is up (single TCP client) |
 | Phone DM delivered but not on dashboard | meshtasticd node id must match DM destination; see `Meshtastic DM identity` in logs. Remove stale `transmit.node_id` if it disagrees with meshtasticd |
