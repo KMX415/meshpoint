@@ -52,9 +52,19 @@ install_meshtasticd_package() {
 write_meshtasticd_config() {
     info "Writing ${MESHTASTICD_CONFIG} (MACAddressSource=${MAC_SOURCE})..."
     mkdir -p /etc/meshtasticd
+    # ConfigDirectory is required or config.d/*.yaml presets are ignored and
+    # meshtasticd falls back to SimRadio (no real RF, no RSSI).
     cat > "${MESHTASTICD_CONFIG}" <<EOF
 General:
   MACAddressSource: ${MAC_SOURCE}
+  MaxNodes: 200
+  MaxMessageQueue: 100
+  ConfigDirectory: /etc/meshtasticd/config.d/
+  AvailableDirectory: /etc/meshtasticd/available.d/
+
+---
+Lora:
+  Module: auto
 EOF
 }
 
@@ -75,7 +85,29 @@ install_lora_preset() {
     fi
 
     cp "${available}" "${target}"
+    # With dtoverlay=spi0-0cs the preset still needs an explicit CS pin on Pi 4/5.
+    if grep -q '^[[:space:]]*#[[:space:]]*CS:' "${target}"; then
+        sed -i 's/^[[:space:]]*#[[:space:]]*CS:/  CS:/' "${target}"
+    fi
+    chown meshtasticd:meshtasticd "${target}" 2>/dev/null || true
     info "Installed LoRa preset: ${PRESET}"
+}
+
+enable_spi_overlay() {
+    local boot_cfg="/boot/firmware/config.txt"
+    [ -f "${boot_cfg}" ] || boot_cfg="/boot/config.txt"
+    if [ ! -f "${boot_cfg}" ]; then
+        warn "Could not find boot config for SPI overlay"
+        return
+    fi
+    if ! grep -q '^[[:space:]]*dtparam=spi=on' "${boot_cfg}"; then
+        echo "dtparam=spi=on" >> "${boot_cfg}"
+        info "Added dtparam=spi=on to ${boot_cfg} (reboot required)"
+    fi
+    if ! grep -q '^[[:space:]]*dtoverlay=spi0-0cs' "${boot_cfg}"; then
+        sed -i '/dtparam=spi=on/a dtoverlay=spi0-0cs' "${boot_cfg}"
+        info "Added dtoverlay=spi0-0cs to ${boot_cfg} (reboot required)"
+    fi
 }
 
 enable_meshtasticd_service() {
@@ -86,6 +118,7 @@ enable_meshtasticd_service() {
 }
 
 install_meshtasticd_package
+enable_spi_overlay
 write_meshtasticd_config
 install_lora_preset
 enable_meshtasticd_service

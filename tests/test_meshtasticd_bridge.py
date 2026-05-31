@@ -23,18 +23,20 @@ class TestMeshtasticdBridgeSource(unittest.TestCase):
         self.assertIs(src.interface, fake_iface)
         mock_sub.assert_called_once()
 
-    def test_on_receive_enqueues_packet(self):
+
+class TestMeshtasticdBridgeAsync(unittest.IsolatedAsyncioTestCase):
+    async def test_on_receive_enqueues_packet(self):
         src = MeshtasticdBridgeSource()
         src._running = True
+        src._loop = asyncio.get_running_loop()
         packet = {"raw": "0102030405060708090a0b0c0d0e0f10", "rxRssi": -88}
 
         src._on_receive(packet, None)
+        await asyncio.sleep(0)
 
         queued = src._queue.get_nowait()
         self.assertEqual(queued.capture_source, "meshtasticd")
 
-
-class TestMeshtasticdBridgeAsync(unittest.IsolatedAsyncioTestCase):
     async def test_start_sets_running_when_connect_succeeds(self):
         src = MeshtasticdBridgeSource(connect_attempts=1)
 

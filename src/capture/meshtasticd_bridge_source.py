@@ -44,6 +44,7 @@ class MeshtasticdBridgeSource(CaptureSource):
         self._sync_settings = sync_settings
         self._interface = None
         self._running = False
+        self._loop: asyncio.AbstractEventLoop | None = None
         self._queue: asyncio.Queue[RawCapture] = asyncio.Queue(maxsize=500)
 
     @property
@@ -60,9 +61,11 @@ class MeshtasticdBridgeSource(CaptureSource):
         return self._interface
 
     async def start(self) -> None:
+        self._loop = asyncio.get_running_loop()
         last_error: Optional[Exception] = None
         for attempt in range(1, self._connect_attempts + 1):
             try:
+                self._running = True
                 await asyncio.to_thread(self._connect_blocking)
                 if self._sync_settings is not None:
                     await asyncio.to_thread(
@@ -70,7 +73,6 @@ class MeshtasticdBridgeSource(CaptureSource):
                         self._interface,
                         self._sync_settings,
                     )
-                self._running = True
                 logger.info(
                     "meshtasticd bridge connected to %s:%d",
                     self._host,
@@ -78,6 +80,7 @@ class MeshtasticdBridgeSource(CaptureSource):
                 )
                 return
             except Exception as exc:
+                self._running = False
                 last_error = exc
                 logger.warning(
                     "meshtasticd bridge connect attempt %d/%d failed: %s",
@@ -143,9 +146,16 @@ class MeshtasticdBridgeSource(CaptureSource):
                 default_frequency_mhz=self._default_frequency_mhz,
             )
             if raw_capture:
-                try:
-                    self._queue.put_nowait(raw_capture)
-                except asyncio.QueueFull:
-                    logger.warning("meshtasticd capture queue full")
+                self._enqueue(raw_capture)
         except Exception:
             logger.debug("Failed to convert meshtasticd packet", exc_info=True)
+
+    def _enqueue(self, raw_capture: RawCapture) -> None:
+        """Thread-safe handoff from meshtastic-python reader to asyncio."""
+        loop = self._loop
+        if loop is None or not loop.is_running():
+            return
+        try:
+            loop.call_soon_threadsafe(self._queue.put_nowait, raw_capture)
+        except asyncio.QueueFull:
+            logger.warning("meshtasticd capture queue full")
