@@ -134,6 +134,7 @@ class MessagingPanel {
             const res = await fetch('/api/messages/send', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
                 body: JSON.stringify({
                     text: text,
                     destination: destination,

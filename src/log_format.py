@@ -200,6 +200,29 @@ def _payload_summary(packet: Packet) -> str:
     return " ".join(parts)
 
 
+def _format_hop_relay(packet: Packet) -> str:
+    """Compact hop and relay label for the >> PKT log line."""
+    if packet.protocol.value != "meshtastic":
+        return ""
+
+    parts: list[str] = []
+    if packet.hop_start > 0:
+        parts.append(f"hl={packet.hop_limit}/{packet.hop_start}")
+        parts.append(f"hops={packet.hop_count}")
+    elif packet.hop_limit > 0:
+        parts.append(f"hl={packet.hop_limit}")
+
+    if packet.relay_node:
+        parts.append(f"relay=0x{packet.relay_node:02x}")
+
+    if packet.hop_start > 0:
+        parts.append("direct" if packet.hop_count == 0 else "relayed")
+
+    if not parts:
+        return ""
+    return " " + " ".join(parts)
+
+
 def print_packet(packet: Packet) -> None:
     """Print a rich single-line packet event to stdout."""
     proto = packet.protocol.value
@@ -214,6 +237,8 @@ def print_packet(packet: Packet) -> None:
     ptype = packet.packet_type.value.upper()
     summary = _payload_summary(packet)
     summary_str = f"  {DIM}{summary}{RESET}" if summary else ""
+    hop_relay_str = _format_hop_relay(packet)
+    hop_relay_display = f"{DIM}{hop_relay_str}{RESET}" if hop_relay_str else ""
 
     line = (
         f" {BRIGHT_GREEN}>>{RESET} "
@@ -224,6 +249,7 @@ def print_packet(packet: Packet) -> None:
         f"{YELLOW}{ptype:<12}{RESET} "
         f"{DIM}rssi{RESET} {rssi_str} {bar} "
         f"{DIM}snr{RESET} {snr_str}"
+        f"{hop_relay_display}"
         f"{summary_str}"
     )
     print(line, flush=True)

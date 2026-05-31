@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +116,23 @@ def _sync_primary_channel_name(node: Any, channel_name: str) -> None:
     primary.settings.name = name
     node.writeChannel(0)
     logger.info("meshtasticd primary channel name set to %r", name)
+
+
+def read_local_node_id_hex(iface: Any) -> str | None:
+    """Return the 8-char lowercase hex node id from a meshtastic-python interface."""
+    local_node = getattr(iface, "localNode", None)
+    if local_node is None:
+        return None
+    node_num = getattr(local_node, "nodeNum", None)
+    if node_num is None:
+        user = getattr(local_node, "user", None)
+        node_num = getattr(user, "id", None) if user is not None else None
+    if node_num is None:
+        return None
+    try:
+        return f"{int(node_num):08x}"
+    except (TypeError, ValueError):
+        return None
 
 
 def build_sync_settings_from_config(config: Any) -> MeshtasticdSyncSettings:

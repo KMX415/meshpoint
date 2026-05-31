@@ -510,6 +510,11 @@ def _build_nodeinfo_broadcaster(
     level, the TX service is unavailable, or the radio backend
     isn't ready: in those cases there's nothing to broadcast on.
     """
+    if config.device.platform == "node":
+        logger.info(
+            "NodeInfo broadcaster skipped: meshtasticd owns node identity"
+        )
+        return None
     if tx_service is None or not config.transmit.enabled:
         return None
     if not tx_service.meshtastic_enabled:
@@ -702,9 +707,29 @@ def _setup_message_interception(
     MeshCore DMs use destination_id='self' to indicate they're for us.
     """
     from src.models.packet import PacketType, Protocol
+    from src.api.message_routing import build_our_meshtastic_node_ids
 
-    our_node_id = config.transmit.node_id
-    our_node_hex = f"{our_node_id:08x}" if our_node_id else ""
+    md_source = (
+        _find_meshtasticd_source(coord)
+        if config.device.platform == "node"
+        else None
+    )
+    md_node_hex = md_source.local_node_id_hex if md_source else None
+    our_node_ids = build_our_meshtastic_node_ids(
+        config.transmit.node_id,
+        md_node_hex,
+    )
+    if md_node_hex and config.transmit.node_id:
+        configured_hex = f"{int(config.transmit.node_id):08x}"
+        if md_node_hex != configured_hex:
+            logger.warning(
+                "meshtasticd node id %s differs from transmit.node_id %s; "
+                "routing DMs to meshtasticd identity",
+                md_node_hex,
+                configured_hex,
+            )
+    if md_node_hex:
+        logger.info("Meshtastic DM identity: %s", ", ".join(sorted(our_node_ids)))
 
     mc_name_cache: dict[str, str] = {}
     mc_pubkey_canon: dict[str, str] = {}
@@ -790,13 +815,10 @@ def _setup_message_interception(
         dest = (packet.destination_id or "").lower()
         source = (packet.source_id or "").lower()
         is_broadcast = dest in ("ffffffff", "ffff", "broadcast") or dest.startswith("channel:")
-        is_for_us = (
-            (our_node_hex and dest == our_node_hex)
-            or dest == "self"
-        )
+        is_for_us = dest in our_node_ids or dest == "self"
 
         if is_broadcast:
-            if our_node_hex and source == our_node_hex:
+            if source in our_node_ids:
                 return
             if packet.protocol == Protocol.MESHCORE:
                 ch_idx = packet.channel_hash or 0
@@ -807,7 +829,7 @@ def _setup_message_interception(
         elif is_for_us:
             node_id = packet.source_id or "unknown"
             direction = "received"
-        elif our_node_hex and source == our_node_hex:
+        elif source in our_node_ids:
             node_id = packet.destination_id or "unknown"
             direction = "sent"
         else:

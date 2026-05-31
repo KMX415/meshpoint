@@ -19,18 +19,13 @@ class MeshtasticdTxClient:
         self._source = None
 
     def set_source(self, source) -> None:
-        """Bind to MeshtasticdBridgeSource for live interface access."""
+        """Bind to MeshtasticdBridgeSource for bridge command access."""
         self._source = source
         logger.info("Meshtasticd TX client bound to capture source")
 
     @property
     def connected(self) -> bool:
         return self._source is not None and self._source.is_running
-
-    def _interface(self):
-        if self._source is None:
-            return None
-        return getattr(self._source, "interface", None)
 
     async def send_text(
         self,
@@ -39,8 +34,8 @@ class MeshtasticdTxClient:
         channel: int = 0,
         want_ack: bool = False,
     ) -> SendResult:
-        iface = self._interface()
-        if iface is None:
+        source = self._source
+        if source is None or not source.is_running:
             return SendResult(
                 success=False,
                 protocol="meshtastic",
@@ -50,17 +45,23 @@ class MeshtasticdTxClient:
         dest_id = self._format_destination(destination)
 
         try:
-            await asyncio.to_thread(
-                iface.sendText,
+            success, error = await asyncio.to_thread(
+                source.request_send_text,
                 text,
-                destinationId=dest_id,
-                wantAck=want_ack,
-                channelIndex=channel,
+                dest_id,
+                channel,
+                want_ack,
             )
+            if success:
+                return SendResult(
+                    success=True,
+                    protocol="meshtastic",
+                    timestamp=time.time(),
+                )
             return SendResult(
-                success=True,
+                success=False,
                 protocol="meshtastic",
-                timestamp=time.time(),
+                error=error or "meshtasticd sendText failed",
             )
         except Exception as exc:
             logger.exception("meshtasticd sendText failed")
@@ -76,8 +77,8 @@ class MeshtasticdTxClient:
         short_name: str,
         hw_model: int = 37,
     ) -> SendResult:
-        iface = self._interface()
-        if iface is None or not hasattr(iface, "localNode"):
+        source = self._source
+        if source is None or not source.is_running:
             return SendResult(
                 success=False,
                 protocol="meshtastic",
@@ -85,21 +86,22 @@ class MeshtasticdTxClient:
             )
 
         try:
-            await asyncio.to_thread(
-                iface.localNode.setOwner,
-                long_name=long_name,
-                short_name=short_name,
-            )
-            logger.info(
-                "meshtasticd NodeInfo setOwner: long=%r short=%r hw=%d",
+            success, error = await asyncio.to_thread(
+                source.request_send_nodeinfo,
                 long_name,
                 short_name,
                 hw_model,
             )
+            if success:
+                return SendResult(
+                    success=True,
+                    protocol="meshtastic",
+                    timestamp=time.time(),
+                )
             return SendResult(
-                success=True,
+                success=False,
                 protocol="meshtastic",
-                timestamp=time.time(),
+                error=error or "meshtasticd setOwner failed",
             )
         except Exception as exc:
             logger.exception("meshtasticd setOwner failed")
@@ -111,5 +113,5 @@ class MeshtasticdTxClient:
 
     @staticmethod
     def _format_destination(destination: int | str) -> int:
-        """Map Meshpoint message destinations to meshtastic-python node nums."""
+        """Map Meshpoint message destinations to meshtastic node nums."""
         return TxService._resolve_destination(destination, Protocol.MESHTASTIC)

@@ -58,7 +58,7 @@ systemctl status meshtasticd
 journalctl -u meshpoint -n 50 --no-pager
 ```
 
-Look for `meshtasticd bridge connected to 127.0.0.1:4403` in the Meshpoint logs.
+Look for `meshtasticd bridge connected to 127.0.0.1:4403` and `Meshtastic DM identity:` in the Meshpoint logs.
 
 ## Troubleshooting
 
@@ -68,5 +68,8 @@ Look for `meshtasticd bridge connected to 127.0.0.1:4403` in the Meshpoint logs.
 | meshtasticd crash: no preset | Copy `lora-RAK6421-13300-slot1.yaml` from `/etc/meshtasticd/available.d/` to `config.d/` |
 | Meshpoint cannot connect to 4403 | Start meshtasticd first: `sudo systemctl restart meshtasticd` then `sudo systemctl restart meshpoint` |
 | Wrong platform detected | Override with `sudo ./scripts/install.sh --platform node` or edit `device.platform` in `local.yaml` |
+| OTA packets in logs then silence | Restart both services; do not run `meshtastic --host` while Meshpoint is up (single TCP client) |
+| Phone DM delivered but not on dashboard | meshtasticd node id must match DM destination; see `Meshtastic DM identity` in logs. Remove stale `transmit.node_id` if it disagrees with meshtasticd |
+| RSSI looks weak at short range | Check `hops=0 direct` on `>> PKT` line; values are from meshtasticd unchanged. Weak direct RSSI usually means the other radio's antenna/TX, not Meshpoint |
 
-See also [`docs/plans/wisemesh-node-meshtasticd.md`](plans/wisemesh-node-meshtasticd.md) for IPC spike notes.
+See also [`docs/plans/wisemesh-node-meshtasticd.md`](plans/wisemesh-node-meshtasticd.md) for IPC spike notes and [`docs/plans/WISMESH-BRANCH.md`](plans/WISMESH-BRANCH.md) for full branch architecture.

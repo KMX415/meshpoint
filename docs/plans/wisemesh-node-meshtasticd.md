@@ -92,15 +92,22 @@ WisMesh HAT:     RAK6421 detected
 
 libloragw installed from prior Gateway experiments does **not** trigger false Gateway when chip probe returns none.
 
-## Phase 2 bridge (next)
+## Phase 2 bridge (shipped 2026-05-31)
 
-| Concern | Approach |
-|---------|----------|
-| **Capture** | Meshtastic TCP API on `localhost:4403`; subscribe to packet stream via `meshtastic` Python library |
-| **TX** | Same client (`--sendtext`, NodeInfo, etc.) |
-| **Config sync** | On Meshpoint Configuration save, push region/channels/identity to meshtasticd |
-| **systemd** | `meshtasticd.service` before `meshpoint.service`; Phase 1 `install.sh --platform node` must write MAC + preset |
-| **CLI path** | Use `/opt/meshpoint/venv/bin/meshtastic` or import library from venv in bridge code |
+Production bridge on `feat/wismesh-hat`. See [WISMESH-BRANCH.md](./WISMESH-BRANCH.md) for install and troubleshooting.
+
+| Concern | Implementation |
+|---------|----------------|
+| **Capture** | `meshtasticd_bridge_worker` subprocess owns one `TCPInterface` on `:4403`; parent reads `RawCapture` from a queue |
+| **Why subprocess** | meshtasticd Phone API is single-client; in-process TCP inside uvicorn caused Recv-Q stalls and live OTA silence |
+| **TX** | `MeshtasticdTxClient` sends commands to worker over IPC (no second TCP client) |
+| **Stream safety** | `LockedTCPInterface` serializes writes only; read-lock caused connect deadlock |
+| **NodeInfo** | Skipped on `device.platform: node` (meshtasticd owns identity) |
+| **DM routing** | Accept DMs for meshtasticd live node id and optional `transmit.node_id` (`message_routing.py`) |
+| **systemd** | `meshpoint-node.service` `After=meshtasticd.service` |
+| **Stall recovery** | Worker reconnects TCP after 90s with no packets; reader thread watchdog |
+
+**Spike lesson retained:** never run `meshtastic --host localhost:4403` while Meshpoint is running.
 
 ## Pi checkout
 
