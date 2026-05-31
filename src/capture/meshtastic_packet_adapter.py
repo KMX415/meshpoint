@@ -2,12 +2,25 @@
 
 from __future__ import annotations
 
+import logging
 import struct
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 from src.models.packet import RawCapture
 from src.models.signal import SignalMetrics
+
+logger = logging.getLogger(__name__)
+
+# meshtastic protobuf TransportMechanism: LoRa over-the-air
+_TRANSPORT_LORA_NAMES = frozenset(
+    {
+        "TRANSPORT_LORA",
+        "TRANSPORT_LORA_ALT1",
+        "TRANSPORT_LORA_ALT2",
+        "TRANSPORT_LORA_ALT3",
+    }
+)
 
 try:
     from meshtastic import mesh_pb2 as _mesh_pb2
@@ -50,21 +63,55 @@ def packet_dict_to_raw_capture(
 def _signal_from_packet(
     packet: dict, default_frequency_mhz: float
 ) -> SignalMetrics:
-    rssi = packet.get("rxRssi", packet.get("rx_rssi", packet.get("rssi")))
-    snr = packet.get("rxSnr", packet.get("rx_snr", packet.get("snr")))
-    raw_field = packet.get("raw")
-    if _is_mesh_packet_proto(raw_field):
-        if rssi is None:
-            rssi = getattr(raw_field, "rx_rssi", None)
-        if snr is None:
-            snr = getattr(raw_field, "rx_snr", None)
+    rssi, snr = _extract_rf_metrics(packet)
+    normalized_rssi = _normalize_rssi(rssi)
+    normalized_snr = _normalize_snr(snr, rssi=normalized_rssi)
+    if normalized_rssi is None and _is_lora_transport(packet):
+        logger.debug(
+            "meshtasticd OTA packet missing rxRssi from=%s port=%s",
+            packet.get("from"),
+            (packet.get("decoded") or {}).get("portnum"),
+        )
     return SignalMetrics(
-        rssi=_normalize_rssi(rssi),
-        snr=_normalize_snr(snr, rssi=_normalize_rssi(rssi)),
+        rssi=normalized_rssi,
+        snr=normalized_snr,
         frequency_mhz=default_frequency_mhz,
         spreading_factor=11,
         bandwidth_khz=250.0,
     )
+
+
+def _extract_rf_metrics(packet: dict) -> tuple[Any, Any]:
+    """Read RSSI/SNR from meshtastic-python dict and live MeshPacket proto."""
+    rssi = packet.get("rxRssi", packet.get("rx_rssi", packet.get("rssi")))
+    snr = packet.get("rxSnr", packet.get("rx_snr", packet.get("snr")))
+
+    raw_field = packet.get("raw")
+    if _is_mesh_packet_proto(raw_field):
+        proto_rssi = getattr(raw_field, "rx_rssi", None)
+        proto_snr = getattr(raw_field, "rx_snr", None)
+        # Proto3 scalars default to 0; Meshtastic uses 0 as "not measured".
+        if rssi is None and proto_rssi not in (None, 0):
+            rssi = proto_rssi
+        if snr is None and proto_snr not in (None, 0.0):
+            snr = proto_snr
+
+    return rssi, snr
+
+
+def _is_lora_transport(packet: dict) -> bool:
+    transport = packet.get("transportMechanism", packet.get("transport_mechanism"))
+    if transport is None and _is_mesh_packet_proto(packet.get("raw")):
+        raw = packet["raw"]
+        transport = getattr(raw, "transport_mechanism", None)
+        if transport is not None and hasattr(transport, "name"):
+            transport = transport.name
+    if isinstance(transport, int):
+        # TRANSPORT_LORA == 1 in mesh.proto
+        return transport in (1, 2, 3, 4)
+    if isinstance(transport, str):
+        return transport in _TRANSPORT_LORA_NAMES
+    return False
 
 
 def _normalize_rssi(value: Any) -> Optional[float]:

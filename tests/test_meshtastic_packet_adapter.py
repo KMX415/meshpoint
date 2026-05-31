@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from src.capture.meshtastic_packet_adapter import (
+    _extract_rf_metrics,
     _mesh_packet_to_lora_bytes,
     packet_dict_to_raw_capture,
 )
@@ -108,6 +109,20 @@ class TestMeshtasticPacketAdapter(unittest.TestCase):
         assert raw is not None
         self.assertIsNone(raw.signal.rssi)
         self.assertIsNone(raw.signal.snr)
+
+    def test_proto_rx_rssi_used_when_dict_omits_field(self):
+        try:
+            from meshtastic import mesh_pb2
+        except ImportError:
+            self.skipTest("meshtastic not installed")
+
+        mp = mesh_pb2.MeshPacket()
+        mp.rx_rssi = -84
+        mp.rx_snr = 7.5
+
+        rssi, snr = _extract_rf_metrics({"raw": mp})
+        self.assertEqual(rssi, -84)
+        self.assertEqual(snr, 7.5)
 
 
 if __name__ == "__main__":

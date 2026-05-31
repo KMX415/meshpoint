@@ -8,6 +8,10 @@ from typing import AsyncIterator, Optional
 
 from src.capture.base import CaptureSource
 from src.capture.meshtastic_packet_adapter import packet_dict_to_raw_capture
+from src.capture.meshtasticd_config_sync import (
+    MeshtasticdSyncSettings,
+    sync_meshtasticd_config,
+)
 from src.models.packet import RawCapture
 
 logger = logging.getLogger(__name__)
@@ -30,12 +34,14 @@ class MeshtasticdBridgeSource(CaptureSource):
         default_frequency_mhz: float = 906.875,
         connect_attempts: int = _DEFAULT_CONNECT_ATTEMPTS,
         connect_delay_seconds: float = _DEFAULT_CONNECT_DELAY_SECONDS,
+        sync_settings: MeshtasticdSyncSettings | None = None,
     ):
         self._host = host
         self._port = port
         self._default_frequency_mhz = default_frequency_mhz
         self._connect_attempts = connect_attempts
         self._connect_delay_seconds = connect_delay_seconds
+        self._sync_settings = sync_settings
         self._interface = None
         self._running = False
         self._queue: asyncio.Queue[RawCapture] = asyncio.Queue(maxsize=500)
@@ -58,6 +64,12 @@ class MeshtasticdBridgeSource(CaptureSource):
         for attempt in range(1, self._connect_attempts + 1):
             try:
                 await asyncio.to_thread(self._connect_blocking)
+                if self._sync_settings is not None:
+                    await asyncio.to_thread(
+                        sync_meshtasticd_config,
+                        self._interface,
+                        self._sync_settings,
+                    )
                 self._running = True
                 logger.info(
                     "meshtasticd bridge connected to %s:%d",

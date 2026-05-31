@@ -63,6 +63,7 @@ def _add_meshcore_usb_source(coordinator: PipelineCoordinator, config) -> None:
 def _add_meshtasticd_source(coordinator: PipelineCoordinator, config) -> None:
     try:
         from src.capture.meshtasticd_bridge_source import MeshtasticdBridgeSource
+        from src.capture.meshtasticd_config_sync import build_sync_settings_from_config
 
         md_cfg = config.capture.meshtasticd
         coordinator.capture_coordinator.add_source(
@@ -70,6 +71,7 @@ def _add_meshtasticd_source(coordinator: PipelineCoordinator, config) -> None:
                 host=md_cfg.host,
                 port=md_cfg.port,
                 default_frequency_mhz=config.radio.frequency_mhz or 906.875,
+                sync_settings=build_sync_settings_from_config(config),
             )
         )
     except ImportError:
