@@ -6,7 +6,8 @@ import asyncio
 import logging
 import time
 
-from src.transmit.tx_service import SendResult
+from src.models.packet import Protocol
+from src.transmit.tx_service import SendResult, TxService
 
 logger = logging.getLogger(__name__)
 
@@ -109,15 +110,6 @@ class MeshtasticdTxClient:
             )
 
     @staticmethod
-    def _format_destination(destination: int | str) -> int | str:
-        if isinstance(destination, str):
-            stripped = destination.strip()
-            if stripped.startswith("!"):
-                try:
-                    return int(stripped[1:], 16)
-                except ValueError:
-                    return stripped
-            if stripped.isdigit():
-                return int(stripped)
-            return stripped
-        return destination
+    def _format_destination(destination: int | str) -> int:
+        """Map Meshpoint message destinations to meshtastic-python node nums."""
+        return TxService._resolve_destination(destination, Protocol.MESHTASTIC)
