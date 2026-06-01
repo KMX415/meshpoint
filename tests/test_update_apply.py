@@ -58,13 +58,13 @@ class TestUpdateApplier(unittest.TestCase):
                 "git fetch",
                 "git checkout",
                 "git reset",
-                "install.sh",
+                "upgrade",
             ],
         )
         joined = " ".join(" ".join(c) for c in runner.calls)
         self.assertNotIn("apply_finish", joined)
         self.assertNotIn("systemctl restart", joined)
-        self.assertNotIn("pip install", joined)
+        self.assertNotIn("install.sh", joined)
         self.assertTrue(result.log[-1].get("detached"))
 
     def test_apply_stops_on_first_failure(self) -> None:
@@ -95,7 +95,7 @@ class TestUpdateApplier(unittest.TestCase):
         result = applier.rollback(sha="deadbeef")
         self.assertTrue(result.success)
         steps = [entry["step"] for entry in result.log]
-        self.assertEqual(steps, ["git reset", "install.sh"])
+        self.assertEqual(steps, ["git reset", "upgrade"])
         self.assertIn("deadbeef", " ".join(runner.calls[0]))
         self.assertEqual(len(runner.calls), 1)
         self.assertTrue(result.log[-1].get("detached"))

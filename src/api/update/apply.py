@@ -2,14 +2,13 @@
 
 The applier walks ``git fetch`` -> ``git checkout -f`` -> ``git reset
 --hard origin/<branch>`` -> detached ``apply_finish.sh`` (``systemctl
-stop`` -> ``scripts/install.sh`` -> ``systemctl restart``). Git runs
-while the service is still up so the HTTP stream can finish; ``install.sh``
-runs only after the stop, in a new session, so the concentrator is not
-active during HAL work.
+stop`` -> ``pip install -r requirements.txt`` -> ``post_update.sh`` ->
+``systemctl restart``). Git runs while the service is still up so the HTTP
+stream can finish; the finish script runs in a new session after the stop.
 
-``install.sh`` is the single upgrade path: on existing installs it
-refreshes ``pip`` dependencies immediately (before apt/HAL), then runs
-the full idempotent installer.
+Dashboard apply intentionally does **not** run full ``install.sh`` (no
+``apt-get upgrade`` on every click). Use ``sudo bash scripts/install.sh``
+over SSH when release notes require system packages, HAL, or a deep upgrade.
 
 Each synchronous git step is its own subprocess invocation so the dashboard
 can stream a running log to the operator and so a step that exits
@@ -181,7 +180,7 @@ class UpdateApplier:
                 cwd=self._repo_path,
             ),
             ApplyAttempt(
-                label="install.sh",
+                label="upgrade",
                 args=["sudo", "bash", self._finish_script],
                 timeout_seconds=60,
                 detached=True,
@@ -229,7 +228,7 @@ class UpdateApplier:
                 timeout_seconds=60,
             ),
             ApplyAttempt(
-                label="install.sh",
+                label="upgrade",
                 args=["sudo", "bash", self._finish_script],
                 timeout_seconds=60,
                 detached=True,
@@ -317,7 +316,8 @@ def _public_step_detail(entry: dict) -> dict:
     if entry.get("detached"):
         detail["detached"] = True
         detail["note"] = (
-            "Continues in background: stop service, run install.sh, restart."
+            "Continues in background: stop service, pip install, "
+            "post-update migrations, restart."
         )
     stdout = (entry.get("stdout") or "").strip()
     stderr = (entry.get("stderr") or "").strip()

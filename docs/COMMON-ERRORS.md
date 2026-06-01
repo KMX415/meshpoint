@@ -184,9 +184,11 @@ sudo systemctl restart meshpoint
 
 If the dashboard still shows **Rollback**, that button resets git to the
 saved pre-update commit; use it only if you want to abandon the RC
-branch. Current `feat/v0.7.6` (and later) runs `pip install` before
-stopping the service for `install.sh`, which avoids this failure mode
-when switching to an RC branch from Settings → Updates.
+branch. Current `feat/v0.7.6` (and later) stops the service, runs
+``pip install -r requirements.txt``, then ``post_update.sh``, then
+restarts (about 1–2 minutes). It does not run full ``install.sh`` on
+every apply. Stable 7.5 must still receive the apply fix on ``main``
+before RC testing from Settings → Updates is safe.
 
 ### `install.sh` told me to reboot after an upgrade. Do I have to?
 

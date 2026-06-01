@@ -11,12 +11,12 @@ const APPLY_STEP_DEFS = [
     { key: 'git fetch', label: 'Fetch latest code from GitHub' },
     { key: 'git checkout', label: 'Check out release branch' },
     { key: 'git reset', label: 'Sync install tree to remote' },
-    { key: 'install.sh', label: 'Run installer (deps, migrations, restart)' },
+    { key: 'upgrade', label: 'Refresh dependencies and restart' },
 ];
 
 const ROLLBACK_STEP_DEFS = [
     { key: 'git reset', label: 'Reset install tree to prior commit' },
-    { key: 'install.sh', label: 'Run installer (deps, migrations, restart)' },
+    { key: 'upgrade', label: 'Refresh dependencies and restart' },
 ];
 
 class UpdateProgressView {
@@ -58,7 +58,7 @@ class UpdateProgressView {
                 </div>
                 <p class="update-progress__elapsed" data-update-elapsed>Elapsed: 0s</p>
                 <p class="update-progress__hint">
-                    Do not refresh this page. Commands run on the Pi as listed below; live output appears in the terminal. The last step stops the service and may take 1–3 minutes. The connection will drop during restart; this page waits for the dashboard to come back.
+                    Do not refresh this page. Commands run on the Pi as listed below; live output appears in the terminal. The last step stops the service, refreshes Python dependencies, and restarts (usually about 1–2 minutes). The connection will drop during that step; this page waits for the dashboard to come back.
                 </p>
                 <ol class="update-progress__steps">${steps}</ol>
                 <div class="update-progress__terminal" aria-label="Update command output">

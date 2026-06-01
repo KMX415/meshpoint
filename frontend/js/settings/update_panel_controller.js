@@ -450,7 +450,7 @@ class UpdatePanelController {
         if (body.success) {
             this._setStatus('success', successMessage);
             const restarted = (body.log || []).some(
-                (entry) => entry.step === 'install.sh' && entry.returncode === 0,
+                (entry) => entry.step === 'upgrade' && entry.returncode === 0,
             );
             if (restarted) {
                 await this._loadInstallStatus();
