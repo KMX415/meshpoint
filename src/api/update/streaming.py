@@ -33,11 +33,11 @@ async def stream_update(
     queue: asyncio.Queue[dict] = asyncio.Queue()
     holder: dict[str, ApplyResult] = {}
 
-    def on_step(step: str, phase: str) -> None:
-        loop.call_soon_threadsafe(
-            queue.put_nowait,
-            {"type": "step", "step": step, "phase": phase},
-        )
+    def on_step(step: str, phase: str, detail: dict | None = None) -> None:
+        payload: dict = {"type": "step", "step": step, "phase": phase}
+        if detail is not None:
+            payload["detail"] = detail
+        loop.call_soon_threadsafe(queue.put_nowait, payload)
 
     def run_chain() -> None:
         if mode == "rollback":

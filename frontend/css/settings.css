@@ -622,6 +622,38 @@ select.update-field__input option:checked {
     font-family: 'JetBrains Mono', monospace;
 }
 
+.update-progress__terminal {
+    margin-top: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+}
+
+.update-progress__terminal-label {
+    margin: 0;
+    padding: 8px 12px;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(243, 244, 246, 0.55);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.update-progress__terminal-body {
+    margin: 0;
+    padding: 10px 12px;
+    max-height: 220px;
+    overflow: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    line-height: 1.45;
+    color: rgba(243, 244, 246, 0.82);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 .update-log {
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);

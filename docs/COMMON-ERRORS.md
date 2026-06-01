@@ -157,6 +157,37 @@ systemctl restart` is often enough. If you are unsure of the installed
 version, or the service fails after a pull-only upgrade, use the
 **Recommended upgrade command** block at the top of this section.
 
+### Service crashes after Settings → Updates apply (`ModuleNotFoundError: No module named 'cryptography'`)
+
+**Cause:** v0.7.6 adds Meshtastic PKI support, which requires
+`cryptography>=43.0.0` in the venv. On older dashboard apply builds,
+the apply path could reset git to the new branch and restart the
+service before `pip install` finished (or before `install.sh` ran),
+especially if the concentrator was active during the update. The new
+code then fails at startup in `_bootstrap_pki()`.
+
+**Fix:** Refresh the venv, then restart:
+
+```bash
+sudo /opt/meshpoint/venv/bin/pip install -r /opt/meshpoint/requirements.txt
+sudo systemctl restart meshpoint
+```
+
+Or run the full installer (also clears stale `.so` files on older
+upgrades):
+
+```bash
+cd /opt/meshpoint
+sudo bash scripts/install.sh
+sudo systemctl restart meshpoint
+```
+
+If the dashboard still shows **Rollback**, that button resets git to the
+saved pre-update commit; use it only if you want to abandon the RC
+branch. Current `feat/v0.7.6` (and later) runs `pip install` before
+stopping the service for `install.sh`, which avoids this failure mode
+when switching to an RC branch from Settings → Updates.
+
 ### `install.sh` told me to reboot after an upgrade. Do I have to?
 
 **Pre-v0.7.1 only.** The install.sh on v0.7.0 always printed the

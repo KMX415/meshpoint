@@ -37,4 +37,5 @@ meshpoint ALL=(ALL) NOPASSWD: /usr/bin/git rev-parse *
 # ── Post-update hooks ─────────────────────────────────────────────────
 meshpoint ALL=(ALL) NOPASSWD: /opt/meshpoint/venv/bin/pip install *
 meshpoint ALL=(ALL) NOPASSWD: /bin/bash /opt/meshpoint/scripts/install.sh
+meshpoint ALL=(ALL) NOPASSWD: /bin/bash /opt/meshpoint/scripts/apply_finish.sh
 meshpoint ALL=(ALL) NOPASSWD: /bin/bash /opt/meshpoint/scripts/post_update.sh

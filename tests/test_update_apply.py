@@ -58,13 +58,15 @@ class TestUpdateApplier(unittest.TestCase):
                 "git fetch",
                 "git checkout",
                 "git reset",
-                "install.sh",
-                "restart service",
+                "pip install",
+                "finish install",
             ],
         )
-        # Restart is detached; runner is not invoked for systemctl.
+        # Finish step is detached; runner is not invoked for apply_finish/systemctl.
         joined = " ".join(" ".join(c) for c in runner.calls)
+        self.assertNotIn("apply_finish", joined)
         self.assertNotIn("systemctl restart", joined)
+        self.assertIn("pip install", joined)
         self.assertTrue(result.log[-1].get("detached"))
 
     def test_apply_stops_on_first_failure(self) -> None:
@@ -82,7 +84,7 @@ class TestUpdateApplier(unittest.TestCase):
         events: list[tuple[str, str]] = []
         applier.apply(
             branch="main",
-            on_step=lambda label, state: events.append((label, state)),
+            on_step=lambda label, state, detail=None: events.append((label, state)),
         )
         starts = [e for e in events if e[1] == "started"]
         completions = [e for e in events if e[1] == "completed"]
