@@ -10,6 +10,8 @@ Queued for the next version bump.
 
 - **Load average on the system stats row.** `GET /api/device/metrics` includes `load_avg` as `[1m, 5m, 15m]` from `/proc/loadavg` on Linux. Dashboard **Load Avg** card shows the 1-minute value with a `5m · 15m` sub-line. [PR #61](https://github.com/KMX415/meshpoint/pull/61).
 
+- **MeshCore channel keys: fix zero-key length.** Empty hashtag keys and legacy saves incorrectly used 64 hex digits (32 bytes) instead of 32 hex digits (16 bytes), which blocked later **Save Channels** with a misleading error on an unrelated row. Saves now normalize the old 64-zero pattern automatically.
+
 - **Docs: Syncrobit Chameleon support.** [Hardware Matrix](HARDWARE-MATRIX.md), [README](../README.md), [Onboarding](ONBOARDING.md), and new [Syncrobit Chameleon guide](SYNCROBIT-CHAMELEON.md) document CM4 eMMC recovery and Meshpoint on the Chameleon SX1302 miner (validated aarch64, v0.7.4+).
 
 - **MQTT broker TLS (deferred).** Configuration → MQTT exposes broker host, port, credentials, allowlist, JSON mirror, and HA options per `docs/MQTT-AND-MESHRADAR.md`. Transport TLS (`mqtts`, CA bundle, cert validation) is not implemented: `mqtt_publisher.py` uses plain TCP only. Planned for the same release vehicle as **Meshtastic PKI** (shared crypto/config touchpoints). Until then use plain port 1883 (e.g. `mqtt.meshtastic.org`) or a LAN broker without TLS.

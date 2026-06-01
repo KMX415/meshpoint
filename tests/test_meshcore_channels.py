@@ -221,7 +221,7 @@ class TestUpdateMeshcoreChannels(unittest.TestCase):
 
     def test_hashtag_channel_empty_key_stores_zero_secret(self):
         config_module._config = _fake_config()
-        zero_key = "00" * 32
+        zero_key = "00" * 16  # 16 bytes => 32 hex digits
         with patch("src.api.routes.config_routes.save_section_to_yaml") as mock_save:
             res = self.client.put(
                 "/api/config/meshcore/channels",
@@ -230,6 +230,33 @@ class TestUpdateMeshcoreChannels(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         saved_keys = mock_save.call_args.args[1]["channel_keys"]
         self.assertEqual(saved_keys, {"hashtag": zero_key})
+
+    def test_legacy_64_digit_zero_key_normalized_on_save(self):
+        config_module._config = _fake_config()
+        legacy = "0" * 64
+        with patch("src.api.routes.config_routes.save_section_to_yaml") as mock_save:
+            res = self.client.put(
+                "/api/config/meshcore/channels",
+                json={"channels": [{"name": "lake", "key_hex": legacy}]},
+            )
+        self.assertEqual(res.status_code, 200)
+        saved_keys = mock_save.call_args.args[1]["channel_keys"]
+        self.assertEqual(saved_keys["lake"], "00" * 16)
+
+    def test_hashtag_and_legacy_zero_channel_together(self):
+        config_module._config = _fake_config()
+        with patch("src.api.routes.config_routes.save_section_to_yaml") as mock_save:
+            res = self.client.put(
+                "/api/config/meshcore/channels",
+                json={"channels": [
+                    {"name": "lake", "key_hex": "0" * 64},
+                    {"name": "#hoop", "key_hex": ""},
+                ]},
+            )
+        self.assertEqual(res.status_code, 200)
+        saved_keys = mock_save.call_args.args[1]["channel_keys"]
+        self.assertEqual(saved_keys["lake"], "00" * 16)
+        self.assertEqual(saved_keys["#hoop"], "00" * 16)
 
     def test_400_when_key_is_wrong_length(self):
         config_module._config = _fake_config()
