@@ -1,9 +1,8 @@
 #!/bin/bash
-# Finish a dashboard-driven apply after git checkout and pip install.
+# Finish a dashboard-driven apply or rollback after git checkout/reset.
 #
-# Runs detached from the Meshpoint process so we can stop the service
-# (releasing the concentrator) before install.sh without killing the
-# apply chain before git and pip complete.
+# Stops meshpoint, runs the full idempotent installer, then restarts.
+# Detached so the stop does not kill the in-process applier mid-stream.
 set -euo pipefail
 
 MESHPOINT_DIR="${MESHPOINT_DIR:-/opt/meshpoint}"

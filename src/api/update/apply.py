@@ -1,14 +1,17 @@
 """Run the multi-step update from the dashboard.
 
 The applier walks ``git fetch`` -> ``git checkout -f`` -> ``git reset
---hard origin/<branch>`` -> ``pip install -r requirements.txt`` ->
-detached ``apply_finish.sh`` (``systemctl stop`` -> ``install.sh`` ->
-``systemctl restart``). Git and pip run while the service is still up
-so the HTTP stream can finish; stopping first would kill this process
-mid-chain. ``apply_finish.sh`` runs in a new session so the stop does
-not abort the applier before dependencies are installed.
+--hard origin/<branch>`` -> detached ``apply_finish.sh`` (``systemctl
+stop`` -> ``scripts/install.sh`` -> ``systemctl restart``). Git runs
+while the service is still up so the HTTP stream can finish; ``install.sh``
+runs only after the stop, in a new session, so the concentrator is not
+active during HAL work.
 
-Each synchronous step is its own subprocess invocation so the dashboard
+``install.sh`` is the single upgrade path: on existing installs it
+refreshes ``pip`` dependencies immediately (before apt/HAL), then runs
+the full idempotent installer.
+
+Each synchronous git step is its own subprocess invocation so the dashboard
 can stream a running log to the operator and so a step that exits
 non-zero stops the chain immediately with the failing step labelled.
 
@@ -178,9 +181,11 @@ class UpdateApplier:
                 cwd=self._repo_path,
             ),
             ApplyAttempt(
-                label="restart service",
-                args=["sudo", "systemctl", "restart", self._service_name],
+                label="install.sh",
+                args=["sudo", "bash", self._finish_script],
+                timeout_seconds=60,
                 detached=True,
+                finish_script=self._finish_script,
             ),
         ]
         for step in steps:
@@ -204,8 +209,6 @@ class UpdateApplier:
         )
 
     def _build_chain(self, branch: str) -> Iterable[ApplyAttempt]:
-        pip_path = f"{self._repo_path}/venv/bin/pip"
-        requirements_path = f"{self._repo_path}/requirements.txt"
         return (
             ApplyAttempt(
                 label="git fetch",
@@ -226,18 +229,7 @@ class UpdateApplier:
                 timeout_seconds=60,
             ),
             ApplyAttempt(
-                label="pip install",
-                args=[
-                    "sudo",
-                    pip_path,
-                    "install",
-                    "-r",
-                    requirements_path,
-                ],
-                timeout_seconds=600,
-            ),
-            ApplyAttempt(
-                label="finish install",
+                label="install.sh",
                 args=["sudo", "bash", self._finish_script],
                 timeout_seconds=60,
                 detached=True,

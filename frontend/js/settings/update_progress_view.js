@@ -11,13 +11,12 @@ const APPLY_STEP_DEFS = [
     { key: 'git fetch', label: 'Fetch latest code from GitHub' },
     { key: 'git checkout', label: 'Check out release branch' },
     { key: 'git reset', label: 'Sync install tree to remote' },
-    { key: 'pip install', label: 'Install Python dependencies' },
-    { key: 'finish install', label: 'Stop service, run installer, restart' },
+    { key: 'install.sh', label: 'Run installer (deps, migrations, restart)' },
 ];
 
 const ROLLBACK_STEP_DEFS = [
     { key: 'git reset', label: 'Reset install tree to prior commit' },
-    { key: 'restart service', label: 'Restart Meshpoint service' },
+    { key: 'install.sh', label: 'Run installer (deps, migrations, restart)' },
 ];
 
 class UpdateProgressView {

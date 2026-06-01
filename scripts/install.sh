@@ -61,6 +61,29 @@ INSTALL_VERSION="$(
         2>/dev/null || echo "unknown"
 )"
 
+# ── Upgrade fast path: refresh venv before apt/HAL work ───────────────
+# Dashboard apply stops the service, then runs this script. Git has
+# already checked out the new tree, so install requirements first so
+# a slow or interrupted HAL section cannot leave the service missing
+# new Python deps (e.g. cryptography on v0.7.6).
+
+_upgrade_refresh_python_deps() {
+    local req="${MESHPOINT_DIR}/requirements.txt"
+    local pip="${MESHPOINT_DIR}/venv/bin/pip"
+    if [ ! -x "$pip" ] || [ ! -f "$req" ]; then
+        warn "Skipping early pip refresh (venv or requirements missing)"
+        return 0
+    fi
+    info "Refreshing Python dependencies (upgrade fast path)..."
+    "$pip" install --upgrade pip -q
+    "$pip" install -r "$req" -q
+    "$pip" install pyserial -q
+}
+
+if [ "$IS_UPGRADE" = "1" ]; then
+    _upgrade_refresh_python_deps
+fi
+
 # ── 1. System packages ─────────────────────────────────────────────
 
 info "Updating system packages..."
