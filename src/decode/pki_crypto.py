@@ -6,11 +6,11 @@ import hashlib
 import secrets
 import struct
 
-from Crypto.Cipher import AES  # nosec B413
+from src.decode.meshtastic_aes_ccm import MeshtasticAesCcmEngine
 
 PKC_OVERHEAD = 12
 PKC_MIC_LEN = 8
-PKC_NONCE_LEN = 8
+PKC_NONCE_LEN = 13
 
 
 def build_pki_nonce(
@@ -53,14 +53,8 @@ def encrypt_pki_payload(
         shared_key = derive_shared_key(private_key, remote_public_key)
         extra_nonce = secrets.randbits(32)
         nonce = build_pki_nonce(from_node_id, packet_id, extra_nonce)
-        cipher = AES.new(
-            shared_key,
-            AES.MODE_CCM,
-            nonce=nonce[:PKC_NONCE_LEN],
-            mac_len=PKC_MIC_LEN,
-        )
-        ciphertext = cipher.encrypt(plaintext)
-        mic = cipher.digest()
+        engine = MeshtasticAesCcmEngine(shared_key)
+        ciphertext, mic = engine.encrypt(nonce, PKC_MIC_LEN, plaintext)
         return ciphertext + mic + struct.pack("<I", extra_nonce)
     except Exception:
         return None
@@ -84,12 +78,7 @@ def decrypt_pki_payload(
         extra_nonce = struct.unpack("<I", auth[8:12])[0]
         shared_key = derive_shared_key(private_key, remote_public_key)
         nonce = build_pki_nonce(from_node_id, packet_id, extra_nonce)
-        cipher = AES.new(
-            shared_key,
-            AES.MODE_CCM,
-            nonce=nonce[:PKC_NONCE_LEN],
-            mac_len=PKC_MIC_LEN,
-        )
-        return cipher.decrypt_and_verify(ciphertext, auth[:PKC_MIC_LEN])
+        engine = MeshtasticAesCcmEngine(shared_key)
+        return engine.decrypt(nonce, PKC_MIC_LEN, ciphertext, auth[:PKC_MIC_LEN])
     except Exception:
         return None

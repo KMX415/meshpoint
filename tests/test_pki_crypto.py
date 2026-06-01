@@ -47,6 +47,30 @@ class TestPkiCrypto(unittest.TestCase):
         )
         self.assertEqual(decrypted, self.plaintext)
 
+    def test_pki_with_fixed_extra_nonce(self):
+        """Deterministic path used by Meshtastic firmware extraNonce field."""
+        from unittest.mock import patch
+
+        fixed_extra = 0xDEADBEEF
+        with patch("src.decode.pki_crypto.secrets.randbits", return_value=fixed_extra):
+            encrypted = encrypt_pki_payload(
+                self.plaintext,
+                private_key=self.alice.private_key,
+                remote_public_key=self.bob.public_key,
+                from_node_id=self.alice_id,
+                packet_id=self.packet_id,
+            )
+        self.assertIsNotNone(encrypted)
+        assert encrypted is not None
+        decrypted = decrypt_pki_payload(
+            encrypted,
+            private_key=self.bob.private_key,
+            remote_public_key=self.alice.public_key,
+            from_node_id=self.alice_id,
+            packet_id=self.packet_id,
+        )
+        self.assertEqual(decrypted, self.plaintext)
+
 
 if __name__ == "__main__":
     unittest.main()
