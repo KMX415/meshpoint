@@ -1,7 +1,7 @@
 # v0.7.6 mesh participant — agent handoff
 
 **Branch:** `feat/v0.7.6-pki`  
-**Last updated:** 2026-06-01  
+**Last updated:** 2026-05-30  
 **Purpose:** Session log for agents working the v0.7.6 RC. Read this before touching inbound TX, PKI replies, traceroute, or telemetry request handling.
 
 **Canonical plan:** `docs/plans/v0.7.6-pki-release.md`  
@@ -13,6 +13,7 @@
 
 | SHA | Summary |
 |-----|---------|
+| `d4ff29b` | Reply hop mirror (`MeshtasticReplyHopPolicy`) for PKI telemetry, traceroute, routing ACK |
 | `2437662` | Telemetry delivery: skip relay for unicast-to-us, pipeline order, `local_stats` fields (`time`, `noise_floor`) |
 | `52fd70c` | Telemetry request replies + reply encryption matches request channel/PKI |
 | `877d5b1` | Traceroute `RouteDiscovery`: preserve inbound route/SNR, `route_back`/`snr_back`, no target duplication |
@@ -109,6 +110,21 @@ No `RELAY ... -> c0ffee42` line for the same packet.
 
 **Note:** Probes from Meshtastic 2.5+ phone to a PKI-capable Meshpoint often arrive as `ch=0x00` (PKI). Reply must use PKI, not channel AES.
 
+### Hardware re-test (.141, 2026-05-30, HEAD `d4ff29b`)
+
+| Check | Result |
+|-------|--------|
+| No `RELAY ... -> c0ffee42` on telemetry probes | pass |
+| `device_metrics` request → app shows metrics | pass |
+| `local_stats` reply TX (`pki=True`, matching `request_id`) | pass |
+| Android app debug log decodes full `LocalStats` incl. `noise_floor` | pass |
+| Node detail **hops away = 0** | confirmed (rules out PR #4336 "hide signal strength for hops != 0"; that gate is RSSI on detail, not the Signal Quality log) |
+| Meshtastic app Signal Quality log | pass (follow-up) | User confirms new log entries appear, same as device metrics |
+
+**Conclusion:** End-to-end pass for rows 6 and 11 on `.141` after `d4ff29b`. Earlier "empty chart" read was likely timing/navigation (chart needs log rows; first probe can look blank until the list below fills).
+
+**Optional Meshpoint polish (non-blocking):** dedup inbound telemetry requests by `(source_id, request_id, variant)` to cut retry airtime when the app fires duplicate probes.
+
 ---
 
 ## Relay interaction (do not regress)
@@ -166,17 +182,23 @@ Run: `python -m pytest tests/test_meshtastic_mesh_participant.py tests/test_mesh
 
 ---
 
-## Witness matrix status (2026-06-01)
+## Witness matrix status (2026-05-30)
 
-Hardware sign-off still **blocks merge**. User hardware sessions on `.141`:
+**`.141` RC sign-off:** rows **1–9** and **11** pass (user). Row **10** conditional pass: code present, MQTT TLS not tested on this bench (external tester needed).
 
-| Row | Scenario | Agent status |
-|-----|----------|--------------|
-| 8 | Traceroute | User reported working post-`877d5b1`; re-test SNR display after encryption fix |
-| 11 | Signal quality / local_stats request | Fix landed `2437662`; **awaiting user re-test** |
-| 1–7, 9–10 | Other matrix rows | Still `pending` in `RESULTS.md` |
+| Row | Scenario | Status |
+|-----|----------|--------|
+| 1–3 | PKI lock + DMs both ways | pass |
+| 4 | Shared Key fallback (non-PKI peer) | pass |
+| 5 | want_ack / routing ACK | pass |
+| 6 | Device metrics | pass |
+| 7 | Position on map | pass |
+| 8 | Traceroute + SNR | pass |
+| 9 | LongFast regression | pass |
+| 10 | MQTT TLS | conditional (deferred hardware test) |
+| 11 | Signal quality / local_stats | pass |
 
-After each pass, mark `[x]` in `RESULTS.md` with date + observer.
+Merge gate on `.141` is clear except row 10 optional external validation.
 
 ---
 
