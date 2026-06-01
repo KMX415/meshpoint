@@ -38,6 +38,8 @@ class NodeRepository:
                 long_name = CASE
                     WHEN excluded.long_name IS NULL OR excluded.long_name = ''
                         THEN nodes.long_name
+                    WHEN excluded.protocol = 'meshtastic'
+                        THEN excluded.long_name
                     WHEN nodes.long_name IS NULL OR nodes.long_name = ''
                         THEN excluded.long_name
                     WHEN nodes.protocol = 'meshcore'

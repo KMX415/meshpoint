@@ -887,7 +887,10 @@ def _setup_message_interception(
     conversations. DMs between other nodes are tagged as 'overheard'.
     MeshCore DMs use destination_id='self' to indicate they're for us.
     """
+    from src.api.message_name_resolver import MessageNameResolver
     from src.models.packet import PacketType, Protocol
+
+    name_resolver = MessageNameResolver(coord.node_repo, meshcore_tx)
 
     our_node_id = config.transmit.node_id
     if our_node_id is None and tx_service is not None:
@@ -1031,19 +1034,12 @@ def _setup_message_interception(
             if (
                 packet.protocol == Protocol.MESHTASTIC
                 and direction == "received"
-                and not node_name
             ):
-                src_id = (packet.source_id or "").lower()
-                if src_id:
-                    row = await coord.node_repo._db.fetch_one(
-                        "SELECT long_name, short_name FROM nodes "
-                        "WHERE LOWER(node_id) = ? AND protocol = 'meshtastic'",
-                        (src_id,),
-                    )
-                    if row:
-                        node_name = row["long_name"] or row["short_name"] or ""
-                    if not node_name:
-                        node_name = packet.source_id or ""
+                node_name = await name_resolver.resolve(
+                    node_id,
+                    packet.protocol.value,
+                    node_name or packet.source_id or "",
+                )
 
             if is_broadcast and packet.protocol == Protocol.MESHCORE:
                 node_name = (packet.decoded_payload or {}).get("long_name", "")
@@ -1123,10 +1119,15 @@ def _setup_message_interception(
                     "snr": round(row["snr"], 1) if row and row["snr"] else None,
                 })
             else:
+                display_name = await name_resolver.resolve(
+                    node_id,
+                    packet.protocol.value,
+                    node_name,
+                )
                 ws_payload = {
                     "text": text,
                     "node_id": node_id,
-                    "node_name": node_name,
+                    "node_name": display_name,
                     "protocol": packet.protocol.value,
                     "direction": direction,
                     "packet_id": packet.packet_id or "",
