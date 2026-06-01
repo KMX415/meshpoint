@@ -461,6 +461,43 @@ async def _hydrate_public_keys(coord: PipelineCoordinator) -> None:
             continue
 
 
+def _telemetry_metrics_providers(
+    tx_service: TxService,
+    coord: PipelineCoordinator,
+    service_started: float,
+):
+    """Shared device_metrics / local_stats snapshots for TX paths."""
+    import time
+
+    duty = getattr(tx_service, "_duty", None)
+    stats = getattr(coord, "stats_reporter", None)
+
+    def device_metrics() -> dict:
+        air_util = duty.current_usage_percent() if duty else 0.0
+        return {
+            "battery_level": 101,
+            "voltage": 5.0,
+            "channel_utilization": 0.0,
+            "air_util_tx": round(air_util, 2),
+            "uptime_seconds": int(time.monotonic() - service_started),
+        }
+
+    def local_stats() -> dict:
+        dm = device_metrics()
+        return {
+            "uptime_seconds": dm["uptime_seconds"],
+            "channel_utilization": dm["channel_utilization"],
+            "air_util_tx": dm["air_util_tx"],
+            "num_packets_tx": 0,
+            "num_packets_rx": stats.total_packets if stats else 0,
+            "num_packets_rx_bad": 0,
+            "num_online_nodes": 0,
+            "num_total_nodes": 0,
+        }
+
+    return device_metrics, local_stats
+
+
 def _setup_inbound_responder(
     coord: PipelineCoordinator,
     tx_service: TxService | None,
@@ -469,8 +506,14 @@ def _setup_inbound_responder(
     if tx_service is None or not tx_service.meshtastic_enabled:
         return
 
+    import time
+
     our_node_id = tx_service.source_node_id
     coord._router.meshtastic_decoder.configure_identity(our_node_id)
+    device_fn, local_fn = _telemetry_metrics_providers(
+        tx_service, coord, time.monotonic()
+    )
+    tx_service.set_telemetry_reply_providers(device_fn, local_fn)
     handler = MeshtasticInboundHandler(tx_service, our_node_id)
 
     def on_packet(packet: Packet) -> None:
@@ -498,23 +541,15 @@ def _build_telemetry_broadcaster(
     import time
 
     service_started = time.monotonic()
-    duty = getattr(tx_service, "_duty", None)
-
-    def metrics_provider() -> dict:
-        air_util = duty.current_usage_percent() if duty else 0.0
-        return {
-            "battery_level": 101,
-            "voltage": 5.0,
-            "channel_utilization": 0.0,
-            "air_util_tx": round(air_util, 2),
-            "uptime_seconds": int(time.monotonic() - service_started),
-        }
+    device_fn, _local_fn = _telemetry_metrics_providers(
+        tx_service, coord, service_started
+    )
 
     return TelemetryBroadcaster(
         tx_service,
         interval_minutes=telem.interval_minutes,
         startup_delay_seconds=telem.startup_delay_seconds,
-        metrics_provider=metrics_provider,
+        metrics_provider=device_fn,
     )
 
 

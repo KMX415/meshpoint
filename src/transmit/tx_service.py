@@ -87,6 +87,8 @@ class TxService:
         self._source_node_id = self._resolve_node_id()
         if persist_derived_node_id:
             self._persist_derived_node_id_if_needed()
+        self._device_metrics_provider = None
+        self._local_stats_provider = None
 
     @property
     def meshtastic_enabled(self) -> bool:
@@ -103,6 +105,23 @@ class TxService:
     @property
     def source_node_id(self) -> int:
         return self._source_node_id
+
+    def set_telemetry_reply_providers(
+        self,
+        device_metrics_provider=None,
+        local_stats_provider=None,
+    ) -> None:
+        self._device_metrics_provider = device_metrics_provider
+        self._local_stats_provider = local_stats_provider
+
+    @staticmethod
+    def _recipient_pubkey_for_reply(original, requester: int, crypto) -> bytes | None:
+        """Use PKI only when the inbound request was PKI-encrypted (ch=0x00)."""
+        if original.channel_hash != 0:
+            return None
+        if crypto is None:
+            return None
+        return crypto.lookup_public_key(requester)
 
     @property
     def node_id_source(self) -> str:
@@ -354,9 +373,9 @@ class TxService:
         packet_id = self._next_packet_id()
         channel_hash = original.channel_hash
         _, channel_key = self._resolve_channel_by_hash(channel_hash)
-        recipient_pubkey = None
-        if self._crypto is not None:
-            recipient_pubkey = self._crypto.lookup_public_key(dest)
+        recipient_pubkey = self._recipient_pubkey_for_reply(
+            original, dest, self._crypto
+        )
         hop_limit = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
 
         packet_bytes = builder.build_routing_ack(
@@ -402,9 +421,9 @@ class TxService:
         packet_id = self._next_packet_id()
         channel_hash = original.channel_hash
         _, channel_key = self._resolve_channel_by_hash(channel_hash)
-        recipient_pubkey = None
-        if self._crypto is not None:
-            recipient_pubkey = self._crypto.lookup_public_key(requester)
+        recipient_pubkey = self._recipient_pubkey_for_reply(
+            original, requester, self._crypto
+        )
         hop_limit = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
 
         packet_bytes = builder.build_traceroute_reply(
@@ -468,6 +487,90 @@ class TxService:
             return SendResult(success=False, protocol="meshtastic", error="Telemetry build failed")
 
         return await self._send_built_packet(packet_bytes, packet_id, label="telemetry")
+
+    async def send_telemetry_reply(self, original) -> SendResult:
+        """Reply to an inbound telemetry request addressed to this node."""
+        if not self.meshtastic_enabled:
+            return SendResult(success=False, protocol="meshtastic", error="TX unavailable")
+
+        builder = self._get_builder()
+        if builder is None or not hasattr(builder, "build_telemetry_reply"):
+            return SendResult(success=False, protocol="meshtastic", error="Builder unavailable")
+
+        try:
+            requester = int(original.source_id, 16)
+            request_id = int(original.packet_id, 16)
+        except ValueError:
+            return SendResult(success=False, protocol="meshtastic", error="Invalid source id")
+
+        payload = original.decoded_payload or {}
+        variant = payload.get("telemetry_variant", "device_metrics")
+        if variant == "local_stats":
+            metrics = (
+                self._local_stats_provider() if self._local_stats_provider else {}
+            )
+        else:
+            metrics = (
+                self._device_metrics_provider() if self._device_metrics_provider else {}
+            )
+
+        packet_id = self._next_packet_id()
+        channel_hash = original.channel_hash
+        _, channel_key = self._resolve_channel_by_hash(channel_hash)
+        recipient_pubkey = self._recipient_pubkey_for_reply(
+            original, requester, self._crypto
+        )
+        hop_limit = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
+
+        build_kwargs = {
+            "source_id": self._source_node_id,
+            "dest": requester,
+            "packet_id": packet_id,
+            "request_id": request_id,
+            "variant": variant,
+            "channel_key": channel_key,
+            "channel_hash": channel_hash,
+            "hop_limit": hop_limit,
+            "hop_start": hop_limit,
+            "recipient_public_key": recipient_pubkey,
+        }
+        if variant == "local_stats":
+            build_kwargs.update(
+                {
+                    "uptime_seconds": int(metrics.get("uptime_seconds", 0)),
+                    "channel_utilization": float(
+                        metrics.get("channel_utilization", 0.0)
+                    ),
+                    "air_util_tx": float(metrics.get("air_util_tx", 0.0)),
+                    "num_packets_tx": int(metrics.get("num_packets_tx", 0)),
+                    "num_packets_rx": int(metrics.get("num_packets_rx", 0)),
+                    "num_packets_rx_bad": int(metrics.get("num_packets_rx_bad", 0)),
+                    "num_online_nodes": int(metrics.get("num_online_nodes", 0)),
+                    "num_total_nodes": int(metrics.get("num_total_nodes", 0)),
+                }
+            )
+        else:
+            build_kwargs.update(
+                {
+                    "battery_level": int(metrics.get("battery_level", 101)),
+                    "voltage": float(metrics.get("voltage", 5.0)),
+                    "channel_utilization": float(
+                        metrics.get("channel_utilization", 0.0)
+                    ),
+                    "air_util_tx": float(metrics.get("air_util_tx", 0.0)),
+                    "uptime_seconds": int(metrics.get("uptime_seconds", 0)),
+                }
+            )
+
+        packet_bytes = builder.build_telemetry_reply(**build_kwargs)
+        if packet_bytes is None:
+            return SendResult(
+                success=False, protocol="meshtastic", error="Telemetry reply build failed"
+            )
+
+        return await self._send_built_packet(
+            packet_bytes, packet_id, label="telemetry reply"
+        )
 
     async def send_position(
         self,

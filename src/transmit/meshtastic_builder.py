@@ -195,6 +195,81 @@ class MeshtasticPacketBuilder:
         )
         return header + ciphertext
 
+    def build_telemetry_reply(
+        self,
+        source_id: int,
+        dest: int,
+        packet_id: int,
+        request_id: int,
+        *,
+        variant: str = "device_metrics",
+        battery_level: int = MAINS_BATTERY_LEVEL,
+        voltage: float = 5.0,
+        channel_utilization: float = 0.0,
+        air_util_tx: float = 0.0,
+        uptime_seconds: int = 0,
+        num_packets_tx: int = 0,
+        num_packets_rx: int = 0,
+        num_packets_rx_bad: int = 0,
+        num_online_nodes: int = 0,
+        num_total_nodes: int = 0,
+        channel_key: bytes | None = None,
+        channel_hash: int = 0x08,
+        hop_limit: int = 3,
+        hop_start: int = 3,
+        recipient_public_key: bytes | None = None,
+    ) -> bytes | None:
+        """Build a unicast TELEMETRY reply to a telemetry request."""
+        try:
+            from meshtastic.protobuf import telemetry_pb2
+
+            telem = telemetry_pb2.Telemetry()
+            if variant == "local_stats":
+                ls = telem.local_stats
+                ls.uptime_seconds = uptime_seconds
+                ls.channel_utilization = channel_utilization
+                ls.air_util_tx = air_util_tx
+                ls.num_packets_tx = num_packets_tx
+                ls.num_packets_rx = num_packets_rx
+                ls.num_packets_rx_bad = num_packets_rx_bad
+                ls.num_online_nodes = num_online_nodes
+                ls.num_total_nodes = num_total_nodes
+            else:
+                telem.device_metrics.battery_level = battery_level
+                telem.device_metrics.voltage = voltage
+                telem.device_metrics.channel_utilization = channel_utilization
+                telem.device_metrics.air_util_tx = air_util_tx
+                telem.device_metrics.uptime_seconds = uptime_seconds
+            payload = telem.SerializeToString()
+        except Exception:
+            logger.exception("Telemetry reply protobuf build failed")
+            return None
+
+        inner = self._serialize_data(
+            PORTNUM_TELEMETRY, payload, request_id=request_id
+        )
+        ciphertext = self._encrypt_payload(
+            inner,
+            packet_id,
+            source_id,
+            dest,
+            channel_key,
+            channel_hash,
+            recipient_public_key,
+        )
+        if ciphertext is None:
+            return None
+        on_air_hash = 0 if recipient_public_key else channel_hash
+        header = self._build_header(
+            dest,
+            source_id,
+            packet_id,
+            hop_limit=hop_limit,
+            hop_start=hop_start,
+            channel_hash=on_air_hash,
+        )
+        return header + ciphertext
+
     def build_position(
         self,
         source_id: int,

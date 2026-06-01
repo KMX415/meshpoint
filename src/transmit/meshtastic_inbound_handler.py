@@ -52,6 +52,33 @@ class MeshtasticInboundHandler:
                 )
             return
 
+        if packet.packet_type == PacketType.TELEMETRY:
+            variant = (packet.decoded_payload or {}).get(
+                "telemetry_variant", "device_metrics"
+            )
+            logger.info(
+                "Inbound telemetry request from %s (id=%s variant=%s ch=0x%02x)",
+                packet.source_id,
+                packet.packet_id,
+                variant,
+                packet.channel_hash or 0,
+            )
+            result = await self._tx.send_telemetry_reply(packet)
+            if result.success:
+                logger.info(
+                    "Telemetry reply TX OK to %s (reply id=%s, variant=%s)",
+                    packet.source_id,
+                    result.packet_id,
+                    variant,
+                )
+            else:
+                logger.warning(
+                    "Telemetry reply failed to %s: %s",
+                    packet.source_id,
+                    result.error,
+                )
+            return
+
         if packet.packet_type == PacketType.TEXT and packet.want_ack:
             await self._tx.send_routing_ack(packet)
 

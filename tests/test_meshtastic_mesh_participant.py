@@ -142,6 +142,39 @@ class TestMeshtasticMeshParticipantBuilder(unittest.TestCase):
         assert decoded is not None
         self.assertEqual(decoded.decoded_payload.get("text"), "pki dm")
 
+    def test_telemetry_reply_carries_request_id(self):
+        request_id = 0xAABBCCDD
+        packet = self.builder.build_telemetry_reply(
+            source_id=self.source_id,
+            dest=self.dest_id,
+            packet_id=7,
+            request_id=request_id,
+            variant="local_stats",
+            uptime_seconds=3600,
+            num_packets_rx=42,
+        )
+        self.assertIsNotNone(packet)
+        decoded = self.decoder.decode(packet)
+        assert decoded is not None
+        self.assertEqual(decoded.decoded_payload.get("request_id"), request_id)
+        self.assertEqual(decoded.decoded_payload.get("telemetry_variant"), "local_stats")
+        self.assertEqual(decoded.decoded_payload.get("num_packets_rx"), 42)
+
+    def test_channel_request_uses_channel_encryption_even_with_pubkey(self):
+        peer = MeshpointKeypair.generate()
+        self.crypto.register_public_key(self.dest_id, peer.public_key)
+        packet = self.builder.build_traceroute_reply(
+            source_id=self.source_id,
+            dest=self.dest_id,
+            packet_id=8,
+            route_nodes=[],
+            request_id=0x12345678,
+            channel_hash=0x08,
+            recipient_public_key=None,
+        )
+        assert packet is not None
+        self.assertEqual(packet[13], 0x08)
+
 
 if __name__ == "__main__":
     unittest.main()
