@@ -161,11 +161,11 @@ def suggest_active_channel_for_install(
         on_074_or_newer = False
     if not on_074_or_newer:
         return channel_info
-    rc = registry.find("rc-075")
+    rc = registry.rc_channel()
     if rc is None:
         return channel_info
     prior = normalize_channel_id(channel_info.get("active_channel_id"))
-    if prior in (None, "stable", "rc-074"):
+    if prior in (None, "stable", "rc-074", "rc-075"):
         return {
             "active_channel_id": rc.id,
             "active_channel_label": rc.label,

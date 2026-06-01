@@ -4,17 +4,39 @@
 
 Queued for the next version bump.
 
-- **Live GPS via `gpsd`.** New pluggable location source under `location.source` in `local.yaml` (`static` | `gpsd` | `uart`). When set to `gpsd`, the Meshpoint reads live fixes from the system daemon over `127.0.0.1:2947` and overwrites `device.latitude` / `device.longitude` / `device.altitude` in place every 5 s. Configuration → GPS in the dashboard ships a 360-degree skyplot with per-satellite azimuth, elevation, SNR, and constellation (GPS / GLONASS / Galileo / BeiDou / QZSS / SBAS), plus a fix-mode lamp, sat-counts, DOP, device metadata, and last-fix time. `scripts/install.sh` now installs `gpsd` + `gpsd-clients`, configures `/etc/default/gpsd` for USB hotplug (`USBAUTO="true"`, `DEVICES=""`, `GPSD_OPTIONS="-n"`), and enables `gpsd.socket` (idempotent on re-run). Tested on u-blox 7 and u-blox 8 USB sticks and a VFAN ublox 7 puck. UART path (`source: uart`) is a placeholder for RAK 7248 onboard GPS — not yet wired. See [docs/CONFIGURATION.md#location-gps-source](CONFIGURATION.md#location-gps-source) and the new "Location and GPS" section in `COMMON-ERRORS.md`. Requested by 1kOhm.
+- **MQTT broker TLS (deferred).** Transport TLS (`mqtts`, CA bundle, cert validation) is not implemented on `mqtt_publisher.py` (plain TCP only). Planned for the same release vehicle as **Meshtastic PKI**. Until then use plain port 1883 or a LAN broker without TLS.
 
-- **MeshCore USB skips known GPS devices.** `find_serial_candidates()` now consults a new `UsbPortClassifier` (`src/hal/usb_classifier.py`) that recognizes u-blox VIDs (`0x1546`) and excludes them from MeshCore probing. Plugging a GPS receiver alongside a Heltec V3/V4 companion no longer triggers spurious 5 s probe timeouts.
+### v0.7.5 (May 2026)
 
-- **Load average on the system stats row.** `GET /api/device/metrics` includes `load_avg` as `[1m, 5m, 15m]` from `/proc/loadavg` on Linux. Dashboard **Load Avg** card shows the 1-minute value with a `5m · 15m` sub-line. [PR #61](https://github.com/KMX415/meshpoint/pull/61).
+Companion polish, live GPS, and local dashboard UX. Edge-only, pure Python, no concentrator recompile. **Upgrade:** `git pull` on `main` (or Settings → Updates → **Stable**) plus `scripts/install.sh` when crossing from older releases so gpsd packages and sudoers stay in sync. Settings → Updates RC picker now points at **v0.7.6** on `feat/v0.7.6`.
 
-- **MeshCore channel keys: fix zero-key length.** Empty hashtag keys and legacy saves incorrectly used 64 hex digits (32 bytes) instead of 32 hex digits (16 bytes), which blocked later **Save Channels** with a misleading error on an unrelated row. Saves now normalize the old 64-zero pattern automatically.
+#### GPS and location
 
-- **Docs: Syncrobit Chameleon support.** [Hardware Matrix](HARDWARE-MATRIX.md), [README](../README.md), [Onboarding](ONBOARDING.md), and new [Syncrobit Chameleon guide](SYNCROBIT-CHAMELEON.md) document CM4 eMMC recovery and Meshpoint on the Chameleon SX1302 miner (validated aarch64, v0.7.4+).
+- **Live GPS via `gpsd`.** Pluggable `location.source` (`static` | `gpsd` | `uart`). Configuration → GPS ships a skyplot (az/el/SNR, constellations, fix lamp, DOP, last fix). `install.sh` installs gpsd + USB hotplug config idempotently. Live fixes update device coordinates and the local map marker. UART path remains a placeholder for RAK onboard GPS.
+- **MeshCore USB skips u-blox GPS.** `UsbPortClassifier` excludes VID `0x1546` from MeshCore serial probing so a GPS stick and Heltec companion can coexist.
 
-- **MQTT broker TLS (deferred).** Configuration → MQTT exposes broker host, port, credentials, allowlist, JSON mirror, and HA options per `docs/MQTT-AND-MESHRADAR.md`. Transport TLS (`mqtts`, CA bundle, cert validation) is not implemented: `mqtt_publisher.py` uses plain TCP only. Planned for the same release vehicle as **Meshtastic PKI** (shared crypto/config touchpoints). Until then use plain port 1883 (e.g. `mqtt.meshtastic.org`) or a LAN broker without TLS.
+#### MeshCore
+
+- **Companion set-name from the dashboard.** `PUT /api/config/meshcore/companion-name`, editable name on Configuration → MeshCore, optional re-apply from `local.yaml` after USB reconnect.
+- **Channel keys (extends v0.7.4 editors).** Slot 0 = Public (locked); user channels on slots 1–7; **hashtag** channels with empty key map to the 16-byte zero secret; Messages send/RX use the same slot index as Configuration.
+- **Zero-key length fix.** Empty hashtag saves previously wrote 64 hex digits and blocked later **Save Channels**; legacy yaml normalizes on read/save.
+
+#### Configuration and MQTT
+
+- **Custom preset on Configuration → Radio.** Restore **Custom** chip with SF/BW/CR inputs when modem params do not match a named preset.
+- **MQTT Home Assistant state topics.** Retained publishes on `meshpoint/{node_id}/telemetry` and `meshpoint/{node_id}/position` when HA discovery is enabled.
+
+#### Dashboard map and nodes
+
+- **Map:** remember zoom/view across reload; node popup **Last heard** line; MeshCore nodes render as **diamond** markers (Meshtastic stays circles).
+- **Node grid:** sort (last heard / signal / hops / name) and filter (all / direct / relayed), persisted in localStorage.
+- **Favorite nodes:** star on cards and drawer, amber map border, **Favorites only** filter.
+
+#### System metrics and fixes
+
+- **Load average on the system stats row.** `GET /api/device/metrics` returns `[1m, 5m, 15m]` from `/proc/loadavg`; new **Load Avg** dashboard card. [PR #61](https://github.com/KMX415/meshpoint/pull/61) merged to `main` after v0.7.4; ships in this release (no separate patch version).
+- **Stats CPU temperature** honors Settings → Meshpoint °F/°C preference.
+- **Terminal:** quick-command insert no longer steals focus from the shell.
 
 ### v0.7.4 (May 20, 2026)
 

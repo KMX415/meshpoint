@@ -64,14 +64,14 @@ class TestMatchChannelForBranch(unittest.TestCase):
         self.assertEqual(info["active_channel_id"], "stable")
 
     def test_rc_branch_maps_to_rc_channel(self) -> None:
-        info = match_channel_for_branch(ReleaseChannelRegistry(), "feat/v0.7.5")
-        self.assertEqual(info["active_channel_id"], "rc-075")
+        info = match_channel_for_branch(ReleaseChannelRegistry(), "feat/v0.7.6")
+        self.assertEqual(info["active_channel_id"], "rc-076")
 
     def test_main_on_074_suggests_next_rc(self) -> None:
         info = suggest_active_channel_for_install(
-            ReleaseChannelRegistry(), "main", local_version="0.7.4",
+            ReleaseChannelRegistry(), "main", local_version="0.7.5",
         )
-        self.assertEqual(info["active_channel_id"], "rc-075")
+        self.assertEqual(info["active_channel_id"], "rc-076")
 
     def test_unknown_branch_maps_to_custom(self) -> None:
         info = match_channel_for_branch(ReleaseChannelRegistry(), "feat/other")
@@ -107,7 +107,7 @@ class TestBuildInstallStatusPayload(unittest.TestCase):
         self.assertIsNone(payload["active_channel_id"])
 
     def test_payload_includes_branch_and_channel(self) -> None:
-        runner = _FakeGitRunner(branch="feat/v0.7.5")
+        runner = _FakeGitRunner(branch="feat/v0.7.6")
         with mock.patch(
             "src.api.update.install_status.fetch_remote_version_sync",
             return_value="0.7.3.1",
@@ -122,20 +122,20 @@ class TestBuildInstallStatusPayload(unittest.TestCase):
                     runner=runner,
                     use_sudo=False,
                 )
-        self.assertEqual(payload["install_branch"], "feat/v0.7.5")
-        self.assertEqual(payload["active_channel_id"], "rc-075")
-        self.assertEqual(payload["remote_branch"], "feat/v0.7.5")
+        self.assertEqual(payload["install_branch"], "feat/v0.7.6")
+        self.assertEqual(payload["active_channel_id"], "rc-076")
+        self.assertEqual(payload["remote_branch"], "feat/v0.7.6")
         self.assertFalse(payload["update_available"])
 
     def test_main_on_074_payload_defaults_picker_to_next_rc(self) -> None:
         runner = _FakeGitRunner(branch="main", sha="56d4f7c")
         with mock.patch(
             "src.api.update.install_status.fetch_remote_version_sync",
-            return_value="0.7.4",
+            return_value="0.7.5",
         ):
             with mock.patch(
                 "src.api.update.install_status.__version__",
-                "0.7.4",
+                "0.7.5",
             ):
                 payload = build_install_status_payload(
                     registry=ReleaseChannelRegistry(),
@@ -144,7 +144,7 @@ class TestBuildInstallStatusPayload(unittest.TestCase):
                     use_sudo=False,
                 )
         self.assertEqual(payload["install_branch"], "main")
-        self.assertEqual(payload["active_channel_id"], "rc-075")
+        self.assertEqual(payload["active_channel_id"], "rc-076")
 
     def test_sync_reports_commits_behind(self) -> None:
         runner = _FakeGitRunner(behind=12)
@@ -162,11 +162,11 @@ class TestBuildInstallStatusPayload(unittest.TestCase):
                     runner=runner,
                     use_sudo=False,
                     sync_remote=True,
-                    channel_id="rc-075",
+                    channel_id="rc-076",
                 )
         self.assertEqual(payload["commits_behind"], 12)
         self.assertEqual(payload["commits_ahead"], 0)
-        self.assertEqual(payload["compare_branch"], "feat/v0.7.5")
+        self.assertEqual(payload["compare_branch"], "feat/v0.7.6")
         self.assertTrue(payload["update_available"])
         self.assertIsNotNone(payload["checked_at"])
         self.assertTrue(

@@ -37,6 +37,7 @@ _LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 _PREVIEW_DETAIL_MAX = 140
 _RC_CHANNEL_VERSION: dict[str, str] = {
     "rc-075": "0.7.5",
+    "rc-076": "0.7.6",
 }
 
 
@@ -190,7 +191,10 @@ def select_preview_section(
                     renders a generic "no preview available" notice.
     """
     if tier == "rc":
-        target = _RC_CHANNEL_VERSION.get(normalize_channel_id(channel_id) or "")
+        cid = channel_id or ""
+        target = _RC_CHANNEL_VERSION.get(cid)
+        if not target:
+            target = _RC_CHANNEL_VERSION.get(normalize_channel_id(cid) or "")
         if target:
             for section in sections:
                 if section.version == target and section.bullets:

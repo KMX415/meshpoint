@@ -102,11 +102,24 @@ class TestSelectPreviewSection(unittest.TestCase):
     def setUp(self) -> None:
         self.sections = ChangelogParser.parse_text(_FIXTURE)
 
-    def test_rc_tier_does_not_surface_older_release_when_075_missing(self) -> None:
+    def test_rc_tier_does_not_surface_older_release_when_076_missing(self) -> None:
         section = select_preview_section(
-            self.sections, tier="rc", channel_id="rc-075",
+            self.sections, tier="rc", channel_id="rc-076",
         )
         self.assertIsNone(section)
+
+    def test_rc_tier_maps_075_to_shipped_release(self) -> None:
+        fixture = _FIXTURE.replace(
+            "### v0.7.4 (May 2026)",
+            "### v0.7.5 (May 2026)\n\n- **gpsd.** Live skyplot.\n\n### v0.7.4 (May 2026)",
+        )
+        sections = ChangelogParser.parse_text(fixture)
+        section = select_preview_section(
+            sections, tier="rc", channel_id="rc-075",
+        )
+        self.assertIsNotNone(section)
+        assert section is not None
+        self.assertEqual(section.version, "0.7.5")
 
     def test_rc_tier_accepts_retired_channel_id(self) -> None:
         section = select_preview_section(

@@ -49,13 +49,14 @@ class TestReleaseChannelRegistry(unittest.TestCase):
         self.assertIsNone(ReleaseChannelRegistry().resolve_branch("custom"))
 
     def test_find_returns_rc_channel(self) -> None:
-        match = ReleaseChannelRegistry().find("rc-075")
+        match = ReleaseChannelRegistry().find("rc-076")
         self.assertIsNotNone(match)
         self.assertEqual(match.tier, "rc")
-        self.assertEqual(match.branch, "feat/v0.7.5")
+        self.assertEqual(match.branch, "feat/v0.7.6")
 
     def test_normalize_channel_id_remaps_retired_rc(self) -> None:
-        self.assertEqual(normalize_channel_id("rc-074"), "rc-075")
+        self.assertEqual(normalize_channel_id("rc-074"), "rc-076")
+        self.assertEqual(normalize_channel_id("rc-075"), "rc-076")
         self.assertEqual(normalize_channel_id("stable"), "stable")
 
 
