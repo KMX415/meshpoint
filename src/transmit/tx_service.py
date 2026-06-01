@@ -354,6 +354,9 @@ class TxService:
         packet_id = self._next_packet_id()
         channel_hash = original.channel_hash
         _, channel_key = self._resolve_channel_by_hash(channel_hash)
+        recipient_pubkey = None
+        if self._crypto is not None:
+            recipient_pubkey = self._crypto.lookup_public_key(dest)
         hop_limit = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
 
         packet_bytes = builder.build_routing_ack(
@@ -365,6 +368,7 @@ class TxService:
             channel_hash=channel_hash,
             hop_limit=hop_limit,
             hop_start=hop_limit,
+            recipient_public_key=recipient_pubkey,
         )
         if packet_bytes is None:
             return SendResult(success=False, protocol="meshtastic", error="ACK build failed")
@@ -382,17 +386,23 @@ class TxService:
 
         try:
             requester = int(original.source_id, 16)
+            request_id = int(original.packet_id, 16)
         except ValueError:
             return SendResult(success=False, protocol="meshtastic", error="Invalid source id")
 
-        route_nodes = [requester, self._source_node_id]
-        snr_values: list[float] = []
+        route_nodes = self._merge_traceroute_route(
+            original, requester, self._source_node_id
+        )
+        snr_values: list[int] = []
         if original.signal and original.signal.snr is not None:
-            snr_values = [float(original.signal.snr)]
+            snr_values = [int(round(float(original.signal.snr) * 4))]
 
         packet_id = self._next_packet_id()
         channel_hash = original.channel_hash
         _, channel_key = self._resolve_channel_by_hash(channel_hash)
+        recipient_pubkey = None
+        if self._crypto is not None:
+            recipient_pubkey = self._crypto.lookup_public_key(requester)
         hop_limit = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
 
         packet_bytes = builder.build_traceroute_reply(
@@ -400,11 +410,13 @@ class TxService:
             dest=requester,
             packet_id=packet_id,
             route_nodes=route_nodes,
+            request_id=request_id,
             snr_towards=snr_values or None,
             channel_key=channel_key,
             channel_hash=channel_hash,
             hop_limit=hop_limit,
             hop_start=hop_limit,
+            recipient_public_key=recipient_pubkey,
         )
         if packet_bytes is None:
             return SendResult(
@@ -823,6 +835,26 @@ class TxService:
         except (IndexError, Exception):
             logger.debug("Channel hash fallback to 0x08", exc_info=True)
             return 0x08, None
+
+    @staticmethod
+    def _merge_traceroute_route(
+        original, requester: int, our_node_id: int
+    ) -> list[int]:
+        """Extend the inbound RouteDiscovery with this node for the reply."""
+        payload = original.decoded_payload or {}
+        route_nodes: list[int] = []
+        for node_hex in payload.get("route") or []:
+            try:
+                route_nodes.append(int(node_hex, 16))
+            except (TypeError, ValueError):
+                continue
+        if our_node_id not in route_nodes:
+            route_nodes.append(our_node_id)
+        if not route_nodes:
+            route_nodes = [requester, our_node_id]
+        elif requester not in route_nodes:
+            route_nodes.insert(0, requester)
+        return route_nodes
 
     def _resolve_channel_by_hash(self, channel_hash: int) -> tuple[int, bytes | None]:
         """Resolve encryption key from a captured on-air channel hash."""

@@ -28,7 +28,25 @@ class MeshtasticInboundHandler:
             return
 
         if packet.packet_type == PacketType.TRACEROUTE:
-            await self._tx.send_traceroute_reply(packet)
+            logger.info(
+                "Inbound traceroute from %s (id=%s ch=0x%02x)",
+                packet.source_id,
+                packet.packet_id,
+                packet.channel_hash or 0,
+            )
+            result = await self._tx.send_traceroute_reply(packet)
+            if result.success:
+                logger.info(
+                    "Traceroute reply TX OK to %s (reply id=%s)",
+                    packet.source_id,
+                    result.packet_id,
+                )
+            else:
+                logger.warning(
+                    "Traceroute reply failed to %s: %s",
+                    packet.source_id,
+                    result.error,
+                )
             return
 
         if packet.packet_type == PacketType.TEXT and packet.want_ack:

@@ -48,6 +48,47 @@ class TestMeshtasticMeshParticipantBuilder(unittest.TestCase):
         assert decoded is not None
         self.assertEqual(decoded.decoded_payload.get("request_id"), request_id)
 
+    def test_traceroute_reply_carries_request_id(self):
+        request_id = 0x11223344
+        packet = self.builder.build_traceroute_reply(
+            source_id=self.source_id,
+            dest=self.dest_id,
+            packet_id=5,
+            route_nodes=[self.dest_id, self.source_id],
+            request_id=request_id,
+            snr_towards=[20],
+        )
+        self.assertIsNotNone(packet)
+        decoded = self.decoder.decode(packet)
+        assert decoded is not None
+        self.assertEqual(decoded.packet_type.value, "traceroute")
+        self.assertEqual(decoded.decoded_payload.get("request_id"), request_id)
+
+    def test_pki_traceroute_reply_round_trip(self):
+        peer = MeshpointKeypair.generate()
+        self.crypto.register_public_key(self.dest_id, peer.public_key)
+        request_id = 0x55667788
+        packet = self.builder.build_traceroute_reply(
+            source_id=self.source_id,
+            dest=self.dest_id,
+            packet_id=6,
+            route_nodes=[self.dest_id, self.source_id],
+            request_id=request_id,
+            recipient_public_key=peer.public_key,
+        )
+        assert packet is not None
+        self.assertEqual(packet[13], 0)
+        peer_crypto = CryptoService()
+        peer_crypto.set_keypair(peer.private_key, peer.public_key)
+        peer_crypto.register_public_key(self.source_id, self.keypair.public_key)
+        peer_decoder = MeshtasticDecoder(peer_crypto)
+        peer_decoder.configure_identity(self.dest_id)
+        decoded = peer_decoder.decode(packet)
+        assert decoded is not None
+        self.assertTrue(decoded.decrypted)
+        self.assertEqual(decoded.decoded_payload.get("request_id"), request_id)
+        self.assertIn(format(self.source_id, "08x"), decoded.decoded_payload.get("route", []))
+
     def test_pki_text_round_trip(self):
         peer = MeshpointKeypair.generate()
         self.crypto.register_public_key(self.dest_id, peer.public_key)

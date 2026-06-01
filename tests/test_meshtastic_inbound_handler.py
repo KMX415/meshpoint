@@ -28,6 +28,23 @@ class TestMeshtasticInboundHandler(unittest.IsolatedAsyncioTestCase):
         await handler.handle(packet)
         tx.send_routing_ack.assert_awaited_once_with(packet)
 
+    async def test_traceroute_reply(self):
+        tx = MagicMock()
+        tx.send_traceroute_reply = AsyncMock(return_value=MagicMock(success=True))
+        handler = MeshtasticInboundHandler(tx, our_node_id=0x12345678)
+
+        packet = Packet(
+            packet_id="0000000b",
+            source_id="aabbccdd",
+            destination_id="12345678",
+            protocol=Protocol.MESHTASTIC,
+            packet_type=PacketType.TRACEROUTE,
+            decrypted=True,
+            decoded_payload={"route": []},
+        )
+        await handler.handle(packet)
+        tx.send_traceroute_reply.assert_awaited_once_with(packet)
+
     async def test_ignores_broadcast(self):
         tx = MagicMock()
         tx.send_routing_ack = AsyncMock()

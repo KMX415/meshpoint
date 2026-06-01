@@ -119,17 +119,25 @@ class MeshtasticPacketBuilder:
         channel_hash: int = 0x08,
         hop_limit: int = 3,
         hop_start: int = 3,
+        recipient_public_key: bytes | None = None,
     ) -> bytes | None:
         """Build a ROUTING ACK for an inbound direct message."""
         routing_payload = b""
         inner = self._serialize_data(
             PORTNUM_ROUTING, routing_payload, request_id=request_id
         )
-        ciphertext = self._crypto.encrypt_meshtastic(
-            inner, packet_id, source_id, key=channel_key
+        ciphertext = self._encrypt_payload(
+            inner,
+            packet_id,
+            source_id,
+            dest,
+            channel_key,
+            channel_hash,
+            recipient_public_key,
         )
         if ciphertext is None:
             return None
+        on_air_hash = 0 if recipient_public_key else channel_hash
         header = self._build_header(
             dest,
             source_id,
@@ -137,7 +145,7 @@ class MeshtasticPacketBuilder:
             hop_limit=hop_limit,
             hop_start=hop_start,
             want_ack=False,
-            channel_hash=channel_hash,
+            channel_hash=on_air_hash,
         )
         return header + ciphertext
 
@@ -235,11 +243,14 @@ class MeshtasticPacketBuilder:
         dest: int,
         packet_id: int,
         route_nodes: Sequence[int],
-        snr_towards: Sequence[float] | None = None,
+        *,
+        request_id: int = 0,
+        snr_towards: Sequence[int] | None = None,
         channel_key: bytes | None = None,
         channel_hash: int = 0x08,
         hop_limit: int = 3,
         hop_start: int = 3,
+        recipient_public_key: bytes | None = None,
     ) -> bytes | None:
         """Build a TRACEROUTE reply with a RouteDiscovery payload."""
         try:
@@ -255,19 +266,28 @@ class MeshtasticPacketBuilder:
             logger.exception("Traceroute protobuf build failed")
             return None
 
-        inner = self._serialize_data(PORTNUM_TRACEROUTE, payload)
-        ciphertext = self._crypto.encrypt_meshtastic(
-            inner, packet_id, source_id, key=channel_key
+        inner = self._serialize_data(
+            PORTNUM_TRACEROUTE, payload, request_id=request_id
+        )
+        ciphertext = self._encrypt_payload(
+            inner,
+            packet_id,
+            source_id,
+            dest,
+            channel_key,
+            channel_hash,
+            recipient_public_key,
         )
         if ciphertext is None:
             return None
+        on_air_hash = 0 if recipient_public_key else channel_hash
         header = self._build_header(
             dest,
             source_id,
             packet_id,
             hop_limit=hop_limit,
             hop_start=hop_start,
-            channel_hash=channel_hash,
+            channel_hash=on_air_hash,
         )
         return header + ciphertext
 
