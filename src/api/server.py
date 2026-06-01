@@ -76,6 +76,9 @@ from src.transmit.nodeinfo_broadcaster import (
     NodeInfoBroadcaster,
     clamp_interval_minutes,
 )
+from src.transmit.position_broadcaster import PositionBroadcaster
+from src.transmit.telemetry_broadcaster import TelemetryBroadcaster
+from src.transmit.meshtastic_inbound_handler import MeshtasticInboundHandler
 from src.transmit.tx_service import TxService
 from src.version import __version__
 
@@ -86,6 +89,8 @@ ws_manager = WebSocketManager()
 pipeline: PipelineCoordinator | None = None
 upstream: UpstreamClient | None = None
 nodeinfo_broadcaster: NodeInfoBroadcaster | None = None
+telemetry_broadcaster: TelemetryBroadcaster | None = None
+position_broadcaster: PositionBroadcaster | None = None
 noise_floor_tracker = NoiseFloorTracker()
 _noise_floor_emitter_task = None
 _spectral_scan_service: SpectralScanService | None = None
@@ -126,6 +131,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         global pipeline, upstream, nodeinfo_broadcaster
+        global telemetry_broadcaster, position_broadcaster
         warn_if_stale_so_files()
         validate_activation(config)
         identity = DeviceIdentity(
@@ -160,6 +166,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
         await pipeline.start()
 
+        _bootstrap_pki(config, pipeline)
+        await _hydrate_public_keys(pipeline)
+
         message_repo = MessageRepository(pipeline.database)
         tx_service = _build_tx_service(config, pipeline)
         mc_source = _find_meshcore_source(pipeline)
@@ -174,6 +183,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         _setup_message_interception(
             pipeline, message_repo, config, meshcore_tx_ref
         )
+        _setup_inbound_responder(pipeline, tx_service, config)
         setup_meshcore_contact_enrichment(pipeline, meshcore_tx_ref)
         if meshcore_tx_ref and meshcore_tx_ref.connected:
             import asyncio
@@ -195,6 +205,18 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         nodeinfo_broadcaster = _build_nodeinfo_broadcaster(config, tx_service)
         if nodeinfo_broadcaster is not None:
             await nodeinfo_broadcaster.start()
+
+        telemetry_broadcaster = _build_telemetry_broadcaster(
+            config, tx_service, pipeline
+        )
+        if telemetry_broadcaster is not None:
+            await telemetry_broadcaster.start()
+
+        position_broadcaster = _build_position_broadcaster(
+            config, tx_service, identity
+        )
+        if position_broadcaster is not None:
+            await position_broadcaster.start()
 
         _wire_native_relay(pipeline, tx_service)
 
@@ -228,6 +250,10 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                 pass
         if nodeinfo_broadcaster is not None:
             await nodeinfo_broadcaster.stop()
+        if telemetry_broadcaster is not None:
+            await telemetry_broadcaster.stop()
+        if position_broadcaster is not None:
+            await position_broadcaster.stop()
         await upstream.stop()
         await pipeline.stop()
         session_manager.shutdown()
@@ -377,6 +403,124 @@ def _add_meshcore_usb_source(
         logger.warning(
             "MeshCore USB unavailable -- meshcore package not installed"
         )
+
+
+def _bootstrap_pki(config: AppConfig, coord: PipelineCoordinator) -> None:
+    """Load PKI keypair into the live crypto service."""
+    from src.identity.keypair import (
+        KeypairStore,
+        resolve_keypair_path,
+        resolve_keypair_path_from_env,
+    )
+
+    if not hasattr(coord, "_crypto"):
+        return
+
+    override = resolve_keypair_path_from_env()
+    key_path = override or resolve_keypair_path(config.storage.database_path)
+    try:
+        keypair = KeypairStore(key_path).load_or_create()
+        coord._crypto.set_keypair(keypair.private_key, keypair.public_key)
+        logger.info("Meshtastic PKI keypair loaded from %s", key_path)
+    except Exception:
+        logger.exception("Failed to load Meshtastic PKI keypair")
+
+
+async def _hydrate_public_keys(coord: PipelineCoordinator) -> None:
+    nodes = await coord.node_repo.get_all(limit=5000)
+    for node in nodes:
+        if not node.public_key:
+            continue
+        try:
+            coord._crypto.register_public_key(
+                int(node.node_id, 16),
+                bytes.fromhex(node.public_key),
+            )
+        except ValueError:
+            continue
+
+
+def _setup_inbound_responder(
+    coord: PipelineCoordinator,
+    tx_service: TxService | None,
+    config: AppConfig,
+) -> None:
+    if tx_service is None or not tx_service.meshtastic_enabled:
+        return
+
+    our_node_id = tx_service.source_node_id
+    coord._router.meshtastic_decoder.configure_identity(our_node_id)
+    handler = MeshtasticInboundHandler(tx_service, our_node_id)
+
+    def on_packet(packet: Packet) -> None:
+        import asyncio
+
+        try:
+            asyncio.get_running_loop().create_task(handler.handle(packet))
+        except RuntimeError:
+            pass
+
+    coord.on_packet(on_packet)
+
+
+def _build_telemetry_broadcaster(
+    config: AppConfig,
+    tx_service: TxService | None,
+    coord: PipelineCoordinator,
+) -> TelemetryBroadcaster | None:
+    if tx_service is None or not tx_service.meshtastic_enabled:
+        return None
+    telem = config.transmit.telemetry
+    if clamp_interval_minutes(telem.interval_minutes) == 0:
+        return None
+
+    import time
+
+    service_started = time.monotonic()
+    duty = getattr(tx_service, "_duty", None)
+
+    def metrics_provider() -> dict:
+        air_util = duty.current_usage_percent() if duty else 0.0
+        return {
+            "battery_level": 101,
+            "voltage": 5.0,
+            "channel_utilization": 0.0,
+            "air_util_tx": round(air_util, 2),
+            "uptime_seconds": int(time.monotonic() - service_started),
+        }
+
+    return TelemetryBroadcaster(
+        tx_service,
+        interval_minutes=telem.interval_minutes,
+        startup_delay_seconds=telem.startup_delay_seconds,
+        metrics_provider=metrics_provider,
+    )
+
+
+def _build_position_broadcaster(
+    config: AppConfig,
+    tx_service: TxService | None,
+    identity: DeviceIdentity,
+) -> PositionBroadcaster | None:
+    if tx_service is None or not tx_service.meshtastic_enabled:
+        return None
+    pos_cfg = config.transmit.position
+    if clamp_interval_minutes(pos_cfg.interval_minutes) == 0:
+        return None
+
+    def coords_provider():
+        lat = identity.latitude
+        lon = identity.longitude
+        if lat is None or lon is None:
+            return None
+        return lat, lon, identity.altitude
+
+    return PositionBroadcaster(
+        tx_service,
+        interval_minutes=pos_cfg.interval_minutes,
+        startup_delay_seconds=pos_cfg.startup_delay_seconds,
+        coords_provider=coords_provider,
+    )
 
 
 def _build_tx_service(

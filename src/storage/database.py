@@ -122,6 +122,11 @@ class DatabaseManager:
         if "role" not in columns:
             await self._connection.execute("ALTER TABLE nodes ADD COLUMN role TEXT")
             logger.info("Migration: added 'role' column to nodes table")
+        if "public_key" not in columns:
+            await self._connection.execute(
+                "ALTER TABLE nodes ADD COLUMN public_key TEXT"
+            )
+            logger.info("Migration: added 'public_key' column to nodes table")
 
         cursor = await self._connection.execute("PRAGMA table_info(messages)")
         msg_cols = {row[1] for row in await cursor.fetchall()}

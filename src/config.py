@@ -153,6 +153,22 @@ class RelayConfig:
 
 
 @dataclass
+class TelemetryConfig:
+    """Periodic device_metrics telemetry broadcast settings."""
+
+    interval_minutes: int = 30
+    startup_delay_seconds: int = 120
+
+
+@dataclass
+class PositionConfig:
+    """Periodic POSITION broadcast settings."""
+
+    interval_minutes: int = 15
+    startup_delay_seconds: int = 180
+
+
+@dataclass
 class MqttConfig:
     enabled: bool = False
     broker: str = "mqtt.meshtastic.org"
@@ -161,6 +177,8 @@ class MqttConfig:
     password: str = "large4cats"
     topic_root: str = "msh"
     region: str = "US"
+    tls_enabled: bool = False
+    tls_ca_cert: str = ""
     # Optional ``!xxxxxxxx`` override; blank uses MD5 hash of device name.
     gateway_id: Optional[str] = None
     publish_channels: list[str] = field(default_factory=lambda: ["LongFast", "MeshCore"])
@@ -205,6 +223,8 @@ class TransmitConfig:
     short_name: str = "MPNT"
     hop_limit: int = 3
     nodeinfo: NodeInfoConfig = field(default_factory=NodeInfoConfig)
+    telemetry: TelemetryConfig = field(default_factory=TelemetryConfig)
+    position: PositionConfig = field(default_factory=PositionConfig)
 
 
 @dataclass

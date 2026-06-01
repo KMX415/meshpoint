@@ -158,6 +158,9 @@ class TxService:
 
         packet_id = self._next_packet_id()
         channel_hash, channel_key = self._resolve_channel(0)
+        public_key = None
+        if self._crypto is not None:
+            public_key = self._crypto.public_key
 
         try:
             nodeinfo_hop_limit = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
@@ -167,6 +170,7 @@ class TxService:
                 long_name=long_name,
                 short_name=short_name,
                 hw_model=hw_model,
+                public_key=public_key,
                 channel_key=channel_key,
                 channel_hash=channel_hash,
                 hop_limit=nodeinfo_hop_limit,
@@ -251,6 +255,9 @@ class TxService:
         dest_int = self._resolve_destination(destination, Protocol.MESHTASTIC)
         packet_id = self._next_packet_id()
         channel_hash, channel_key = self._resolve_channel(channel)
+        recipient_pubkey = None
+        if dest_int != BROADCAST_ADDR_MT and self._crypto is not None:
+            recipient_pubkey = self._crypto.lookup_public_key(dest_int)
 
         hop_limit = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
         packet_bytes = builder.build_text_message(
@@ -263,6 +270,7 @@ class TxService:
             hop_limit=hop_limit,
             hop_start=hop_limit,
             want_ack=want_ack,
+            recipient_public_key=recipient_pubkey,
         )
         if packet_bytes is None:
             return SendResult(
@@ -314,6 +322,190 @@ class TxService:
 
             if self._duty:
                 self._duty.record_tx(airtime_ms)
+            return SendResult(
+                success=True,
+                protocol="meshtastic",
+                packet_id=f"{packet_id:08x}",
+                timestamp=time.time(),
+                airtime_ms=airtime_ms,
+            )
+        return SendResult(
+            success=False,
+            protocol="meshtastic",
+            packet_id=f"{packet_id:08x}",
+            error=f"lgw_send returned {result_code}",
+        )
+
+    async def send_routing_ack(self, original) -> SendResult:
+        """Reply with a Meshtastic routing ACK to an inbound DM."""
+        if not self.meshtastic_enabled:
+            return SendResult(success=False, protocol="meshtastic", error="TX unavailable")
+
+        builder = self._get_builder()
+        if builder is None or not hasattr(builder, "build_routing_ack"):
+            return SendResult(success=False, protocol="meshtastic", error="Builder unavailable")
+
+        try:
+            request_id = int(original.packet_id, 16)
+            dest = int(original.source_id, 16)
+        except ValueError:
+            return SendResult(success=False, protocol="meshtastic", error="Invalid packet ids")
+
+        packet_id = self._next_packet_id()
+        channel_hash = original.channel_hash
+        _, channel_key = self._resolve_channel_by_hash(channel_hash)
+        hop_limit = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
+
+        packet_bytes = builder.build_routing_ack(
+            source_id=self._source_node_id,
+            dest=dest,
+            packet_id=packet_id,
+            request_id=request_id,
+            channel_key=channel_key,
+            channel_hash=channel_hash,
+            hop_limit=hop_limit,
+            hop_start=hop_limit,
+        )
+        if packet_bytes is None:
+            return SendResult(success=False, protocol="meshtastic", error="ACK build failed")
+
+        return await self._send_built_packet(packet_bytes, packet_id, label="routing ACK")
+
+    async def send_traceroute_reply(self, original) -> SendResult:
+        """Reply to a traceroute probe addressed to this node."""
+        if not self.meshtastic_enabled:
+            return SendResult(success=False, protocol="meshtastic", error="TX unavailable")
+
+        builder = self._get_builder()
+        if builder is None or not hasattr(builder, "build_traceroute_reply"):
+            return SendResult(success=False, protocol="meshtastic", error="Builder unavailable")
+
+        try:
+            requester = int(original.source_id, 16)
+        except ValueError:
+            return SendResult(success=False, protocol="meshtastic", error="Invalid source id")
+
+        route_nodes = [requester, self._source_node_id]
+        snr_values: list[float] = []
+        if original.signal and original.signal.snr is not None:
+            snr_values = [float(original.signal.snr)]
+
+        packet_id = self._next_packet_id()
+        channel_hash = original.channel_hash
+        _, channel_key = self._resolve_channel_by_hash(channel_hash)
+        hop_limit = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
+
+        packet_bytes = builder.build_traceroute_reply(
+            source_id=self._source_node_id,
+            dest=requester,
+            packet_id=packet_id,
+            route_nodes=route_nodes,
+            snr_towards=snr_values or None,
+            channel_key=channel_key,
+            channel_hash=channel_hash,
+            hop_limit=hop_limit,
+            hop_start=hop_limit,
+        )
+        if packet_bytes is None:
+            return SendResult(
+                success=False, protocol="meshtastic", error="Traceroute build failed"
+            )
+
+        return await self._send_built_packet(
+            packet_bytes, packet_id, label="traceroute reply"
+        )
+
+    async def send_telemetry(
+        self,
+        *,
+        battery_level: int = 101,
+        voltage: float = 5.0,
+        channel_utilization: float = 0.0,
+        air_util_tx: float = 0.0,
+        uptime_seconds: int = 0,
+    ) -> SendResult:
+        if not self.meshtastic_enabled:
+            return SendResult(success=False, protocol="meshtastic", error="TX unavailable")
+
+        builder = self._get_builder()
+        if builder is None or not hasattr(builder, "build_telemetry"):
+            return SendResult(success=False, protocol="meshtastic", error="Builder unavailable")
+
+        packet_id = self._next_packet_id()
+        channel_hash, channel_key = self._resolve_channel(0)
+        hop_limit = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
+
+        packet_bytes = builder.build_telemetry(
+            source_id=self._source_node_id,
+            packet_id=packet_id,
+            battery_level=battery_level,
+            voltage=voltage,
+            channel_utilization=channel_utilization,
+            air_util_tx=air_util_tx,
+            uptime_seconds=uptime_seconds,
+            channel_key=channel_key,
+            channel_hash=channel_hash,
+            hop_limit=hop_limit,
+            hop_start=hop_limit,
+        )
+        if packet_bytes is None:
+            return SendResult(success=False, protocol="meshtastic", error="Telemetry build failed")
+
+        return await self._send_built_packet(packet_bytes, packet_id, label="telemetry")
+
+    async def send_position(
+        self,
+        latitude: float,
+        longitude: float,
+        altitude: float | None = None,
+    ) -> SendResult:
+        if not self.meshtastic_enabled:
+            return SendResult(success=False, protocol="meshtastic", error="TX unavailable")
+
+        builder = self._get_builder()
+        if builder is None or not hasattr(builder, "build_position"):
+            return SendResult(success=False, protocol="meshtastic", error="Builder unavailable")
+
+        packet_id = self._next_packet_id()
+        channel_hash, channel_key = self._resolve_channel(0)
+        hop_limit = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
+
+        packet_bytes = builder.build_position(
+            source_id=self._source_node_id,
+            packet_id=packet_id,
+            latitude=latitude,
+            longitude=longitude,
+            altitude=altitude,
+            channel_key=channel_key,
+            channel_hash=channel_hash,
+            hop_limit=hop_limit,
+            hop_start=hop_limit,
+        )
+        if packet_bytes is None:
+            return SendResult(success=False, protocol="meshtastic", error="Position build failed")
+
+        return await self._send_built_packet(packet_bytes, packet_id, label="position")
+
+    async def _send_built_packet(
+        self, packet_bytes: bytes, packet_id: int, *, label: str
+    ) -> SendResult:
+        tx_pkt = self._build_hal_packet(packet_bytes)
+        airtime_ms = await self._get_airtime(tx_pkt)
+
+        if self._duty and not self._duty.check_budget(airtime_ms):
+            return SendResult(
+                success=False,
+                protocol="meshtastic",
+                packet_id=f"{packet_id:08x}",
+                error="Duty cycle limit reached",
+                airtime_ms=airtime_ms,
+            )
+
+        result_code = await asyncio.to_thread(self._wrapper.send, tx_pkt)
+        if result_code == 0:
+            if self._duty:
+                self._duty.record_tx(airtime_ms)
+            logger.info("TX %s OK: id=%08x airtime=%dms", label, packet_id, airtime_ms)
             return SendResult(
                 success=True,
                 protocol="meshtastic",
@@ -631,6 +823,30 @@ class TxService:
         except (IndexError, Exception):
             logger.debug("Channel hash fallback to 0x08", exc_info=True)
             return 0x08, None
+
+    def _resolve_channel_by_hash(self, channel_hash: int) -> tuple[int, bytes | None]:
+        """Resolve encryption key from a captured on-air channel hash."""
+        if self._crypto is None:
+            return channel_hash, None
+        try:
+            primary_name = self._primary_channel_name
+            all_keys = self._crypto.get_all_keys()
+            if all_keys:
+                primary_hash = self._crypto.compute_channel_hash(
+                    primary_name, all_keys[0]
+                )
+                if primary_hash == channel_hash:
+                    return channel_hash, all_keys[0]
+            for i, (ch_name, key) in enumerate(self._crypto._keys.items(), start=1):
+                if i < len(all_keys):
+                    h = self._crypto.compute_channel_hash(ch_name, all_keys[i])
+                    if h == channel_hash:
+                        return channel_hash, all_keys[i]
+            if all_keys:
+                return channel_hash, all_keys[0]
+        except Exception:
+            logger.debug("Channel-by-hash lookup failed", exc_info=True)
+        return channel_hash, None
 
     def _get_preset_name(self) -> str:
         """Derive the Meshtastic modem preset display name from radio params."""

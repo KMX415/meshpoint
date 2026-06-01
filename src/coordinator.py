@@ -301,6 +301,17 @@ class PipelineCoordinator:
             await self._node_repo.upsert(node_update)
             self._last_node_update[node_update.node_id] = node_update
             self._stats_reporter.record_node(node_update.to_dict())
+            if node_update.public_key:
+                try:
+                    self._crypto.register_public_key(
+                        int(node_update.node_id, 16),
+                        bytes.fromhex(node_update.public_key),
+                    )
+                except ValueError:
+                    logger.debug(
+                        "Ignoring invalid public_key for node %s",
+                        node_update.node_id,
+                    )
         elif packet.source_id:
             await self._node_repo.increment_packet_count(packet.source_id)
 

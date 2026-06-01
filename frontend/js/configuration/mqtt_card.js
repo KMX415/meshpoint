@@ -105,6 +105,10 @@ class MqttConfigCard {
                             <input type="checkbox" data-mqtt-ha>
                             <span class="cfg-field__label">Home Assistant auto-discovery</span>
                         </label>
+                        <label class="cfg-field cfg-field--toggle">
+                            <input type="checkbox" data-mqtt-tls>
+                            <span class="cfg-field__label">Use TLS (mqtts)</span>
+                        </label>
                     </fieldset>
                     <div class="cfg-preview" data-mqtt-previews>
                         <span class="cfg-preview__label">Example topics (LongFast gateway)</span>
@@ -134,6 +138,7 @@ class MqttConfigCard {
         this._locPrecision = this._root.querySelector('[data-mqtt-loc-precision]');
         this._json = this._root.querySelector('[data-mqtt-json]');
         this._ha = this._root.querySelector('[data-mqtt-ha]');
+        this._tls = this._root.querySelector('[data-mqtt-tls]');
         this._previewMt = this._root.querySelector('[data-mqtt-preview-mt]');
         this._previewMc = this._root.querySelector('[data-mqtt-preview-mc]');
         this._previewJson = this._root.querySelector('[data-mqtt-preview-json]');
@@ -175,6 +180,7 @@ class MqttConfigCard {
         }
         if (this._json) this._json.checked = !!mqtt.publish_json;
         if (this._ha) this._ha.checked = !!mqtt.homeassistant_discovery;
+        if (this._tls) this._tls.checked = !!mqtt.tls_enabled;
         this._renderPreviews(mqtt);
     }
 
@@ -239,6 +245,8 @@ class MqttConfigCard {
             publish_json: this._json.checked,
             location_precision: this._locPrecision.value,
             homeassistant_discovery: this._ha.checked,
+            tls_enabled: this._tls ? this._tls.checked : false,
+            tls_ca_cert: '',
         };
         if (this._passwordDirty) {
             payload.password = this._pass.value;
