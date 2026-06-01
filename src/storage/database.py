@@ -100,6 +100,8 @@ class DatabaseManager:
         self._connection: aiosqlite.Connection | None = None
 
     async def connect(self) -> None:
+        if self._connection is not None:
+            return
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         self._connection = await aiosqlite.connect(self._db_path)
         self._connection.row_factory = aiosqlite.Row

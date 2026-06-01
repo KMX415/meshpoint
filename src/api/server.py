@@ -165,9 +165,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             _inject_tx_gain_into_source(pipeline)
 
         _bootstrap_pki(config, pipeline)
+        await _hydrate_public_keys(pipeline)
 
         await pipeline.start()
-        await _hydrate_public_keys(pipeline)
 
         message_repo = MessageRepository(pipeline.database)
         tx_service = _build_tx_service(config, pipeline)
@@ -448,14 +448,25 @@ def _bootstrap_pki(config: AppConfig, coord: PipelineCoordinator) -> None:
 
 
 async def _hydrate_public_keys(coord: PipelineCoordinator) -> None:
-    nodes = await coord.node_repo.get_all(limit=5000)
-    for node in nodes:
-        if not node.public_key:
+    if not hasattr(coord, "_crypto"):
+        return
+    await coord.database.connect()
+    rows = await coord.database.fetch_all(
+        """
+        SELECT node_id, public_key FROM nodes
+        WHERE public_key IS NOT NULL AND public_key != ''
+        LIMIT 5000
+        """
+    )
+    for row in rows:
+        node_id = row.get("node_id")
+        public_key = row.get("public_key")
+        if not node_id or not public_key:
             continue
         try:
             coord._crypto.register_public_key(
-                int(node.node_id, 16),
-                bytes.fromhex(node.public_key),
+                int(node_id, 16),
+                bytes.fromhex(public_key),
             )
         except ValueError:
             continue
