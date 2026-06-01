@@ -162,6 +162,63 @@ class TestMeshtasticMeshParticipantBuilder(unittest.TestCase):
         self.assertEqual(decoded.decoded_payload.get("telemetry_variant"), "local_stats")
         self.assertEqual(decoded.decoded_payload.get("num_packets_rx"), 42)
 
+    def test_pki_telemetry_reply_round_trip(self):
+        peer = MeshpointKeypair.generate()
+        self.crypto.register_public_key(self.dest_id, peer.public_key)
+        request_id = 0x66D70477
+        packet = self.builder.build_telemetry_reply(
+            source_id=self.source_id,
+            dest=self.dest_id,
+            packet_id=0x0000DAB6,
+            request_id=request_id,
+            variant="local_stats",
+            uptime_seconds=3600,
+            num_packets_rx=42,
+            noise_floor=-95,
+            telemetry_time=1_700_000_000,
+            channel_hash=0,
+            recipient_public_key=peer.public_key,
+            hop_limit=2,
+            hop_start=2,
+        )
+        assert packet is not None
+        self.assertEqual(packet[13], 0)
+        peer_crypto = CryptoService()
+        peer_crypto.set_keypair(peer.private_key, peer.public_key)
+        peer_crypto.register_public_key(self.source_id, self.keypair.public_key)
+        peer_decoder = MeshtasticDecoder(peer_crypto)
+        peer_decoder.configure_identity(self.dest_id)
+        decoded = peer_decoder.decode(packet)
+        assert decoded is not None
+        self.assertTrue(decoded.decrypted)
+        self.assertEqual(decoded.decoded_payload.get("request_id"), request_id)
+        self.assertEqual(
+            decoded.decoded_payload.get("telemetry_variant"), "local_stats"
+        )
+        self.assertEqual(decoded.decoded_payload.get("num_packets_rx"), 42)
+
+    def test_telemetry_reply_hop_mirrors_zero_hop_request(self):
+        from src.models.packet import Packet, PacketType, Protocol
+        from src.transmit.reply_hop_policy import MeshtasticReplyHopPolicy
+
+        original = Packet(
+            packet_id="66d70477",
+            source_id="7d8b98a9",
+            destination_id="c0ffee42",
+            protocol=Protocol.MESHTASTIC,
+            packet_type=PacketType.TELEMETRY,
+            decrypted=True,
+            hop_limit=0,
+            hop_start=0,
+            channel_hash=0,
+            decoded_payload={"telemetry_variant": "local_stats"},
+        )
+        hop_limit, hop_start = MeshtasticReplyHopPolicy.reply_hop_fields(
+            original.hop_limit, original.hop_start, 3
+        )
+        self.assertEqual(hop_limit, 0)
+        self.assertEqual(hop_start, 0)
+
     def test_channel_request_uses_channel_encryption_even_with_pubkey(self):
         peer = MeshpointKeypair.generate()
         self.crypto.register_public_key(self.dest_id, peer.public_key)

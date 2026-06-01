@@ -57,21 +57,25 @@ class MeshtasticInboundHandler:
                 "telemetry_variant", "device_metrics"
             )
             logger.info(
-                "Inbound telemetry request from %s (id=%s variant=%s ch=0x%02x)",
+                "Inbound telemetry request from %s (id=%s variant=%s ch=0x%02x "
+                "hop=%d/%d)",
                 packet.source_id,
                 packet.packet_id,
                 variant,
                 packet.channel_hash or 0,
+                packet.hop_limit,
+                packet.hop_start,
             )
             result = await self._tx.send_telemetry_reply(packet)
             if result.success:
-                payload = packet.decoded_payload or {}
                 logger.info(
-                    "Telemetry reply TX OK to %s (reply id=%s, variant=%s, pki=%s)",
+                    "Telemetry reply TX OK to %s (reply id=%s, variant=%s, pki=%s, "
+                    "request_id=%s)",
                     packet.source_id,
                     result.packet_id,
                     variant,
                     packet.channel_hash == 0,
+                    packet.packet_id,
                 )
             else:
                 logger.warning(

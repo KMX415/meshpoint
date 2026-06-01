@@ -17,6 +17,7 @@ from typing import Optional
 
 from src.models.packet import Protocol
 from src.transmit.duty_cycle import DutyCycleTracker
+from src.transmit.reply_hop_policy import MeshtasticReplyHopPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +122,19 @@ class TxService:
             return None
         if crypto is None:
             return None
-        return crypto.lookup_public_key(requester)
+        key = crypto.lookup_public_key(requester)
+        if key is None:
+            key = crypto.refresh_public_key_from_db(requester)
+        return key
+
+    @staticmethod
+    def _reply_hop_fields(original, configured_hop_limit: int) -> tuple[int, int]:
+        """Mirror firmware hop limits for want_response replies."""
+        return MeshtasticReplyHopPolicy.reply_hop_fields(
+            original.hop_limit,
+            original.hop_start,
+            configured_hop_limit,
+        )
 
     @property
     def node_id_source(self) -> str:
@@ -376,7 +389,14 @@ class TxService:
         recipient_pubkey = self._recipient_pubkey_for_reply(
             original, dest, self._crypto
         )
-        hop_limit = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
+        if channel_hash == 0 and recipient_pubkey is None:
+            return SendResult(
+                success=False,
+                protocol="meshtastic",
+                error="No public_key for PKI routing ACK recipient",
+            )
+        configured = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
+        hop_limit, hop_start = self._reply_hop_fields(original, configured)
 
         packet_bytes = builder.build_routing_ack(
             source_id=self._source_node_id,
@@ -386,7 +406,7 @@ class TxService:
             channel_key=channel_key,
             channel_hash=channel_hash,
             hop_limit=hop_limit,
-            hop_start=hop_limit,
+            hop_start=hop_start,
             recipient_public_key=recipient_pubkey,
         )
         if packet_bytes is None:
@@ -424,7 +444,14 @@ class TxService:
         recipient_pubkey = self._recipient_pubkey_for_reply(
             original, requester, self._crypto
         )
-        hop_limit = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
+        if channel_hash == 0 and recipient_pubkey is None:
+            return SendResult(
+                success=False,
+                protocol="meshtastic",
+                error="No public_key for PKI traceroute reply recipient",
+            )
+        configured = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
+        hop_limit, hop_start = self._reply_hop_fields(original, configured)
 
         packet_bytes = builder.build_traceroute_reply(
             source_id=self._source_node_id,
@@ -438,7 +465,7 @@ class TxService:
             channel_key=channel_key,
             channel_hash=channel_hash,
             hop_limit=hop_limit,
-            hop_start=hop_limit,
+            hop_start=hop_start,
             recipient_public_key=recipient_pubkey,
         )
         if packet_bytes is None:
@@ -520,7 +547,14 @@ class TxService:
         recipient_pubkey = self._recipient_pubkey_for_reply(
             original, requester, self._crypto
         )
-        hop_limit = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
+        if channel_hash == 0 and recipient_pubkey is None:
+            return SendResult(
+                success=False,
+                protocol="meshtastic",
+                error="No public_key for PKI telemetry reply recipient",
+            )
+        configured = self._config.hop_limit if self._config else DEFAULT_HOP_LIMIT
+        hop_limit, hop_start = self._reply_hop_fields(original, configured)
 
         build_kwargs = {
             "source_id": self._source_node_id,
@@ -532,7 +566,7 @@ class TxService:
             "channel_key": channel_key,
             "channel_hash": channel_hash,
             "hop_limit": hop_limit,
-            "hop_start": hop_limit,
+            "hop_start": hop_start,
             "recipient_public_key": recipient_pubkey,
         }
         if variant == "local_stats":
