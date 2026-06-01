@@ -10,6 +10,7 @@ class MqttConfigCard {
         this._api = api;
         this._root = null;
         this._passwordDirty = false;
+        this._unsubDisplayUnits = null;
     }
 
     mount(root) {
@@ -89,7 +90,7 @@ class MqttConfigCard {
                             <span class="cfg-field__label">Location on MQTT</span>
                             <select class="cfg-field__input" data-mqtt-loc-precision>
                                 <option value="exact">Exact coordinates</option>
-                                <option value="approximate">Approximate (~1.1 km)</option>
+                                <option value="approximate" data-approximate-option>Approximate</option>
                                 <option value="none">None (strip from MQTT)</option>
                             </select>
                         </label>
@@ -150,6 +151,19 @@ class MqttConfigCard {
         ['input', 'change'].forEach((ev) => {
             this._form.addEventListener(ev, () => this._renderPreviews());
         });
+        this._refreshApproximateOptionLabels();
+        if (window.MeshpointDisplayUnits) {
+            this._unsubDisplayUnits = window.MeshpointDisplayUnits.onChange(
+                () => this._refreshApproximateOptionLabels(),
+            );
+        }
+    }
+
+    _refreshApproximateOptionLabels() {
+        const Units = window.MeshpointDisplayUnits;
+        if (!Units || !this._locPrecision) return;
+        const opt = this._locPrecision.querySelector('option[value="approximate"]');
+        if (opt) opt.textContent = Units.approximateLocationOptionLabel();
     }
 
     render(config) {

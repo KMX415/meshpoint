@@ -24,6 +24,7 @@ class GpsConfigCard {
         this._stats = new window.GpsStatsColumn();
         this._timer = null;
         this._currentSource = 'static';
+        this._unsubDisplayUnits = null;
     }
 
     mount(root) {
@@ -152,7 +153,7 @@ class GpsConfigCard {
                         <label class="cfg-field" data-mesh-precision-wrap hidden>
                             <span class="cfg-field__label">Live GPS privacy</span>
                             <select class="cfg-field__input" data-mesh-precision>
-                                <option value="approximate">Approximate (~1.1 km)</option>
+                                <option value="approximate" data-approximate-option>Approximate</option>
                                 <option value="exact">Precise</option>
                                 <option value="none">Hidden (no position on mesh)</option>
                             </select>
@@ -198,6 +199,12 @@ class GpsConfigCard {
         this._root.querySelectorAll('input[name="mesh-coord-source"]').forEach((radio) => {
             radio.addEventListener('change', () => this._onMeshSourceChange(radio.value));
         });
+        this._refreshApproximateOptionLabels();
+        if (window.MeshpointDisplayUnits) {
+            this._unsubDisplayUnits = window.MeshpointDisplayUnits.onChange(
+                () => this._refreshApproximateOptionLabels(),
+            );
+        }
     }
 
     render(config) {
@@ -242,6 +249,17 @@ class GpsConfigCard {
 
     destroy() {
         this._stopPolling();
+        if (this._unsubDisplayUnits) {
+            this._unsubDisplayUnits();
+            this._unsubDisplayUnits = null;
+        }
+    }
+
+    _refreshApproximateOptionLabels() {
+        const Units = window.MeshpointDisplayUnits;
+        if (!Units || !this._meshPrecision) return;
+        const opt = this._meshPrecision.querySelector('option[value="approximate"]');
+        if (opt) opt.textContent = Units.approximateLocationOptionLabel();
     }
 
     _onSourceChange(value) {

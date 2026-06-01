@@ -209,7 +209,7 @@ transmit:
 |---|---|---|
 | `coordinate_source` | `static` (default) | Broadcast the registered pin from `device.latitude/longitude`. |
 | | `live` | Broadcast the live gpsd/UART fix. Requires `location.source` other than `static`. |
-| `location_precision` | `approximate` (default for live) | Round to ~1.1 km before POSITION TX. |
+| `location_precision` | `approximate` (default for live) | Round to ~2 decimal places before POSITION TX (about **0.7 mi** / **1.1 km**; the dashboard label follows Settings → Meshpoint distance units). |
 | | `exact` | Full precision from the live fix. |
 | | `none` | Skip POSITION broadcasts when using live (privacy: no position on mesh). |
 
@@ -602,7 +602,7 @@ Control how much location detail leaves the device via MQTT:
 | Value | Behavior |
 |---|---|
 | `exact` | Full GPS coordinates (default) |
-| `approximate` | Rounded to ~1.1km precision (2 decimal places) |
+| `approximate` | Rounded to ~2 decimal places (about 0.7 mi / 1.1 km; Configuration → MQTT and GPS labels follow Settings → Meshpoint distance units) |
 | `none` | Location stripped entirely from MQTT messages |
 
 Full-precision location data is always available on the [Meshradar](https://meshradar.io) dashboard regardless of this setting.
