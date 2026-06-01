@@ -528,6 +528,7 @@ class TxService:
             "packet_id": packet_id,
             "request_id": request_id,
             "variant": variant,
+            "telemetry_time": int(time.time()),
             "channel_key": channel_key,
             "channel_hash": channel_hash,
             "hop_limit": hop_limit,
@@ -547,8 +548,12 @@ class TxService:
                     "num_packets_rx_bad": int(metrics.get("num_packets_rx_bad", 0)),
                     "num_online_nodes": int(metrics.get("num_online_nodes", 0)),
                     "num_total_nodes": int(metrics.get("num_total_nodes", 0)),
+                    "num_tx_relay": int(metrics.get("num_tx_relay", 0)),
                 }
             )
+            noise_floor = metrics.get("noise_floor")
+            if noise_floor is not None:
+                build_kwargs["noise_floor"] = int(noise_floor)
         else:
             build_kwargs.update(
                 {

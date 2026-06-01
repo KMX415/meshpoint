@@ -152,6 +152,8 @@ class TestMeshtasticMeshParticipantBuilder(unittest.TestCase):
             variant="local_stats",
             uptime_seconds=3600,
             num_packets_rx=42,
+            noise_floor=-95,
+            telemetry_time=1_700_000_000,
         )
         self.assertIsNotNone(packet)
         decoded = self.decoder.decode(packet)

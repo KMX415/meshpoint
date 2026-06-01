@@ -465,6 +465,9 @@ def _telemetry_metrics_providers(
     tx_service: TxService,
     coord: PipelineCoordinator,
     service_started: float,
+    *,
+    noise_floor_tracker=None,
+    relay_manager=None,
 ):
     """Shared device_metrics / local_stats snapshots for TX paths."""
     import time
@@ -484,6 +487,15 @@ def _telemetry_metrics_providers(
 
     def local_stats() -> dict:
         dm = device_metrics()
+        noise_floor = None
+        if noise_floor_tracker is not None:
+            snap = noise_floor_tracker.snapshot()
+            value_dbm = snap.get("value_dbm")
+            if value_dbm is not None:
+                noise_floor = int(round(value_dbm))
+        relayed = 0
+        if relay_manager is not None:
+            relayed = int(relay_manager.get_stats().get("relayed", 0))
         return {
             "uptime_seconds": dm["uptime_seconds"],
             "channel_utilization": dm["channel_utilization"],
@@ -493,6 +505,8 @@ def _telemetry_metrics_providers(
             "num_packets_rx_bad": 0,
             "num_online_nodes": 0,
             "num_total_nodes": 0,
+            "num_tx_relay": relayed,
+            "noise_floor": noise_floor,
         }
 
     return device_metrics, local_stats
@@ -509,9 +523,15 @@ def _setup_inbound_responder(
     import time
 
     our_node_id = tx_service.source_node_id
+    our_node_hex = f"{our_node_id:08x}"
     coord._router.meshtastic_decoder.configure_identity(our_node_id)
+    coord.relay_manager.set_local_node_id(our_node_hex)
     device_fn, local_fn = _telemetry_metrics_providers(
-        tx_service, coord, time.monotonic()
+        tx_service,
+        coord,
+        time.monotonic(),
+        noise_floor_tracker=noise_floor_tracker,
+        relay_manager=coord.relay_manager,
     )
     tx_service.set_telemetry_reply_providers(device_fn, local_fn)
     handler = MeshtasticInboundHandler(tx_service, our_node_id)
@@ -542,7 +562,11 @@ def _build_telemetry_broadcaster(
 
     service_started = time.monotonic()
     device_fn, _local_fn = _telemetry_metrics_providers(
-        tx_service, coord, service_started
+        tx_service,
+        coord,
+        service_started,
+        noise_floor_tracker=noise_floor_tracker,
+        relay_manager=coord.relay_manager,
     )
 
     return TelemetryBroadcaster(
@@ -666,6 +690,7 @@ def _wire_native_relay(
             )
 
     relay.set_transmit_function(_native_relay)
+    relay.set_local_node_id(f"{tx_service.source_node_id:08x}")
     logger.info(
         "Relay backend: native onboard SX1302 (identity-preserving)"
     )

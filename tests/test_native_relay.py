@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 
 from src.config import RadioConfig, TransmitConfig
 from src.models.packet import Packet, PacketType, Protocol
+from src.models.signal import SignalMetrics
 from src.transmit.tx_service import TxService
 
 
@@ -170,6 +171,30 @@ class TestRelayManagerAsyncDispatch(unittest.IsolatedAsyncioTestCase):
         )
         await manager._relay(packet)
         self.assertEqual(len(sync_calls), 1)
+
+    def test_skips_relay_for_unicast_to_local_node(self):
+        from src.relay.relay_manager import RelayManager
+
+        manager = RelayManager(enabled=True)
+        manager.set_local_node_id("c0ffee42")
+        packet = Packet(
+            packet_id="aa",
+            source_id="7d8b98a9",
+            destination_id="c0ffee42",
+            protocol=Protocol.MESHTASTIC,
+            packet_type=PacketType.TELEMETRY,
+            hop_limit=3,
+            signal=SignalMetrics(
+                rssi=-50.0,
+                snr=8.0,
+                frequency_mhz=906.875,
+                spreading_factor=11,
+                bandwidth_khz=250,
+            ),
+        )
+        decision = manager.evaluate(packet)
+        self.assertFalse(decision.should_relay)
+        self.assertEqual(decision.reason, "dest_local")
 
 
 if __name__ == "__main__":

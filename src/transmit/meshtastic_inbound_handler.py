@@ -65,11 +65,13 @@ class MeshtasticInboundHandler:
             )
             result = await self._tx.send_telemetry_reply(packet)
             if result.success:
+                payload = packet.decoded_payload or {}
                 logger.info(
-                    "Telemetry reply TX OK to %s (reply id=%s, variant=%s)",
+                    "Telemetry reply TX OK to %s (reply id=%s, variant=%s, pki=%s)",
                     packet.source_id,
                     result.packet_id,
                     variant,
+                    packet.channel_hash == 0,
                 )
             else:
                 logger.warning(

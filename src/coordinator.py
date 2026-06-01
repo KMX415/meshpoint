@@ -270,10 +270,10 @@ class PipelineCoordinator:
 
         packet.capture_source = raw.capture_source
         await self._store_packet(packet)
+        self._notify_callbacks(packet)
         await self._relay.process_packet(packet)
         self._publish_mqtt(packet)
         self._record_stats(packet)
-        self._notify_callbacks(packet)
 
     @staticmethod
     def _adapt_meshcore_usb(raw: RawCapture) -> Optional[Packet]:

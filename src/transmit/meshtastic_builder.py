@@ -213,6 +213,9 @@ class MeshtasticPacketBuilder:
         num_packets_rx_bad: int = 0,
         num_online_nodes: int = 0,
         num_total_nodes: int = 0,
+        num_tx_relay: int = 0,
+        noise_floor: int | None = None,
+        telemetry_time: int = 0,
         channel_key: bytes | None = None,
         channel_hash: int = 0x08,
         hop_limit: int = 3,
@@ -224,6 +227,8 @@ class MeshtasticPacketBuilder:
             from meshtastic.protobuf import telemetry_pb2
 
             telem = telemetry_pb2.Telemetry()
+            if telemetry_time:
+                telem.time = telemetry_time
             if variant == "local_stats":
                 ls = telem.local_stats
                 ls.uptime_seconds = uptime_seconds
@@ -234,6 +239,9 @@ class MeshtasticPacketBuilder:
                 ls.num_packets_rx_bad = num_packets_rx_bad
                 ls.num_online_nodes = num_online_nodes
                 ls.num_total_nodes = num_total_nodes
+                ls.num_tx_relay = num_tx_relay
+                if noise_floor is not None:
+                    ls.noise_floor = noise_floor
             else:
                 telem.device_metrics.battery_level = battery_level
                 telem.device_metrics.voltage = voltage
