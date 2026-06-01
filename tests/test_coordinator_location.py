@@ -40,23 +40,26 @@ class TestCoordinatorBuildsLocationSource(unittest.TestCase):
 
 
 class TestApplyLatestLocationFix(unittest.TestCase):
-    """``_apply_latest_location_fix`` writes live fixes back to ``device``."""
+    """Live fixes notify listeners but do not overwrite ``device.*``."""
 
-    def _coord_with_fake_source(self, status: GpsStatus) -> PipelineCoordinator:
+    def _coord_with_fake_source(
+        self,
+        status: GpsStatus,
+        *,
+        source_name: str = "gpsd",
+    ) -> PipelineCoordinator:
         cfg = AppConfig()
-        cfg.device.latitude = None
-        cfg.device.longitude = None
-        cfg.device.altitude = None
+        cfg.device.latitude = 40.0
+        cfg.device.longitude = -74.0
+        cfg.device.altitude = 99.0
         coord = PipelineCoordinator(cfg)
-        # Replace the constructor-built static source with a fake whose
-        # ``get_status`` returns the supplied snapshot.
         fake = MagicMock(spec=LocationSource)
         fake.get_status.return_value = status
-        fake.source_name = "test-fake"
+        fake.source_name = source_name
         coord._location_source = fake  # noqa: SLF001
         return coord
 
-    def test_3d_fix_overwrites_device_coordinates(self) -> None:
+    def test_live_fix_does_not_overwrite_registered_device_coordinates(self) -> None:
         status = GpsStatus(
             source="gpsd",
             available=True,
@@ -68,89 +71,74 @@ class TestApplyLatestLocationFix(unittest.TestCase):
         coord = self._coord_with_fake_source(status)
         coord._apply_latest_location_fix()  # noqa: SLF001
 
-        self.assertAlmostEqual(coord._config.device.latitude, 40.7128)  # noqa: SLF001
-        self.assertAlmostEqual(coord._config.device.longitude, -74.0060)  # noqa: SLF001
-        self.assertAlmostEqual(coord._config.device.altitude, 12.3)  # noqa: SLF001
-
-    def test_2d_fix_keeps_existing_altitude(self) -> None:
-        status = GpsStatus(
-            source="gpsd",
-            available=True,
-            fix=LocationFix(
-                mode=2, latitude=40.0, longitude=-74.0, altitude_m=None,
-            ),
-        )
-        coord = self._coord_with_fake_source(status)
-        coord._config.device.altitude = 99.0  # noqa: SLF001
-        coord._apply_latest_location_fix()  # noqa: SLF001
-
+        self.assertEqual(coord._config.device.latitude, 40.0)  # noqa: SLF001
+        self.assertEqual(coord._config.device.longitude, -74.0)  # noqa: SLF001
         self.assertEqual(coord._config.device.altitude, 99.0)  # noqa: SLF001
 
-    def test_unavailable_source_does_not_overwrite_device(self) -> None:
+    def test_static_source_is_a_no_op(self) -> None:
+        status = GpsStatus(
+            source="static",
+            available=True,
+            fix=LocationFix(mode=3, latitude=41.0, longitude=-73.0, altitude_m=5.0),
+        )
+        coord = self._coord_with_fake_source(status, source_name="static")
+        seen: list[tuple] = []
+        coord.on_location_update(lambda lat, lon, alt: seen.append((lat, lon, alt)))
+        coord._apply_latest_location_fix()  # noqa: SLF001
+
+        self.assertEqual(seen, [])
+
+    def test_unavailable_source_does_not_notify(self) -> None:
         status = GpsStatus(
             source="gpsd",
             available=False,
             error="Connection refused",
         )
         coord = self._coord_with_fake_source(status)
-        coord._config.device.latitude = 40.0  # noqa: SLF001
-        coord._config.device.longitude = -74.0  # noqa: SLF001
-
+        seen: list[tuple] = []
+        coord.on_location_update(lambda lat, lon, alt: seen.append((lat, lon, alt)))
         coord._apply_latest_location_fix()  # noqa: SLF001
 
-        # Stale fallback coordinates preserved.
-        self.assertEqual(coord._config.device.latitude, 40.0)  # noqa: SLF001
-        self.assertEqual(coord._config.device.longitude, -74.0)  # noqa: SLF001
+        self.assertEqual(seen, [])
 
-    def test_no_fix_does_not_overwrite_device(self) -> None:
+    def test_no_fix_does_not_notify(self) -> None:
         status = GpsStatus(
             source="gpsd",
             available=True,
             fix=LocationFix(mode=1, latitude=None, longitude=None, altitude_m=None),
         )
         coord = self._coord_with_fake_source(status)
-        coord._config.device.latitude = 40.0  # noqa: SLF001
-        coord._config.device.longitude = -74.0  # noqa: SLF001
-
+        seen: list[tuple] = []
+        coord.on_location_update(lambda lat, lon, alt: seen.append((lat, lon, alt)))
         coord._apply_latest_location_fix()  # noqa: SLF001
 
-        self.assertEqual(coord._config.device.latitude, 40.0)  # noqa: SLF001
-        self.assertEqual(coord._config.device.longitude, -74.0)  # noqa: SLF001
+        self.assertEqual(seen, [])
 
-    def test_unchanged_position_is_a_no_op(self) -> None:
-        # Same coords flowing through every tick must not constantly
-        # re-write the device fields (avoids unnecessary churn for
-        # callers that watch the values).
+    def test_unchanged_live_fix_is_a_no_op(self) -> None:
         status = GpsStatus(
             source="gpsd",
             available=True,
             fix=LocationFix(mode=3, latitude=40.0, longitude=-74.0, altitude_m=10.0),
         )
         coord = self._coord_with_fake_source(status)
+        seen: list[tuple] = []
+        coord.on_location_update(lambda lat, lon, alt: seen.append((lat, lon, alt)))
+
         coord._apply_latest_location_fix()  # noqa: SLF001
-        first_lat = coord._config.device.latitude  # noqa: SLF001
         coord._apply_latest_location_fix()  # noqa: SLF001
 
-        self.assertEqual(coord._config.device.latitude, first_lat)  # noqa: SLF001
+        self.assertEqual(len(seen), 1)
 
 
 class TestLocationUpdateCallback(unittest.TestCase):
-    """``on_location_update`` listeners fire on real position changes only.
-
-    The callback is the bridge that keeps ``DeviceIdentity`` (used by the
-    ``/api/device`` endpoint and the upstream Meshradar registration
-    payload) in sync with the live GPS source.
-    """
+    """``on_location_update`` listeners fire on live fix changes only."""
 
     def _coord_with_fake_source(self, status: GpsStatus) -> PipelineCoordinator:
         cfg = AppConfig()
-        cfg.device.latitude = None
-        cfg.device.longitude = None
-        cfg.device.altitude = None
         coord = PipelineCoordinator(cfg)
         fake = MagicMock(spec=LocationSource)
         fake.get_status.return_value = status
-        fake.source_name = "test-fake"
+        fake.source_name = "gpsd"
         coord._location_source = fake  # noqa: SLF001
         return coord
 
@@ -167,21 +155,6 @@ class TestLocationUpdateCallback(unittest.TestCase):
         coord._apply_latest_location_fix()  # noqa: SLF001
 
         self.assertEqual(seen, [(40.0, -74.0, 10.0)])
-
-    def test_callback_does_not_fire_when_position_unchanged(self) -> None:
-        status = GpsStatus(
-            source="gpsd",
-            available=True,
-            fix=LocationFix(mode=3, latitude=40.0, longitude=-74.0, altitude_m=10.0),
-        )
-        coord = self._coord_with_fake_source(status)
-        seen: list[tuple] = []
-        coord.on_location_update(lambda lat, lon, alt: seen.append((lat, lon, alt)))
-
-        coord._apply_latest_location_fix()  # noqa: SLF001
-        coord._apply_latest_location_fix()  # noqa: SLF001
-
-        self.assertEqual(len(seen), 1)
 
     def test_callback_exception_does_not_break_others(self) -> None:
         status = GpsStatus(

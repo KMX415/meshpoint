@@ -4,6 +4,8 @@
 
 Queued for the next version bump.
 
+- **Location split: Meshradar pin vs mesh POSITION.** Registered coordinates in `device.latitude/longitude` (setup wizard / Configuration → GPS) are always sent to Meshradar upstream and never overwritten by live gpsd fixes. Live GPS still powers the Configuration → GPS skyplot when `location.source: gpsd`. Meshtastic POSITION packets on the LoRa mesh are configured separately under **Configuration → GPS → Mesh position broadcasts**: **Registered pin** (static wizard coords) or **Live GPS** (requires gpsd/UART), with **Approximate** (~1.1 km), **Precise**, or **Hidden** privacy when using live. New `transmit.position.coordinate_source` and `transmit.position.location_precision` in `local.yaml`. MQTT location privacy (`mqtt.location_precision`) is unchanged and independent.
+
 - **Config: warn on unknown `local.yaml` keys.** The loader (`src/config.py`) now logs a single `WARNING` listing any config keys it could not apply: a misspelled field (`tx_powr_dbm`), a stray nested key, or a whole mistyped section (`transmt:`), instead of silently dropping them. Behaviour is otherwise unchanged: unknown keys are still ignored, known keys still merge as before. Helps diagnose "I set it in `local.yaml` but nothing happened". Adds `tests/test_config_loader.py` covering the merge path and the warning.
 
 - **MQTT broker TLS (deferred).** Transport TLS (`mqtts`, CA bundle, cert validation) is not implemented on `mqtt_publisher.py` (plain TCP only). Planned for the same release vehicle as **Meshtastic PKI**. Until then use plain port 1883 or a LAN broker without TLS.

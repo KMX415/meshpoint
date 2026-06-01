@@ -166,6 +166,13 @@ class PositionConfig:
 
     interval_minutes: int = 15
     startup_delay_seconds: int = 180
+    # Coordinates sent on the public LoRa mesh (Meshtastic POSITION packets).
+    # ``static`` uses ``device.{latitude,longitude,altitude}`` (wizard pin).
+    # ``live`` reads the active ``LocationSource`` (gpsd/uart) when a fix exists.
+    coordinate_source: str = "static"
+    # Privacy when ``coordinate_source`` is ``live``: exact, approximate
+    # (~1.1 km rounding), or none (skip position on mesh). Ignored for static.
+    location_precision: str = "approximate"
 
 
 @dataclass
@@ -234,9 +241,10 @@ class LocationConfig:
     ``source`` values:
         - ``"static"``   : use ``device.latitude/longitude/altitude`` from
                            ``local.yaml``. Backward-compatible default.
-        - ``"gpsd"``     : connect to a local or remote ``gpsd`` daemon and
-                           overwrite ``device.{lat,lon,alt}`` when fixes
-                           arrive. Auto-installed by ``scripts/install.sh``.
+        - ``"gpsd"``     : connect to a local or remote ``gpsd`` daemon for
+                           live fixes (skyplot, optional mesh POSITION).
+                           Does not change ``device.{lat,lon,alt}`` (Meshradar
+                           pin). Auto-installed by ``scripts/install.sh``.
         - ``"uart"``     : reserved for direct on-board UART NMEA reading
                            (RAK Pi HAT GPS). Plumbing exists in
                            ``src.hal.gps_reader`` but is not wired into

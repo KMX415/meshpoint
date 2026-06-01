@@ -150,17 +150,6 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         pipeline.on_packet(lambda pkt: print_packet(pkt))
         pipeline.on_packet(public_radar_routes.public_radar_packet_callback)
 
-        # Mirror live GPS fixes from the location source into DeviceIdentity
-        # so /api/device (the local map) and the upstream registration
-        # payload (Meshradar fleet view) both see fresh coordinates.
-        def _sync_identity_position(lat, lon, alt):
-            identity.latitude = lat
-            identity.longitude = lon
-            if alt is not None:
-                identity.altitude = alt
-
-        pipeline.on_location_update(_sync_identity_position)
-
         if config.transmit.enabled:
             _inject_tx_gain_into_source(pipeline)
 
@@ -213,7 +202,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             await telemetry_broadcaster.start()
 
         position_broadcaster = _build_position_broadcaster(
-            config, tx_service, identity
+            config, tx_service, pipeline
         )
         if position_broadcaster is not None:
             await position_broadcaster.start()
@@ -532,7 +521,7 @@ def _build_telemetry_broadcaster(
 def _build_position_broadcaster(
     config: AppConfig,
     tx_service: TxService | None,
-    identity: DeviceIdentity,
+    coord: PipelineCoordinator,
 ) -> PositionBroadcaster | None:
     if tx_service is None or not tx_service.meshtastic_enabled:
         return None
@@ -540,18 +529,15 @@ def _build_position_broadcaster(
     if clamp_interval_minutes(pos_cfg.interval_minutes) == 0:
         return None
 
-    def coords_provider():
-        lat = identity.latitude
-        lon = identity.longitude
-        if lat is None or lon is None:
-            return None
-        return lat, lon, identity.altitude
+    from src.transmit.mesh_position_resolver import MeshPositionResolver
+
+    resolver = MeshPositionResolver(config, coord.location_source)
 
     return PositionBroadcaster(
         tx_service,
         interval_minutes=pos_cfg.interval_minutes,
         startup_delay_seconds=pos_cfg.startup_delay_seconds,
-        coords_provider=coords_provider,
+        coords_provider=resolver.resolve,
     )
 
 

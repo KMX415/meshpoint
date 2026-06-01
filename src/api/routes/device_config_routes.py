@@ -14,6 +14,8 @@ from src.api.audit.dependencies import get_audit_writer
 from src.api.auth.dependencies import require_admin
 from src.api.auth.jwt_session import SessionClaims
 from src.config import AppConfig, save_section_to_yaml
+from src.hal.location.privacy import VALID_LOCATION_PRECISION
+from src.transmit.mesh_position_resolver import VALID_MESH_COORDINATE_SOURCES
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,15 @@ def reset_routes() -> None:
     global _config, _identity
     _config = None
     _identity = None
+
+
+def _sync_registered_identity(device) -> None:
+    """Keep upstream Meshradar registration aligned with the wizard pin."""
+    if _identity is None:
+        return
+    _identity.latitude = device.latitude
+    _identity.longitude = device.longitude
+    _identity.altitude = device.altitude
 
 
 def build_device_status(device) -> dict:
@@ -80,6 +91,9 @@ class GpsUpdate(BaseModel):
     # uart-mode fields (kept for forward-compat; not yet wired)
     baud: Optional[int] = Field(None, ge=9600, le=921600)
     timeout_seconds: Optional[int] = Field(None, ge=1, le=3600)
+    # Meshtastic POSITION on the LoRa mesh (not Meshradar upstream pin).
+    mesh_coordinate_source: Optional[str] = None
+    mesh_location_precision: Optional[str] = None
 
 
 @router.put("/device")
@@ -127,6 +141,8 @@ async def update_device(
         except PermissionError as exc:
             raise HTTPException(403, str(exc)) from exc
 
+    _sync_registered_identity(device)
+
     return {
         "saved": True,
         "restart_required": True,
@@ -165,6 +181,9 @@ async def update_gps(
 
     location_updates: dict = {}
     device_updates: dict = {}
+    position_updates: dict = {}
+
+    pos = _config.transmit.position
 
     # ------------------------------------------------------------------
     # Branch by source: collect all updates, write yaml at the end.
@@ -208,18 +227,57 @@ async def update_gps(
         ):
             location.min_fix_quality = req.min_fix_quality
             location_updates["min_fix_quality"] = req.min_fix_quality
+        if req.latitude is not None and req.longitude is not None:
+            device.latitude = req.latitude
+            device.longitude = req.longitude
+            device_updates["latitude"] = req.latitude
+            device_updates["longitude"] = req.longitude
+            if req.altitude is not None:
+                device.altitude = req.altitude
+                device_updates["altitude"] = req.altitude
 
     else:  # uart
         if source_changed:
             location.source = "uart"
             location_updates["source"] = "uart"
 
+    if req.source == "static" and pos.coordinate_source == "live":
+        pos.coordinate_source = "static"
+        position_updates["coordinate_source"] = "static"
+
+    if req.mesh_coordinate_source is not None:
+        mesh_source = req.mesh_coordinate_source.lower()
+        if mesh_source not in VALID_MESH_COORDINATE_SOURCES:
+            raise HTTPException(
+                400,
+                f"mesh_coordinate_source must be one of {sorted(VALID_MESH_COORDINATE_SOURCES)}",
+            )
+        if mesh_source == "live" and req.source == "static":
+            raise HTTPException(
+                400,
+                "Live mesh position requires gpsd or UART as the GPS source",
+            )
+        if mesh_source != pos.coordinate_source:
+            pos.coordinate_source = mesh_source
+            position_updates["coordinate_source"] = mesh_source
+
+    if req.mesh_location_precision is not None:
+        precision = req.mesh_location_precision.lower()
+        if precision not in VALID_LOCATION_PRECISION:
+            raise HTTPException(
+                400,
+                f"mesh_location_precision must be one of {sorted(VALID_LOCATION_PRECISION)}",
+            )
+        if precision != pos.location_precision:
+            pos.location_precision = precision
+            position_updates["location_precision"] = precision
+
     # ------------------------------------------------------------------
     # Persist whatever changed.
     # ------------------------------------------------------------------
     audit_keys = list(location_updates.keys()) + [
         f"device.{k}" for k in device_updates.keys()
-    ]
+    ] + [f"transmit.position.{k}" for k in position_updates.keys()]
     if audit_keys:
         with audit.timed_action(
             user=_claims.subject,
@@ -231,8 +289,23 @@ async def update_gps(
                     save_section_to_yaml("location", asdict(location))
                 if device_updates:
                     save_section_to_yaml("device", device_updates)
+                if position_updates:
+                    save_section_to_yaml(
+                        "transmit",
+                        {
+                            "position": {
+                                "interval_minutes": pos.interval_minutes,
+                                "startup_delay_seconds": pos.startup_delay_seconds,
+                                "coordinate_source": pos.coordinate_source,
+                                "location_precision": pos.location_precision,
+                            }
+                        },
+                    )
             except PermissionError as exc:
                 raise HTTPException(403, str(exc)) from exc
+
+    if device_updates:
+        _sync_registered_identity(device)
 
     return {
         "saved": bool(audit_keys),
@@ -246,5 +319,7 @@ async def update_gps(
             "gpsd_port": location.gpsd_port,
             "update_interval_seconds": location.update_interval_seconds,
             "min_fix_quality": location.min_fix_quality,
+            "mesh_coordinate_source": pos.coordinate_source,
+            "mesh_location_precision": pos.location_precision,
         },
     }

@@ -64,4 +64,12 @@ def enrich_config_payload(cfg: AppConfig, base: dict) -> dict:
         "update_interval_seconds": location.update_interval_seconds,
         "min_fix_quality": location.min_fix_quality,
     }
+    pos = cfg.transmit.position
+    if "transmit" in base:
+        base["transmit"]["position"] = {
+            "interval_minutes": pos.interval_minutes,
+            "startup_delay_seconds": pos.startup_delay_seconds,
+            "coordinate_source": pos.coordinate_source,
+            "location_precision": pos.location_precision,
+        }
     return base

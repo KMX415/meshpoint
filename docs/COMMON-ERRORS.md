@@ -916,26 +916,38 @@ You should see all four settings. If you customized
 desired settings (USB hotplug + no-wait mode) are now in place.
 Re-add any custom flags after the installer runs.
 
-### Live GPS coordinates not updating on the dashboard map / NodeInfo
+### Live GPS skyplot works but Meshradar fleet pin does not move
+
+**Expected behavior (v0.7.6+).** Registered coordinates in
+`device.latitude/longitude` are the Meshradar fleet pin. Live gpsd
+fixes power the Configuration → GPS skyplot and optional mesh
+POSITION broadcasts, but they do **not** overwrite the registered
+pin or the upstream WebSocket registration payload.
+
+**To advertise live position on the Meshtastic app map:** open
+Configuration → GPS, set **Mesh position broadcasts** to **Live GPS**
+and pick **Approximate** or **Precise** privacy, then Save.
+
+**To move the Meshradar pin:** edit **Registered coordinates** on the
+same card (or `device:` in `local.yaml`) and Save.
+
+### gpsd enabled but skyplot still shows the static pin only
 
 **Cause:** `location.source` in `local.yaml` is still `static`
-(or unset, which defaults to static). The Meshpoint is reading
-the wizard-time lat/lon/alt and ignoring `gpsd` even though the
-daemon is happily tracking satellites.
+(or unset, which defaults to static). The Meshpoint is not polling
+gpsd even though the daemon may be tracking satellites.
 
-**Fix:** Open Configuration → GPS and switch the source to
-**gpsd**, then click **Save**. Or edit `local.yaml`:
+**Fix:** Open Configuration → GPS and switch **Source** to **gpsd**,
+then click **Save** (service restart required). Or edit `local.yaml`:
 
 ```yaml
 location:
   source: "gpsd"
 ```
 
-Restart the service. The live fix flows into `device.latitude` /
-`device.longitude` / `device.altitude` once the receiver has a
-2D fix or better. The static wizard-time values are still in
-`device.*` but the coordinator overwrites them with the live fix
-on every update interval (default 5 s).
+Restart the service. The skyplot and stats column update from the live
+fix once the receiver has a 2D fix or better. Registered coordinates
+in `device.*` stay unchanged unless you edit them explicitly.
 
 ### MeshCore USB companion connection fails after plugging in a GPS
 
