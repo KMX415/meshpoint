@@ -129,6 +129,10 @@ class SX1302Wrapper:
         reset on an unconnected pin is harmless.
         Delegated to systemd ExecStartPre for root access;
         this method is a best-effort fallback via pinctrl subprocess.
+
+        On some RAK Hotspot V2 / RAK7248 carriers the reset timing is
+        sensitive. You can increase the hold time with the environment
+        variable CONCENTRATOR_RESET_HOLD_SEC (default: 0.1).
         """
         import subprocess
         import time
@@ -136,20 +140,22 @@ class SX1302Wrapper:
         if gpio_pins is None:
             gpio_pins = [17, 25]
 
+        hold = float(os.environ.get("CONCENTRATOR_RESET_HOLD_SEC", "0.1"))
+
         try:
             for pin in gpio_pins:
                 subprocess.run(
                     ["pinctrl", "set", str(pin), "op", "dh"],
                     check=True, capture_output=True,
                 )
-            time.sleep(0.1)
+            time.sleep(hold)
             for pin in gpio_pins:
                 subprocess.run(
                     ["pinctrl", "set", str(pin), "op", "dl"],
                     check=True, capture_output=True,
                 )
-            time.sleep(0.1)
-            logger.info("Concentrator reset via pinctrl GPIO %s", gpio_pins)
+            time.sleep(hold)
+            logger.info("Concentrator reset via pinctrl GPIO %s (hold=%.1fs)", gpio_pins, hold)
         except (OSError, subprocess.CalledProcessError):
             logger.warning(
                 "In-app GPIO reset failed (pins %s) -- relying on systemd ExecStartPre",

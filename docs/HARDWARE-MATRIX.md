@@ -46,6 +46,13 @@ If your deployment cannot guarantee clean shutdowns, either:
 1. Buy a SenseCap M1 instead, or
 2. Add a small UPS (PiSugar, USB battery with passthrough) to the RAK V2.
 
+**RAK Hotspot V2 note:** Some units are particularly sensitive to reset
+timing. If you see repeated `lgw_start()` failures with chip version 0x00
+even after power cycles, try setting
+`Environment=CONCENTRATOR_RESET_HOLD_SEC=1.0` (or `CONCENTRATOR_LATE_RESET=1`)
+in the service. Also see the "RAK Hotspot V2 specific issues" section in
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
 ### Choosing between them
 
 | If... | Buy... |
