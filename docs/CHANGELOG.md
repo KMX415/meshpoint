@@ -2,7 +2,16 @@
 
 ### Unreleased
 
-Queued for the next version bump.
+Queued for the next version bump (v0.7.6 mesh participant RC on `feat/v0.7.6-pki`).
+
+#### Meshtastic mesh participant (inbound TX)
+
+- **PKI + channel reply encryption.** Unicast replies (routing ACK, traceroute, telemetry) use PKI only when the inbound packet has `channel_hash == 0`. Channel-based requests stay on channel AES even when the peer pubkey is known.
+- **Traceroute reply.** Preserve inbound route/SNR, populate `route_back`/`snr_back`, set `request_id`, fix duplicate-node SNR display in Meshtastic app.
+- **Telemetry request response.** Answer unicast `TELEMETRY` probes (Signal quality / `local_stats`) with matching variant, `request_id`, `Telemetry.time`, and `LocalStats.noise_floor`.
+- **Relay vs inbound replies.** Skip relay for unicast packets addressed to our node; run inbound auto-responders before relay evaluation so replies are not delayed behind relay airtime on the SX1302.
+
+#### Other queued
 
 - **Location split: Meshradar pin vs mesh POSITION.** Registered coordinates in `device.latitude/longitude` (setup wizard / Configuration → GPS) are always sent to Meshradar upstream and never overwritten by live gpsd fixes. Live GPS still powers the Configuration → GPS skyplot when `location.source: gpsd`. Meshtastic POSITION packets on the LoRa mesh are configured separately under **Configuration → GPS → Mesh position broadcasts**: **Registered pin** (static wizard coords) or **Live GPS** (requires gpsd/UART), with **Approximate** (~1.1 km), **Precise**, or **Hidden** privacy when using live. New `transmit.position.coordinate_source` and `transmit.position.location_precision` in `local.yaml`. MQTT location privacy (`mqtt.location_precision`) is unchanged and independent.
 
