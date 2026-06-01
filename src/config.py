@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 import os
 import sys
 from dataclasses import dataclass, field
@@ -10,6 +11,8 @@ from typing import Optional
 import yaml
 
 from src.version import __version__
+
+logger = logging.getLogger(__name__)
 
 
 # Band-start frequencies (MHz) for the Meshtastic slot formula
@@ -325,6 +328,25 @@ def _merge_dataclass(instance, overrides: dict):
             setattr(instance, key, value)
 
 
+def _collect_unknown_keys(instance, overrides: dict, prefix: str = "") -> list[str]:
+    """Return dotted paths of override keys with no matching dataclass field.
+
+    Mirrors the descent rules in :func:`_merge_dataclass`: it only recurses
+    into a nested dataclass (e.g. ``transmit.nodeinfo``), so user-supplied
+    mapping fields such as ``meshtastic.channel_keys`` are treated as opaque
+    values rather than scanned for "unknown" keys.
+    """
+    unknown: list[str] = []
+    for key, value in overrides.items():
+        if not hasattr(instance, key):
+            unknown.append(f"{prefix}{key}")
+            continue
+        current = getattr(instance, key)
+        if dataclasses.is_dataclass(current) and isinstance(value, dict):
+            unknown.extend(_collect_unknown_keys(current, value, f"{prefix}{key}."))
+    return unknown
+
+
 def _apply_yaml(cfg: AppConfig, path: Path) -> None:
     """Merge a single YAML file into an existing AppConfig."""
     if not path.exists():
@@ -332,6 +354,10 @@ def _apply_yaml(cfg: AppConfig, path: Path) -> None:
 
     with open(path, "r") as fh:
         raw = yaml.safe_load(fh) or {}
+
+    if not isinstance(raw, dict):
+        logger.warning("Ignoring %s: top-level YAML is not a mapping.", path)
+        return
 
     section_map = {
         "radio": cfg.radio,
@@ -349,9 +375,26 @@ def _apply_yaml(cfg: AppConfig, path: Path) -> None:
         "location": cfg.location,
     }
 
-    for section_name, section_instance in section_map.items():
-        if section_name in raw:
-            _merge_dataclass(section_instance, raw[section_name])
+    unknown_keys: list[str] = []
+    for section_name, section_value in raw.items():
+        section_instance = section_map.get(section_name)
+        if section_instance is None:
+            unknown_keys.append(section_name)
+            continue
+        _merge_dataclass(section_instance, section_value)
+        if isinstance(section_value, dict):
+            unknown_keys.extend(
+                _collect_unknown_keys(section_instance, section_value, f"{section_name}.")
+            )
+
+    if unknown_keys:
+        logger.warning(
+            "Ignoring %d unknown config key(s) in %s: %s. "
+            "These were not applied -- check for typos against the documented schema.",
+            len(unknown_keys),
+            path,
+            ", ".join(sorted(unknown_keys)),
+        )
 
 
 _VALID_CONFIG_EXTENSIONS = {".yaml", ".yml"}
