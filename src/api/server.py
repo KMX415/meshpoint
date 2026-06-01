@@ -164,10 +164,10 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         if config.transmit.enabled:
             _inject_tx_gain_into_source(pipeline)
 
-        await pipeline.start()
-
         _bootstrap_pki(config, pipeline)
         await _hydrate_public_keys(pipeline)
+
+        await pipeline.start()
 
         message_repo = MessageRepository(pipeline.database)
         tx_service = _build_tx_service(config, pipeline)
@@ -181,7 +181,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                     _send_meshcore_advert(meshcore_tx_ref, mc_source)
                 )
         _setup_message_interception(
-            pipeline, message_repo, config, meshcore_tx_ref
+            pipeline, message_repo, config, meshcore_tx_ref, tx_service
         )
         _setup_inbound_responder(pipeline, tx_service, config)
         setup_meshcore_contact_enrichment(pipeline, meshcore_tx_ref)
@@ -405,8 +405,21 @@ def _add_meshcore_usb_source(
         )
 
 
+def _resolve_mesh_node_id(config: AppConfig) -> int | None:
+    configured = config.transmit.node_id
+    if configured is not None:
+        return configured
+    device_id = (config.device.device_id or "").strip()
+    if not device_id:
+        return None
+    try:
+        return TxService._derive_node_id(device_id)
+    except RuntimeError:
+        return None
+
+
 def _bootstrap_pki(config: AppConfig, coord: PipelineCoordinator) -> None:
-    """Load PKI keypair into the live crypto service."""
+    """Load PKI keypair and wire decoder identity before packet capture starts."""
     from src.identity.keypair import (
         KeypairStore,
         resolve_keypair_path,
@@ -415,6 +428,14 @@ def _bootstrap_pki(config: AppConfig, coord: PipelineCoordinator) -> None:
 
     if not hasattr(coord, "_crypto"):
         return
+
+    coord._crypto.set_node_db_path(config.storage.database_path)
+    our_node_id = _resolve_mesh_node_id(config)
+    if our_node_id is not None:
+        coord._router.meshtastic_decoder.configure_identity(our_node_id)
+        logger.info(
+            "Meshtastic PKI identity configured: 0x%08x", our_node_id
+        )
 
     override = resolve_keypair_path_from_env()
     key_path = override or resolve_keypair_path(config.storage.database_path)
@@ -847,6 +868,7 @@ def _setup_message_interception(
     message_repo: MessageRepository,
     config: AppConfig,
     meshcore_tx=None,
+    tx_service: TxService | None = None,
 ) -> None:
     """Register a callback to intercept TEXT messages for storage.
 
@@ -857,6 +879,8 @@ def _setup_message_interception(
     from src.models.packet import PacketType, Protocol
 
     our_node_id = config.transmit.node_id
+    if our_node_id is None and tx_service is not None:
+        our_node_id = tx_service.source_node_id
     our_node_hex = f"{our_node_id:08x}" if our_node_id else ""
 
     mc_name_cache: dict[str, str] = {}

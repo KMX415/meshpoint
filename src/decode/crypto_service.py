@@ -31,6 +31,7 @@ class CryptoService:
         self._private_key: bytes | None = None
         self._public_key: bytes | None = None
         self._public_keys: dict[int, bytes] = {}
+        self._node_db_path: str | None = None
         if default_key_b64:
             self._default_key = self._expand_key(
                 base64.b64decode(default_key_b64)
@@ -58,12 +59,51 @@ class CryptoService:
     def has_pki(self) -> bool:
         return self._private_key is not None and self._public_key is not None
 
+    def set_node_db_path(self, db_path: str) -> None:
+        """Optional SQLite path for on-demand peer public_key lookup."""
+        self._node_db_path = db_path
+
     def register_public_key(self, node_id: int, public_key: bytes) -> None:
         if public_key and len(public_key) == 32:
             self._public_keys[node_id] = public_key
 
     def lookup_public_key(self, node_id: int) -> bytes | None:
-        return self._public_keys.get(node_id)
+        cached = self._public_keys.get(node_id)
+        if cached is not None:
+            return cached
+        loaded = self._load_public_key_from_db(node_id)
+        if loaded is not None:
+            self._public_keys[node_id] = loaded
+        return loaded
+
+    def _load_public_key_from_db(self, node_id: int) -> bytes | None:
+        if not self._node_db_path:
+            return None
+        import sqlite3
+
+        node_hex = f"{node_id:08x}"
+        try:
+            with sqlite3.connect(self._node_db_path) as conn:
+                row = conn.execute(
+                    "SELECT public_key FROM nodes "
+                    "WHERE lower(node_id) = lower(?) "
+                    "AND public_key IS NOT NULL AND public_key != ''",
+                    (node_hex,),
+                ).fetchone()
+            if not row or not row[0]:
+                return None
+            key = bytes.fromhex(row[0])
+            if len(key) != 32:
+                logger.warning(
+                    "Ignoring invalid public_key length for node %s", node_hex
+                )
+                return None
+            return key
+        except (ValueError, sqlite3.Error):
+            logger.debug(
+                "Failed to load public_key for %s from DB", node_hex, exc_info=True
+            )
+            return None
 
     def decrypt_meshtastic_pki(
         self,

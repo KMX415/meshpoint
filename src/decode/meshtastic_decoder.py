@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from src.decode.crypto_service import CryptoService
+from src.decode.pki_crypto import PKC_OVERHEAD
 from src.decode.portnum_handlers import dispatch_portnum
 from src.models.node import Node
 from src.models.packet import Packet, PacketType, Protocol
@@ -54,20 +55,59 @@ class MeshtasticDecoder:
             self._our_node_id,
             len(encrypted_payload),
         ):
-            sender_key = self._crypto.lookup_public_key(header["source_id"])
-            if sender_key is not None:
+            sender_id = header["source_id"]
+            sender_key = self._crypto.lookup_public_key(sender_id)
+            if sender_key is None:
+                logger.warning(
+                    "PKI DM from %08x to %08x: no sender public_key "
+                    "(wait for NodeInfo or restart after key exchange)",
+                    sender_id,
+                    header["dest_id"],
+                )
+            elif not self._crypto.has_pki():
+                logger.warning(
+                    "PKI DM from %08x: local keypair not loaded", sender_id
+                )
+            else:
                 decrypted_bytes = self._crypto.decrypt_meshtastic_pki(
                     encrypted_payload,
                     header["packet_id"],
-                    header["source_id"],
+                    sender_id,
                     sender_key,
                 )
-                if decrypted_bytes is not None:
+                if decrypted_bytes is None:
+                    logger.warning(
+                        "PKI DM from %08x: decrypt failed "
+                        "(stale sender public_key? need fresh NodeInfo)",
+                        sender_id,
+                    )
+                else:
                     decoded_payload, packet_type, raw_app_payload, request_id = (
                         self._decode_payload(decrypted_bytes)
                     )
                     if decoded_payload is not None:
                         decrypted = True
+                    else:
+                        logger.warning(
+                            "PKI DM from %08x: decrypt OK but payload parse failed",
+                            sender_id,
+                        )
+        elif (
+            header["channel_hash"] == 0
+            and header["dest_id"] != BROADCAST_ADDR
+            and len(encrypted_payload) > PKC_OVERHEAD
+        ):
+            if self._our_node_id is None:
+                logger.warning(
+                    "PKI-shaped DM to %08x but decoder identity not configured",
+                    header["dest_id"],
+                )
+            elif header["dest_id"] != self._our_node_id:
+                logger.debug(
+                    "PKI-shaped packet to %08x (we are %08x)",
+                    header["dest_id"],
+                    self._our_node_id,
+                )
 
         if not decrypted:
             for key in self._crypto.get_all_keys():
