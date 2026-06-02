@@ -4,7 +4,7 @@ Experimental **Meshpoint Node** support for the RAK6421 WisMesh Pi HAT (meshtast
 This work lives on a **long-lived branch** and may not merge to `main` for some time.
 Gateway users (RAK2287 / SenseCap M1 concentrators) should stay on **`main`**.
 
-**Last updated:** 2026-05-31 (worker bridge, DM routing, hop/RSSI log work)
+**Last updated:** 2026-05-31 (13302 1W default preset bundled)
 
 ## Architecture
 
@@ -59,7 +59,7 @@ sudo systemctl restart meshtasticd meshpoint
 
 - Skip the SX1302 HAL build
 - Install and configure **meshtasticd** (Debian 12/13 OBS repo)
-- Copy the RAK6421 LoRa preset and set `MACAddressSource`
+- Copy the **RAK13302 1W** LoRa preset (bundled in `config/meshtasticd/`; falls back if meshtasticd package lacks it)
 - Install `meshpoint-node.service` (starts **after** meshtasticd)
 
 The setup wizard writes `device.platform: node` and `capture.sources: [meshtasticd]`.
@@ -146,7 +146,8 @@ Preserve `config/local.yaml` if you want the same `device_id` and API key.
 | DM in logs, not on dashboard | DM routed to wrong node id | Pull latest; check `Meshtastic DM identity` log line |
 | `meshtastic --host` while Meshpoint runs | Second client corrupts stream | Stop Meshpoint before CLI probe |
 | meshtasticd crash: blank MAC | Missing MAC source | `General.MACAddressSource: eth0` in `/etc/meshtasticd/config.yaml` |
-| meshtasticd crash: no preset | Missing HAT preset | Copy `lora-RAK6421-13300-slot1.yaml` to `config.d/` |
+| meshtasticd crash: no preset | Missing HAT preset | Re-run `sudo ./scripts/install_meshtasticd.sh` or copy bundled `config/meshtasticd/lora-RAK6421-13302-slot1.yaml` |
+| TX power stuck at ~22 dBm on RAK13302 | Wrong preset (13300) or PA power jumper | Confirm preset name in `meshtastic --host localhost:4403 --info`; use 13302 yaml + 5V PA jumper |
 | Dashboard Apply fails at `install.sh` | Interrupted dpkg or git synced but install did not finish | `sudo dpkg --configure -a`, then Apply again. Current branch heals dpkg and skips dist-upgrade on upgrade |
 
 ## Tests

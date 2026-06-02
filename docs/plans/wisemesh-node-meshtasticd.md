@@ -20,12 +20,20 @@ sudo apt install meshtasticd
 
 ### RAK6421 LoRa preset
 
-Copy the WisBlock slot preset into `config.d` (required; autoconf alone is not enough):
+`scripts/install_meshtasticd.sh` (via `install.sh --platform node`) installs the **RAK13302 1W** preset by default:
+
+- Bundled at `config/meshtasticd/lora-RAK6421-13302-slot1.yaml` (meshtasticd 2.7.x packages often ship only the 13300 preset in `available.d/`)
+- Copied to `/etc/meshtasticd/config.d/` with `Enable_Pins`, `TX_GAIN_LORA`, and `CS: 8` for the Pi SPI overlay
+
+**RAK13300 (standard power):** set `meshtasticd.preset: lora-RAK6421-13300-slot1.yaml` in `local.yaml` and re-run `sudo ./scripts/install_meshtasticd.sh`, or `MESHTASTICD_PRESET=lora-RAK6421-13300-slot1.yaml sudo ./scripts/install.sh --platform node`.
+
+**13302 hardware power:** the RAK13302 module has a 3-pin jumper for the 5V PA rail. External 5V or battery power may be required for full 1W output; software preset alone does not enable the PA if power is wrong.
+
+Manual copy (only if not using Meshpoint installer):
 
 ```bash
 sudo mkdir -p /etc/meshtasticd/config.d
-sudo cp /etc/meshtasticd/available.d/lora-RAK6421-13300-slot1.yaml /etc/meshtasticd/config.d/
-# RAK13302 high-power module: use lora-RAK6421-13302-*.yaml when present in available.d
+sudo cp /opt/meshpoint/config/meshtasticd/lora-RAK6421-13302-slot1.yaml /etc/meshtasticd/config.d/
 ```
 
 ### MAC address (required on fresh install)
@@ -47,7 +55,7 @@ sudo systemctl enable --now meshtasticd
 
 | Log line | Fix |
 |----------|-----|
-| `Unable to find config for 6421 Pi Hat` | Copy `lora-RAK6421-13300-slot1.yaml` to `config.d/` |
+| `Unable to find config for 6421 Pi Hat` | Re-run `sudo ./scripts/install_meshtasticd.sh` or copy bundled preset from `config/meshtasticd/` |
 | `Blank MAC Address not allowed` | Add `General.MACAddressSource` to `config.yaml` |
 
 ## IPC: Meshtastic Python CLI → TCP `4403`
@@ -67,14 +75,14 @@ There is no `/usr/bin/meshtastic` system binary on this Pi; only `/usr/bin/mesht
 Connected to radio
 Metadata: hwModel=PORTDUINO, firmwareVersion=2.7.15, role=CLIENT
 Preferences.lora: txPower=30, modemPreset=LONG_FAST, txEnabled=true, region=UNSET
-Active preset file: lora-RAK6421-13300-slot1.yaml
+Active preset file: lora-RAK6421-13302-slot1.yaml
 ```
 
 ### Fields for Meshpoint display (High power badge)
 
 | Signal | Source | Spike result |
 |--------|--------|--------------|
-| Module SKU | Preset filename in `/etc/meshtasticd/config.d/` | `lora-RAK6421-13300-slot1.yaml` (no 13302 preset in this package version) |
+| Module SKU | Preset filename in `/etc/meshtasticd/config.d/` | `lora-RAK6421-13302-slot1.yaml` (default; bundled in Meshpoint repo) |
 | TX power | `Preferences.lora.txPower` from `--info` | **30** dBm reported |
 | `hw_model` | `Metadata.hwModel` | **PORTDUINO** (does not distinguish RAK13300 vs RAK13302) |
 

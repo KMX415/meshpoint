@@ -37,7 +37,7 @@ capture:
     host: "127.0.0.1"
     port: 4403
     mac_address_source: "eth0"
-    preset: "lora-RAK6421-13300-slot1.yaml"
+    preset: "lora-RAK6421-13302-slot1.yaml"
 
 storage:
   database_path: "data/concentrator.db"

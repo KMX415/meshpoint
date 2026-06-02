@@ -65,7 +65,8 @@ Look for `meshtasticd bridge connected to 127.0.0.1:4403` and `Meshtastic DM ide
 | Symptom | Fix |
 |---------|-----|
 | meshtasticd crash: blank MAC | Ensure `/etc/meshtasticd/config.yaml` has `General.MACAddressSource: eth0` (or `wlan0`) |
-| meshtasticd crash: no preset | Copy `lora-RAK6421-13300-slot1.yaml` from `/etc/meshtasticd/available.d/` to `config.d/` |
+| meshtasticd crash: no preset | Re-run `sudo ./scripts/install_meshtasticd.sh` (installs bundled 13302 preset) |
+| TX power ~22 dBm on RAK13302 1W module | 13300 preset or PA not powered | `meshtastic --host localhost:4403 --info` should show `txPower=30` and preset `13302` |
 | Meshpoint cannot connect to 4403 | Start meshtasticd first: `sudo systemctl restart meshtasticd` then `sudo systemctl restart meshpoint` |
 | Dashboard Apply fails at install.sh | Git may still be current while install failed. Run `sudo dpkg --configure -a`, then Apply again or `sudo bash scripts/install.sh` + restart |
 | Wrong platform detected | Override with `sudo ./scripts/install.sh --platform node` or edit `device.platform` in `local.yaml` |

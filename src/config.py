@@ -96,7 +96,7 @@ class MeshtasticdConfig:
     host: str = "127.0.0.1"
     port: int = 4403
     mac_address_source: str = "eth0"
-    preset: str = "lora-RAK6421-13300-slot1.yaml"
+    preset: str = "lora-RAK6421-13302-slot1.yaml"
 
 
 @dataclass

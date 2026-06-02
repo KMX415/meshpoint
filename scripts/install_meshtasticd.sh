@@ -8,7 +8,7 @@ set -euo pipefail
 MESHTASTICD_CONFIG="/etc/meshtasticd/config.yaml"
 MESHTASTICD_CONFIGD="/etc/meshtasticd/config.d"
 MAC_SOURCE="${MESHTASTICD_MAC_SOURCE:-eth0}"
-PRESET="${MESHTASTICD_PRESET:-lora-RAK6421-13300-slot1.yaml}"
+PRESET="${MESHTASTICD_PRESET:-lora-RAK6421-13302-slot1.yaml}"
 
 info()  { echo -e "\033[0;32m[INFO]\033[0m  $*"; }
 warn()  { echo -e "\033[1;33m[WARN]\033[0m  $*"; }
@@ -72,19 +72,27 @@ install_lora_preset() {
     mkdir -p "${MESHTASTICD_CONFIGD}"
     local available="/etc/meshtasticd/available.d/${PRESET}"
     local target="${MESHTASTICD_CONFIGD}/${PRESET}"
+    local repo_root
+    repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    local bundled="${repo_root}/config/meshtasticd/${PRESET}"
 
-    if [ -f "${target}" ]; then
-        info "LoRa preset already installed: ${PRESET}"
+    # Only one RAK6421 slot profile should be active in config.d.
+    find "${MESHTASTICD_CONFIGD}" -maxdepth 1 -type f -name 'lora-RAK6421-*.yaml' \
+        ! -name "${PRESET}" -delete 2>/dev/null || true
+
+    local source=""
+    if [ -f "${available}" ]; then
+        source="${available}"
+    elif [ -f "${bundled}" ]; then
+        source="${bundled}"
+        info "Using bundled Meshpoint preset (meshtasticd package lacks ${PRESET})"
+    else
+        warn "Preset not found: ${PRESET}"
+        warn "Check /etc/meshtasticd/available.d/ or config/meshtasticd/ in the repo."
         return
     fi
 
-    if [ ! -f "${available}" ]; then
-        warn "Preset not found in available.d: ${PRESET}"
-        warn "List /etc/meshtasticd/available.d/ and copy the right RAK6421 yaml manually."
-        return
-    fi
-
-    cp "${available}" "${target}"
+    cp "${source}" "${target}"
     # With dtoverlay=spi0-0cs the preset still needs an explicit CS pin on Pi 4/5.
     if grep -q '^[[:space:]]*#[[:space:]]*CS:' "${target}"; then
         sed -i 's/^[[:space:]]*#[[:space:]]*CS:/  CS:/' "${target}"
