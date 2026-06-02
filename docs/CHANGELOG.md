@@ -2,7 +2,7 @@
 
 ### Unreleased
 
-Queued for the next version bump (v0.7.6 mesh participant RC on `feat/v0.7.6-pki`).
+Queued for the next version bump (v0.7.6 mesh participant RC on `feat/v0.7.6`).
 
 #### Meshtastic mesh participant (inbound TX)
 
@@ -17,7 +17,17 @@ Queued for the next version bump (v0.7.6 mesh participant RC on `feat/v0.7.6-pki
 
 - **Config: warn on unknown `local.yaml` keys.** The loader (`src/config.py`) now logs a single `WARNING` listing any config keys it could not apply: a misspelled field (`tx_powr_dbm`), a stray nested key, or a whole mistyped section (`transmt:`), instead of silently dropping them. Behaviour is otherwise unchanged: unknown keys are still ignored, known keys still merge as before. Helps diagnose "I set it in `local.yaml` but nothing happened". Adds `tests/test_config_loader.py` covering the merge path and the warning.
 
-- **MQTT broker TLS (deferred).** Transport TLS (`mqtts`, CA bundle, cert validation) is not implemented on `mqtt_publisher.py` (plain TCP only). Planned for the same release vehicle as **Meshtastic PKI**. Until then use plain port 1883 or a LAN broker without TLS.
+- **MQTT broker TLS (deferred).** Transport TLS (`mqtts`, CA bundle, cert validation) is not implemented on `mqtt_publisher.py` (plain TCP only). Planned for v0.7.6. Until then use plain port 1883 or a LAN broker without TLS.
+
+### v0.7.5.1 (May 2026)
+
+Patch release on `main`. Edge-only. **Upgrade:** Settings → Updates → **Stable**, or `git pull` on `main` plus `systemctl restart meshpoint`. No concentrator or HAL changes.
+
+#### Dashboard apply
+
+- **Lightweight apply finish.** Settings → Updates runs `git fetch` / checkout / reset, then a detached `scripts/apply_finish.sh` that stops the service, runs `pip install -r requirements.txt`, `post_update.sh`, and restarts. Avoids crash loops when the next release adds new Python dependencies before the service boots the new code.
+- **Live update progress.** Apply and rollback streams show command output in a terminal panel; step labels match the backend (`upgrade` instead of stale `install.sh` / `restart service` keys).
+- **SSH upgrade path.** `install.sh` on upgrade (`IS_UPGRADE=1`) refreshes the venv before apt/HAL work so manual upgrades get the same pip-first safety net.
 
 ### v0.7.5 (May 2026)
 
