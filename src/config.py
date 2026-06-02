@@ -78,6 +78,12 @@ class MeshtasticConfig:
 class MeshcoreConfig:
     default_key_b64: str = ""
     channel_keys: dict[str, str] = field(default_factory=dict)
+    # Desired companion advert name. When set, the dashboard rename
+    # path writes here, and the USB capture source re-applies it on
+    # every connect via MeshCoreTxClient.set_companion_name. Leaving
+    # this empty means "trust whatever name is on the companion's
+    # flash" -- the v0.7.4 behavior.
+    companion_name: Optional[str] = None
 
 
 @dataclass
@@ -212,6 +218,44 @@ class TransmitConfig:
 
 
 @dataclass
+class LocationConfig:
+    """Where the Meshpoint's reported lat/lon/alt comes from.
+
+    ``source`` values:
+        - ``"static"``   : use ``device.latitude/longitude/altitude`` from
+                           ``local.yaml``. Backward-compatible default.
+        - ``"gpsd"``     : connect to a local or remote ``gpsd`` daemon and
+                           overwrite ``device.{lat,lon,alt}`` when fixes
+                           arrive. Auto-installed by ``scripts/install.sh``.
+        - ``"uart"``     : reserved for direct on-board UART NMEA reading
+                           (RAK Pi HAT GPS). Plumbing exists in
+                           ``src.hal.gps_reader`` but is not wired into
+                           the runtime yet; treated as ``static`` until
+                           the source is implemented.
+
+    ``gpsd_host`` / ``gpsd_port`` default to gpsd's well-known
+    localhost socket. Override only when running gpsd on a peer
+    device on the LAN.
+
+    ``update_interval_seconds`` is the period the coordinator wakes up
+    to poll the active source. Static is effectively idle. gpsd reads
+    the latest TPV report each cycle (the daemon batches device data
+    on its side, so this is cheap).
+
+    ``min_fix_quality`` filters noisy fixes: ``0`` accepts anything
+    gpsd publishes (including no-fix), ``1`` requires a 2D fix, ``2``
+    requires a 3D fix. Default is ``1`` so the dashboard never moves
+    based on a no-fix TPV.
+    """
+
+    source: str = "static"
+    gpsd_host: str = "127.0.0.1"
+    gpsd_port: int = 2947
+    update_interval_seconds: int = 5
+    min_fix_quality: int = 1
+
+
+@dataclass
 class WebAuthConfig:
     """Local dashboard authentication settings.
 
@@ -256,6 +300,7 @@ class AppConfig:
     mqtt: MqttConfig = field(default_factory=MqttConfig)
     transmit: TransmitConfig = field(default_factory=TransmitConfig)
     web_auth: WebAuthConfig = field(default_factory=WebAuthConfig)
+    location: LocationConfig = field(default_factory=LocationConfig)
 
 
 def _resolve_radio_frequency(radio: "RadioConfig") -> None:
@@ -314,6 +359,7 @@ def _apply_yaml(cfg: AppConfig, path: Path) -> None:
         "mqtt": cfg.mqtt,
         "transmit": cfg.transmit,
         "web_auth": cfg.web_auth,
+        "location": cfg.location,
     }
 
     for section_name, section_instance in section_map.items():

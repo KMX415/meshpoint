@@ -181,6 +181,51 @@ if [ -f "$BOOT_CONFIG" ]; then
     fi
 fi
 
+# ── 3b. Install gpsd for USB GPS receivers ─────────────────────────
+#
+# Enables plug-and-play USB GPS sticks (u-blox 7/8 etc) without
+# changes to local.yaml. udev auto-attaches recognized devices to
+# the gpsd daemon; the Meshpoint LocationSource (source: gpsd) reads
+# from gpsd's TCP socket on 127.0.0.1:2947.
+#
+# Idempotent: re-running install.sh does not rewrite a config that
+# already matches.
+
+info "Installing gpsd for USB GPS receivers..."
+apt-get install -y -qq gpsd gpsd-clients
+
+GPSD_DEFAULTS="/etc/default/gpsd"
+if [ -f "$GPSD_DEFAULTS" ]; then
+    # Desired settings:
+    #   START_DAEMON="true"  -- start at boot
+    #   USBAUTO="true"       -- udev auto-attaches recognized USB GPS
+    #   DEVICES=""           -- empty so udev owns the device list
+    #   GPSD_OPTIONS="-n"    -- no-wait mode, opens device before first client
+    GPSD_NEEDS_WRITE=0
+    grep -q '^START_DAEMON="true"' "$GPSD_DEFAULTS" || GPSD_NEEDS_WRITE=1
+    grep -q '^USBAUTO="true"'      "$GPSD_DEFAULTS" || GPSD_NEEDS_WRITE=1
+    grep -q '^DEVICES=""'          "$GPSD_DEFAULTS" || GPSD_NEEDS_WRITE=1
+    grep -q '^GPSD_OPTIONS="-n"'   "$GPSD_DEFAULTS" || GPSD_NEEDS_WRITE=1
+
+    if [ "$GPSD_NEEDS_WRITE" = "1" ]; then
+        info "Configuring ${GPSD_DEFAULTS} for USB hotplug..."
+        cat > "$GPSD_DEFAULTS" <<'_GPSD_DEFAULTS'
+# Default settings for the gpsd init script and the hotplug wrapper.
+# Managed by Meshpoint installer. Re-run scripts/install.sh to reset.
+
+START_DAEMON="true"
+USBAUTO="true"
+DEVICES=""
+GPSD_OPTIONS="-n"
+_GPSD_DEFAULTS
+    else
+        info "${GPSD_DEFAULTS} already configured"
+    fi
+fi
+
+systemctl enable gpsd.socket 2>/dev/null || warn "Could not enable gpsd.socket"
+systemctl restart gpsd.socket 2>/dev/null || warn "Could not start gpsd.socket"
+
 # ── 4. Build SX1302 HAL (Gateway only) ─────────────────────────────
 
 if [ "$INSTALL_PLATFORM" = "gateway" ]; then

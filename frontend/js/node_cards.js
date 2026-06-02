@@ -6,13 +6,20 @@
 class NodeCards {
     /** Match Meshtastic-style "recently heard" (not cloud device heartbeat at 15 min). */
     static ONLINE_THRESHOLD_MS = 2 * 60 * 60 * 1000;
+    static SORT_KEYS = new Set(['last_heard', 'signal', 'hops', 'name']);
+    static FILTER_KEYS = new Set(['all', 'direct', 'relayed']);
+    static SORT_STORAGE_KEY = 'meshpoint.nodeCards.sortBy';
+    static FILTER_STORAGE_KEY = 'meshpoint.nodeCards.filter';
+    static FAVORITES_ONLY_STORAGE_KEY = 'meshpoint.nodeCards.favoritesOnly';
 
     constructor(containerId, onCardClick) {
         this._container = document.getElementById(containerId);
         this._onCardClick = onCardClick;
         this._nodes = [];
         this._searchQuery = '';
-        this._sortBy = 'last_heard';
+        this._sortBy = this._loadSavedSort();
+        this._filter = this._loadSavedFilter();
+        this._favoritesOnly = this._loadSavedFavoritesOnly();
 
         const searchEl = document.getElementById('node-search');
         if (searchEl) {
@@ -21,9 +28,108 @@ class NodeCards {
                 this._render();
             });
         }
+        this._wireSort();
+        this._wireFilter();
+        this._wireFavoritesToggle();
         if (window.MeshpointDisplayUnits) {
             window.MeshpointDisplayUnits.onChange(() => this._render());
         }
+        if (window.MeshpointNodeFavorites) {
+            window.MeshpointNodeFavorites.onChange(() => this._render());
+        }
+    }
+
+    _loadSavedSort() {
+        try {
+            const v = localStorage.getItem(NodeCards.SORT_STORAGE_KEY);
+            return NodeCards.SORT_KEYS.has(v) ? v : 'last_heard';
+        } catch (_e) {
+            return 'last_heard';
+        }
+    }
+
+    _loadSavedFilter() {
+        try {
+            const v = localStorage.getItem(NodeCards.FILTER_STORAGE_KEY);
+            return NodeCards.FILTER_KEYS.has(v) ? v : 'all';
+        } catch (_e) {
+            return 'all';
+        }
+    }
+
+    _loadSavedFavoritesOnly() {
+        try {
+            return localStorage.getItem(NodeCards.FAVORITES_ONLY_STORAGE_KEY) === '1';
+        } catch (_e) {
+            return false;
+        }
+    }
+
+    _saveSort(value) {
+        try { localStorage.setItem(NodeCards.SORT_STORAGE_KEY, value); }
+        catch (_e) { /* private mode / quota -- best-effort */ }
+    }
+
+    _saveFilter(value) {
+        try { localStorage.setItem(NodeCards.FILTER_STORAGE_KEY, value); }
+        catch (_e) { /* private mode / quota -- best-effort */ }
+    }
+
+    _saveFavoritesOnly(value) {
+        try {
+            localStorage.setItem(NodeCards.FAVORITES_ONLY_STORAGE_KEY, value ? '1' : '0');
+        } catch (_e) { /* private mode / quota -- best-effort */ }
+    }
+
+    _wireSort() {
+        const select = document.getElementById('node-sort');
+        if (!select) return;
+        select.value = this._sortBy;
+        select.addEventListener('change', (e) => {
+            const next = e.target.value;
+            if (!NodeCards.SORT_KEYS.has(next)) return;
+            this._sortBy = next;
+            this._saveSort(next);
+            this._render();
+        });
+    }
+
+    _wireFilter() {
+        const buttons = document.querySelectorAll('[data-filter]');
+        if (!buttons.length) return;
+        buttons.forEach((btn) => {
+            const value = btn.dataset.filter;
+            btn.classList.toggle('nc-pill--active', value === this._filter);
+            btn.addEventListener('click', () => {
+                if (!NodeCards.FILTER_KEYS.has(value)) return;
+                this._filter = value;
+                this._saveFilter(value);
+                buttons.forEach((b) => {
+                    b.classList.toggle('nc-pill--active', b.dataset.filter === value);
+                });
+                this._render();
+            });
+        });
+    }
+
+    _wireFavoritesToggle() {
+        const btn = document.getElementById('node-favorites-toggle');
+        if (!btn) return;
+        this._reflectFavoritesToggle(btn);
+        btn.addEventListener('click', () => {
+            this._favoritesOnly = !this._favoritesOnly;
+            this._saveFavoritesOnly(this._favoritesOnly);
+            this._reflectFavoritesToggle(btn);
+            this._render();
+        });
+    }
+
+    _reflectFavoritesToggle(btn) {
+        const on = this._favoritesOnly;
+        btn.classList.toggle('nc-pill--active', on);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        btn.innerHTML = on ? '\u2605' : '\u2606';
+        btn.title = on ? 'Showing favorites only (click to clear)' : 'Show only favorited nodes';
     }
 
     loadNodes(nodes) {
@@ -59,22 +165,35 @@ class NodeCards {
     }
 
     _render() {
-        let filtered = this._nodes;
+        let working = this._nodes;
         if (this._searchQuery) {
-            filtered = filtered.filter(n => {
+            working = working.filter(n => {
                 const name = (n.long_name || n.short_name || '').toLowerCase();
                 const id = (n.node_id || '').toLowerCase();
                 return name.includes(this._searchQuery) || id.includes(this._searchQuery);
             });
         }
+        working = this._applyFilter(working);
+        working = this._applySort(working);
 
-        if (filtered.length === 0) {
+        if (working.length === 0) {
             this._container.innerHTML =
                 '<div class="nc-empty">No nodes found</div>';
             return;
         }
 
-        this._container.innerHTML = filtered.map(n => this._buildCard(n)).join('');
+        this._container.innerHTML = working.map(n => this._buildCard(n)).join('');
+
+        this._container.querySelectorAll('[data-favorite-toggle]').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const card = btn.closest('.nc-card');
+                const nodeId = card?.dataset?.nodeId;
+                if (nodeId && window.MeshpointNodeFavorites) {
+                    window.MeshpointNodeFavorites.toggle(nodeId);
+                }
+            });
+        });
 
         this._container.querySelectorAll('.nc-card').forEach(el => {
             el.addEventListener('click', () => {
@@ -83,6 +202,27 @@ class NodeCards {
                 if (node && this._onCardClick) this._onCardClick(node);
             });
         });
+    }
+
+    _applyFilter(nodes) {
+        const filtered = window.MeshpointNodeCardsSort
+            ? window.MeshpointNodeCardsSort.applyFilter(nodes, this._filter)
+            : nodes;
+        if (this._favoritesOnly && window.MeshpointNodeFavorites) {
+            const favs = new Set(window.MeshpointNodeFavorites.list());
+            return filtered.filter((n) => favs.has(n.node_id));
+        }
+        return filtered;
+    }
+
+    _applySort(nodes) {
+        const favs = window.MeshpointNodeFavorites
+            ? new Set(window.MeshpointNodeFavorites.list())
+            : new Set();
+        if (window.MeshpointNodeCardsSort) {
+            return window.MeshpointNodeCardsSort.applySort(nodes, this._sortBy, favs);
+        }
+        return nodes.slice();
     }
 
     _buildCard(n) {
@@ -96,18 +236,28 @@ class NodeCards {
         const onlineDot = online
             ? '<span class="nc-online nc-online--on" title="Heard within 2 hours"></span>'
             : '<span class="nc-online nc-online--off" title="Not heard within 2 hours"></span>';
+        const isFav = !!(window.MeshpointNodeFavorites && window.MeshpointNodeFavorites.has(n.node_id));
+        const favClass = isFav ? ' nc-card__favorite--on' : '';
+        const favTitle = isFav ? 'Remove favorite' : 'Add favorite';
+        const favGlyph = isFav ? '\u2605' : '\u2606';
 
         const signal = this._buildSignal(n);
         const telemetry = this._buildTelemetry(n);
         const meta = this._buildMeta(n);
 
-        return `<div class="nc-card" data-node-id="${this._esc(n.node_id)}">
+        return `<div class="nc-card${isFav ? ' nc-card--fav' : ''}" data-node-id="${this._esc(n.node_id)}">
             <div class="nc-card__top">
                 <div class="nc-avatar" style="background:${avatarColor}">${shortLabel}</div>
                 <div class="nc-card__identity">
                     <div class="nc-card__name">${onlineDot} ${name}</div>
                     <div class="nc-card__heard">${this._timeAgo(heardAt)}</div>
                 </div>
+                <button type="button"
+                        class="nc-card__favorite${favClass}"
+                        data-favorite-toggle
+                        aria-label="${favTitle}"
+                        aria-pressed="${isFav ? 'true' : 'false'}"
+                        title="${favTitle}">${favGlyph}</button>
                 <span class="nc-proto nc-proto--${proto}">${protoBadge}</span>
             </div>
             ${signal}

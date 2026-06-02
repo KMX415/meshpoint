@@ -58,7 +58,7 @@ DEFAULT_CATALOG: tuple[CommandEntry, ...] = (
     CommandEntry(
         id="service-status",
         label="Service status",
-        command="sudo systemctl status meshpoint --no-pager",
+        command="systemctl status meshpoint --no-pager",
         category=CATEGORY_SERVICE,
         description="Show the current meshpoint service state.",
     ),

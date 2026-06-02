@@ -11,6 +11,7 @@ from src.capture.capture_coordinator import CaptureCoordinator
 from src.config import AppConfig
 from src.decode.crypto_service import CryptoService
 from src.decode.packet_router import PacketRouter
+from src.hal.location import LocationSource, build_location_source
 from src.log_format import CYAN, DIM, GREEN, RESET
 from src.models.packet import Packet, Protocol, RawCapture
 from src.relay.meshtastic_transmitter import MeshtasticTransmitter
@@ -52,6 +53,9 @@ class PipelineCoordinator:
         self._transmitter: Optional[MeshtasticTransmitter] = None
         self._mqtt: Optional[MqttPublisher] = None
         self._stats_reporter = StatsReporter()
+        self._location_source: LocationSource = build_location_source(
+            config.location, config.device
+        )
 
         self._node_repo: Optional[NodeRepository] = None
         self._packet_repo: Optional[PacketRepository] = None
@@ -59,9 +63,13 @@ class PipelineCoordinator:
 
         self._last_node_update: dict[str, Any] = {}
         self._on_packet_callbacks: list[Callable[[Packet], None]] = []
+        self._on_location_callbacks: list[
+            Callable[[Optional[float], Optional[float], Optional[float]], None]
+        ] = []
         self._running = False
         self._pipeline_task: Optional[asyncio.Task] = None
         self._cleanup_task: Optional[asyncio.Task] = None
+        self._location_refresh_task: Optional[asyncio.Task] = None
 
     @property
     def database(self) -> DatabaseManager:
@@ -97,9 +105,28 @@ class PipelineCoordinator:
     def stats_reporter(self) -> StatsReporter:
         return self._stats_reporter
 
+    @property
+    def location_source(self) -> LocationSource:
+        """Live GPS source. Always present (defaults to ``StaticSource``)."""
+        return self._location_source
+
     def on_packet(self, callback: Callable[[Packet], None]) -> None:
         """Register a callback invoked for each decoded packet."""
         self._on_packet_callbacks.append(callback)
+
+    def on_location_update(
+        self,
+        callback: Callable[[Optional[float], Optional[float], Optional[float]], None],
+    ) -> None:
+        """Register a callback fired when the live location source publishes
+        a fresh position fix.
+
+        Called with ``(latitude, longitude, altitude_m)``. Fires only when
+        the new fix actually differs from the cached device position, so
+        listeners can rely on it as a real change signal instead of
+        polling.
+        """
+        self._on_location_callbacks.append(callback)
 
     async def start(self) -> None:
         await self._db.connect()
@@ -110,6 +137,8 @@ class PipelineCoordinator:
         self._setup_channel_keys()
         self._setup_relay_transmitter()
         self._setup_mqtt()
+        self._setup_location_banner()
+        await self._location_source.start()
         await self._capture.start()
 
         self._running = True
@@ -118,6 +147,9 @@ class PipelineCoordinator:
         )
         self._cleanup_task = asyncio.create_task(
             self._cleanup_loop(), name="db-cleanup"
+        )
+        self._location_refresh_task = asyncio.create_task(
+            self._location_refresh_loop(), name="location-refresh"
         )
         registered = [src.name for src in self._capture._sources]
         sources = ", ".join(
@@ -131,13 +163,14 @@ class PipelineCoordinator:
     async def stop(self) -> None:
         self._running = False
         await self._capture.stop()
-        for task in (self._pipeline_task, self._cleanup_task):
+        for task in (self._pipeline_task, self._cleanup_task, self._location_refresh_task):
             if task:
                 task.cancel()
                 try:
                     await task
                 except asyncio.CancelledError:
                     pass
+        await self._location_source.stop()
         if self._transmitter:
             self._transmitter.disconnect()
         if self._mqtt:
@@ -165,6 +198,56 @@ class PipelineCoordinator:
             pass
         except Exception:
             logger.exception("Cleanup loop error")
+
+    async def _location_refresh_loop(self) -> None:
+        """Periodically pull the latest fix from the active location source.
+
+        When the source publishes a real position fix, write it back into
+        ``self._config.device.latitude/longitude/altitude`` so every
+        downstream consumer (farthest-direct calculation, heartbeat,
+        node-position math, dashboard map placement) sees the live
+        coordinate without further plumbing.
+
+        Static sources also flow through this loop: their ``get_status``
+        returns the same configured coordinates every tick, so it's a
+        cheap no-op. We deliberately do not write back to ``local.yaml``
+        on every tick: in-memory updates suffice.
+        """
+        interval = max(1, self._config.location.update_interval_seconds)
+        try:
+            while self._running:
+                await asyncio.sleep(interval)
+                self._apply_latest_location_fix()
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.exception("Location refresh loop error")
+
+    def _apply_latest_location_fix(self) -> None:
+        status = self._location_source.get_status()
+        if not status.available or status.fix is None:
+            return
+        if not status.fix.has_position:
+            return
+
+        device = self._config.device
+        if (
+            device.latitude == status.fix.latitude
+            and device.longitude == status.fix.longitude
+            and device.altitude == status.fix.altitude_m
+        ):
+            return  # no change
+
+        device.latitude = status.fix.latitude
+        device.longitude = status.fix.longitude
+        if status.fix.altitude_m is not None:
+            device.altitude = status.fix.altitude_m
+
+        for cb in self._on_location_callbacks:
+            try:
+                cb(device.latitude, device.longitude, device.altitude)
+            except Exception:
+                logger.exception("Location update callback failed")
 
     async def _run_pipeline(self) -> None:
         try:
@@ -363,3 +446,21 @@ class PipelineCoordinator:
         for name, key in self._config.meshcore.channel_keys.items():
             key_b64 = base64.b64encode(binascii.unhexlify(key)).decode()
             self._crypto.add_channel_key(name, key_b64)
+
+    def _setup_location_banner(self) -> None:
+        """One-line startup banner matching the RELAY/MQTT/PIPELINE rows."""
+        source_name = self._location_source.source_name
+        if source_name == "gpsd":
+            host = self._config.location.gpsd_host
+            port = self._config.location.gpsd_port
+            detail = f"gpsd @ {host}:{port}"
+            color = GREEN
+        elif source_name == "uart":
+            detail = "on-board UART (placeholder, falls back to static)"
+            color = DIM
+        else:
+            detail = "static config coordinates"
+            color = DIM
+        logger.info(
+            f" {CYAN}--{RESET} {color}LOCATION{RESET} {detail}"
+        )

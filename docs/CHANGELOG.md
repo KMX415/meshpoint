@@ -4,9 +4,49 @@
 
 Queued for the next version bump (v0.7.6 mesh participant RC on `feat/v0.7.6`).
 
-- **Docs: Syncrobit Chameleon support.** [Hardware Matrix](HARDWARE-MATRIX.md), [README](../README.md), [Onboarding](ONBOARDING.md), and new [Syncrobit Chameleon guide](SYNCROBIT-CHAMELEON.md) document CM4 eMMC recovery and Meshpoint on the Chameleon SX1302 miner (validated aarch64, v0.7.4+).
+- **MQTT broker TLS (deferred).** Transport TLS (`mqtts`, CA bundle, cert validation) is not implemented on `mqtt_publisher.py` (plain TCP only). Planned for v0.7.6. Until then use plain port 1883 or a LAN broker without TLS.
 
-- **MQTT broker TLS (deferred).** Configuration → MQTT exposes broker host, port, credentials, allowlist, JSON mirror, and HA options per `docs/MQTT-AND-MESHRADAR.md`. Transport TLS (`mqtts`, CA bundle, cert validation) is not implemented: `mqtt_publisher.py` uses plain TCP only. Planned for the same release vehicle as **Meshtastic PKI** (shared crypto/config touchpoints). Until then use plain port 1883 (e.g. `mqtt.meshtastic.org`) or a LAN broker without TLS.
+### v0.7.5.1 (May 2026)
+
+Patch release on `main`. Edge-only. **Upgrade:** Settings → Updates → **Stable**, or `git pull` on `main` plus `systemctl restart meshpoint`. No concentrator or HAL changes.
+
+#### Dashboard apply
+
+- **Lightweight apply finish.** Settings → Updates runs `git fetch` / checkout / reset, then a detached `scripts/apply_finish.sh` that stops the service, runs `pip install -r requirements.txt`, `post_update.sh`, and restarts. Avoids crash loops when the next release adds new Python dependencies before the service boots the new code.
+- **Live update progress.** Apply and rollback streams show command output in a terminal panel; step labels match the backend (`upgrade` instead of stale `install.sh` / `restart service` keys).
+- **SSH upgrade path.** `install.sh` on upgrade (`IS_UPGRADE=1`) refreshes the venv before apt/HAL work so manual upgrades get the same pip-first safety net.
+
+### v0.7.5 (May 2026)
+
+Companion polish, live GPS, and local dashboard UX. Edge-only, pure Python, no concentrator recompile. **Upgrade:** `git pull` on `main` (or Settings → Updates → **Stable**) plus `scripts/install.sh` when crossing from older releases so gpsd packages and sudoers stay in sync. Settings → Updates RC picker now points at **v0.7.6** on `feat/v0.7.6`.
+
+#### GPS and location
+
+- **Live GPS via `gpsd`.** Pluggable `location.source` (`static` | `gpsd` | `uart`). Configuration → GPS ships a skyplot (az/el/SNR, constellations, fix lamp, DOP, last fix). `install.sh` installs gpsd + USB hotplug config idempotently. Live fixes update device coordinates and the local map marker. UART path remains a placeholder for RAK onboard GPS.
+- **MeshCore USB skips u-blox GPS.** `UsbPortClassifier` excludes VID `0x1546` from MeshCore serial probing so a GPS stick and Heltec companion can coexist.
+
+#### MeshCore
+
+- **Companion set-name from the dashboard.** `PUT /api/config/meshcore/companion-name`, editable name on Configuration → MeshCore, optional re-apply from `local.yaml` after USB reconnect.
+- **Channel keys (extends v0.7.4 editors).** Slot 0 = Public (locked); user channels on slots 1–7; **hashtag** channels with empty key map to the 16-byte zero secret; Messages send/RX use the same slot index as Configuration.
+- **Zero-key length fix.** Empty hashtag saves previously wrote 64 hex digits and blocked later **Save Channels**; legacy yaml normalizes on read/save.
+
+#### Configuration and MQTT
+
+- **Custom preset on Configuration → Radio.** Restore **Custom** chip with SF/BW/CR inputs when modem params do not match a named preset.
+- **MQTT Home Assistant state topics.** Retained publishes on `meshpoint/{node_id}/telemetry` and `meshpoint/{node_id}/position` when HA discovery is enabled.
+
+#### Dashboard map and nodes
+
+- **Map:** remember zoom/view across reload; node popup **Last heard** line; MeshCore nodes render as **diamond** markers (Meshtastic stays circles).
+- **Node grid:** sort (last heard / signal / hops / name) and filter (all / direct / relayed), persisted in localStorage.
+- **Favorite nodes:** star on cards and drawer, amber map border, **Favorites only** filter.
+
+#### System metrics and fixes
+
+- **Load average on the system stats row.** `GET /api/device/metrics` returns `[1m, 5m, 15m]` from `/proc/loadavg`; new **Load Avg** dashboard card. [PR #61](https://github.com/KMX415/meshpoint/pull/61) merged to `main` after v0.7.4; ships in this release (no separate patch version).
+- **Stats CPU temperature** honors Settings → Meshpoint °F/°C preference.
+- **Terminal:** quick-command insert no longer steals focus from the shell.
 
 ### v0.7.4 (May 20, 2026)
 

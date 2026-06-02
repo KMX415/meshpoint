@@ -93,6 +93,26 @@ To match a Meshtastic preset, set `spreading_factor` and `bandwidth_khz` togethe
 | LongModerate | 11 | 125 |
 | LongSlow | 12 | 125 |
 
+### Custom presets (Configuration → Radio)
+
+The dashboard's **Configuration → Radio** card includes a **Custom**
+chip alongside the named preset buttons. Selecting Custom reveals
+inputs for spreading factor (5-12), bandwidth (125 / 250 / 500 kHz),
+and coding rate (4/5, 4/6, 4/7, 4/8). Use it for combinations that
+don't appear in the named-preset table above (for example
+SF11 / BW125 / CR4/8 for an extra-resilient long-range link, or
+SF7 / BW500 / CR4/5 to mirror the deprecated ShortTurbo).
+
+When `current_preset` in the radio configuration is empty (because
+the saved SF / BW / CR doesn't match any named preset), the card
+opens on Custom automatically and pre-fills the three inputs from
+the values in `local.yaml` so you can see exactly what you're on.
+
+Modem changes always require a service restart; the dashboard
+prompts you when one is needed. Off-spec combinations (anything
+not in the named table) may be silently dropped by neighboring
+nodes, so set the same Custom values on the receiving side too.
+
 ### Changing Region
 
 ```yaml
@@ -139,6 +159,92 @@ The setup wizard configures sources automatically. To add or remove a MeshCore c
 | `mock` | Synthetic packet generator for development. Not for production. |
 
 When running both Meshtastic concentrator capture and a MeshCore USB companion, pin `meshcore_usb.serial_port` explicitly. Auto-detect can grab the wrong device when multiple Espressif boards are attached.
+
+---
+
+## Location (GPS) source
+
+```yaml
+location:
+  source: "static"           # static | gpsd | uart
+  gpsd_host: "127.0.0.1"     # gpsd TCP host (only when source=gpsd)
+  gpsd_port: 2947            # gpsd TCP port
+  update_interval_seconds: 5 # how often the coordinator polls the source
+  min_fix_quality: 1         # minimum NMEA fix quality (1=2D, 3=3D)
+```
+
+`location.source` selects where the Meshpoint reads its current
+position. The setup wizard always writes static lat/lon/alt under
+`device.*` (see [Device Identity](#device-identity)); the choice
+here is whether to **also** consult a live GPS at runtime. Source
+changes require a service restart; everything else hot-reloads.
+
+| Source | Behavior |
+|---|---|
+| `static` (default) | Uses `device.latitude` / `device.longitude` / `device.altitude` exactly as set during the wizard. No GPS hardware required. |
+| `gpsd` | Reads live fixes from the system `gpsd` daemon over TCP (`127.0.0.1:2947`). Recommended for any USB GPS receiver (u-blox 7, u-blox 8, VFAN puck, generic CDC ACM sticks). |
+| `uart` | Reserved for direct-serial reads from a Pi HAT GPS (e.g. RAK 7248). Currently a placeholder; falls back to static and surfaces an explanatory error in the dashboard. |
+
+When `source: gpsd` is active and the daemon has a 2D or 3D fix,
+the coordinator updates `_config.device.latitude` / `.longitude` /
+`.altitude` in place every `update_interval_seconds`. Anything that
+reads from `device.*` (NodeInfo broadcasts, MQTT, the dashboard map,
+Meshradar cloud) automatically sees the live position. If the fix
+is lost, the last known coordinates remain in use until a fresh fix
+arrives — there is no fallback to the wizard-time static value.
+
+### Using gpsd (USB GPS receivers)
+
+`scripts/install.sh` installs `gpsd` and `gpsd-clients`, configures
+`/etc/default/gpsd` for **USB hotplug** (`USBAUTO="true"`,
+`DEVICES=""`, `GPSD_OPTIONS="-n"`), and enables `gpsd.socket`. As
+of v0.7.5 this happens on every fresh install **and** every
+upgrade re-run.
+
+To enable live GPS:
+
+1. Plug in a USB GPS receiver. udev rules shipped with `gpsd`
+   recognize u-blox VIDs (`0x1546`) and auto-attach the device.
+   The MeshCore USB auto-detect path (`UsbPortClassifier`) skips
+   any port classified as `gps_known`, so a u-blox stick will
+   never be probed as a MeshCore companion.
+2. Open the dashboard at **Configuration → GPS**, switch the source
+   to **gpsd**, and click **Save**. The Meshpoint restarts the
+   location source in-place; no full service restart needed unless
+   you also changed `gpsd_host` / `gpsd_port`.
+3. Watch the **GPS** card. The skyplot animates, satellite dots
+   render at their azimuth/elevation, and the fix-mode lamp flips
+   from grey (no fix) → amber (2D) → green (3D) as the receiver
+   acquires.
+
+For headless / yaml-only setup add the section above to
+`local.yaml` and restart the service. Verify with `cgps` (shipped
+in `gpsd-clients`) or `gpsmon`.
+
+### Receiver compatibility
+
+| Receiver | Protocol | Tested |
+|---|---|---|
+| u-blox 7 USB stick | USB CDC ACM, NMEA + UBX | yes (RAK V2 .141) |
+| u-blox 8 USB stick | USB CDC ACM, NMEA + UBX | yes |
+| VFAN ublox 7 USB puck | USB CDC ACM, NMEA + UBX | yes |
+| RAK 7248 onboard u-blox via UART (`/dev/ttyAMA0`) | NMEA over UART | placeholder (`source: uart`, not yet wired) |
+
+Other USB receivers should work as long as `gpsd` recognizes the
+device's VID. If `cgps` shows data but the dashboard does not,
+check `journalctl -u meshpoint | grep -i gpsd` for connection
+errors and confirm `source: gpsd` in `local.yaml`.
+
+### Privacy
+
+Live GPS coordinates flow through the same surfaces as the static
+wizard values: NodeInfo broadcasts (off-air to the mesh), MQTT
+(only when `mqtt.enabled: true` and the channel is allow-listed,
+respecting `mqtt.location_precision`), and the upstream WebSocket
+to meshradar.io (only when `upstream.enabled: true`). To run a
+mobile / wardriving Meshpoint without leaking position upstream,
+either `mqtt.location_precision: none` (or `approximate`) or
+`upstream.enabled: false`.
 
 ---
 
@@ -190,6 +296,41 @@ meshcore:
     SomeChannelName: "32-BytePSK"      # Meshcore Channel Name with 32-Byte Hex PSK. One channel per line            
 ```
 Any Channels listed in the YAML will show in the UI. Changes made in the UI will be written to the YAML config file and pushed to the USB Companion device. Additionally, all channels will be pushed to the USB Companion device upon Meshpoint startup. Maximum of 8 Channels can by configured at this time. THis limit may be adjusted at a later date. 
+
+### MeshCore Companion Identity (v0.7.5+)
+
+The USB companion's advert name is what neighbors see in their
+contact list and on the mesh. As of v0.7.5 the dashboard owns the
+rename path:
+
+- **Configuration → MeshCore → Companion name** edits the input,
+  ticks "Send advert after save" (default on), and clicks
+  **Save Name**. The Meshpoint sends `CMD_SET_ADVERT_NAME` to the
+  companion (via `meshcore.commands.set_name`), persists the
+  cleaned name to `local.yaml` under `meshcore.companion_name`, and
+  optionally fires an advert so neighbors pick up the new name
+  immediately.
+- The configured name is **re-applied on every USB reconnect**.
+  Hot-swapping a freshly-flashed companion, or replacing a
+  failed unit, lands the new device on your configured name
+  without a manual re-save.
+
+```yaml
+meshcore:
+  companion_name: "Mesh Lab East"    # optional. When set, re-applied on every USB reconnect.
+```
+
+Leaving `companion_name` unset (the default) keeps the v0.7.4
+behavior: the Meshpoint trusts whatever name is on the
+companion's flash. Set it once from the dashboard; further
+reboots / unplug / replug events re-apply automatically.
+
+Validation (shared between the dashboard and the on-connect
+re-apply path): the name is stripped of leading/trailing
+whitespace, must not be empty, and must fit in **32 UTF-8 bytes**
+(conservative cap matching the companion firmware's accepted
+range). 4-byte unicode codepoints (some emoji) count toward that
+limit.
 
 ---
 
@@ -335,9 +476,11 @@ Set during the setup wizard. The coordinates are used for map placement on the l
 
 ### Updating Location
 
-Two options:
+Three options:
 
-1. Edit `local.yaml` directly (fastest):
+1. **Configuration → GPS** in the dashboard (recommended). Edit lat/lon/alt for `source: static`, or switch to `source: gpsd` to consume live fixes from a USB GPS receiver. See [Location (GPS) source](#location-gps-source) above.
+
+2. Edit `local.yaml` directly (fastest for headless tweaks):
 
    ```bash
    sudo nano /opt/meshpoint/config/local.yaml
@@ -345,7 +488,7 @@ Two options:
    sudo systemctl restart meshpoint
    ```
 
-2. Re-run the setup wizard and press Enter through steps you want to keep:
+3. Re-run the setup wizard and press Enter through steps you want to keep:
 
    ```bash
    sudo /opt/meshpoint/venv/bin/python -m src.cli setup
@@ -505,6 +648,7 @@ meshtastic:            # Meshtastic protocol settings
 meshcore:              # MeshCore protocol settings
   default_key_b64: null
   channel_keys: {}
+  companion_name: null  # Optional. When set, re-applied on every USB reconnect.
 
 capture:               # what packet sources to read from
   sources:
@@ -514,6 +658,13 @@ capture:               # what packet sources to read from
     auto_detect: true
     serial_port: null
     baud_rate: 115200
+
+location:              # GPS / location source
+  source: "static"            # static | gpsd | uart
+  gpsd_host: "127.0.0.1"
+  gpsd_port: 2947
+  update_interval_seconds: 5
+  min_fix_quality: 1
 
 transmit:              # native messaging TX (Meshtastic via SX1302, MeshCore via USB)
   enabled: false

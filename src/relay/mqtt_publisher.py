@@ -10,6 +10,7 @@ JSON mirror for Home Assistant and Node-RED consumers.
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Optional
 
@@ -156,6 +157,7 @@ class MqttPublisher:
             logger.debug("MQTT published %s (%s)", packet.packet_id, packet.packet_type.value)
             if self._ha_discovery:
                 self._ha_discovery.announce_node(packet)
+                self._ha_discovery.publish_state(packet)
 
         return published
 
@@ -264,6 +266,58 @@ class HomeAssistantDiscovery:
 
         if sensors:
             self._announced_nodes.add(node_id)
+
+    def publish_state(self, packet: Packet) -> None:
+        """Publish retained state for Home Assistant discovery topics."""
+        if not packet.decoded_payload or not packet.source_id:
+            return
+
+        node_id = packet.source_id
+        payload = packet.decoded_payload
+
+        if packet.packet_type == PacketType.TELEMETRY:
+            state = {
+                key: payload[key]
+                for key in (
+                    "battery_level",
+                    "temperature",
+                    "voltage",
+                    "humidity",
+                    "barometric_pressure",
+                    "channel_utilization",
+                    "air_util_tx",
+                )
+                if key in payload and payload[key] is not None
+            }
+            if state:
+                topic = f"meshpoint/{node_id}/telemetry"
+                self._client.publish(
+                    topic,
+                    json.dumps(state),
+                    qos=1,
+                    retain=True,
+                )
+            return
+
+        if packet.packet_type == PacketType.POSITION:
+            lat = payload.get("latitude")
+            lon = payload.get("longitude")
+            if lat is None or lon is None:
+                return
+            position = {
+                "latitude": lat,
+                "longitude": lon,
+            }
+            alt = payload.get("altitude")
+            if alt is not None:
+                position["altitude"] = alt
+            topic = f"meshpoint/{node_id}/position"
+            self._client.publish(
+                topic,
+                json.dumps(position),
+                qos=1,
+                retain=True,
+            )
 
     def _device_block(self, node_id: str) -> dict:
         return {

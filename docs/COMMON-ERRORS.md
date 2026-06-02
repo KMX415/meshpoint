@@ -799,6 +799,95 @@ passes a proper command timeout, skips the active probe when inbound
 events have arrived recently, and tolerates a single transient miss
 before reconnecting.
 
+### "Companion rejected name" / oversize name on rename (v0.7.5+)
+
+**Symptom:** Saving a new name on **Configuration → MeshCore → Companion
+name** fails with a toast like `Error: Name is 36 bytes (UTF-8);
+companion accepts at most 32.` or
+`Error: Companion rejected name: <reason>`.
+
+**Cause and fix:**
+
+- **`Name must not be empty`** -- whitespace-only or empty input. The
+  Meshpoint short-circuits before the companion is touched. Type a
+  real name.
+- **`Name is N bytes (UTF-8); companion accepts at most 32`** -- the
+  trimmed name exceeds the 32-byte cap. Note that 4-byte unicode
+  codepoints (some emoji) count as 4 bytes each: 9 of them blow
+  through the limit before the visible character count looks
+  unreasonable. Shorten the name or drop the emoji.
+- **`Companion rejected name: <detail>`** -- the rename actually
+  reached the device and the firmware refused it. Most often this is
+  a stricter local cap (some firmware variants enforce 28 bytes for
+  certain regions) or a transient flash-write failure. Try a shorter
+  name; if the same name was accepted on a different unit, retry
+  after a power cycle of the companion.
+
+The rename is atomic: a rejection means the on-device name is
+unchanged, and `local.yaml` is **not** updated. Your dashboard
+readout will still show the old name on the next refresh.
+
+### Dashboard still shows old companion name after a successful rename
+
+**Symptom:** Renaming the companion from **Configuration → MeshCore
+→ Companion name** appears to succeed (the Save button reports OK,
+neighbors see the new advert), but the dashboard input field and
+the Companion card readout keep showing the old name even after
+refreshing the page or restarting the service.
+
+**Affects:** Meshpoint v0.7.5 builds between commits `e082819` and
+`15bdc1d` (early ship of the rename feature). Fixed in the
+follow-up to this release.
+
+**Cause:** Early v0.7.5 builds tried to refresh the local
+`self_info` cache by calling a `send_appstart()` method that does
+not exist in `meshcore` 2.3.x. The rename itself wrote to flash
+correctly (this is why neighbors see the new advert and
+`local.yaml` shows `companion_name: <new>`), but the cache the
+dashboard reads from never got updated. Look for
+`AttributeError: 'MeshCore' object has no attribute 'send_appstart'`
+in `journalctl -u meshpoint`.
+
+**Fix:** Pull `main` (or the latest `feat/v0.7.5`) and restart the
+service:
+
+```bash
+cd /opt/meshpoint
+sudo git pull
+sudo systemctl restart meshpoint
+```
+
+The first reconnect after the restart reseeds `self_info` from the
+device's actual on-flash name, so the dashboard will catch up
+automatically. Subsequent renames update the cache directly with no
+library-method dependency.
+
+### Companion reverts to its old name on reboot
+
+**Symptom:** You renamed the companion from the dashboard, the rename
+worked (toast confirmed, neighbors saw the new advert), but a reboot
+or unplug/replug brings the old name back.
+
+**Cause:** Either you're on an older Meshpoint (pre-v0.7.5) where the
+rename only updated runtime state, or `local.yaml` is owned by a user
+the service can't write to (look for the WARN: `Renamed companion to
+'X' but failed to persist to local.yaml`).
+
+**Fix:**
+
+1. Confirm `meshcore.companion_name` shows up in `local.yaml`. If it
+   doesn't, the persistence write failed. Run
+   `sudo chown meshpoint:meshpoint /opt/meshpoint/config/local.yaml`
+   (or whichever user the systemd unit runs as) and re-save from the
+   dashboard.
+2. After saving, the next USB connect (whether from a service
+   restart, a Pi reboot, an unplug/replug, or even a swap to a fresh
+   companion) re-applies the configured name. You should see
+   `Re-applied companion_name='X' on connect` in the journal.
+3. If the WARN persists with `Failed to re-apply companion_name on
+   connect: <error>`, treat the error message the same way as the
+   in-dashboard rename failures above (shorter name, retry, etc.).
+
 ### Heltec V4 v4.2/v4.3 fails to handshake even after a fresh flash
 
 **Cause:** The stock web flasher at
@@ -822,6 +911,103 @@ settings".
 
 Stock builds from `meshcore.io` work fine on Heltec V3 and on Heltec V4
 v4.0/v4.1.
+
+---
+
+## Location and GPS
+
+### Configuration → GPS shows "no fix" with source set to gpsd
+
+**Cause:** The Meshpoint reached `gpsd` on `127.0.0.1:2947` but the
+daemon has no device attached, or the attached receiver hasn't
+acquired enough satellites for a 2D fix yet.
+
+**Fix:**
+
+1. Confirm `gpsd` is running and reachable:
+
+   ```bash
+   systemctl status gpsd.socket
+   gpsdctl get
+   cgps   # ctrl-C to exit; from gpsd-clients
+   ```
+
+2. If `gpsdctl get` returns no devices, plug a recognized USB GPS
+   receiver and wait 5–10 seconds for udev to call
+   `/lib/udev/rules.d/60-gpsd.rules`. `dmesg | tail` should show
+   `cdc_acm` enumerating `/dev/ttyACM0`.
+
+3. If a device is attached but `cgps` shows zero satellites, the
+   receiver still needs sky view. Cold-start time-to-first-fix on
+   u-blox 7 / 8 sticks is **30–90 seconds outdoors** and can be
+   indefinite indoors. The dashboard skyplot will show satellites
+   appearing one by one as the receiver tracks them; the fix-mode
+   lamp turns green when a 3D fix is achieved.
+
+4. If `gpsdctl get` shows the device but `gpsd` keeps logging
+   `device disconnected` / re-attach loops, the receiver is on
+   the wrong baud rate or the firmware is broken. Try a different
+   USB port, then a different cable, then a different stick.
+
+### `gpsd` not picking up my u-blox stick at all
+
+**Cause:** Either `gpsd` is not installed, or `USBAUTO="true"` is
+missing from `/etc/default/gpsd`. The Meshpoint installer adds
+both on every run as of v0.7.5+, so re-running it usually fixes
+this.
+
+**Fix:**
+
+```bash
+cd /opt/meshpoint
+sudo /opt/meshpoint/scripts/install.sh
+```
+
+Verify the configuration:
+
+```bash
+grep -E '^(START_DAEMON|USBAUTO|DEVICES|GPSD_OPTIONS)=' \
+    /etc/default/gpsd
+```
+
+You should see all four settings. If you customized
+`/etc/default/gpsd` by hand and the installer rewrote it, the
+desired settings (USB hotplug + no-wait mode) are now in place.
+Re-add any custom flags after the installer runs.
+
+### Live GPS coordinates not updating on the dashboard map / NodeInfo
+
+**Cause:** `location.source` in `local.yaml` is still `static`
+(or unset, which defaults to static). The Meshpoint is reading
+the wizard-time lat/lon/alt and ignoring `gpsd` even though the
+daemon is happily tracking satellites.
+
+**Fix:** Open Configuration → GPS and switch the source to
+**gpsd**, then click **Save**. Or edit `local.yaml`:
+
+```yaml
+location:
+  source: "gpsd"
+```
+
+Restart the service. The live fix flows into `device.latitude` /
+`device.longitude` / `device.altitude` once the receiver has a
+2D fix or better. The static wizard-time values are still in
+`device.*` but the coordinator overwrites them with the live fix
+on every update interval (default 5 s).
+
+### MeshCore USB companion connection fails after plugging in a GPS
+
+**Cause:** Pre-v0.7.5 the MeshCore USB auto-detect path probed
+every `/dev/ttyACM*` looking for a companion handshake. u-blox
+GPS sticks (VID `0x1546`) hung the probe for ~5 s each before
+timing out, occasionally producing a `meshcore: no companion
+found` log line and delayed startup.
+
+**Fix:** Update to v0.7.5 or later. `UsbPortClassifier` now
+classifies u-blox VIDs as `gps_known` and the MeshCore detector
+skips them entirely. Plugging a GPS in alongside a Heltec V3 / V4
+companion is fully supported and the two devices co-exist.
 
 ---
 

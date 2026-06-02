@@ -166,6 +166,7 @@ class ConfigurationPanel {
     _buildApi() {
         const self = this;
         return {
+            get: (url) => self._request('GET', url, undefined),
             put: (url, body) => self._request('PUT', url, body),
             post: (url, body) => self._request('POST', url, body),
             refresh: () => self._loadConfig().then(() => self._renderAll()),
@@ -184,16 +185,19 @@ class ConfigurationPanel {
     async _request(method, url, body) {
         const init = { method, headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' };
         if (body !== undefined && body !== null) init.body = JSON.stringify(body);
+        const isGet = method === 'GET';
         try {
             const res = await fetch(url, init);
             if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                this._toast(`Error: ${err.detail || res.status}`);
+                if (!isGet) {
+                    const err = await res.json().catch(() => ({}));
+                    this._toast(`Error: ${err.detail || res.status}`);
+                }
                 return null;
             }
             return await res.json();
         } catch (e) {
-            this._toast(`Save failed: ${e.message}`);
+            if (!isGet) this._toast(`Save failed: ${e.message}`);
             return null;
         }
     }

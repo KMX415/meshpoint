@@ -148,12 +148,41 @@ class MeshcoreConfigCard {
     _renderOnline(mc) {
         const radio = mc.radio || {};
         const name = this._esc(mc.companion_name || 'Connected');
+        const nameValue = this._esc(mc.companion_name || '');
         const channelRows = this._buildChannelRows(mc.channel_keys || []);
 
         this._body.innerHTML = `
             <div class="cfg-mc-status">
                 <span class="cfg-mc-status__lamp" aria-hidden="true"></span>
                 <span class="cfg-mc-status__name">${name}</span>
+            </div>
+            <div class="cfg-mc-identity" data-mc-identity>
+                <label class="cfg-field cfg-field--inline">
+                    <span class="cfg-field__label">Companion name</span>
+                    <input class="cfg-field__input" type="text"
+                           data-mc-name maxlength="32"
+                           value="${nameValue}"
+                           placeholder="My Meshpoint"
+                           aria-describedby="mc-name-hint">
+                </label>
+                <p class="cfg-field__hint" id="mc-name-hint">
+                    Identity on the mesh is advert packets, so renaming
+                    only updates neighbors after the next advert. Send one
+                    automatically after save with the checkbox below.
+                </p>
+                <label class="cfg-field cfg-field--toggle">
+                    <input type="checkbox" data-mc-name-advert checked>
+                    <span class="cfg-field__label">
+                        Send advert after save
+                    </span>
+                </label>
+                <div class="cfg-card__actions">
+                    <button class="terminal-button terminal-button--primary"
+                            type="button" data-mc-name-save>
+                        Save Name
+                    </button>
+                </div>
+                <p class="cfg-status" data-mc-name-status aria-live="polite"></p>
             </div>
             <div class="cfg-mc-readouts">
                 <div class="cfg-mc-readout">
@@ -232,7 +261,7 @@ class MeshcoreConfigCard {
                     <td class="ch-table__psk-cell">
                         <input class="ch-table__name-input" data-field="key_hex"
                                type="password" value="${keyHex}"
-                               placeholder="32-char hex key" />
+                               placeholder="32-char hex (empty = hashtag)" />
                         <button class="ch-table__reveal" type="button"
                                 title="Show/hide key">&#128065;</button>
                     </td>
@@ -261,6 +290,11 @@ class MeshcoreConfigCard {
 
         const refresh = this._body.querySelector('[data-mc-refresh]');
         if (refresh) refresh.addEventListener('click', () => this._api.refresh());
+
+        const saveName = this._body.querySelector('[data-mc-name-save]');
+        if (saveName) {
+            saveName.addEventListener('click', () => this._saveCompanionName(saveName));
+        }
     }
 
     _wireChannelHandlers(scope) {
@@ -293,7 +327,8 @@ class MeshcoreConfigCard {
         if (btn) btn.style.display = this._focusedRow ? '' : 'none';
     }
 
-    _MC_MAX_CHANNELS = 8;
+    // Device has 8 slots: 0 = Public (locked row), 1–7 = user channels.
+    _MC_MAX_USER_CHANNELS = 7;
 
     _updateAddBtn() {
         const btn = this._body.querySelector('[data-mc-add]');
@@ -302,9 +337,11 @@ class MeshcoreConfigCard {
         const count = tbody
             ? tbody.querySelectorAll('tr:not(.ch-table__row--locked)').length
             : 0;
-        const atLimit = count >= this._MC_MAX_CHANNELS;
+        const atLimit = count >= this._MC_MAX_USER_CHANNELS;
         btn.disabled = atLimit;
-        btn.title = atLimit ? `Only ${this._MC_MAX_CHANNELS} channels allowed` : '';
+        btn.title = atLimit
+            ? `Only ${this._MC_MAX_USER_CHANNELS} user channels (slots 1–7)`
+            : '';
     }
 
     _addEmptyRow() {
@@ -322,7 +359,7 @@ class MeshcoreConfigCard {
             </td>
             <td class="ch-table__psk-cell">
                 <input class="ch-table__name-input" data-field="key_hex"
-                       type="password" value="" placeholder="32-char hex key" />
+                       type="password" value="" placeholder="32-char hex (empty = hashtag)" />
                 <button class="ch-table__reveal" type="button"
                         title="Show/hide key">&#128065;</button>
             </td>
@@ -376,6 +413,70 @@ class MeshcoreConfigCard {
         } finally {
             button.disabled = false;
         }
+    }
+
+    async _saveCompanionName(button) {
+        const input = this._body.querySelector('[data-mc-name]');
+        const advertEl = this._body.querySelector('[data-mc-name-advert]');
+        const status = this._body.querySelector('[data-mc-name-status]');
+        if (!input || !status) return;
+
+        const value = (input.value || '').trim();
+        if (!value) {
+            status.dataset.kind = 'error';
+            status.textContent = 'Name must not be empty.';
+            return;
+        }
+
+        button.disabled = true;
+        status.dataset.kind = 'pending';
+        status.textContent = 'Renaming companion…';
+
+        const result = await this._api.put(
+            '/api/config/meshcore/companion-name',
+            { name: value },
+        );
+
+        if (!result) {
+            // _api.put toasts the server detail on non-2xx; we just
+            // clear the inline status so the toast is the user's
+            // canonical signal.
+            status.dataset.kind = 'error';
+            status.textContent = 'Save failed.';
+            button.disabled = false;
+            return;
+        }
+
+        status.dataset.kind = 'success';
+        status.textContent = `Renamed to "${result.name || value}".`;
+        this._api.toast('Companion renamed');
+
+        // Default-on per the v0.7.5 spec: identity on the mesh is the
+        // advert packet, so a rename without a follow-up advert leaves
+        // every neighbor seeing the old name until the next periodic
+        // beacon (which on MeshCore is operator-driven, not automatic).
+        if (advertEl && advertEl.checked) {
+            try {
+                const advertRes = await this._api.post(
+                    '/api/messages/advert',
+                    {},
+                );
+                if (advertRes && advertRes.success) {
+                    this._api.toast('Advert sent');
+                } else if (advertRes) {
+                    this._api.toast(
+                        'Advert failed' +
+                            (advertRes.error ? `: ${advertRes.error}` : ''),
+                    );
+                }
+            } catch (_e) {
+                // Rename already stuck on flash; advert failure is a
+                // soft error. Rely on the toast to surface it.
+            }
+        }
+
+        await this._api.refresh();
+        button.disabled = false;
     }
 
     _setStatus(kind, message) {

@@ -1,8 +1,9 @@
 # WisMesh Node platform (`feat/wismesh-hat`)
 
 Experimental **Meshpoint Node** support for the RAK6421 WisMesh Pi HAT (meshtasticd-backed RF).
-This work lives on a **long-lived branch** and may not merge to `main` for some time.
-Gateway users (RAK2287 / SenseCap M1 concentrators) should stay on **`main`**.
+**Discovery docs** (README Option E, Hardware Matrix, Onboarding, migration guide) are on **`main`** so users can find the HAT before the code ships.
+**Installer and runtime** remain on branch **`feat/wismesh-hat`** until **v0.7.6** merges.
+Gateway users (RAK2287 / SenseCap M1 concentrators) should stay on **`main`** for production installs.
 
 **Last updated:** 2026-05-31 (dashboard meshtasticd control plane + platform UI)
 

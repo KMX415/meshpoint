@@ -6,7 +6,7 @@ allows the operator to pin to. The catalog is intentionally tiny:
 ``custom`` slot the user fills in by typing a branch name.
 
 **Release housekeeping:** when bumping ``__version__`` on ``main``, replace
-the RC row here for the *next* sprint (``rc-075`` / ``feat/v0.7.5``, etc.)
+the RC row here for the *next* sprint (``rc-076`` / ``feat/v0.7.6``, etc.)
 and branch ``feat/v0.7.N`` from updated ``main``. Full checklist:
 ``Meshradar.io/.cursor/rules/operations-runbook.mdc`` (Dashboard release
 channel picker).
@@ -29,6 +29,7 @@ TIER_CUSTOM = "custom"
 # Remap retired picker ids (sessionStorage, docs, old bookmarks).
 CHANNEL_ID_ALIASES: dict[str, str] = {
     "rc-074": "rc-075",
+    "rc-075": "rc-076",
 }
 
 
@@ -36,7 +37,12 @@ def normalize_channel_id(channel_id: str | None) -> str | None:
     """Return the current catalog id for a stored or requested channel id."""
     if not channel_id:
         return channel_id
-    return CHANNEL_ID_ALIASES.get(channel_id, channel_id)
+    seen: set[str] = set()
+    current = channel_id
+    while current in CHANNEL_ID_ALIASES and current not in seen:
+        seen.add(current)
+        current = CHANNEL_ID_ALIASES[current]
+    return current
 
 
 @dataclass(frozen=True)
@@ -62,11 +68,11 @@ DEFAULT_CHANNELS: tuple[ReleaseChannel, ...] = (
         description="Latest tagged release. Recommended for production gateways.",
     ),
     ReleaseChannel(
-        id="rc-075",
-        label="Release candidate (v0.7.5)",
-        branch="feat/v0.7.5",
+        id="rc-076",
+        label="Release candidate (v0.7.6)",
+        branch="feat/v0.7.6",
         tier=TIER_RC,
-        description="Next sprint branch. Expect rough edges until the branch exists on GitHub.",
+        description="Sprint branch for v0.7.6. Expect rough edges.",
     ),
     ReleaseChannel(
         id="custom",
@@ -94,6 +100,13 @@ class ReleaseChannelRegistry:
         channel_id = normalize_channel_id(channel_id) or ""
         for channel in self._channels:
             if channel.id == channel_id:
+                return channel
+        return None
+
+    def rc_channel(self) -> ReleaseChannel | None:
+        """Return the configured release-candidate channel, if any."""
+        for channel in self._channels:
+            if channel.tier == TIER_RC:
                 return channel
         return None
 

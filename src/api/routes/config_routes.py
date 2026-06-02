@@ -105,7 +105,7 @@ async def get_config():
             except Exception:
                 pass
     mc_status["channel_keys"] = [
-        {"name": name, "key_hex": key}
+        {"name": name, "key_hex": _meshcore_key_hex_for_response(key)}
         for name, key in (_config.meshcore.channel_keys.items() if _config else [])
     ]
 
@@ -444,13 +444,62 @@ async def update_channels(req: ChannelsUpdate):
     }
 
 
+MESHCORE_CHANNEL_KEY_BYTES = 16
+# 16 zero bytes => 32 hex digits (each byte is "00", not 32 copies of "00").
+MESHCORE_ZERO_KEY_HEX = "00" * MESHCORE_CHANNEL_KEY_BYTES
+# Erroneous value written by v0.7.5 RC before the fix (64 hex digits = 32 bytes).
+MESHCORE_LEGACY_ZERO_KEY_HEX = "0" * (MESHCORE_CHANNEL_KEY_BYTES * 4)
+
+
 class McChannelEntry(BaseModel):
     name: str
-    key_hex: str
+    key_hex: str = ""
 
 
 class McChannelsUpdate(BaseModel):
     channels: list[McChannelEntry]
+
+
+def _meshcore_key_hex_for_response(key_hex: str) -> str:
+    """Coerce known-bad stored keys for GET /api/config (non-fatal)."""
+    raw = (key_hex or "").strip().lower()
+    if not raw or raw == MESHCORE_LEGACY_ZERO_KEY_HEX:
+        return MESHCORE_ZERO_KEY_HEX
+    if len(raw) == MESHCORE_CHANNEL_KEY_BYTES * 4 and set(raw) <= {"0"}:
+        return MESHCORE_ZERO_KEY_HEX
+    return (key_hex or "").strip()
+
+
+def _normalize_meshcore_key_hex(key_hex: str, *, channel_name: str) -> str:
+    """Return canonical lowercase hex for a 16-byte MeshCore channel key."""
+    raw_hex = (key_hex or "").strip().lower()
+    if not raw_hex:
+        return MESHCORE_ZERO_KEY_HEX
+    if raw_hex == MESHCORE_LEGACY_ZERO_KEY_HEX:
+        return MESHCORE_ZERO_KEY_HEX
+    try:
+        raw = binascii.unhexlify(raw_hex)
+    except (ValueError, binascii.Error):
+        raise HTTPException(400, f"Invalid hex key for channel '{channel_name}'")
+    if len(raw) == MESHCORE_CHANNEL_KEY_BYTES * 2 and raw == b"\x00" * (
+        MESHCORE_CHANNEL_KEY_BYTES * 2
+    ):
+        return MESHCORE_ZERO_KEY_HEX
+    if len(raw) != MESHCORE_CHANNEL_KEY_BYTES:
+        raise HTTPException(
+            400,
+            f"MeshCore key for '{channel_name}' must be {MESHCORE_CHANNEL_KEY_BYTES} bytes "
+            f"({MESHCORE_CHANNEL_KEY_BYTES * 2} hex characters)",
+        )
+    return binascii.hexlify(raw).decode()
+
+
+def _normalize_meshcore_channel_entry(name: str, key_hex: str) -> tuple[str, str] | None:
+    """Return (name, normalized_hex) or None if the row has no name."""
+    name = (name or "").strip()
+    if not name:
+        return None
+    return name, _normalize_meshcore_key_hex(key_hex, channel_name=name)
 
 
 @router.put("/meshcore/channels")
@@ -461,13 +510,11 @@ async def update_meshcore_channels(req: McChannelsUpdate):
 
     channel_keys: dict[str, str] = {}
     for ch in req.channels:
-        if not ch.name or not ch.key_hex:
+        normalized = _normalize_meshcore_channel_entry(ch.name, ch.key_hex)
+        if normalized is None:
             continue
-        try:
-            binascii.unhexlify(ch.key_hex)
-        except (ValueError, binascii.Error):
-            raise HTTPException(400, f"Invalid hex key for channel '{ch.name}'")
-        channel_keys[ch.name] = ch.key_hex
+        name, key_hex = normalized
+        channel_keys[name] = key_hex
 
     _config.meshcore.channel_keys = channel_keys
     try:

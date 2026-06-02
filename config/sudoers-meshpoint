@@ -11,6 +11,7 @@
 # (branch names, package names, commit SHAs) -- never the binary.
 
 # ── Service management ────────────────────────────────────────────────
+meshpoint ALL=(ALL) NOPASSWD: /usr/bin/systemctl status meshpoint *
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart meshpoint
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart meshtasticd
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/systemctl is-active meshtasticd

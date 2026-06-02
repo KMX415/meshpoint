@@ -185,6 +185,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 15_000);
 
     setInterval(_checkForUpdate, 300_000);
+
+    if (window.MeshpointDisplayUnits?.onChange) {
+        window.MeshpointDisplayUnits.onChange(_renderCpuTemp);
+    }
 });
 
 function _bootDangerousPanel(router) {
@@ -322,10 +326,14 @@ async function _loadInitial(nodeMap, nodeList, packetFeed) {
 
 async function _refreshData(nodeMap, nodeList, packetFeed) {
     try {
-        const res = await fetch('/api/nodes?enrich=true');
-        const data = await res.json();
+        const [nodesRes, deviceRes] = await Promise.all([
+            fetch('/api/nodes?enrich=true'),
+            fetch('/api/device'),
+        ]);
+        const data = await nodesRes.json();
         const nodes = data.nodes || data || [];
-        nodeMap.loadNodes(nodes);
+        const device = deviceRes.ok ? await deviceRes.json() : undefined;
+        nodeMap.loadNodes(nodes, device);
         nodeList.loadNodes(nodes);
         packetFeed.loadNodes(nodes);
     } catch (e) {
@@ -380,7 +388,16 @@ async function _updateStats() {
             _setText('stat-ram-sub', `${metrics.memory_used_mb} / ${metrics.memory_total_mb} MB`);
             _setText('stat-disk-val', `${metrics.disk_percent}%`);
             _setText('stat-disk-sub', `${metrics.disk_used_gb} / ${metrics.disk_total_gb} GB`);
-            _setText('stat-temp-val', metrics.cpu_temp_c != null ? `${metrics.cpu_temp_c}°C` : 'N/A');
+            _lastCpuTempC = metrics.cpu_temp_c;
+            _renderCpuTemp();
+            if (Array.isArray(metrics.load_avg)) {
+                const [m1, m5, m15] = metrics.load_avg;
+                _setText('stat-load-val', m1.toFixed(2));
+                _setText('stat-load-sub', `5m ${m5.toFixed(2)} · 15m ${m15.toFixed(2)}`);
+            } else {
+                _setText('stat-load-val', 'N/A');
+                _setText('stat-load-sub', '');
+            }
         }
     } catch (e) {
         console.error('Failed to update stats:', e);
@@ -394,6 +411,21 @@ function _incrementPacketCount() {
 }
 
 window.getTotalPackets = () => _totalPackets;
+
+let _lastCpuTempC = null;
+
+function _renderCpuTemp() {
+    const formatter = window.MeshpointDisplayUnits?.formatTemperature;
+    let text;
+    if (_lastCpuTempC == null) {
+        text = 'N/A';
+    } else if (typeof formatter === 'function') {
+        text = formatter(_lastCpuTempC) ?? 'N/A';
+    } else {
+        text = `${_lastCpuTempC}\u00B0C`;
+    }
+    _setText('stat-temp-val', text);
+}
 
 function _formatUptime(totalSeconds) {
     const days = Math.floor(totalSeconds / 86400);

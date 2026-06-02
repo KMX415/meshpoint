@@ -35,6 +35,7 @@
     <link rel="stylesheet" href="css/stats.css" />
     <link rel="stylesheet" href="css/settings.css" />
     <link rel="stylesheet" href="css/configuration.css" />
+    <link rel="stylesheet" href="css/gps.css" />
     <link rel="stylesheet" href="css/terminal_theme.css" />
     <link rel="stylesheet" href="css/terminal.css" />
     <link rel="stylesheet" href="/vendor/xterm/xterm.css" />
@@ -310,6 +311,11 @@
                             <div class="stat-card__label">CPU Temp</div>
                             <div class="stat-card__value" id="stat-temp-val">--</div>
                         </div>
+                        <div class="stat-card stat-card--system" id="stat-load">
+                            <div class="stat-card__label">Load Avg</div>
+                            <div class="stat-card__value" id="stat-load-val">--</div>
+                            <div class="stat-card__sub" id="stat-load-sub"></div>
+                        </div>
                     </section>
 
                     <div class="dashboard__main">
@@ -325,6 +331,23 @@
                                 <div class="panel__header">
                                     <span>Nodes</span>
                                     <input type="text" id="node-search" class="node-search" placeholder="Search..." />
+                                </div>
+                                <div class="nc-controls" role="group" aria-label="Sort and filter nodes">
+                                    <select id="node-sort" class="nc-controls__sort" aria-label="Sort nodes by">
+                                        <option value="last_heard">Sort: Last heard</option>
+                                        <option value="signal">Sort: Signal</option>
+                                        <option value="hops">Sort: Hops</option>
+                                        <option value="name">Sort: Name</option>
+                                    </select>
+                                    <button id="node-favorites-toggle" type="button"
+                                            class="nc-pill nc-pill--star"
+                                            aria-pressed="false"
+                                            title="Show only favorited nodes">&#9734;</button>
+                                    <div class="nc-controls__filter" role="group" aria-label="Filter by hop count">
+                                        <button type="button" class="nc-pill nc-pill--active" data-filter="all">All</button>
+                                        <button type="button" class="nc-pill" data-filter="direct">Direct</button>
+                                        <button type="button" class="nc-pill" data-filter="relayed">Relayed</button>
+                                    </div>
                                 </div>
                                 <div class="panel__body" id="node-list"></div>
                             </div>
@@ -652,6 +675,8 @@
     <script src="js/websocket_client.js"></script>
     <script src="js/components/node_map.js"></script>
     <script src="js/meshpoint_display_units.js"></script>
+    <script src="js/meshpoint_node_favorites.js"></script>
+    <script src="js/node_cards_sort.js"></script>
     <script src="js/node_cards.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="js/node_metrics_chart.js"></script>
@@ -692,6 +717,8 @@
     <script src="js/configuration/meshcore_card.js"></script>
     <script src="js/configuration/transmit_card.js"></script>
     <script src="js/configuration/mqtt_card.js"></script>
+    <script src="js/configuration/gps_skyplot.js"></script>
+    <script src="js/configuration/gps_stats_column.js"></script>
     <script src="js/configuration/gps_card.js"></script>
     <script src="js/configuration/advanced_card.js"></script>
     <script src="js/configuration/configuration_panel.js"></script>

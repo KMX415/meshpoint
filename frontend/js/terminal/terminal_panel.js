@@ -158,6 +158,17 @@ class TerminalPanelController {
             return;
         }
         this.client.sendInput(commandText);
+        // Return focus to the shell so Enter runs the line instead of
+        // re-activating the drawer button (which would insert twice).
+        this._focusTerminal();
+    }
+
+    _focusTerminal() {
+        const active = document.activeElement;
+        if (active instanceof HTMLElement && this.drawerEl?.contains(active)) {
+            active.blur();
+        }
+        this.renderer?.focus();
     }
 
     _toggleSearch() {

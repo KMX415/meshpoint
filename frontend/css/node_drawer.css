@@ -90,6 +90,37 @@
     color: var(--text-primary);
 }
 
+.nd-header__favorite {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    margin-right: 0.1rem;
+    opacity: 0.75;
+    transition: color 0.15s, opacity 0.15s, transform 0.15s;
+    flex-shrink: 0;
+}
+
+.nd-header__favorite:hover {
+    color: var(--accent-amber, #f59e0b);
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.nd-header__favorite--on {
+    color: var(--accent-amber, #f59e0b);
+    opacity: 1;
+}
+
+.nd-header__favorite:focus-visible {
+    outline: 1px solid var(--accent-amber, #f59e0b);
+    outline-offset: 1px;
+}
+
 /* ---- Body ---- */
 
 .nd-body {

@@ -14,6 +14,18 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# Companion firmware caps the advert name at roughly 32 ASCII bytes; the
+# exact ceiling varies with location/unicode payload per MeshCore docs.
+# We enforce 32 UTF-8 bytes as a conservative upper bound that fits every
+# documented variant.
+MAX_COMPANION_NAME_BYTES = 32
+
+# Companion channel slots: 0 = Public (firmware default). User-configured keys
+# use slots 1..N so they match Messages UI channel indices and RX channel_idx.
+MESHCORE_PUBLIC_SLOT_INDEX = 0
+MESHCORE_MAX_DEVICE_SLOTS = 8
+MESHCORE_MAX_USER_CHANNELS = MESHCORE_MAX_DEVICE_SLOTS - 1
+
 
 @dataclass
 class SendResult:
@@ -212,6 +224,98 @@ class MeshCoreTxClient:
             await self._run_post_command()
             return SendResult(success=False, error=str(exc))
 
+    async def set_companion_name(self, name: str) -> SendResult:
+        """Rename the USB companion via CMD_SET_ADVERT_NAME (0x08).
+
+        On OK we mutate the cached ``self_info["name"]`` so the
+        Configuration card, top-bar chip, and packet attribution all
+        reflect the rename without waiting for the next reconnect.
+        ``set_name`` itself only returns OK/ERROR; it does not emit a
+        fresh SELF_INFO, and meshcore 2.3.x exposes no public method to
+        re-poll the device (``self_info`` is seeded once during the
+        ``connect`` handshake's appstart and never auto-refreshed).
+        Updating the dict locally is safe because the firmware just
+        acknowledged the new name via ``command_ok``; the next
+        reconnect will reseed ``self_info`` from the device anyway.
+
+        Validation lives here so route handlers, future CLI callers,
+        and the ``meshcore.companion_name`` yaml-on-connect path all
+        use the same ceiling.
+        """
+        if not self.connected:
+            return SendResult(success=False, error="Not connected")
+
+        cleaned = (name or "").strip()
+        if not cleaned:
+            return SendResult(success=False, error="Name must not be empty")
+        encoded_len = len(cleaned.encode("utf-8"))
+        if encoded_len > MAX_COMPANION_NAME_BYTES:
+            return SendResult(
+                success=False,
+                error=(
+                    f"Name is {encoded_len} bytes (UTF-8); "
+                    f"companion accepts at most {MAX_COMPANION_NAME_BYTES}."
+                ),
+            )
+
+        try:
+            from meshcore import EventType
+        except Exception:
+            return SendResult(success=False, error="meshcore library unavailable")
+
+        try:
+            result = await asyncio.wait_for(
+                self._mc.commands.set_name(cleaned),
+                timeout=10.0,
+            )
+        except asyncio.TimeoutError:
+            await self._run_post_command()
+            return SendResult(success=False, error="set_name timed out")
+        except Exception as exc:
+            logger.exception("MeshCore set_name failed")
+            await self._run_post_command()
+            return SendResult(success=False, error=str(exc))
+
+        if result.type == EventType.ERROR:
+            payload = getattr(result, "payload", None)
+            detail = ""
+            if isinstance(payload, dict):
+                detail = str(payload.get("reason") or payload.get("error") or payload)
+            elif payload is not None:
+                detail = str(payload)
+            error = f"Companion rejected name: {detail}" if detail else "Companion rejected name"
+            await self._run_post_command()
+            return SendResult(success=False, error=error)
+
+        # OK path: refresh self_info so callers see the new name immediately.
+        # The meshcore library does not expose a method to re-poll the
+        # device's identity (self_info is seeded once during connect's
+        # appstart handshake and never automatically refreshed). Since
+        # the firmware just acknowledged the rename via command_ok, we
+        # know the new name is what the device holds: mutate the cached
+        # dict directly so /api/config -> get_radio_info() returns the
+        # new value on the next dashboard refresh. The next reconnect
+        # will reseed self_info from the device anyway.
+        try:
+            cache = getattr(self._mc, "self_info", None)
+            if isinstance(cache, dict):
+                cache["name"] = cleaned
+        except Exception:
+            logger.debug(
+                "set_companion_name: could not update self_info cache; "
+                "dashboard will lag by one reconnect cycle",
+                exc_info=True,
+            )
+
+        event_type = (
+            result.type.value
+            if hasattr(result.type, "value")
+            else str(result.type)
+        )
+        logger.info("MeshCore companion renamed to %r (%s)", cleaned, event_type)
+        await self._run_post_command()
+        return SendResult(success=True, event_type=event_type)
+
     @staticmethod
     def _normalize_contact_payload(payload) -> list[dict]:
         """Accept both dict-keyed-by-pubkey and list formats.
@@ -259,9 +363,10 @@ class MeshCoreTxClient:
     async def sync_channels(self, channel_keys: dict) -> None:
         """Sync configured channels to the companion device.
 
-        Writes each channel from channel_keys to a numbered slot (0, 1, …),
-        then clears any slots beyond that count that still hold a name on the
-        device. channel_keys maps channel name → hex-encoded 16-byte secret.
+        Slot 0 is reserved for Public. Each entry in channel_keys is written
+        to slots 1, 2, … so device channel_idx matches the Messages tab. Extra
+        user slots are cleared. channel_keys maps channel name → hex-encoded
+        16-byte secret (use 32 zero digits for hashtag / no-PSK channels).
         """
         if not self.connected:
             logger.debug("sync_channels: not connected, skipping")
@@ -272,7 +377,7 @@ class MeshCoreTxClient:
             logger.warning("sync_channels: meshcore library unavailable")
             return
 
-        _MAX_SLOTS = 8
+        _MAX_SLOTS = MESHCORE_MAX_DEVICE_SLOTS
 
         # Read current device slots.
         device_slots: dict[int, tuple[str, bytes]] = {}
@@ -296,31 +401,41 @@ class MeshCoreTxClient:
             )
 
         desired = list(channel_keys.items())  # [(name, key_hex), …]
+        if len(desired) > MESHCORE_MAX_USER_CHANNELS:
+            logger.warning(
+                "sync_channels: more than %d user channels configured, ignoring extras",
+                MESHCORE_MAX_USER_CHANNELS,
+            )
+            desired = desired[:MESHCORE_MAX_USER_CHANNELS]
 
-        # Write desired channels.
-        for idx, (name, key_hex) in enumerate(desired):
-            if idx >= _MAX_SLOTS:
-                logger.warning("sync_channels: more than %d channels configured, ignoring extras", _MAX_SLOTS)
-                break
+        # Write desired channels to slots 1..N (slot 0 = Public, untouched).
+        for user_idx, (name, key_hex) in enumerate(desired):
+            slot = user_idx + 1
             try:
                 secret = bytes.fromhex(key_hex)
             except ValueError:
                 logger.warning("sync_channels: invalid hex key for '%s', skipping", name)
                 continue
-            dev_name, dev_secret = device_slots.get(idx, ("", b""))
+            if len(secret) != 16:
+                logger.warning(
+                    "sync_channels: key for '%s' must be 16 bytes, skipping", name
+                )
+                continue
+            dev_name, dev_secret = device_slots.get(slot, ("", b""))
             if dev_name == name and dev_secret == secret:
-                logger.debug("sync_channels: slot %d already correct (%s)", idx, name)
+                logger.debug("sync_channels: slot %d already correct (%s)", slot, name)
                 continue
             try:
                 await asyncio.wait_for(
-                    self._mc.commands.set_channel(idx, name, secret), timeout=5.0
+                    self._mc.commands.set_channel(slot, name, secret), timeout=5.0
                 )
-                logger.info("sync_channels: set slot %d → %s", idx, name)
+                logger.info("sync_channels: set slot %d → %s", slot, name)
             except Exception:
-                logger.exception("sync_channels: failed to set slot %d (%s)", idx, name)
+                logger.exception("sync_channels: failed to set slot %d (%s)", slot, name)
 
-        # Clear any extra populated slots on the device.
-        for idx in range(len(desired), _MAX_SLOTS):
+        # Clear extra user slots (never clear Public slot 0).
+        first_clear = 1 + len(desired)
+        for idx in range(first_clear, _MAX_SLOTS):
             dev = device_slots.get(idx)
             if dev is None:
                 break

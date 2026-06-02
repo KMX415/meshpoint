@@ -16,7 +16,7 @@
 const UPDATE_CHANNEL_STORAGE_KEY = 'meshpoint_update_channel_id';
 const UPDATE_CUSTOM_BRANCH_STORAGE_KEY = 'meshpoint_update_custom_branch';
 /** Retired picker ids remapped when the dashboard reloads after a release. */
-const UPDATE_CHANNEL_ALIASES = { 'rc-074': 'rc-075' };
+const UPDATE_CHANNEL_ALIASES = { 'rc-074': 'rc-075', 'rc-075': 'rc-076' };
 
 class UpdatePanelController {
     constructor(rootEl) {
@@ -269,7 +269,7 @@ class UpdatePanelController {
             && status.install_branch === 'main'
             && this._versionAtLeast(status.local_version, [0, 7, 4])
         ) {
-            const rc = this._channels.find((c) => c.id === 'rc-075');
+            const rc = this._channels.find((c) => c.tier === 'rc');
             if (rc) channelId = rc.id;
         }
         if (channelId && !this._channels.some((c) => c.id === channelId)) {
