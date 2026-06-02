@@ -225,7 +225,7 @@ class UpdateProgressView {
         }
     }
 
-    async waitForServiceRecovery({ timeoutMs = 90000, intervalMs = 2000 } = {}) {
+    async waitForServiceRecovery({ timeoutMs = 180000, intervalMs = 2000 } = {}) {
         if (!this.root) return false;
         this.root.dataset.state = 'reconnecting';
         const hint = this.root.querySelector('.update-progress__hint');
@@ -236,7 +236,7 @@ class UpdateProgressView {
         const deadline = Date.now() + timeoutMs;
         while (Date.now() < deadline) {
             try {
-                const response = await fetch('/api/device/status', {
+                const response = await fetch('/api/identity', {
                     credentials: 'same-origin',
                     cache: 'no-store',
                 });
@@ -252,7 +252,7 @@ class UpdateProgressView {
             await new Promise((resolve) => setTimeout(resolve, intervalMs));
         }
         if (hint) {
-            hint.textContent = 'Still waiting for the dashboard. If this lasts more than a minute, open the page again or check `journalctl -u meshpoint` over SSH.';
+            hint.textContent = 'Still waiting for the dashboard. Pip can take 2–3 minutes on a Pi. Refresh the page or check `journalctl -u meshpoint` over SSH.';
         }
         return false;
     }

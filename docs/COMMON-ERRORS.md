@@ -181,13 +181,40 @@ sudo bash scripts/install.sh
 sudo systemctl restart meshpoint
 ```
 
-**Prevention:** v0.7.5.1+ stops the service, runs
-``scripts/apply_finish.sh`` (pip + ``post_update.sh`` + restart) in a
-detached session after git sync. Typical runtime is about 1–2 minutes.
+**Prevention:** v0.7.5.1+ runs ``scripts/apply_finish.sh`` (pip +
+``post_update.sh`` + restart) in a detached session after git sync.
+Do not ``systemctl stop`` at the start of that script: it is spawned
+from the meshpoint service cgroup and would kill itself before pip
+finishes. Typical runtime is about 1–2 minutes (longer when
+``cryptography`` is first installed). The Updates page waits up to
+three minutes, then reloads when ``/api/identity`` responds again.
 Full ``install.sh`` is still recommended over SSH when release notes call
 for system packages or HAL work. If the dashboard still shows
 **Rollback**, that button resets git to the saved pre-update commit; use
 it only if you want to abandon the target branch.
+
+### Settings → Updates stuck on "Reconnecting" after apply
+
+**Cause:** On builds before the apply_finish cgroup fix, the script
+called ``systemctl stop`` while still running inside the meshpoint
+service unit. Systemd then killed the script before ``pip install`` and
+``systemctl restart`` could finish, leaving the service **inactive**
+while the browser kept polling.
+
+**Fix (recovery):**
+
+```bash
+sudo bash /opt/meshpoint/scripts/apply_finish.sh
+```
+
+Or manually:
+
+```bash
+sudo /opt/meshpoint/venv/bin/pip install -r /opt/meshpoint/requirements.txt
+sudo systemctl restart meshpoint
+```
+
+Then hard-refresh the dashboard (Ctrl+Shift+R).
 
 ### `install.sh` told me to reboot after an upgrade. Do I have to?
 
