@@ -344,6 +344,10 @@
     color: var(--brand-amber, #ffb84d);
 }
 
+.update-card__description[data-tier="experimental"] {
+    color: var(--accent-cyan, #4ecdc4);
+}
+
 .update-card__description[data-tier="custom"] {
     color: #ff6b6b;
 }

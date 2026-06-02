@@ -363,10 +363,21 @@ class UpdatePanelController {
             this._setStatus('error', 'Custom channel requires a branch name.');
             return;
         }
-        const confirmed = window.confirm(
+        let confirmText = (
             `Apply update from "${channel.label}"? `
             + 'The service will restart at the end of the chain.'
         );
+        if (channel.tier === 'experimental') {
+            confirmText = (
+                `EXPERIMENTAL: "${channel.label}"\n\n`
+                + 'This switches to the meshtasticd Node platform (RAK6421 WisMesh HAT).\n\n'
+                + 'Do NOT use on RAK V2, SenseCap M1, Chameleon, or any SX1302 gateway.\n\n'
+                + 'After Apply, run: sudo ./scripts/install.sh --platform node\n'
+                + 'See docs/WISMESH-NODE.md on the Pi.\n\n'
+                + 'Continue anyway?'
+            );
+        }
+        const confirmed = window.confirm(confirmText);
         if (!confirmed) return;
         this._rememberChannelForReload(channel, customBranch);
         const branch = channel.tier === 'custom' ? customBranch : (channel.branch || '');

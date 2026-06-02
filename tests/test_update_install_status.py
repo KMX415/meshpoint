@@ -67,6 +67,11 @@ class TestMatchChannelForBranch(unittest.TestCase):
         info = match_channel_for_branch(ReleaseChannelRegistry(), "feat/v0.7.6")
         self.assertEqual(info["active_channel_id"], "rc-076")
 
+    def test_wismesh_branch_maps_to_experimental_channel(self) -> None:
+        info = match_channel_for_branch(ReleaseChannelRegistry(), "feat/wismesh-hat")
+        self.assertEqual(info["active_channel_id"], "wismesh-node")
+        self.assertEqual(info["channel_tier"], "experimental")
+
     def test_main_on_074_suggests_next_rc(self) -> None:
         info = suggest_active_channel_for_install(
             ReleaseChannelRegistry(), "main", local_version="0.7.5",

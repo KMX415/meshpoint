@@ -54,6 +54,16 @@ class TestReleaseChannelRegistry(unittest.TestCase):
         self.assertEqual(match.tier, "rc")
         self.assertEqual(match.branch, "feat/v0.7.6")
 
+    def test_find_returns_wismesh_experimental_channel(self) -> None:
+        match = ReleaseChannelRegistry().find("wismesh-node")
+        self.assertIsNotNone(match)
+        self.assertEqual(match.tier, "experimental")
+        self.assertEqual(match.branch, "feat/wismesh-hat")
+
+    def test_resolve_branch_for_wismesh_experimental(self) -> None:
+        registry = ReleaseChannelRegistry()
+        self.assertEqual(registry.resolve_branch("wismesh-node"), "feat/wismesh-hat")
+
     def test_normalize_channel_id_remaps_retired_rc(self) -> None:
         self.assertEqual(normalize_channel_id("rc-074"), "rc-076")
         self.assertEqual(normalize_channel_id("rc-075"), "rc-076")

@@ -84,6 +84,29 @@ equivalent). Prefer `sudo poweroff` before removing PoE to avoid SPI latch
 
 ---
 
+## Experimental: WisMesh Node (RAK6421 HAT)
+
+| | RAK6421 WisMesh Pi HAT |
+|---|---|
+| **Platform tier** | **Experimental (Node)** — not Stable |
+| **Host** | Raspberry Pi 4 (64-bit OS Lite) |
+| **RF path** | **meshtasticd** (Portduino) + WisBlock LoRa module |
+| **LoRa modules** | **RAK13300** (validated), **RAK13302** (when meshtasticd preset available) |
+| **Concentrator** | None (single-radio via meshtasticd, not 8-channel SX1302) |
+| **Meshpoint branch** | `feat/wismesh-hat` (Settings → Updates → Experimental) |
+| **Install** | `./scripts/install.sh --platform node` |
+| **Gateway TX/RX** | No native concentrator path; meshtasticd owns the radio |
+| **Dashboard** | Same browser UI; packet source is TCP Phone API (:4403) |
+
+Popular add-on for Pi users who want Meshtastic on a HAT without retiring a
+Helium-class gateway. **Do not flash this track onto RAK V2, SenseCap M1,
+Chameleon, or RAK2287 DIY units** unless you are intentionally converting
+that Pi to a Node-only install.
+
+Full runbook: **[WisMesh Node guide](WISMESH-NODE.md)**.
+
+---
+
 ## What is NOT supported
 
 | Hardware | Status | Reason |

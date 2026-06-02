@@ -24,6 +24,7 @@ from typing import Iterable
 
 TIER_STABLE = "stable"
 TIER_RC = "rc"
+TIER_EXPERIMENTAL = "experimental"
 TIER_CUSTOM = "custom"
 
 # Remap retired picker ids (sessionStorage, docs, old bookmarks).
@@ -73,6 +74,17 @@ DEFAULT_CHANNELS: tuple[ReleaseChannel, ...] = (
         branch="feat/v0.7.6",
         tier=TIER_RC,
         description="Sprint branch for v0.7.6. Expect rough edges.",
+    ),
+    ReleaseChannel(
+        id="wismesh-node",
+        label="Experimental: WisMesh Node (RAK6421 HAT)",
+        branch="feat/wismesh-hat",
+        tier=TIER_EXPERIMENTAL,
+        description=(
+            "meshtasticd Node platform for the RAK6421 WisMesh Pi HAT. "
+            "Not for RAK V2, SenseCap M1, Chameleon, or other SX1302 gateways. "
+            "See docs/WISMESH-NODE.md."
+        ),
     ),
     ReleaseChannel(
         id="custom",

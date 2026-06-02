@@ -14,6 +14,22 @@ A **Meshpoint** is an edge device that:
 - Decodes, stores, and visualizes packets on a real-time dashboard with full chat UI, node discovery, and radio configuration
 - Ships data upstream to the [Meshradar](https://meshradar.io) cloud platform for regional mesh intelligence
 
+## Choose your path: Gateway or Node
+
+Most Meshpoints are **gateways**: a Raspberry Pi plus an **SX1302 or SX1303
+concentrator** (RAK Hotspot V2, SenseCap M1, Syncrobit Chameleon, or DIY
+RAK2287). That is what the rest of this guide covers. Install from **`main`**
+(Stable) after cloning the repo.
+
+**Node (experimental):** If you have a **RAK6421 WisMesh Pi HAT** on a Pi 4 with a **RAK13300** or **RAK13302** LoRa WisBlock module (slot 1), and want Meshpoint's dashboard without an SX1302 gateway stack, use the experimental **`feat/wismesh-hat`** track instead. It runs **meshtasticd** for RF and is **not** for concentrator gateways.
+
+| Path | Hardware | Branch | Guide |
+|------|----------|--------|-------|
+| **Gateway** (recommended) | SX1302/SX1303 concentrator | `main` | Continue below |
+| **Node** (experimental) | RAK6421 HAT + RAK13300/13302 | `feat/wismesh-hat` | [WisMesh Node guide](WISMESH-NODE.md) |
+
+---
+
 ## Hardware Requirements
 
 You need a Raspberry Pi 4 or Compute Module 4 host with an SX1302 or SX1303 LoRa
