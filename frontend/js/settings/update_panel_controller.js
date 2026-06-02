@@ -481,7 +481,7 @@ class UpdatePanelController {
             return;
         }
         const recovered = await this.progressView?.waitForServiceRecovery({
-            timeoutMs: 45000,
+            timeoutMs: 180000,
         });
         if (recovered) {
             // Apply may have succeeded; rollback is written before git fetch.
