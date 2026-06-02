@@ -58,13 +58,13 @@ class TestUpdateApplier(unittest.TestCase):
                 "git fetch",
                 "git checkout",
                 "git reset",
-                "install.sh",
-                "restart service",
+                "upgrade",
             ],
         )
-        # Restart is detached; runner is not invoked for systemctl.
         joined = " ".join(" ".join(c) for c in runner.calls)
+        self.assertNotIn("apply_finish", joined)
         self.assertNotIn("systemctl restart", joined)
+        self.assertNotIn("install.sh", joined)
         self.assertTrue(result.log[-1].get("detached"))
 
     def test_apply_stops_on_first_failure(self) -> None:
@@ -82,12 +82,12 @@ class TestUpdateApplier(unittest.TestCase):
         events: list[tuple[str, str]] = []
         applier.apply(
             branch="main",
-            on_step=lambda label, state: events.append((label, state)),
+            on_step=lambda label, state, detail=None: events.append((label, state)),
         )
         starts = [e for e in events if e[1] == "started"]
         completions = [e for e in events if e[1] == "completed"]
-        self.assertEqual(len(starts), 5)
-        self.assertEqual(len(completions), 5)
+        self.assertEqual(len(starts), 4)
+        self.assertEqual(len(completions), 4)
 
     def test_rollback_runs_reset_then_restart(self) -> None:
         runner = _RecorderRunner()
@@ -95,7 +95,7 @@ class TestUpdateApplier(unittest.TestCase):
         result = applier.rollback(sha="deadbeef")
         self.assertTrue(result.success)
         steps = [entry["step"] for entry in result.log]
-        self.assertEqual(steps, ["git reset", "restart service"])
+        self.assertEqual(steps, ["git reset", "upgrade"])
         self.assertIn("deadbeef", " ".join(runner.calls[0]))
         self.assertEqual(len(runner.calls), 1)
         self.assertTrue(result.log[-1].get("detached"))

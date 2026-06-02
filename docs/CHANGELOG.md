@@ -2,7 +2,7 @@
 
 ### Unreleased
 
-Queued for the next version bump.
+Queued for the next version bump (v0.7.6 mesh participant RC on `feat/v0.7.6`).
 
 - **Docs: Syncrobit Chameleon support.** [Hardware Matrix](HARDWARE-MATRIX.md), [README](../README.md), [Onboarding](ONBOARDING.md), and new [Syncrobit Chameleon guide](SYNCROBIT-CHAMELEON.md) document CM4 eMMC recovery and Meshpoint on the Chameleon SX1302 miner (validated aarch64, v0.7.4+).
 

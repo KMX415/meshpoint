@@ -157,6 +157,38 @@ systemctl restart` is often enough. If you are unsure of the installed
 version, or the service fails after a pull-only upgrade, use the
 **Recommended upgrade command** block at the top of this section.
 
+### Service crashes after Settings → Updates apply (`ModuleNotFoundError: No module named 'cryptography'`)
+
+**Cause:** Releases that add new Python dependencies (for example v0.7.6
+PKI support, which needs `cryptography>=43.0.0`) can fail at startup if
+the dashboard apply path reset git to the new branch and restarted the
+service before `pip install -r requirements.txt` finished. Older apply
+builds ran `install.sh` synchronously while the service was still up, or
+skipped pip entirely.
+
+**Fix (recovery):** Refresh the venv, then restart:
+
+```bash
+sudo /opt/meshpoint/venv/bin/pip install -r /opt/meshpoint/requirements.txt
+sudo systemctl restart meshpoint
+```
+
+Or run the full installer:
+
+```bash
+cd /opt/meshpoint
+sudo bash scripts/install.sh
+sudo systemctl restart meshpoint
+```
+
+**Prevention:** v0.7.5.1+ stops the service, runs
+``scripts/apply_finish.sh`` (pip + ``post_update.sh`` + restart) in a
+detached session after git sync. Typical runtime is about 1–2 minutes.
+Full ``install.sh`` is still recommended over SSH when release notes call
+for system packages or HAL work. If the dashboard still shows
+**Rollback**, that button resets git to the saved pre-update commit; use
+it only if you want to abandon the target branch.
+
 ### `install.sh` told me to reboot after an upgrade. Do I have to?
 
 **Pre-v0.7.1 only.** The install.sh on v0.7.0 always printed the

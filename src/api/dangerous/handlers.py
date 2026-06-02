@@ -40,6 +40,18 @@ def schedule_systemctl_restart(service_name: str) -> subprocess.Popen:
     )
 
 
+def schedule_detached_apply_finish(
+    finish_script: str = "/opt/meshpoint/scripts/apply_finish.sh",
+) -> subprocess.Popen:
+    """Stop service, refresh venv deps, post_update, restart -- outlives this process."""
+    return subprocess.Popen(  # noqa: S603 -- structured argv
+        ["sudo", "/bin/bash", finish_script],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+
+
 def shell_runner(
     args: list[str], timeout_seconds: Optional[float] = 60.0,
 ) -> tuple[int, str, str]:

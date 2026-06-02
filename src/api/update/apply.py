@@ -1,11 +1,18 @@
 """Run the multi-step update from the dashboard.
 
-The applier walks ``git fetch`` -> ``git checkout -B`` (hard reset to
-``origin/<branch>``) -> ``bash scripts/install.sh`` -> ``systemctl
-restart meshpoint``. Each step
-is its own subprocess invocation so the dashboard can stream a
-running log to the operator and so a step that exits non-zero stops
-the chain immediately with the failing step labelled.
+The applier walks ``git fetch`` -> ``git checkout -f`` -> ``git reset
+--hard origin/<branch>`` -> detached ``apply_finish.sh`` (``systemctl
+stop`` -> ``pip install -r requirements.txt`` -> ``post_update.sh`` ->
+``systemctl restart``). Git runs while the service is still up so the HTTP
+stream can finish; the finish script runs in a new session after the stop.
+
+Dashboard apply intentionally does **not** run full ``install.sh`` (no
+``apt-get upgrade`` on every click). Use ``sudo bash scripts/install.sh``
+over SSH when release notes require system packages, HAL, or a deep upgrade.
+
+Each synchronous git step is its own subprocess invocation so the dashboard
+can stream a running log to the operator and so a step that exits
+non-zero stops the chain immediately with the failing step labelled.
 
 Subprocess invocation is delegated to a ``Runner`` callable so tests
 inject a fake without needing real git or sudo. In production the
@@ -28,7 +35,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable, Optional
 
-from src.api.dangerous.handlers import schedule_systemctl_restart
+from src.api.dangerous.handlers import (
+    schedule_detached_apply_finish,
+    schedule_systemctl_restart,
+)
 from src.api.update.install_status import read_head_full_sha
 from src.api.update.rollback_state import (
     DEFAULT_ROLLBACK_STATE_PATH,
@@ -47,6 +57,7 @@ class ApplyAttempt:
     cwd: Optional[str] = None
     timeout_seconds: float = 600.0
     detached: bool = False
+    finish_script: Optional[str] = None
 
 
 @dataclass
@@ -63,7 +74,7 @@ class ApplyResult:
 
 # Runner takes the args list and returns ``(returncode, stdout, stderr)``.
 Runner = Callable[[list[str], Optional[str], float], tuple[int, str, str]]
-StreamCallback = Callable[[str, str], None]
+StreamCallback = Callable[[str, str, Optional[dict]], None]
 
 
 def shell_runner(
@@ -89,12 +100,14 @@ class UpdateApplier:
         *,
         repo_path: str = "/opt/meshpoint",
         install_script: str = "/opt/meshpoint/scripts/install.sh",
+        finish_script: str = "/opt/meshpoint/scripts/apply_finish.sh",
         service_name: str = "meshpoint",
         runner: Runner = shell_runner,
         rollback_state_path: Path | None = None,
     ) -> None:
         self._repo_path = repo_path
         self._install_script = install_script
+        self._finish_script = finish_script
         self._service_name = service_name
         self._runner = runner
         self._rollback_state_path = (
@@ -167,9 +180,11 @@ class UpdateApplier:
                 cwd=self._repo_path,
             ),
             ApplyAttempt(
-                label="restart service",
-                args=["sudo", "systemctl", "restart", self._service_name],
+                label="upgrade",
+                args=["sudo", "bash", self._finish_script],
+                timeout_seconds=60,
                 detached=True,
+                finish_script=self._finish_script,
             ),
         ]
         for step in steps:
@@ -213,29 +228,26 @@ class UpdateApplier:
                 timeout_seconds=60,
             ),
             ApplyAttempt(
-                label="install.sh",
-                args=["sudo", "bash", self._install_script],
-                cwd=self._repo_path,
-                timeout_seconds=900,
-            ),
-            ApplyAttempt(
-                label="restart service",
-                args=["sudo", "systemctl", "restart", self._service_name],
+                label="upgrade",
+                args=["sudo", "bash", self._finish_script],
                 timeout_seconds=60,
                 detached=True,
+                finish_script=self._finish_script,
             ),
         )
 
     def _run_step(
         self, step: ApplyAttempt, on_step: Optional[StreamCallback],
     ) -> dict:
+        started_detail = {"command": shlex.join(step.args)}
         if on_step:
-            on_step(step.label, "started")
+            on_step(step.label, "started", started_detail)
         if step.detached:
-            proc = schedule_systemctl_restart(self._service_name)
-            if on_step:
-                on_step(step.label, "completed")
-            return {
+            if step.finish_script:
+                proc = schedule_detached_apply_finish(step.finish_script)
+            else:
+                proc = schedule_systemctl_restart(self._service_name)
+            entry = {
                 "step": step.label,
                 "command": shlex.join(step.args),
                 "returncode": 0,
@@ -244,29 +256,38 @@ class UpdateApplier:
                 "detached": True,
                 "pid": proc.pid,
             }
+            if on_step:
+                on_step(step.label, "completed", _public_step_detail(entry))
+            return entry
         try:
             rc, stdout, stderr = self._runner(
                 step.args, step.cwd, step.timeout_seconds,
             )
         except subprocess.TimeoutExpired:
-            if on_step:
-                on_step(step.label, "error")
-            return {
+            entry = {
                 "step": step.label,
                 "command": shlex.join(step.args),
                 "returncode": -1,
                 "stdout": "",
                 "stderr": "timeout",
             }
-        if on_step:
-            on_step(step.label, "completed" if rc == 0 else "error")
-        return {
+            if on_step:
+                on_step(step.label, "error", _public_step_detail(entry))
+            return entry
+        entry = {
             "step": step.label,
             "command": shlex.join(step.args),
             "returncode": rc,
             "stdout": stdout,
             "stderr": stderr,
         }
+        if on_step:
+            on_step(
+                step.label,
+                "completed" if rc == 0 else "error",
+                _public_step_detail(entry),
+            )
+        return entry
 
     def _capture_head_sha(self) -> Optional[str]:
         if not Path(self._repo_path).exists():
@@ -284,3 +305,24 @@ class UpdateApplier:
                 exc_info=True,
             )
         return None
+
+
+def _public_step_detail(entry: dict) -> dict:
+    """Trim step output for NDJSON streaming to the dashboard."""
+    detail: dict = {
+        "command": entry.get("command", ""),
+        "returncode": entry.get("returncode"),
+    }
+    if entry.get("detached"):
+        detail["detached"] = True
+        detail["note"] = (
+            "Continues in background: stop service, pip install, "
+            "post-update migrations, restart."
+        )
+    stdout = (entry.get("stdout") or "").strip()
+    stderr = (entry.get("stderr") or "").strip()
+    if stdout:
+        detail["stdout"] = stdout[-4000:] if len(stdout) > 4000 else stdout
+    if stderr:
+        detail["stderr"] = stderr[-4000:] if len(stderr) > 4000 else stderr
+    return detail

@@ -3,21 +3,20 @@
  *
  * Driven by NDJSON stream events from the apply/rollback stream endpoints
  * (``/api/update/apply/stream``, ``/api/update/rollback/stream``) so each
- * git/install step lights up as it runs on the Pi. After the final
- * result, we poll ``/api/device/status`` when the service restarts.
+ * git/pip/install step lights up as it runs on the Pi. A live terminal
+ * panel appends each command and its stdout/stderr as steps complete.
  */
 
 const APPLY_STEP_DEFS = [
     { key: 'git fetch', label: 'Fetch latest code from GitHub' },
     { key: 'git checkout', label: 'Check out release branch' },
     { key: 'git reset', label: 'Sync install tree to remote' },
-    { key: 'install.sh', label: 'Run installer' },
-    { key: 'restart service', label: 'Restart Meshpoint service' },
+    { key: 'upgrade', label: 'Refresh dependencies and restart' },
 ];
 
 const ROLLBACK_STEP_DEFS = [
     { key: 'git reset', label: 'Reset install tree to prior commit' },
-    { key: 'restart service', label: 'Restart Meshpoint service' },
+    { key: 'upgrade', label: 'Refresh dependencies and restart' },
 ];
 
 class UpdateProgressView {
@@ -59,11 +58,16 @@ class UpdateProgressView {
                 </div>
                 <p class="update-progress__elapsed" data-update-elapsed>Elapsed: 0s</p>
                 <p class="update-progress__hint">
-                    Do not refresh this page. The Meshpoint is updating on the Pi; this usually takes 20–30 seconds. The connection may drop during install or restart; the page will wait for the service to come back.
+                    Do not refresh this page. Commands run on the Pi as listed below; live output appears in the terminal. The last step stops the service, refreshes Python dependencies, and restarts (usually about 1–2 minutes). The connection will drop during that step; this page waits for the dashboard to come back.
                 </p>
                 <ol class="update-progress__steps">${steps}</ol>
+                <div class="update-progress__terminal" aria-label="Update command output">
+                    <p class="update-progress__terminal-label">Live output</p>
+                    <pre class="update-progress__terminal-body" data-update-terminal-body></pre>
+                </div>
             </div>
         `;
+        this._appendTerminalLine('Waiting for first step…', 'info');
         this._startElapsedClock();
     }
 
@@ -71,17 +75,73 @@ class UpdateProgressView {
         if (!this.root || !event || event.type !== 'step') return;
         const phase = event.phase;
         const stepKey = event.step;
+        const detail = event.detail || {};
+        this._ensureStepRow(stepKey);
         if (phase === 'started') {
             this._setActiveStep(stepKey);
+            if (detail.command) {
+                this._appendTerminalLine(`$ ${detail.command}`, 'cmd');
+            }
             return;
         }
         if (phase === 'completed') {
             this._setStepStatus(stepKey, 'ok');
+            this._appendStepOutput(detail, 'ok');
             return;
         }
         if (phase === 'error') {
             this._setStepStatus(stepKey, 'error');
+            this._appendStepOutput(detail, 'error');
         }
+    }
+
+    _appendStepOutput(detail, status) {
+        if (detail.note) {
+            this._appendTerminalLine(detail.note, 'info');
+        }
+        if (detail.stdout) {
+            this._appendTerminalLine(detail.stdout, 'out');
+        }
+        if (detail.stderr) {
+            this._appendTerminalLine(detail.stderr, status === 'error' ? 'err' : 'out');
+        }
+        if (detail.returncode != null && detail.returncode !== 0) {
+            this._appendTerminalLine(`exit code ${detail.returncode}`, 'err');
+        }
+        if (detail.detached) {
+            this._appendTerminalLine(
+                '[continues in background — dashboard may disconnect]',
+                'info',
+            );
+        }
+    }
+
+    _appendTerminalLine(text, kind = 'out') {
+        const pre = this.root?.querySelector('[data-update-terminal-body]');
+        if (!pre || !text) return;
+        const prefix = kind === 'cmd' ? '' : kind === 'info' ? '# ' : kind === 'err' ? '! ' : '';
+        const line = `${prefix}${text}`;
+        pre.textContent = pre.textContent
+            ? `${pre.textContent}\n${line}`
+            : line;
+        pre.scrollTop = pre.scrollHeight;
+    }
+
+    _ensureStepRow(stepKey) {
+        if (!this.root || this.root.querySelector(`[data-step="${stepKey}"]`)) return;
+        const list = this.root.querySelector('.update-progress__steps');
+        if (!list) return;
+        const row = document.createElement('li');
+        row.className = 'update-progress__step';
+        row.dataset.step = stepKey;
+        row.dataset.status = 'pending';
+        row.innerHTML = `
+            <span class="update-progress__step-icon" aria-hidden="true"></span>
+            <span class="update-progress__step-label">${this._escape(stepKey)}</span>
+            <span class="update-progress__step-hint"></span>
+        `;
+        list.appendChild(row);
+        this._stepDefs = [...this._stepDefs, { key: stepKey, label: stepKey }];
     }
 
     _setActiveStep(stepKey) {
@@ -172,6 +232,7 @@ class UpdateProgressView {
         if (hint) {
             hint.textContent = 'Meshpoint is restarting. Reconnecting to the dashboard…';
         }
+        this._appendTerminalLine('Waiting for dashboard to come back online…', 'info');
         const deadline = Date.now() + timeoutMs;
         while (Date.now() < deadline) {
             try {
@@ -184,6 +245,7 @@ class UpdateProgressView {
                     if (hint) {
                         hint.textContent = 'Dashboard is back online. Reloading to pick up the new version.';
                     }
+                    this._appendTerminalLine('Dashboard online — reloading page.', 'info');
                     return true;
                 }
             } catch (_e) { /* service restart drops the connection */ }
