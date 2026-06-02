@@ -81,6 +81,34 @@ On RAK and SenseCap carriers, `meshpoint setup` writes `radio.carrier_type`. Whe
 
 If your `libloragw` build does not expose the spectral scan symbols at all (older HAL revisions), the service logs a single info line at startup and falls back automatically.
 
+### GPS PPS time sync (HAL)
+
+Separate from [Location (GPS) source](#location-gps-source) (dashboard lat/lon). PPS sync wires the concentrator's internal packet counter to GPS time via Semtech `lgw_gps_*` and `sx1302_gps_enable` — useful when you need accurate `timestamp_us` on RX metadata (logging, TDoA-style analysis, correlating captures to wall clock).
+
+```yaml
+radio:
+  gps_pps_enabled: false          # set true on RAK Pi HAT with PPS wired to SX1303
+  gps_pps_tty_path: "/dev/ttyAMA0"
+  gps_family: "ubx7"              # passed to lgw_gps_enable
+  gps_pps_target_baud: 0           # 0 = HAL default (9600)
+```
+
+Requirements:
+
+- `libloragw` built from the SX1302 HAL tree with `loragw_gps.c` linked (stock `lora_gateway` packages on some images omit these symbols — startup logs `GPS/PPS sync unavailable` and continues).
+- u-blox on the HAT UART with PPS routed to the concentrator (RAK2287/5146/SX1303 HAT).
+- Clear sky: first `lgw_gps_sync` may take minutes until UBX time messages arrive.
+
+**Do not** enable `gps_pps_enabled` and `location.source: uart` on the same `tty_path`. Only one owner can open the serial port. Typical RAK deployments:
+
+| Goal | `location.source` | `radio.gps_pps_enabled` |
+|---|---|---|
+| Map position from HAT GPS | `uart` | `false` |
+| Accurate packet timestamps + map from USB gpsd | `gpsd` | `true` on `/dev/ttyAMA0` |
+| Timestamps only, static map coords | `static` | `true` |
+
+Status: `GET /api/device/gps-pps-status` (enabled, sync count, last error, reference counter). Config keys also appear under `radio_advanced` in `GET /api/config`.
+
 ### Standard Meshtastic Presets
 
 To match a Meshtastic preset, set `spreading_factor` and `bandwidth_khz` together:

@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from src.hal.concentrator_config import ConcentratorChannelPlan
+from src.hal.sx1302_gps import HalGpsPpsSync
 from src.hal.sx1302_signatures import apply_signatures
 from src.hal.sx1302_spectral_scan import (
     SpectralScanResult,
@@ -115,6 +116,11 @@ class SX1302Wrapper:
         self._sx1261_configured = False
         self._carrier_type: str = ""
         self._concentrator_model_id: Optional[int] = None
+        self._gps_pps: Optional[HalGpsPpsSync] = None
+
+    @property
+    def gps_pps(self) -> Optional[HalGpsPpsSync]:
+        return self._gps_pps
 
     def set_carrier_type(self, carrier_type: str) -> None:
         """Set carrier signature for SX1261 path guardrails (from config or wizard)."""
@@ -217,10 +223,36 @@ class SX1302Wrapper:
         )
 
     def stop(self) -> None:
+        self.stop_gps_pps()
         if self._started and self._lib:
             self._lib.lgw_stop()
             self._started = False
             logger.info("SX1302 concentrator stopped")
+
+    def start_gps_pps(
+        self,
+        tty_path: str = "/dev/ttyAMA0",
+        gps_family: str = "ubx7",
+        target_baud: int = 0,
+    ) -> bool:
+        """Enable HAL GPS UART + PPS sync (call after ``lgw_start``)."""
+        if self._lib is None:
+            self.load()
+        if self._gps_pps is None:
+            self._gps_pps = HalGpsPpsSync(
+                self._lib,
+                tty_path=tty_path,
+                gps_family=gps_family,
+                target_baud=target_baud,
+            )
+        if not self._started:
+            logger.warning("GPS/PPS: concentrator not started yet")
+            return False
+        return self._gps_pps.start()
+
+    def stop_gps_pps(self) -> None:
+        if self._gps_pps is not None:
+            self._gps_pps.stop()
 
     def receive(self) -> list[ConcentratorPacket]:
         """Poll for received packets. Non-blocking.

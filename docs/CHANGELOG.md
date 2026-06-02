@@ -8,6 +8,7 @@
 - **Concentrator model ID.** Startup logs SX1302 vs SX1303 when `libloragw` exposes `sx1302_get_model_id` (e.g. `Concentrator model ID: 0x12 (SX1303)`).
 - **SX1261 guard.** Non-empty `radio.sx1261_spi_path` on RAK/SenseCap carriers (`radio.carrier_type`) is cleared at configure time with an explicit warning, preventing `lgw_start()` failures from misconfigured spectral scan on Pi-invisible SX1261 wiring.
 - **SPI preflight.** Missing `/dev/spidev0.0` raises a clear error before `lgw_start()` (raspi-config / spi group hints).
+- **GPS PPS (HAL).** Optional `radio.gps_pps_*` enables `lgw_gps_*` / `sx1302_gps_enable` timestamp sync on RAK Pi HATs with PPS wired to the concentrator. `GET /api/device/gps-pps-status`; config rejects sharing the HAT UART with `location.source: uart`.
 
 ### v0.7.6 (June 2026)
 

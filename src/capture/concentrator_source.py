@@ -96,6 +96,17 @@ class ConcentratorCaptureSource(CaptureSource):
 
         self._wrapper.start()
         self._wrapper.set_syncword(self._syncword)
+        if self._radio_config is not None and self._radio_config.gps_pps_enabled:
+            ok = self._wrapper.start_gps_pps(
+                tty_path=self._radio_config.gps_pps_tty_path,
+                gps_family=self._radio_config.gps_family,
+                target_baud=self._radio_config.gps_pps_target_baud,
+            )
+            if not ok:
+                logger.warning(
+                    "GPS/PPS requested but HAL sync did not start "
+                    "(see earlier warnings)"
+                )
         self._running = True
         logger.info(
             "Concentrator capture started (syncword=0x%02X)",
@@ -104,6 +115,7 @@ class ConcentratorCaptureSource(CaptureSource):
 
     async def stop(self) -> None:
         self._running = False
+        self._wrapper.stop_gps_pps()
         self._wrapper.stop()
         logger.info("Concentrator capture stopped")
 

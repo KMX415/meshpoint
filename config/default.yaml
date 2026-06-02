@@ -11,6 +11,11 @@ radio:
   sync_word: 0x2B
   preamble_length: 16
   tx_power_dbm: 22
+  # HAL GPS/PPS (RAK Pi HAT u-blox → concentrator PPS pin). Off by default.
+  # gps_pps_enabled: false
+  # gps_pps_tty_path: "/dev/ttyAMA0"
+  # gps_family: "ubx7"
+  # gps_pps_target_baud: 0   # 0 = HAL default (9600)
 
 meshtastic:
   default_key_b64: "AQ=="

@@ -72,6 +72,14 @@ class RadioConfig:
     # ``sensecap_m1``, or empty). Used to block Pi-visible SX1261 SPI
     # paths that brick ``lgw_start()`` on RAK/SenseCap concentrators.
     carrier_type: str = ""
+    # HAL GPS/PPS: align concentrator packet timestamps with GPS time via
+    # libloragw ``lgw_gps_*`` + ``sx1302_gps_enable``. Requires a HAL build
+    # that includes loragw_gps.c. Exclusive with ``location.source: uart`` on
+    # the same TTY (only one process may open the GPS serial port).
+    gps_pps_enabled: bool = False
+    gps_pps_tty_path: str = "/dev/ttyAMA0"
+    gps_family: str = "ubx7"
+    gps_pps_target_baud: int = 0
 
 
 @dataclass
@@ -455,8 +463,26 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
     local = config_path or os.environ.get("CONCENTRATOR_CONFIG", "config/local.yaml")
     _apply_yaml(cfg, _validated_config_path(local))
     _resolve_radio_frequency(cfg.radio)
+    validate_config_consistency(cfg)
 
     return cfg
+
+
+def validate_config_consistency(config: AppConfig) -> None:
+    """Reject impossible radio/location combinations before hardware starts."""
+    if not config.radio.gps_pps_enabled:
+        return
+    if config.location.source != "uart":
+        return
+    pps_tty = os.path.normpath(config.radio.gps_pps_tty_path)
+    uart_tty = os.path.normpath(config.location.uart_path)
+    if pps_tty == uart_tty:
+        raise ValueError(
+            "radio.gps_pps_enabled and location.source=uart cannot share "
+            f"the same serial device ({pps_tty!r}). Use location.source=gpsd "
+            "or static for dashboard coordinates while PPS owns the HAT UART, "
+            "or disable gps_pps_enabled when using UART for location only."
+        )
 
 
 def _get_local_yaml_path() -> Path:
