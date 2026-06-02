@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+import contextlib
+import logging
+import socket
 import threading
 
 from meshtastic.tcp_interface import TCPInterface
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_CLOSE_TIMEOUT_SECONDS = 5.0
 
 
 class LockedTCPInterface(TCPInterface):
@@ -30,6 +37,41 @@ class LockedTCPInterface(TCPInterface):
         # connect()/waitForConfig() deadlocks on startup.
         return super()._readBytes(length)
 
-    def close(self) -> None:
-        with self._stream_lock:
-            super().close()
+    def close(self, *, join_timeout: float = _DEFAULT_CLOSE_TIMEOUT_SECONDS) -> None:
+        force_close_tcp_interface(self, join_timeout=join_timeout)
+
+
+def force_close_tcp_interface(
+    iface: TCPInterface,
+    *,
+    join_timeout: float = _DEFAULT_CLOSE_TIMEOUT_SECONDS,
+) -> None:
+    """Close a TCPInterface without blocking forever on a stuck reader thread."""
+    iface._wantExit = True  # noqa: SLF001 — meshtastic stream API
+    sock = getattr(iface, "socket", None)
+    if sock is not None:
+        with contextlib.suppress(OSError):
+            sock.shutdown(socket.SHUT_RDWR)
+        with contextlib.suppress(OSError):
+            sock.close()
+        iface.socket = None  # noqa: SLF001
+
+    rx_thread = getattr(iface, "_rxThread", None)
+    if (
+        rx_thread is not None
+        and rx_thread is not threading.current_thread()
+        and rx_thread.is_alive()
+    ):
+        rx_thread.join(timeout=join_timeout)
+        if rx_thread.is_alive():
+            logger.warning(
+                "meshtasticd reader thread did not exit within %.0fs; abandoning",
+                join_timeout,
+            )
+
+    try:
+        from meshtastic.mesh_interface import MeshInterface
+
+        MeshInterface.close(iface)
+    except Exception:
+        logger.debug("meshtasticd MeshInterface.close failed", exc_info=True)

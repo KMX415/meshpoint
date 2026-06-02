@@ -11,6 +11,7 @@ FATAL_PREFIX = "__fatal__:"
 
 class BridgeCommand(str, Enum):
     STOP = "stop"
+    RECONNECT = "reconnect"
     SEND_TEXT = "send_text"
     SEND_NODEINFO = "send_nodeinfo"
     READ_RADIO_STATE = "read_radio_state"

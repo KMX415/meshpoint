@@ -12,22 +12,29 @@ import logging
 import queue
 import threading
 import time
-from typing import Any
+from typing import Any, Callable, TypeVar
 
 from src.capture.meshtasticd_bridge_ipc import (
     BridgeCommand,
     BridgeResponse,
-    BridgeSendNodeinfoRequest,
     BridgeSendTextRequest,
     fatal_message,
 )
-from src.capture.meshtasticd_stream_client import LockedTCPInterface
+from src.capture.meshtasticd_stream_client import (
+    LockedTCPInterface,
+    force_close_tcp_interface,
+)
 
 logger = logging.getLogger(__name__)
 
 _READER_WATCH_INTERVAL_SECONDS = 15.0
 _COMMAND_POLL_SECONDS = 0.25
 _STALL_RECONNECT_SECONDS = 90.0
+_IFACE_OP_TIMEOUT_SECONDS = 25.0
+_RECONNECT_CLOSE_TIMEOUT_SECONDS = 5.0
+_RECONNECT_TOTAL_TIMEOUT_SECONDS = 30.0
+
+_T = TypeVar("_T")
 
 
 def run_bridge_worker(
@@ -80,6 +87,8 @@ class _BridgeWorker:
         self._running = True
         self._receive_handler = None
         self._last_packet_at = 0.0
+        self._tcp_lock = threading.RLock()
+        self._iface_op_in_progress = False
 
     def run(self) -> None:
         from pubsub import pub
@@ -117,16 +126,17 @@ class _BridgeWorker:
             sync_meshtasticd_config,
         )
 
-        self._receive_handler = self._on_receive
-        self._iface = LockedTCPInterface(
-            hostname=self._host,
-            portNumber=self._port,
-            connectNow=True,
-        )
-        if self._sync_settings_dict is not None:
-            settings = MeshtasticdSyncSettings(**self._sync_settings_dict)
-            sync_meshtasticd_config(self._iface, settings)
-        self._last_packet_at = time.monotonic()
+        with self._tcp_lock:
+            self._receive_handler = self._on_receive
+            self._iface = LockedTCPInterface(
+                hostname=self._host,
+                portNumber=self._port,
+                connectNow=True,
+            )
+            if self._sync_settings_dict is not None:
+                settings = MeshtasticdSyncSettings(**self._sync_settings_dict)
+                sync_meshtasticd_config(self._iface, settings)
+            self._last_packet_at = time.monotonic()
 
     @staticmethod
     def _local_node_id_hex_from_iface(iface: LockedTCPInterface | None) -> str | None:
@@ -135,27 +145,146 @@ class _BridgeWorker:
         return read_local_node_id_hex(iface) if iface is not None else None
 
     def _reconnect_tcp(self, reason: str) -> None:
+        """Replace the TCP session; must not block indefinitely on close()."""
         from pubsub import pub
 
         logger.warning("meshtasticd TCP reconnect: %s", reason)
-        if self._receive_handler is not None:
+        old_handler = self._receive_handler
+        old_iface = self._iface
+        self._iface = None
+
+        if old_handler is not None:
             try:
-                pub.unsubscribe(self._receive_handler, "meshtastic.receive")
+                pub.unsubscribe(old_handler, "meshtastic.receive")
             except Exception:
                 pass
-        if self._iface is not None:
+
+        if old_iface is not None:
             try:
-                self._iface.close()
+                force_close_tcp_interface(
+                    old_iface,
+                    join_timeout=_RECONNECT_CLOSE_TIMEOUT_SECONDS,
+                )
             except Exception:
                 logger.debug("meshtasticd bridge close failed", exc_info=True)
-            self._iface = None
-        self._connect_locked_tcp()
-        pub.subscribe(self._receive_handler, "meshtastic.receive")
+
+        def _connect() -> LockedTCPInterface:
+            iface = LockedTCPInterface(
+                hostname=self._host,
+                portNumber=self._port,
+                connectNow=True,
+            )
+            if self._sync_settings_dict is not None:
+                from src.capture.meshtasticd_config_sync import (
+                    MeshtasticdSyncSettings,
+                    sync_meshtasticd_config,
+                )
+
+                settings = MeshtasticdSyncSettings(**self._sync_settings_dict)
+                sync_meshtasticd_config(iface, settings)
+            return iface
+
+        try:
+            new_iface = self._run_timed_op(
+                "reconnect_connect",
+                _connect,
+                timeout=_RECONNECT_TOTAL_TIMEOUT_SECONDS,
+            )
+        except Exception:
+            logger.exception("meshtasticd TCP reconnect failed")
+            return
+
+        with self._tcp_lock:
+            self._receive_handler = self._on_receive
+            self._iface = new_iface
+            self._last_packet_at = time.monotonic()
+            pub.subscribe(self._receive_handler, "meshtastic.receive")
         logger.info(
             "meshtasticd bridge worker reconnected to %s:%d",
             self._host,
             self._port,
         )
+
+    def _run_timed_op(
+        self,
+        label: str,
+        fn: Callable[[], _T],
+        *,
+        timeout: float,
+    ) -> _T:
+        """Run a blocking op with timeout (used for reconnect connect path)."""
+        result_box: list[_T | None] = [None]
+        error_box: list[BaseException | None] = [None]
+
+        def _target() -> None:
+            try:
+                result_box[0] = fn()
+            except BaseException as exc:
+                error_box[0] = exc
+
+        thread = threading.Thread(target=_target, name=f"meshtasticd-{label}")
+        thread.start()
+        thread.join(timeout=timeout)
+        if thread.is_alive():
+            raise TimeoutError(f"{label} timed out after {timeout:.0f}s")
+        if error_box[0] is not None:
+            raise error_box[0]
+        if result_box[0] is None:
+            raise RuntimeError(f"{label} returned no result")
+        return result_box[0]
+
+    def _schedule_reconnect(self, reason: str) -> None:
+        """Queue reconnect on the command thread (never from the watchdog)."""
+        try:
+            self._cmd_queue.put_nowait((BridgeCommand.RECONNECT, reason))
+        except Exception:
+            logger.warning(
+                "meshtasticd reconnect not queued (%s); command queue full",
+                reason,
+            )
+
+    def _run_iface_op(self, label: str, fn: Callable[[], _T]) -> _T | None:
+        """Run a blocking meshtastic API call with timeout and TCP recovery."""
+        result_box: list[_T | None] = [None]
+        error_box: list[BaseException | None] = [None]
+
+        def _target() -> None:
+            try:
+                result_box[0] = fn()
+            except BaseException as exc:
+                error_box[0] = exc
+
+        self._iface_op_in_progress = True
+        try:
+            thread = threading.Thread(target=_target, name=f"meshtasticd-{label}")
+            thread.start()
+            thread.join(timeout=_IFACE_OP_TIMEOUT_SECONDS)
+            if thread.is_alive():
+                logger.error(
+                    "meshtasticd %s timed out after %.0fs; scheduling TCP reconnect",
+                    label,
+                    _IFACE_OP_TIMEOUT_SECONDS,
+                )
+                stale = self._iface
+                self._iface = None
+                if stale is not None:
+                    try:
+                        force_close_tcp_interface(
+                            stale,
+                            join_timeout=_RECONNECT_CLOSE_TIMEOUT_SECONDS,
+                        )
+                    except Exception:
+                        logger.debug(
+                            "meshtasticd stale iface close failed",
+                            exc_info=True,
+                        )
+                self._schedule_reconnect(f"{label} timed out")
+                raise TimeoutError(f"{label} timed out")
+            if error_box[0] is not None:
+                raise error_box[0]
+            return result_box[0]
+        finally:
+            self._iface_op_in_progress = False
 
     def _on_receive(self, packet, interface) -> None:
         from src.capture.meshtastic_packet_adapter import packet_dict_to_raw_capture
@@ -186,17 +315,21 @@ class _BridgeWorker:
 
             rx_thread = getattr(iface, "_rxThread", None)
             if rx_thread is not None and not rx_thread.is_alive():
-                self._reconnect_tcp("reader thread exited")
+                self._schedule_reconnect("reader thread exited")
                 continue
 
             idle = time.monotonic() - self._last_packet_at
-            if idle >= _STALL_RECONNECT_SECONDS:
-                self._reconnect_tcp(f"no packets for {idle:.0f}s")
+            if idle >= _STALL_RECONNECT_SECONDS and not self._iface_op_in_progress:
+                self._schedule_reconnect(f"no packets for {idle:.0f}s")
 
     def _handle_command(self, command: tuple[str, Any]) -> None:
         op, payload = command
         if op == BridgeCommand.STOP:
             self._running = False
+            return
+        if op == BridgeCommand.RECONNECT:
+            reason = str(payload or "scheduled")
+            self._reconnect_tcp(reason)
             return
         if op == BridgeCommand.SEND_TEXT:
             self._send_text(payload)
@@ -218,13 +351,17 @@ class _BridgeWorker:
         if iface is None:
             self._resp_queue.put((BridgeResponse.ERROR, "not connected"))
             return
-        try:
+
+        def _do_send() -> None:
             iface.sendText(
                 request.text,
                 destinationId=request.destination,
                 wantAck=request.want_ack,
                 channelIndex=request.channel,
             )
+
+        try:
+            self._run_iface_op("sendText", _do_send)
             logger.info(
                 "meshtasticd sendText OK: dest=0x%08x channel=%d len=%d",
                 request.destination,
@@ -238,19 +375,21 @@ class _BridgeWorker:
 
     def _send_nodeinfo(self, payload: dict[str, Any]) -> None:
         from src.capture.meshtasticd_control import (
-            MeshtasticdWriteOwnerRequest,
             apply_write_owner,
             parse_write_owner_payload,
         )
 
-        iface = self._iface
-        local_node = getattr(iface, "localNode", None) if iface is not None else None
+        local_node = getattr(self._iface, "localNode", None) if self._iface else None
         if local_node is None:
             self._resp_queue.put((BridgeResponse.ERROR, "not connected"))
             return
         try:
             request = parse_write_owner_payload(payload)
-            apply_write_owner(local_node, request)
+
+            def _do_owner() -> None:
+                apply_write_owner(local_node, request)
+
+            self._run_iface_op("setOwner", _do_owner)
             self._resp_queue.put((BridgeResponse.OK, None))
         except Exception as exc:
             logger.exception("meshtasticd setOwner failed")
@@ -260,7 +399,10 @@ class _BridgeWorker:
         from src.capture.meshtasticd_control import read_radio_state_from_iface
 
         try:
-            state = read_radio_state_from_iface(self._iface)
+            state = self._run_iface_op(
+                "read_radio_state",
+                lambda: read_radio_state_from_iface(self._iface),
+            )
             self._resp_queue.put((BridgeResponse.OK, state.to_dict()))
         except Exception as exc:
             logger.exception("meshtasticd read_radio_state failed")
@@ -272,13 +414,17 @@ class _BridgeWorker:
             parse_write_lora_payload,
         )
 
-        iface = self._iface
-        local_node = getattr(iface, "localNode", None) if iface is not None else None
+        local_node = getattr(self._iface, "localNode", None) if self._iface else None
         if local_node is None:
             self._resp_queue.put((BridgeResponse.ERROR, "not connected"))
             return
         try:
-            changes = apply_write_lora(local_node, parse_write_lora_payload(payload))
+            parsed = parse_write_lora_payload(payload)
+
+            def _do_lora() -> list[str]:
+                return apply_write_lora(local_node, parsed)
+
+            changes = self._run_iface_op("write_lora", _do_lora)
             self._resp_queue.put((BridgeResponse.OK, {"changes": changes}))
         except ValueError as exc:
             self._resp_queue.put((BridgeResponse.ERROR, str(exc)))
@@ -296,7 +442,7 @@ class _BridgeWorker:
                 pass
         if self._iface is not None:
             try:
-                self._iface.close()
+                force_close_tcp_interface(self._iface)
             except Exception:
                 logger.debug("meshtasticd bridge worker close failed", exc_info=True)
             self._iface = None
