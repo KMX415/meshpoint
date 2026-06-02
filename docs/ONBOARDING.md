@@ -137,6 +137,8 @@ The install script handles everything: system packages, SPI/UART/GPS kernel conf
 
 This takes 5-15 minutes depending on your internet speed and Pi model.
 
+> **WisMesh Node (RAK6421 HAT, experimental):** Documented on `main` (see [README Option E](../README.md#option-e-wismesh-node-rak6421-hat-experimental) and [Hardware Matrix](HARDWARE-MATRIX.md#wismesh-node-rak6421-hat-experimental)). Software is on branch **`feat/wismesh-hat`** until v0.7.6: use `sudo bash /opt/meshpoint/scripts/install.sh --platform node` instead of the gateway install above. The Node installer configures **meshtasticd** and installs the bundled **RAK13302 1W** LoRa preset by default (standard for WisBlock slot 1). See [`docs/plans/WISMESH-BRANCH.md`](plans/WISMESH-BRANCH.md).
+
 ### Step 6: Reboot
 
 The SPI and UART kernel changes require a reboot:

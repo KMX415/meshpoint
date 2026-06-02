@@ -56,6 +56,7 @@ If your deployment cannot guarantee clean shutdowns, either:
 | You want easiest reflash (back panel access) | RAK Hotspot V2 (4 bottom screws) |
 | You want PoE and a sealed outdoor-style enclosure | Syncrobit Chameleon (after eMMC reflash) |
 | You already have a Chameleon and a CM4 USB carrier | Repurpose with [Syncrobit Chameleon guide](SYNCROBIT-CHAMELEON.md) |
+| You have a RAK WisMesh Pi Node HAT (RAK6421) | [WisMesh Node (experimental)](#wismesh-node-rak6421-hat-experimental) on branch `feat/wismesh-hat` |
 
 ### Syncrobit Chameleon notes
 
@@ -74,6 +75,28 @@ to restore vendor software.
 supply enough current for CM4 + concentrator (plan for up to ~2-3 A at 5 V
 equivalent). Prefer `sudo poweroff` before removing PoE to avoid SPI latch
 (see below).
+
+---
+
+## WisMesh Node (RAK6421 HAT, experimental)
+
+Meshpoint **Node** platform for the [RAK WisMesh Pi Node](https://store.rakwireless.com/products/wismesh-pi-node): Pi 4 + **RAK6421** HAT + WisBlock **SX1262** (slot 1). RF is owned by **meshtasticd** (single-channel Meshtastic participant), not the SX1302 concentrator stack used elsewhere in this matrix.
+
+| | WisMesh Node (RAK6421) |
+|---|---|
+| **Host** | Pi 4 (SD), 64-bit OS |
+| **Radio** | WisBlock RAK13300 (~22 dBm) or **RAK13302 1W** (PA, default preset) |
+| **RF stack** | meshtasticd → TCP Phone API (`:4403`) → Meshpoint bridge |
+| **RX channels** | One LoRa channel at a time (modem preset), not 8-ch SF7–SF12 parallel |
+| **TX** | Yes (via meshtasticd) |
+| **Meshpoint role** | Observer + participant on Meshtastic; same dashboard chat and upstream as Gateway |
+| **MeshCore** | Optional USB companion (same as Gateway); concentrator-free |
+
+**Docs on `main`:** this section, [README > Option E](../README.md#option-e-wismesh-node-rak6421-hat-experimental), [Onboarding](ONBOARDING.md), [Migrate Gateway ↔ Node](MIGRATE-GATEWAY-TO-NODE.md).
+
+**Software today:** branch **`feat/wismesh-hat`** (`install.sh --platform node`). Planned merge: **v0.7.6** on `main`. Full architecture and dashboard behavior: [`docs/plans/WISMESH-BRANCH.md`](plans/WISMESH-BRANCH.md).
+
+**Do not** run Gateway `install.sh` on a Pi that only has the WisMesh HAT (no SX1302). The setup wizard and `chip_id` probe expect a concentrator on Gateway installs.
 
 ---
 
