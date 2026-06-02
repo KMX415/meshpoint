@@ -120,12 +120,14 @@ location:
   # Where the Meshpoint's reported lat/lon/alt comes from.
   #   static : use device.latitude/longitude/altitude (default)
   #   gpsd   : poll a local or remote gpsd daemon for live fixes
-  #   uart   : reserved (RAK Pi HAT GPS, not yet wired)
+  #   uart   : on-board RAK Pi HAT GPS via /dev/ttyAMA0 (NMEA GGA)
   source: "static"
   # gpsd connection. Defaults match the well-known local socket; only
   # change when running gpsd on a peer machine on the LAN.
   gpsd_host: "127.0.0.1"
   gpsd_port: 2947
+  uart_path: "/dev/ttyAMA0"
+  uart_baud: 9600
   # How often the coordinator wakes to read the active source.
   update_interval_seconds: 5
   # Minimum acceptable fix mode: 0=any (incl. no-fix), 1=2D, 2=3D.

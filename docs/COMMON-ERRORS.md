@@ -401,16 +401,54 @@ disabled in `raspi-config`, or the SPI bus latched after a hard power cut.
 3. Full power cycle: `sudo poweroff`, wait for green LED to stop, unplug for
    10+ seconds, then plug back in.
 
-Normal chip versions are `0x10` (SX1302) and `0x12` (SX1303).
+Normal chip versions are `0x10` (SX1302) and `0x12` (SX1303). Startup
+also logs `Concentrator model ID: 0x12 (SX1303)` when the HAL exposes
+`sx1302_get_model_id`.
+
+### `sx1261_check_status: got:0x00 expected:0x22` / `failed to patch sx1261`
+
+**Cause:** `radio.sx1261_spi_path` is set on a carrier where the SX1261
+companion chip is **not** wired to a Pi-visible SPI bus (RAK2287, RAK5146,
+SenseCap M1, most RAK Hotspot V2 units). The HAL probes a chip that is not
+there and may refuse `lgw_start()`.
+
+**Fix:**
+
+1. Edit `config/local.yaml` and clear the path:
+
+   ```yaml
+   radio:
+     sx1261_spi_path: ""
+   ```
+
+2. Restart: `sudo systemctl restart meshpoint`.
+
+3. Confirm the journal shows `SX1261 spi_path empty; spectral scan disabled`
+   and `Application startup complete`.
+
+On current Meshpoint builds with `radio.carrier_type: rak` or
+`sensecap_m1` (written by `meshpoint setup`), a mistaken path is cleared
+automatically at startup with a warning. Re-run `sudo meshpoint setup` if
+`carrier_type` is missing.
+
+See [Configuration > Spectral Scan](CONFIGURATION.md#spectral-scan-noise-floor).
 
 ### `lgw_start() failed` or `Failed to set SX1250_0 in STANDBY_RC mode`
 
-**Cause:** SPI bus latch from a hard power cut. The Meshpoint shutdown
-handler holds the concentrator in reset on `sudo reboot` and
-`sudo systemctl restart`, so this only appears after yanked-cable shutdowns,
-breaker trips, or outages.
+**Cause:** Usually one of:
 
-**Fix:** Full power cycle:
+1. **SX1261 misconfiguration** — see the entry above if the log mentions
+   `sx1261_check_status` or `failed to patch sx1261`.
+2. **SPI bus latch** from a hard power cut. The Meshpoint shutdown handler
+   holds the concentrator in reset on `sudo reboot` and
+   `sudo systemctl restart`, so latch typically follows yanked-cable
+   shutdowns, breaker trips, or outages.
+3. **SPI disabled or device missing** — `/dev/spidev0.0` not present;
+   enable SPI in `raspi-config` and confirm the `meshpoint` user is in
+   the `spi` group.
+
+**Fix:** If SX1261 lines appear in the log, fix `sx1261_spi_path` first.
+Otherwise full power cycle:
 
 ```bash
 sudo poweroff

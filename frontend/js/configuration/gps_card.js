@@ -33,8 +33,8 @@ class GpsConfigCard {
                 <header class="cfg-card__head">
                     <h3 class="cfg-card__title">GPS and placement</h3>
                     <p class="cfg-card__hint">
-                        Live fix from a USB GPS via gpsd, or static coordinates
-                        you enter manually. Used by the local map and
+                        Live fix from gpsd (USB GPS), UART (RAK Pi HAT), or static
+                        coordinates you enter manually. Used by the local map and
                         Meshradar fleet view.
                     </p>
                 </header>
@@ -127,6 +127,42 @@ class GpsConfigCard {
                         </p>
                     </fieldset>
 
+                    <fieldset class="cfg-fieldset" data-uart-fields hidden>
+                        <legend class="cfg-fieldset__legend">UART (on-board GPS)</legend>
+                        <div class="cfg-row">
+                            <label class="cfg-field">
+                                <span class="cfg-field__label">Serial device</span>
+                                <input class="cfg-field__input" type="text"
+                                       data-uart-path placeholder="/dev/ttyAMA0">
+                            </label>
+                            <label class="cfg-field cfg-field--narrow">
+                                <span class="cfg-field__label">Baud</span>
+                                <input class="cfg-field__input" type="number"
+                                       min="4800" max="115200"
+                                       data-uart-baud placeholder="9600">
+                            </label>
+                        </div>
+                        <div class="cfg-row">
+                            <label class="cfg-field cfg-field--narrow">
+                                <span class="cfg-field__label">Update interval (s)</span>
+                                <input class="cfg-field__input" type="number"
+                                       min="1" max="300" data-uart-interval>
+                            </label>
+                            <label class="cfg-field cfg-field--narrow">
+                                <span class="cfg-field__label">Min fix quality</span>
+                                <select class="cfg-field__input" data-uart-quality>
+                                    <option value="1">1 — accept any reading</option>
+                                    <option value="2" selected>2 — require 2D fix</option>
+                                    <option value="3">3 — require 3D fix</option>
+                                </select>
+                            </label>
+                        </div>
+                        <p class="cfg-field__hint">
+                            RAK Pi HAT GPS on /dev/ttyAMA0 (install.sh enables UART).
+                            Fix and satellite count update live; full skyplot needs gpsd.
+                        </p>
+                    </fieldset>
+
                     <div class="cfg-card__actions">
                         <button class="terminal-button terminal-button--primary" type="submit">
                             Save GPS settings
@@ -155,6 +191,11 @@ class GpsConfigCard {
 
         this._staticFields = this._root.querySelector('[data-static-fields]');
         this._gpsdFields = this._root.querySelector('[data-gpsd-fields]');
+        this._uartFields = this._root.querySelector('[data-uart-fields]');
+        this._uartPath = this._root.querySelector('[data-uart-path]');
+        this._uartBaud = this._root.querySelector('[data-uart-baud]');
+        this._uartInterval = this._root.querySelector('[data-uart-interval]');
+        this._uartQuality = this._root.querySelector('[data-uart-quality]');
 
         this._form.addEventListener('submit', (e) => this._onSubmit(e));
         this._root.querySelectorAll('input[name="gps-source"]').forEach((radio) => {
@@ -188,6 +229,19 @@ class GpsConfigCard {
             this._gpsdQuality.value = String(location.min_fix_quality);
         }
 
+        if (this._uartPath) {
+            this._uartPath.value = location.uart_path || '/dev/ttyAMA0';
+        }
+        if (this._uartBaud) {
+            this._uartBaud.value = location.uart_baud || 9600;
+        }
+        if (this._uartInterval && location.update_interval_seconds) {
+            this._uartInterval.value = location.update_interval_seconds;
+        }
+        if (this._uartQuality && location.min_fix_quality) {
+            this._uartQuality.value = String(location.min_fix_quality);
+        }
+
         this._restartPolling(source);
     }
 
@@ -204,8 +258,10 @@ class GpsConfigCard {
         if (!this._staticFields || !this._gpsdFields) return;
         const isStatic = source === 'static';
         const isGpsd = source === 'gpsd';
+        const isUart = source === 'uart';
         this._staticFields.hidden = !isStatic;
         this._gpsdFields.hidden = !isGpsd;
+        if (this._uartFields) this._uartFields.hidden = !isUart;
     }
 
     _updateSourceHint(source) {
@@ -217,9 +273,8 @@ class GpsConfigCard {
                 + 'to the daemon.';
         } else if (source === 'uart') {
             this._sourceHint.textContent =
-                'Reserved for the on-board RAK Pi HAT GPS module. Not yet '
-                + 'wired in v0.7.5; falls back to the static coordinates '
-                + 'on save.';
+                'Live NMEA from the on-board RAK Pi HAT GPS (/dev/ttyAMA0). '
+                + 'Switching source requires a service restart.';
         } else {
             this._sourceHint.textContent =
                 'Coordinates are entered manually and stay fixed until '
@@ -229,7 +284,7 @@ class GpsConfigCard {
 
     _restartPolling(source) {
         this._stopPolling();
-        const interval = source === 'gpsd' ? 2000 : 30000;
+        const interval = (source === 'gpsd' || source === 'uart') ? 2000 : 30000;
         this._pollOnce();
         this._timer = window.setInterval(() => this._pollOnce(), interval);
     }
@@ -281,6 +336,15 @@ class GpsConfigCard {
             const intervalRaw = this._gpsdInterval.value.trim();
             if (intervalRaw) payload.update_interval_seconds = Number(intervalRaw);
             const qualityRaw = this._gpsdQuality.value;
+            if (qualityRaw) payload.min_fix_quality = Number(qualityRaw);
+        } else if (source === 'uart') {
+            const path = this._uartPath.value.trim();
+            if (path) payload.uart_path = path;
+            const baudRaw = this._uartBaud.value.trim();
+            if (baudRaw) payload.uart_baud = Number(baudRaw);
+            const intervalRaw = this._uartInterval.value.trim();
+            if (intervalRaw) payload.update_interval_seconds = Number(intervalRaw);
+            const qualityRaw = this._uartQuality.value;
             if (qualityRaw) payload.min_fix_quality = Number(qualityRaw);
         }
 

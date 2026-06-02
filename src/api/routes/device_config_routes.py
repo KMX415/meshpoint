@@ -63,8 +63,8 @@ class GpsUpdate(BaseModel):
     * ``gpsd`` -- live position from a running gpsd daemon (defaults to
       127.0.0.1:2947). The ``location:`` section of ``local.yaml`` holds
       the connection details and update cadence.
-    * ``uart`` -- placeholder for the on-board RAK Pi HAT GPS module.
-      Not yet wired in v0.7.5; falls back to static.
+    * ``uart`` -- on-board RAK Pi HAT GPS via NMEA on ``/dev/ttyAMA0``
+      (or a custom ``uart_path``).
     """
 
     source: str = "static"
@@ -77,9 +77,11 @@ class GpsUpdate(BaseModel):
     gpsd_port: Optional[int] = Field(None, ge=1, le=65535)
     update_interval_seconds: Optional[int] = Field(None, ge=1, le=300)
     min_fix_quality: Optional[int] = Field(None, ge=1, le=3)
-    # uart-mode fields (kept for forward-compat; not yet wired)
-    baud: Optional[int] = Field(None, ge=9600, le=921600)
-    timeout_seconds: Optional[int] = Field(None, ge=1, le=3600)
+    # uart-mode fields
+    uart_path: Optional[str] = Field(None, min_length=1, max_length=128)
+    uart_baud: Optional[int] = Field(None, ge=4800, le=115200)
+    # Legacy alias accepted from older dashboard builds
+    baud: Optional[int] = Field(None, ge=4800, le=115200)
 
 
 @router.put("/device")
@@ -213,6 +215,25 @@ async def update_gps(
         if source_changed:
             location.source = "uart"
             location_updates["source"] = "uart"
+        baud = req.uart_baud if req.uart_baud is not None else req.baud
+        if req.uart_path is not None and req.uart_path != location.uart_path:
+            location.uart_path = req.uart_path.strip()
+            location_updates["uart_path"] = location.uart_path
+        if baud is not None and baud != location.uart_baud:
+            location.uart_baud = baud
+            location_updates["uart_baud"] = location.uart_baud
+        if (
+            req.update_interval_seconds is not None
+            and req.update_interval_seconds != location.update_interval_seconds
+        ):
+            location.update_interval_seconds = req.update_interval_seconds
+            location_updates["update_interval_seconds"] = req.update_interval_seconds
+        if (
+            req.min_fix_quality is not None
+            and req.min_fix_quality != location.min_fix_quality
+        ):
+            location.min_fix_quality = req.min_fix_quality
+            location_updates["min_fix_quality"] = req.min_fix_quality
 
     # ------------------------------------------------------------------
     # Persist whatever changed.
@@ -246,5 +267,7 @@ async def update_gps(
             "gpsd_port": location.gpsd_port,
             "update_interval_seconds": location.update_interval_seconds,
             "min_fix_quality": location.min_fix_quality,
+            "uart_path": location.uart_path,
+            "uart_baud": location.uart_baud,
         },
     }

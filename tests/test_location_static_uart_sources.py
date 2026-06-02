@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timezone
+from unittest.mock import MagicMock
 
 from src.config import DeviceConfig
+from src.hal.gps_reader import GpsPosition
 from src.hal.location.static_source import StaticSource
 from src.hal.location.uart_source import UartSource
 
@@ -75,21 +78,31 @@ class TestStaticSource(unittest.IsolatedAsyncioTestCase):
 
 
 class TestUartSource(unittest.IsolatedAsyncioTestCase):
-    """``UartSource`` is a placeholder; surfaces an explanatory error."""
+    """``UartSource`` exposes live NMEA fixes via ``GpsReader``."""
 
-    async def test_status_is_unavailable_with_explanatory_error(self) -> None:
+    async def test_status_before_start_is_unavailable(self) -> None:
         source = UartSource()
-        await source.start()
-        try:
-            status = source.get_status()
-            self.assertEqual(status.source, "uart")
-            self.assertFalse(status.available)
-            self.assertIsNotNone(status.error)
-            # Error must point users to the working alternatives.
-            self.assertIn("static", status.error.lower())
-            self.assertIn("gpsd", status.error.lower())
-        finally:
-            await source.stop()
+        status = source.get_status()
+        self.assertEqual(status.source, "uart")
+        self.assertFalse(status.available)
+        self.assertIn("not started", (status.error or "").lower())
+
+    async def test_status_with_fix(self) -> None:
+        source = UartSource()
+        source._reader = MagicMock()
+        source._started = True
+        source._reader.latest_position = GpsPosition(
+            latitude=51.5,
+            longitude=-0.1,
+            altitude=20.0,
+            satellites=6,
+            fix_quality=2,
+            timestamp=datetime(2026, 6, 2, tzinfo=timezone.utc),
+        )
+        status = source.get_status()
+        self.assertTrue(status.available)
+        self.assertIsNotNone(status.fix)
+        self.assertEqual(status.device.path, "/dev/ttyAMA0")
 
     async def test_source_name_is_stable(self) -> None:
         source = UartSource()

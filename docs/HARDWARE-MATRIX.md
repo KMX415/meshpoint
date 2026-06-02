@@ -17,6 +17,7 @@ Application code is plain Python (v0.7.0+); **aarch64** is required.
 |---|---|---|---|---|
 | **Host** | Pi 4 (SD) | Pi 4 (SD) | CM4 (eMMC) | Pi 4 (SD) |
 | **Concentrator** | RAK2287 (SX1302) | WM1303 (SX1303) | SX1302 (onboard) | RAK2287 (SX1302) |
+| **HAL chip version log** | `0x10` (SX1302) | `0x12` (SX1303) | `0x10` (SX1302) | `0x10` (SX1302) |
 | **TX support** | Yes (native, with HAL patch) | Yes (native, with HAL patch) | Yes (native, with HAL patch) | Yes (native, with HAL patch) |
 | **RX channels** | 8 simultaneous | 8 simultaneous | 8 simultaneous | 8 simultaneous |
 | **Spreading factors** | SF7-SF12 simultaneous | SF7-SF12 simultaneous | SF7-SF12 simultaneous | SF7-SF12 simultaneous |
@@ -177,8 +178,10 @@ window-mounted deployments. For better coverage:
 
 GPS antenna (u.FL to SMA pigtail) is optional. If your carrier board has a
 u-blox GPS module, plugging in a GPS antenna gives you automatic
-positioning during the setup wizard. Otherwise enter coordinates manually
-(right-click any spot in Google Maps to copy in decimal format).
+positioning during the setup wizard. Set `location.source: uart` for the
+on-board RAK HAT module, or `location.source: gpsd` for a USB GPS stick.
+Otherwise enter coordinates manually (right-click any spot in Google Maps
+to copy in decimal format).
 
 ---
 

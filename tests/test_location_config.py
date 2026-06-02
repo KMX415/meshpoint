@@ -84,11 +84,18 @@ class TestLocationYamlMerge(unittest.TestCase):
             path.unlink()
 
     def test_uart_source_round_trips(self) -> None:
-        path = self._write_yaml("location:\n  source: uart\n")
+        path = self._write_yaml(
+            "location:\n"
+            "  source: uart\n"
+            "  uart_path: /dev/serial0\n"
+            "  uart_baud: 115200\n"
+        )
         try:
             cfg = AppConfig()
             _apply_yaml(cfg, path)
             self.assertEqual(cfg.location.source, "uart")
+            self.assertEqual(cfg.location.uart_path, "/dev/serial0")
+            self.assertEqual(cfg.location.uart_baud, 115200)
         finally:
             path.unlink()
 

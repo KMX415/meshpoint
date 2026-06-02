@@ -4,6 +4,10 @@
 
 Queued for the next version bump (v0.7.6 mesh participant RC on `feat/v0.7.6`).
 
+- **UART GPS.** `location.source: uart` reads NMEA GGA from the RAK Pi HAT (`/dev/ttyAMA0` by default). Configuration → GPS UART fieldset; `meshpoint setup` can select uart when the wizard probe gets a fix. Requires `pyserial` in the venv (`pip install -r requirements.txt` after upgrade).
+- **Concentrator model ID.** Startup logs SX1302 vs SX1303 when `libloragw` exposes `sx1302_get_model_id` (e.g. `Concentrator model ID: 0x12 (SX1303)`).
+- **SX1261 guard.** Non-empty `radio.sx1261_spi_path` on RAK/SenseCap carriers (`radio.carrier_type`) is cleared at configure time with an explicit warning, preventing `lgw_start()` failures from misconfigured spectral scan on Pi-invisible SX1261 wiring.
+- **SPI preflight.** Missing `/dev/spidev0.0` raises a clear error before `lgw_start()` (raspi-config / spi group hints).
 - **MQTT broker TLS (deferred).** Transport TLS (`mqtts`, CA bundle, cert validation) is not implemented on `mqtt_publisher.py` (plain TCP only). Planned for v0.7.6. Until then use plain port 1883 or a LAN broker without TLS.
 
 ### v0.7.5.1 (May 2026)
