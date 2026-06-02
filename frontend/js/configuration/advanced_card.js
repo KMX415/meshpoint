@@ -71,6 +71,14 @@ class AdvancedConfigCard {
     }
 
     render(config) {
+        const isNode = window.PlatformContext
+            && window.PlatformContext.isNodePlatform(config);
+        const radioArticle = this._radioAdvForm
+            && this._radioAdvForm.closest('article');
+        if (radioArticle) {
+            radioArticle.style.display = isNode ? 'none' : '';
+        }
+
         const storage = config.storage || {};
         const radioAdv = config.radio_advanced || {};
 

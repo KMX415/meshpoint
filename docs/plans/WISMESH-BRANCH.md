@@ -4,7 +4,29 @@ Experimental **Meshpoint Node** support for the RAK6421 WisMesh Pi HAT (meshtast
 This work lives on a **long-lived branch** and may not merge to `main` for some time.
 Gateway users (RAK2287 / SenseCap M1 concentrators) should stay on **`main`**.
 
-**Last updated:** 2026-05-31 (13302 1W default preset bundled)
+**Last updated:** 2026-05-31 (dashboard meshtasticd control plane + platform UI)
+
+## Dashboard UI (WisMesh Node)
+
+On `device.platform: node`, Configuration and Radio tabs branch on `GET /api/config` (`device.platform`, `capture.meshtasticd`, `meshtasticd_runtime`).
+
+| Area | What operators see |
+|------|-------------------|
+| **Configuration → Identity** | Device name (Meshradar) + live long/short from meshtasticd; Save pushes `PUT /api/meshtasticd/identity`. Node ID read-only (HAT MAC). |
+| **Configuration → Transmit** | **WisBlock module** picker (RAK13300 vs RAK13302 1W) → `PUT /api/meshtasticd/module-preset` (installs yaml, restarts meshtasticd). **Meshtastic radio** card: TX enable, power, region, modem preset → `PUT /api/meshtasticd/radio`. No native SX1302 relay controls. |
+| **Configuration → Radio** | WisMesh status hero (bridge pill, RAK13300/13302 badge, node id). NodeInfo cadence + Send Now (setOwner via bridge). No concentrator SF/BW editor. |
+| **Configuration → MeshCore** | Full USB companion form + dual-radio callout (explicit `meshcore_usb` in sources; autostart suppressed on node). |
+| **Radio tab** | Observational meshtasticd readouts; duty gauge hidden; NodeInfo countdown kept. |
+| **Settings → Dangerous** | No **Restart concentrator**; **Force NodeInfo** calls meshtasticd `setOwner`. |
+
+**meshtasticd docs:** [Usage](https://meshtastic.org/docs/meshtasticd/usage/) (TCP port 4403, single client). Python API: `TCPInterface`, `localNode.setOwner`, `writeConfig("lora")` per [python.meshtastic.org](https://python.meshtastic.org/).
+
+**Marketing hook:** dashboard **WisBlock module** selection lets experimenters swap RAK13300 (standard) and RAK13302 1W (PA) without SSH. After apply, restart Meshpoint once so the TCP bridge reconnects.
+
+| Module | meshtasticd preset | Typical use |
+|--------|-------------------|-------------|
+| RAK13302 1W | `lora-RAK6421-13302-slot1.yaml` | Default. SKY66122 PA, high ERP experiments |
+| RAK13300 | `lora-RAK6421-13300-slot1.yaml` | Standard ~22 dBm WisBlock |
 
 ## Architecture
 
@@ -39,7 +61,7 @@ Gateway users (RAK2287 / SenseCap M1 concentrators) should stay on **`main`**.
 
 **Node platform rules:**
 
-- **meshtasticd owns RF identity.** NodeInfo broadcaster is skipped (`server.py`); do not `setOwner` from Meshpoint on boot.
+- **meshtasticd owns RF TX.** Dashboard edits identity and LoRa via `/api/meshtasticd/*` (bridge `setOwner` / `writeConfig("lora")`). Periodic NodeInfo uses `NodeInfoBroadcaster` → `send_nodeinfo` → bridge `setOwner` (interval from `transmit.nodeinfo` in yaml).
 - **Do not run** `meshtastic --host localhost:4403` while Meshpoint is running (steals the single client slot).
 - **Restart order:** `meshtasticd` first, then `meshpoint` (clears stale TCP state).
 

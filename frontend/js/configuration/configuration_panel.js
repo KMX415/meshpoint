@@ -57,19 +57,30 @@ class ConfigurationPanel {
                 card.mount(host);
                 this._cards.set('identity', card);
             }
-        } else if (section === 'radio' && window.RadioConfigEditCard) {
+        } else if (section === 'radio') {
             const host = document.getElementById('cfg-radio-panel');
+            const isNode = window.PlatformContext
+                && window.PlatformContext.isNodePlatform(this._config);
             if (host) {
                 host.innerHTML = `
                     <div class="cfg-section">
+                        <div data-cfg-wismesh-hero></div>
                         <div data-cfg-radio></div>
                         <div data-cfg-nodeinfo-edit></div>
                         <div data-cfg-nodeinfo-status></div>
                     </div>
                 `;
-                const radio = new window.RadioConfigEditCard(api);
-                radio.mount(host.querySelector('[data-cfg-radio]'));
-                this._cards.set('radio', radio);
+                if (isNode && window.WismeshStatusCard) {
+                    const hero = new window.WismeshStatusCard(api);
+                    hero.mount(host.querySelector('[data-cfg-wismesh-hero]'));
+                    this._cards.set('wismesh-hero', hero);
+                    const heroHost = host.querySelector('[data-cfg-radio]');
+                    if (heroHost) heroHost.style.display = 'none';
+                } else if (window.RadioConfigEditCard) {
+                    const radio = new window.RadioConfigEditCard(api);
+                    radio.mount(host.querySelector('[data-cfg-radio]'));
+                    this._cards.set('radio', radio);
+                }
                 if (window.NodeInfoConfigCard) {
                     const edit = new window.NodeInfoConfigCard(api);
                     edit.mount(host.querySelector('[data-cfg-nodeinfo-edit]'));
@@ -97,13 +108,21 @@ class ConfigurationPanel {
                 card.mount(host);
                 this._cards.set('meshcore', card);
             }
-        } else if (section === 'transmit' && window.TransmitConfigCard) {
+        } else if (section === 'transmit') {
             const host = document.getElementById('cfg-transmit-panel');
+            const isNode = window.PlatformContext
+                && window.PlatformContext.isNodePlatform(this._config);
             if (host) {
                 host.innerHTML = '';
-                const card = new window.TransmitConfigCard(api);
-                card.mount(host);
-                this._cards.set('transmit', card);
+                if (isNode && window.WismeshRadioCard) {
+                    const card = new window.WismeshRadioCard(api);
+                    card.mount(host);
+                    this._cards.set('transmit', card);
+                } else if (window.TransmitConfigCard) {
+                    const card = new window.TransmitConfigCard(api);
+                    card.mount(host);
+                    this._cards.set('transmit', card);
+                }
             }
         } else if (section === 'mqtt' && window.MqttConfigCard) {
             const host = document.getElementById('cfg-mqtt-panel');

@@ -70,10 +70,28 @@ class TopbarController {
             const cfg = await res.json();
             this._meshcore.setDashboardReachable(true);
             const tx = cfg.transmit || {};
-            this._meshtastic.setMeshtastic({
-                shortName: tx.short_name,
-                radio: cfg.radio || null,
-            });
+            const isNode = window.PlatformContext
+                && window.PlatformContext.isNodePlatform(cfg);
+            if (isNode) {
+                const md = window.PlatformContext.meshtasticdRuntime(cfg);
+                const mdc = window.PlatformContext.meshtasticdConfig(cfg);
+                this._meshtastic.setMeshtastic({
+                    shortName: md.short_name || tx.short_name,
+                    radio: {
+                        region: md.region || (cfg.radio && cfg.radio.region),
+                        frequency_mhz: cfg.radio && cfg.radio.frequency_mhz,
+                        current_preset: cfg.radio && cfg.radio.current_preset,
+                        modem_preset: md.modem_preset,
+                        module_badge: mdc.module_badge,
+                    },
+                    nodePlatform: true,
+                });
+            } else {
+                this._meshtastic.setMeshtastic({
+                    shortName: tx.short_name,
+                    radio: cfg.radio || null,
+                });
+            }
             this._meshcore.setMeshcore(cfg.meshcore || null);
             document.dispatchEvent(
                 new CustomEvent('meshpoint:configUpdated', { detail: cfg }),

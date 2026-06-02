@@ -36,6 +36,7 @@ _config: AppConfig | None = None
 _crypto = None
 _tx_service = None
 _identity: DeviceIdentity | None = None
+_bridge_status_provider = None
 
 
 def init_routes(
@@ -43,12 +44,25 @@ def init_routes(
     crypto=None,
     tx_service=None,
     identity: DeviceIdentity | None = None,
+    bridge_status_provider=None,
 ) -> None:
-    global _config, _crypto, _tx_service, _identity
+    global _config, _crypto, _tx_service, _identity, _bridge_status_provider
     _config = config
     _crypto = crypto
     _tx_service = tx_service
     _identity = identity
+    _bridge_status_provider = bridge_status_provider
+
+
+def _is_node_platform() -> bool:
+    return _config is not None and _config.device.platform == "node"
+
+
+def _node_gateway_only_detail() -> str:
+    return (
+        "On WisMesh Node, use Configuration → WisMesh radio or "
+        "PUT /api/meshtasticd/radio instead."
+    )
 
 
 @router.get("")
@@ -162,7 +176,11 @@ async def get_config():
             for r, d in REGION_DEFAULTS.items()
         ],
     }
-    return config_enrichment.enrich_config_payload(_config, payload)
+    return config_enrichment.enrich_config_payload(
+        _config,
+        payload,
+        bridge_status_provider=_bridge_status_provider,
+    )
 
 
 class RelaySettingsUpdate(BaseModel):
@@ -183,6 +201,8 @@ async def update_transmit(req: TransmitUpdate):
     """Update TX settings. Some changes require a restart."""
     if _config is None:
         raise HTTPException(503, "Config not loaded")
+    if _is_node_platform():
+        raise HTTPException(409, _node_gateway_only_detail())
 
     updates: dict = {}
     relay_updates: dict = {}
@@ -255,6 +275,12 @@ async def update_identity(req: IdentityUpdate):
     """Update node identity. node_id changes need restart."""
     if _config is None:
         raise HTTPException(503, "Config not loaded")
+    if _is_node_platform() and (req.long_name is not None or req.short_name is not None):
+        raise HTTPException(
+            409,
+            "On WisMesh Node, save Meshtastic long/short names via "
+            "PUT /api/meshtasticd/identity.",
+        )
 
     updates = {}
     tx = _config.transmit
@@ -302,6 +328,8 @@ async def update_radio(req: RadioUpdate):
     """Update radio settings. Flags restart_required for RX changes."""
     if _config is None:
         raise HTTPException(503, "Config not loaded")
+    if _is_node_platform():
+        raise HTTPException(409, _node_gateway_only_detail())
 
     updates = {}
     radio = _config.radio

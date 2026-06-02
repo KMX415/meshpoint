@@ -133,6 +133,11 @@ class RadioStatusCard {
     }
 
     render(config) {
+        if (window.PlatformContext && window.PlatformContext.isNodePlatform(config)) {
+            this._root.classList.add('r-card--hidden-node');
+            return;
+        }
+        this._root.classList.remove('r-card--hidden-node');
         const tx = config.transmit || {};
         const duty = config.duty_cycle || {};
         const used = duty.used_percent || 0;

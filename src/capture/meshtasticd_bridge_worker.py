@@ -201,8 +201,14 @@ class _BridgeWorker:
         if op == BridgeCommand.SEND_TEXT:
             self._send_text(payload)
             return
-        if op == BridgeCommand.SEND_NODEINFO:
+        if op in (BridgeCommand.SEND_NODEINFO, BridgeCommand.WRITE_OWNER):
             self._send_nodeinfo(payload)
+            return
+        if op == BridgeCommand.READ_RADIO_STATE:
+            self._read_radio_state()
+            return
+        if op == BridgeCommand.WRITE_LORA:
+            self._write_lora(payload)
             return
         logger.warning("Unknown bridge command: %s", op)
 
@@ -231,26 +237,53 @@ class _BridgeWorker:
             self._resp_queue.put((BridgeResponse.ERROR, str(exc)))
 
     def _send_nodeinfo(self, payload: dict[str, Any]) -> None:
-        request = BridgeSendNodeinfoRequest(**payload)
+        from src.capture.meshtasticd_control import (
+            MeshtasticdWriteOwnerRequest,
+            apply_write_owner,
+            parse_write_owner_payload,
+        )
+
         iface = self._iface
         local_node = getattr(iface, "localNode", None) if iface is not None else None
         if local_node is None:
             self._resp_queue.put((BridgeResponse.ERROR, "not connected"))
             return
         try:
-            local_node.setOwner(
-                long_name=request.long_name,
-                short_name=request.short_name,
-            )
-            logger.info(
-                "meshtasticd NodeInfo setOwner: long=%r short=%r hw=%d",
-                request.long_name,
-                request.short_name,
-                request.hw_model,
-            )
+            request = parse_write_owner_payload(payload)
+            apply_write_owner(local_node, request)
             self._resp_queue.put((BridgeResponse.OK, None))
         except Exception as exc:
             logger.exception("meshtasticd setOwner failed")
+            self._resp_queue.put((BridgeResponse.ERROR, str(exc)))
+
+    def _read_radio_state(self) -> None:
+        from src.capture.meshtasticd_control import read_radio_state_from_iface
+
+        try:
+            state = read_radio_state_from_iface(self._iface)
+            self._resp_queue.put((BridgeResponse.OK, state.to_dict()))
+        except Exception as exc:
+            logger.exception("meshtasticd read_radio_state failed")
+            self._resp_queue.put((BridgeResponse.ERROR, str(exc)))
+
+    def _write_lora(self, payload: dict[str, Any]) -> None:
+        from src.capture.meshtasticd_control import (
+            apply_write_lora,
+            parse_write_lora_payload,
+        )
+
+        iface = self._iface
+        local_node = getattr(iface, "localNode", None) if iface is not None else None
+        if local_node is None:
+            self._resp_queue.put((BridgeResponse.ERROR, "not connected"))
+            return
+        try:
+            changes = apply_write_lora(local_node, parse_write_lora_payload(payload))
+            self._resp_queue.put((BridgeResponse.OK, {"changes": changes}))
+        except ValueError as exc:
+            self._resp_queue.put((BridgeResponse.ERROR, str(exc)))
+        except Exception as exc:
+            logger.exception("meshtasticd write_lora failed")
             self._resp_queue.put((BridgeResponse.ERROR, str(exc)))
 
     def _shutdown(self) -> None:

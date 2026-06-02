@@ -13,6 +13,9 @@ class BridgeCommand(str, Enum):
     STOP = "stop"
     SEND_TEXT = "send_text"
     SEND_NODEINFO = "send_nodeinfo"
+    READ_RADIO_STATE = "read_radio_state"
+    WRITE_LORA = "write_lora"
+    WRITE_OWNER = "write_owner"
 
 
 class BridgeResponse(str, Enum):

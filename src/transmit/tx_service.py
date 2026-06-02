@@ -92,9 +92,11 @@ class TxService:
 
     @property
     def meshtastic_enabled(self) -> bool:
+        if self._meshtasticd_tx is not None and self._meshtasticd_tx.connected:
+            return True
         if self._config is None or not self._config.enabled:
             return False
-        return self._wrapper is not None or self._meshtasticd_tx is not None
+        return self._wrapper is not None
 
     @property
     def meshcore_enabled(self) -> bool:

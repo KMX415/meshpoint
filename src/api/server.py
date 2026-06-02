@@ -56,6 +56,7 @@ from src.api.routes import (
     upstream_config_routes,
     update_check,
     update_routes,
+    meshtasticd_routes,
 )
 from src.api.terminal import CommandCatalog, SessionManager
 from src.api.update import ReleaseChannelRegistry, UpdateApplier
@@ -201,7 +202,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         _init_routes(
             pipeline, config, identity, auth_subsystem, tx_service, message_repo
         )
-        _init_dangerous_registry(pipeline)
+        _init_dangerous_registry(pipeline, config)
         print_banner(config)
         logger.info("Meshpoint started -- listening for packets")
         yield
@@ -249,6 +250,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(device_config_routes.router, dependencies=protected)
     app.include_router(system_config_routes.router, dependencies=protected)
     app.include_router(config_routes.router, dependencies=protected)
+    app.include_router(meshtasticd_routes.router, dependencies=protected)
     app.include_router(stats_routes.router, dependencies=protected)
 
     @app.websocket("/ws")
@@ -396,14 +398,41 @@ def _add_meshtasticd_source(
 def _build_tx_service(
     config: AppConfig, coord: PipelineCoordinator
 ) -> TxService | None:
-    """Build the TX service if transmit is enabled in config."""
-    if not config.transmit.enabled:
-        logger.info("Transmit disabled in config")
-        return None
-
+    """Build TX service for gateway native TX, meshtasticd node, or both."""
     from src.transmit.duty_cycle import DutyCycleTracker, resolve_max_duty_percent
     from src.transmit.meshcore_tx_client import MeshCoreTxClient
     from src.transmit.meshtasticd_tx_client import MeshtasticdTxClient
+
+    md_source = _find_meshtasticd_source(coord)
+    is_node = _is_node_platform(config)
+    if not config.transmit.enabled and not (is_node and md_source):
+        logger.info("Transmit disabled in config")
+        return None
+
+    meshtasticd_tx = MeshtasticdTxClient()
+    if md_source:
+        meshtasticd_tx.set_source(md_source)
+
+    if is_node and md_source and not config.transmit.enabled:
+        crypto = coord._crypto if hasattr(coord, "_crypto") else None
+        tx_svc = TxService(
+            wrapper=None,
+            crypto=crypto,
+            channel_plan=None,
+            transmit_config=config.transmit,
+            meshcore_tx=None,
+            meshtasticd_tx=meshtasticd_tx,
+            duty_tracker=None,
+            radio_config=config.radio,
+            primary_channel_name=config.meshtastic.primary_channel_name,
+            device_id=config.device.device_id,
+        )
+        logger.info(
+            "Transmit service ready (meshtasticd node): MT=%s MC=%s",
+            tx_svc.meshtastic_enabled,
+            tx_svc.meshcore_enabled,
+        )
+        return tx_svc
 
     duty = DutyCycleTracker(
         region=config.radio.region,
@@ -415,9 +444,6 @@ def _build_tx_service(
     meshcore_tx = MeshCoreTxClient()
     mc_source = _find_meshcore_source(coord)
     if mc_source:
-        # Bind to the live source so reconnects in the capture path
-        # propagate to the dashboard's "MeshCore connected" status and
-        # to outbound send commands.
         meshcore_tx.set_source(mc_source)
         meshcore_tx.set_post_command_callback(mc_source.restart_auto_fetching)
 
@@ -425,11 +451,6 @@ def _build_tx_service(
             await meshcore_tx.sync_channels(config.meshcore.channel_keys)
 
         mc_source.set_connected_callback(_sync_channels_on_connect)
-
-    meshtasticd_tx = MeshtasticdTxClient()
-    md_source = _find_meshtasticd_source(coord)
-    if md_source:
-        meshtasticd_tx.set_source(md_source)
 
     wrapper = _get_concentrator_wrapper(coord)
     crypto = coord._crypto if hasattr(coord, "_crypto") else None
@@ -449,7 +470,8 @@ def _build_tx_service(
     )
     logger.info(
         "Transmit service ready: MT=%s MC=%s",
-        tx_svc.meshtastic_enabled, tx_svc.meshcore_enabled,
+        tx_svc.meshtastic_enabled,
+        tx_svc.meshcore_enabled,
     )
     return tx_svc
 
@@ -510,21 +532,17 @@ def _build_nodeinfo_broadcaster(
     level, the TX service is unavailable, or the radio backend
     isn't ready: in those cases there's nothing to broadcast on.
     """
-    if config.device.platform == "node":
-        logger.info(
-            "NodeInfo broadcaster skipped: meshtasticd owns node identity"
-        )
-        return None
-    if tx_service is None or not config.transmit.enabled:
+    if tx_service is None:
         return None
     if not tx_service.meshtastic_enabled:
-        logger.info(
-            "NodeInfo broadcaster skipped: Meshtastic TX backend "
-            "not available"
-        )
         return None
-
     ni = config.transmit.nodeinfo
+    if _is_node_platform(config):
+        logger.info(
+            "NodeInfo broadcaster: meshtasticd setOwner cadence "
+            "(interval=%s min)",
+            ni.interval_minutes,
+        )
     interval_minutes = clamp_interval_minutes(ni.interval_minutes)
     startup_delay = max(0, ni.startup_delay_seconds)
     if interval_minutes == 0:
@@ -989,6 +1007,13 @@ def _init_routes(
     tx_service: TxService | None = None,
     message_repo: MessageRepository | None = None,
 ) -> None:
+    def _bridge_accessor():
+        return _find_meshtasticd_source(coord)
+
+    meshtasticd_routes.init_routes(
+        config=config,
+        bridge_accessor=_bridge_accessor,
+    )
     identity_routes.init_routes(identity, auth_subsystem.service)
     network_mapper = NetworkMapper(coord.node_repo)
     signal_analyzer = SignalAnalyzer(coord.packet_repo)
@@ -1036,6 +1061,7 @@ def _init_routes(
         crypto=crypto,
         tx_service=tx_service,
         identity=identity,
+        bridge_status_provider=_bridge_accessor,
     )
     mqtt_config_routes.init_routes(config=config)
     upstream_config_routes.init_routes(config=config)
@@ -1043,7 +1069,10 @@ def _init_routes(
     system_config_routes.init_routes(config=config)
 
 
-def _init_dangerous_registry(coord: PipelineCoordinator) -> None:
+def _init_dangerous_registry(
+    coord: PipelineCoordinator,
+    config: AppConfig,
+) -> None:
     """Compose the Settings → Dangerous registry now that the pipeline is live.
 
     Restart actions don't need pipeline state -- they go through
@@ -1099,12 +1128,8 @@ def _init_dangerous_registry(coord: PipelineCoordinator) -> None:
             logger.exception("restart_concentrator: pipeline reload failed")
             return False
 
-    registry = DangerousActionRegistry([
+    actions = [
         build_restart_service_action(),
-        build_restart_concentrator_action(
-            dispatch=_dispatch,
-            restart_coro_factory=_restart_concentrator_coro,
-        ),
         build_clear_database_action(
             dispatch=_dispatch,
             clear_coro_factory=_clear_database_coro,
@@ -1117,7 +1142,16 @@ def _init_dangerous_registry(coord: PipelineCoordinator) -> None:
             dispatch=_dispatch,
             broadcast_coro_factory=_force_nodeinfo_coro,
         ),
-    ])
+    ]
+    if config.device.platform != "node":
+        actions.insert(
+            1,
+            build_restart_concentrator_action(
+                dispatch=_dispatch,
+                restart_coro_factory=_restart_concentrator_coro,
+            ),
+        )
+    registry = DangerousActionRegistry(actions)
     dangerous_routes.init_routes(registry)
 
 

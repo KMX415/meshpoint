@@ -439,3 +439,49 @@ select.cfg-field__input option:checked {
 .cfg-mc-channels {
     margin-bottom: 14px;
 }
+
+.cfg-callout {
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(34, 211, 238, 0.25);
+    background: rgba(34, 211, 238, 0.06);
+    font-size: 13px;
+    line-height: 1.45;
+    color: rgba(243, 244, 246, 0.85);
+}
+
+.wismesh-hero__grid {
+    display: grid;
+    gap: 10px;
+}
+
+.wismesh-hero__pill {
+    display: inline-block;
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.wismesh-hero__pill--ok {
+    border-color: rgba(34, 211, 238, 0.45);
+    color: var(--accent-cyan, #22d3ee);
+}
+
+.wismesh-hero__pill--warn {
+    border-color: rgba(245, 158, 11, 0.45);
+    color: var(--accent-amber, #f59e0b);
+}
+
+.wismesh-hero__id-val {
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 14px;
+    color: var(--accent-cyan, #22d3ee);
+}
+
+.r-card--hidden-node {
+    display: none !important;
+}

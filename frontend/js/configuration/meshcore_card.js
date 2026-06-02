@@ -22,6 +22,12 @@ class MeshcoreConfigCard {
         this._root = root;
         this._root.innerHTML = `
             <div class="cfg-section" data-mc-root>
+                <p class="cfg-callout" data-mc-node-callout hidden>
+                    Meshtastic RF uses the WisMesh HAT (meshtasticd). Enable a USB MeshCore
+                    companion here to capture MeshCore alongside Meshtastic. Plug-and-play
+                    USB autostart is off on Node: add <code>meshcore_usb</code> to capture
+                    sources explicitly.
+                </p>
                 <article class="cfg-card">
                     <header class="cfg-card__head">
                         <h3 class="cfg-card__title">USB capture source</h3>
@@ -75,6 +81,11 @@ class MeshcoreConfigCard {
     }
 
     render(config) {
+        const isNode = window.PlatformContext
+            && window.PlatformContext.isNodePlatform(config);
+        const callout = this._root.querySelector('[data-mc-node-callout]');
+        if (callout) callout.hidden = !isNode;
+
         const cap = config.capture || {};
         const mcUsb = cap.meshcore_usb || {};
         const sources = cap.sources || [];

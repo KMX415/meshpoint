@@ -223,7 +223,31 @@ class MeshtasticdBridgeSource(CaptureSource):
             },
         )
 
-    def _request(self, command: BridgeCommand, payload: dict) -> tuple[bool, str | None]:
+    def request_read_radio_state(self) -> tuple[bool, dict | str | None]:
+        """Return live owner + LoRa prefs from the bridge worker."""
+        return self._request(BridgeCommand.READ_RADIO_STATE, {})
+
+    def request_write_lora(self, payload: dict) -> tuple[bool, dict | str | None]:
+        return self._request(BridgeCommand.WRITE_LORA, payload)
+
+    def request_write_owner(
+        self,
+        long_name: str,
+        short_name: str,
+        hw_model: int = 37,
+    ) -> tuple[bool, str | None]:
+        return self._request(
+            BridgeCommand.WRITE_OWNER,
+            {
+                "long_name": long_name,
+                "short_name": short_name,
+                "hw_model": hw_model,
+            },
+        )
+
+    def _request(
+        self, command: BridgeCommand, payload: dict
+    ) -> tuple[bool, Any]:
         if self._cmd_queue is None or self._resp_queue is None:
             return False, "meshtasticd bridge not connected"
         self._cmd_queue.put((command, payload))
@@ -232,5 +256,5 @@ class MeshtasticdBridgeSource(CaptureSource):
         except queue.Empty:
             return False, "meshtasticd bridge command timed out"
         if status == BridgeResponse.OK:
-            return True, None
+            return True, detail
         return False, str(detail or "meshtasticd bridge command failed")
