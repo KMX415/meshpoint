@@ -205,8 +205,7 @@ class MessagingChat {
 
         let senderHtml = '';
         if (msg.direction === 'received') {
-            let name = msg.node_name || msg.node_id || '';
-            if (name.startsWith('broadcast:')) name = '';
+            const name = this._receivedSenderLabel(msg);
             if (name) senderHtml = `<div class="msg-bubble__sender">${this._esc(name)}</div>`;
         }
 
@@ -342,8 +341,7 @@ class MessagingChat {
 
         let senderHtml = '';
         if (msg.direction === 'received') {
-            let name = msg.node_name || msg.node_id || '';
-            if (name.startsWith('broadcast:')) name = '';
+            const name = this._receivedSenderLabel(msg);
             if (name) senderHtml = `<div class="msg-bubble__sender">${this._esc(name)}</div>`;
         }
 
@@ -456,6 +454,23 @@ class MessagingChat {
     _dayKey(ts) {
         const d = new Date(ts);
         return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    }
+
+    _receivedSenderLabel(msg) {
+        let name = (msg.node_name || '').trim();
+        if (name.startsWith('broadcast:')) name = '';
+        if (name.toLowerCase() === 'broadcast') name = '';
+        if (!name && msg.source_id) {
+            const sid = String(msg.source_id);
+            if (sid && sid !== 'ffffffff' && !sid.startsWith('broadcast')) {
+                name = sid.length > 6 ? `!${sid.slice(-4)}` : sid;
+            }
+        }
+        if (!name) {
+            const nid = msg.node_id || '';
+            if (!nid.startsWith('broadcast:')) name = nid;
+        }
+        return name;
     }
 
     _esc(str) {
