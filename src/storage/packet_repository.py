@@ -96,6 +96,15 @@ class PacketRepository:
             for row in rows
         ]
 
+    async def get_source_id_by_packet_id(self, packet_id: str) -> str:
+        if not packet_id:
+            return ""
+        row = await self._db.fetch_one(
+            "SELECT source_id FROM packets WHERE packet_id = ? LIMIT 1",
+            (packet_id,),
+        )
+        return row["source_id"] if row else ""
+
     async def get_by_source(
         self, source_id: str, limit: int = 100
     ) -> list[Packet]:

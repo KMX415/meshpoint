@@ -1081,8 +1081,13 @@ def _setup_message_interception(
                 packet.protocol == Protocol.MESHTASTIC
                 and direction == "received"
             ):
+                sender_lookup = (
+                    (packet.source_id or "")
+                    if is_broadcast
+                    else node_id
+                )
                 node_name = await name_resolver.resolve(
-                    node_id,
+                    sender_lookup,
                     packet.protocol.value,
                     node_name or packet.source_id or "",
                 )
@@ -1165,8 +1170,13 @@ def _setup_message_interception(
                     "snr": round(row["snr"], 1) if row and row["snr"] else None,
                 })
             else:
+                ws_name_lookup = (
+                    (packet.source_id or "")
+                    if is_broadcast and packet.protocol == Protocol.MESHTASTIC
+                    else node_id
+                )
                 display_name = await name_resolver.resolve(
-                    node_id,
+                    ws_name_lookup,
                     packet.protocol.value,
                     node_name,
                 )
@@ -1237,6 +1247,7 @@ def _init_routes(
         node_repo=coord.node_repo,
         meshcore_tx=meshcore_tx,
         config=config,
+        packet_repo=coord.packet_repo,
     )
 
     crypto = coord._crypto if hasattr(coord, "_crypto") else None

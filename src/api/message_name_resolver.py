@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.storage.node_repository import NodeRepository
+    from src.storage.packet_repository import PacketRepository
     from src.transmit.meshcore_tx_client import MeshCoreTxClient
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,10 @@ class MessageNameResolver:
         fallback: str = "",
     ) -> str:
         if node_id.startswith("broadcast:"):
-            return "Broadcast"
+            fb = (fallback or "").strip()
+            if fb and fb.lower() != "broadcast":
+                return fb
+            return ""
 
         name = await self._lookup_meshtastic(node_id)
         if name:
@@ -90,12 +94,32 @@ class MessageNameResolver:
 
     async def apply_to_message_dict(self, message: dict[str, Any]) -> dict[str, Any]:
         out = dict(message)
+        node_id = out.get("node_id", "")
+        stored = (out.get("node_name") or "").strip()
+        if node_id.startswith("broadcast:"):
+            if stored and stored.lower() != "broadcast":
+                out["node_name"] = stored
+            else:
+                out["node_name"] = await self._resolve_broadcast_sender(out)
+            return out
         out["node_name"] = await self.resolve(
-            out.get("node_id", ""),
+            node_id,
             out.get("protocol", ""),
-            out.get("node_name", ""),
+            stored,
         )
         return out
+
+    async def _resolve_broadcast_sender(self, message: dict[str, Any]) -> str:
+        pkt_id = message.get("packet_id") or ""
+        if pkt_id and self._packet_repo:
+            src = await self._packet_repo.get_source_id_by_packet_id(pkt_id)
+            if src:
+                return await self.resolve(
+                    src,
+                    message.get("protocol", ""),
+                    src,
+                )
+        return ""
 
     async def apply_to_conversation_dict(self, conversation: dict[str, Any]) -> dict[str, Any]:
         out = dict(conversation)

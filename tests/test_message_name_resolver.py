@@ -7,9 +7,11 @@ import unittest
 
 from src.api.message_name_resolver import MessageNameResolver
 from src.models.node import Node
+from src.models.packet import Packet, PacketType, Protocol, SignalMetrics
 from src.storage.database import DatabaseManager
 from src.storage.message_repository import MessageRepository
 from src.storage.node_repository import NodeRepository
+from src.storage.packet_repository import PacketRepository
 
 
 def _run(coro):
@@ -71,6 +73,46 @@ class TestMessageNameResolver(unittest.TestCase):
         raw = messages[0].to_dict()
         enriched = _run(self.resolver.apply_to_message_dict(raw))
         self.assertEqual(enriched["node_name"], "Guziii")
+
+    def test_broadcast_channel_does_not_force_sender_label_broadcast(self):
+        _run(self.node_repo.upsert(
+            Node(
+                node_id="a1b2c3d4",
+                long_name="TestNode",
+                protocol="meshtastic",
+            )
+        ))
+        _run(self.packet_repo.save(Packet(
+            packet_id="pkt-bcast-1",
+            source_id="a1b2c3d4",
+            destination_id="ffffffff",
+            protocol=Protocol.MESHTASTIC,
+            packet_type=PacketType.TEXT,
+            signal=SignalMetrics(rssi=-50.0, snr=8.0),
+        )))
+        _run(self.message_repo.save_received(
+            text="Hey",
+            node_id="broadcast:meshtastic:0",
+            node_name="Broadcast",
+            protocol="meshtastic",
+            packet_id="pkt-bcast-1",
+        ))
+
+        messages = _run(self.message_repo.get_conversation("broadcast:meshtastic:0"))
+        raw = messages[0].to_dict()
+        enriched = _run(self.resolver.apply_to_message_dict(raw))
+        self.assertEqual(enriched["node_name"], "TestNode")
+
+    def test_resolve_sender_by_source_id_for_broadcast_lookup(self):
+        _run(self.node_repo.upsert(
+            Node(
+                node_id="a1b2c3d4",
+                long_name="TestNode",
+                protocol="meshtastic",
+            )
+        ))
+        name = _run(self.resolver.resolve("a1b2c3d4", "meshtastic", ""))
+        self.assertEqual(name, "TestNode")
 
 
 if __name__ == "__main__":

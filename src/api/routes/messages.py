@@ -19,6 +19,7 @@ from src.storage.message_repository import (
     BROADCAST_NODE_MT,
     MessageRepository,
 )
+from src.storage.packet_repository import PacketRepository
 from src.transmit.meshcore_tx_client import MeshCoreTxClient
 from src.transmit.tx_service import PRESET_DISPLAY_NAMES, TxService
 
@@ -40,6 +41,7 @@ def init_routes(
     node_repo,
     meshcore_tx: MeshCoreTxClient | None = None,
     config: AppConfig | None = None,
+    packet_repo: PacketRepository | None = None,
 ) -> None:
     global _tx_service, _message_repo, _node_repo, _meshcore_tx, _config, _name_resolver
     _tx_service = tx_service
@@ -47,7 +49,7 @@ def init_routes(
     _node_repo = node_repo
     _meshcore_tx = meshcore_tx
     _config = config
-    _name_resolver = MessageNameResolver(node_repo, meshcore_tx)
+    _name_resolver = MessageNameResolver(node_repo, meshcore_tx, packet_repo)
 
 
 class SendRequest(BaseModel):
@@ -308,14 +310,7 @@ async def _enrich_conversations(conversations: list[dict]) -> list[dict]:
 async def _enrich_messages(messages: list[dict]) -> list[dict]:
     if _name_resolver is None or not messages:
         return messages
-    display_name = await _name_resolver.resolve(
-        messages[0].get("node_id", ""),
-        messages[0].get("protocol", ""),
-        messages[0].get("node_name", ""),
-    )
-    enriched: list[dict] = []
-    for msg in messages:
-        out = dict(msg)
-        out["node_name"] = display_name
-        enriched.append(out)
-    return enriched
+    return [
+        await _name_resolver.apply_to_message_dict(msg)
+        for msg in messages
+    ]
