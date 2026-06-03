@@ -28,7 +28,10 @@ class TestMessageNameResolver(unittest.TestCase):
         _run(self.db.connect())
         self.node_repo = NodeRepository(self.db)
         self.message_repo = MessageRepository(self.db)
-        self.resolver = MessageNameResolver(self.node_repo)
+        self.packet_repo = PacketRepository(self.db)
+        self.resolver = MessageNameResolver(
+            self.node_repo, packet_repo=self.packet_repo
+        )
 
     def tearDown(self) -> None:
         _run(self.db.disconnect())
@@ -82,14 +85,24 @@ class TestMessageNameResolver(unittest.TestCase):
                 protocol="meshtastic",
             )
         ))
-        _run(self.packet_repo.save(Packet(
-            packet_id="pkt-bcast-1",
-            source_id="a1b2c3d4",
-            destination_id="ffffffff",
-            protocol=Protocol.MESHTASTIC,
-            packet_type=PacketType.TEXT,
-            signal=SignalMetrics(rssi=-50.0, snr=8.0),
-        )))
+        async def _seed_packet() -> None:
+            await self.packet_repo.insert(Packet(
+                packet_id="pkt-bcast-1",
+                source_id="a1b2c3d4",
+                destination_id="ffffffff",
+                protocol=Protocol.MESHTASTIC,
+                packet_type=PacketType.TEXT,
+                signal=SignalMetrics(
+                    rssi=-50.0,
+                    snr=8.0,
+                    frequency_mhz=906.875,
+                    spreading_factor=11,
+                    bandwidth_khz=250,
+                ),
+            ))
+            await self.db.commit()
+
+        _run(_seed_packet())
         _run(self.message_repo.save_received(
             text="Hey",
             node_id="broadcast:meshtastic:0",

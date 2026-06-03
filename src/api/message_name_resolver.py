@@ -20,9 +20,11 @@ class MessageNameResolver:
         self,
         node_repo: NodeRepository | None = None,
         meshcore_tx: MeshCoreTxClient | None = None,
+        packet_repo: PacketRepository | None = None,
     ) -> None:
         self._node_repo = node_repo
         self._meshcore_tx = meshcore_tx
+        self._packet_repo = packet_repo
 
     async def resolve(
         self,
