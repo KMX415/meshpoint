@@ -1,25 +1,64 @@
 # v0.7.6 mesh participant — test results
 
-**Branch:** `feat/v0.7.6-pki`  
-**HEAD:** `d4ff29b` (see commit table in [`AGENT-HANDOFF.md`](AGENT-HANDOFF.md))  
-**Last updated:** 2026-05-30 (`.141` witness matrix complete; row 10 deferred)  
-**Automated:** 872+ pytest passed, ruff clean on touched paths, Bandit clean on crypto modules.
+**Branch:** `feat/v0.7.6`  
+**HEAD:** `c5db5bd` (feature freeze for pre-bump validation)  
+**Last updated:** 2026-06-04  
+**Automated (local, 2026-06-04):** 906 pytest passed, 3 skipped.
 
-## Witness matrix (hardware: RAK V2 `.141`)
+**Ship gate:** Re-confirm witness matrix on `.141` at this SHA, then version bump + merge to `main`. Row 10 (MQTT TLS) remains conditional/deferred.
+
+---
+
+## Pre-bump re-test (`.141` @ `c5db5bd`)
+
+PKI mesh-participant rows **1–9** and **11** passed on `.141` at earlier HEAD `d4ff29b` / sign-off record `68946df`. Sprint polish landed **after** that sign-off (apply path, broadcast sender fix, startup crash fix, map filters, MeshCore UX copy). Re-run the queue below before bumping `src/version.py`.
 
 | # | Scenario | Status | Notes |
 |---|----------|--------|-------|
-| 1 | Green lock | pass | `.141` post-`d4ff29b`: PKI green/closed lock on Meshtastic 2.5+ app after NodeInfo cycle |
-| 2 | Phone → Meshpoint DM | pass | `.141`: witness DM decrypted in dashboard Messages |
-| 3 | Meshpoint → phone DM | pass | `.141`: dashboard DM delivered on 2.5+ phone |
-| 4 | 2.4.x Shared Key fallback | pass | `.141`: DM to Meshpoint from non-PKI peer; shared-key path works both directions |
-| 5 | DM with want_ack | pass | `.141`: sender phone shows delivered after routing ACK |
-| 6 | Device metrics in app | pass | `.141` post-`d4ff29b`: request reply writes new device-metrics log entries in Meshtastic app |
-| 7 | Position on map | pass | `.141`: Meshpoint pin on Meshtastic app map at configured coords |
-| 8 | Traceroute to Meshpoint | pass | `.141` post-`52fd70c`/`d4ff29b`: trace completes; SNR not `? dB` on direct hop |
-| 9 | Channel broadcast regression | pass | `.141`: LongFast RX/decode unchanged with v0.7.6 TX stack active |
-| 10 | MQTT TLS | conditional | Code shipped (`tls_enabled` + `mqtt_publisher.tls_set`); **not hardware-validated here** — defer to contributor with MQTT broker access |
-| 11 | Signal quality (local_stats request) | pass | `.141` post-`d4ff29b`: app writes new Signal Quality log entries (same pattern as device metrics). Debug decode + hops away 0 confirmed. Journal retries are benign if UI updates; optional request dedup is polish only. |
+| 0 | Boot smoke | pending | `systemctl status meshpoint`; no traceback; `/api/health` returns version `0.7.5.1` until bump |
+| 1 | Green lock | pending | Re-spot-check PKI closed lock after NodeInfo cycle |
+| 2 | Phone → Meshpoint DM | pending | |
+| 3 | Meshpoint → phone DM | pending | |
+| 4 | 2.4.x Shared Key fallback | pending | Optional if no 2.4 witness handy |
+| 5 | DM with want_ack | pending | |
+| 6 | Device metrics in app | pending | |
+| 7 | Position on map | pending | |
+| 8 | Traceroute to Meshpoint | pending | SNR not `? dB` on direct hop |
+| 9 | Channel broadcast regression | pending | **Priority:** `0c4a598` sender-name fix; public TEXT shows node name not "Broadcast" |
+| 10 | MQTT TLS | conditional | Code shipped; needs external `mqtts` tester (non-blocking) |
+| 11 | Signal quality (local_stats) | pending | App writes new Signal Quality log entries |
+
+### Testing queue (order)
+
+1. **Deploy** `.141` to `feat/v0.7.6` @ `c5db5bd` (block below). Confirm `transmit.enabled: true`.
+2. **Row 0** — clean boot, dashboard loads, Messages tab opens (validates `1fb3f34`).
+3. **Row 9** — hear a public LongFast TEXT from another node; sender name correct in Messages + packet feed.
+4. **Rows 1, 5, 6, 7, 8, 11** — PKI spot-check pass (same procedure as May 30 run; see [`AGENT-HANDOFF.md`](AGENT-HANDOFF.md)).
+5. **Rows 2–3** — bidirectional DM with 2.5+ phone.
+6. **Dashboard extras** (non-matrix, quick): map Direct/Relayed filter pills (`31a9214`); Settings → Updates Apply on RC branch (`b2470b2`) if you use the picker.
+7. Mark each row `pass` with date when done. **All rows 0–9 and 11 `[x]`** (or documented conditional on 10) → ready for version bump.
+
+---
+
+## Prior witness (archived — `feat/v0.7.6-pki` @ `d4ff29b`, 2026-05-30)
+
+| # | Scenario | Status | Notes |
+|---|----------|--------|-------|
+| 1 | Green lock | pass | `.141` post-`d4ff29b` |
+| 2 | Phone → Meshpoint DM | pass | |
+| 3 | Meshpoint → phone DM | pass | |
+| 4 | 2.4.x Shared Key fallback | pass | |
+| 5 | DM with want_ack | pass | |
+| 6 | Device metrics in app | pass | |
+| 7 | Position on map | pass | |
+| 8 | Traceroute to Meshpoint | pass | |
+| 9 | Channel broadcast regression | pass | |
+| 10 | MQTT TLS | conditional | Not exercised on `.141` |
+| 11 | Signal quality (local_stats) | pass | |
+
+Commits after this archive: `68946df` sign-off record through `c5db5bd` (see `git log 68946df..HEAD`).
+
+---
 
 ## Unit coverage (local)
 
@@ -31,25 +70,29 @@
 | Inbound ACK / traceroute / telemetry triggers | `tests/test_meshtastic_inbound_handler.py` |
 | Relay skips unicast-to-local-node | `tests/test_native_relay.py` |
 
+---
+
 ## Deploy on test Pi
 
 ```
 cd /opt/meshpoint
 sudo git fetch origin
-sudo git checkout feat/v0.7.6-pki
-sudo git pull
+sudo git checkout feat/v0.7.6
+sudo git pull origin feat/v0.7.6
 sudo /opt/meshpoint/venv/bin/pip install -r requirements.txt
 sudo systemctl restart meshpoint
 ```
 
-Ensure `transmit.enabled: true` in `local.yaml`. PKI keys appear at `data/keys.yaml` beside the SQLite DB on first boot.
+Or: **Settings → Updates → Release candidate (v0.7.6)** → Apply (after dashboard is on a build that offers `rc-076`).
+
+Ensure `transmit.enabled: true` in `local.yaml`. PKI keys at `data/keys.yaml` on first boot (existing installs keep keys).
+
+---
 
 ## Agent handoff
 
-**Read [`AGENT-HANDOFF.md`](AGENT-HANDOFF.md) first** for traceroute, telemetry request, PKI reply encryption, and relay fixes landed during RC hardware debug.
+**Read [`AGENT-HANDOFF.md`](AGENT-HANDOFF.md)** for traceroute, telemetry request, PKI reply encryption, and relay rules.
 
-Hardware sign-off blocks merge to `feat/v0.7.6` / version bump.
+**After matrix green:** bump `src/version.py`, `config/default.yaml` `firmware_version`, README badge, `docs/CHANGELOG.md` v0.7.6 section, update `channels.py` RC row to next sprint on `main`, merge `feat/v0.7.6` → `main`.
 
-**`.141` sign-off (2026-05-30):** rows **1–9** and **11** pass. Row **10** conditional (MQTT TLS not exercised on this bench; needs external tester with `mqtts` broker).
-
-Optional before ship: `.49` fresh-SD parity pass; row 10 hardware validation when someone with MQTT infra can run it.
+**Optional before ship:** `.49` fresh-SD parity; row 10 MQTT TLS when a contributor has `mqtts` infra.
