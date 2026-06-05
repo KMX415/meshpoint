@@ -1,8 +1,8 @@
 # v0.7.6 mesh participant — test results
 
 **Branch:** `feat/v0.7.6`  
-**HEAD:** `c5db5bd` (feature freeze for pre-bump validation)  
-**Last updated:** 2026-06-04  
+**HEAD:** `51a5102` (feature freeze for pre-bump validation)  
+**Last updated:** 2026-06-04 (LAN probe; deploy blocked on SSH auth)  
 **Automated (local, 2026-06-04):** 906 pytest passed, 3 skipped.
 
 **Ship gate:** Re-confirm witness matrix on `.141` at this SHA, then version bump + merge to `main`. Row 10 (MQTT TLS) remains conditional/deferred.
@@ -15,7 +15,7 @@ PKI mesh-participant rows **1–9** and **11** passed on `.141` at earlier HEAD 
 
 | # | Scenario | Status | Notes |
 |---|----------|--------|-------|
-| 0 | Boot smoke | pending | `systemctl status meshpoint`; no traceback; `/api/health` returns version `0.7.5.1` until bump |
+| 0 | Boot smoke | partial | **2026-06-04 LAN:** `.141` reachable; `GET /api/identity` 200, `Meshpoint-KS-RAKV2`, **v0.7.5.1**, Online; `/login` loads. **Not yet on `feat/v0.7.6`** (SSH auth failed: set `MESHPOINT_PI_PASSWORD` to deploy). |
 | 1 | Green lock | pending | Re-spot-check PKI closed lock after NodeInfo cycle |
 | 2 | Phone → Meshpoint DM | pending | |
 | 3 | Meshpoint → phone DM | pending | |
@@ -28,9 +28,20 @@ PKI mesh-participant rows **1–9** and **11** passed on `.141` at earlier HEAD 
 | 10 | MQTT TLS | conditional | Code shipped; needs external `mqtts` tester (non-blocking) |
 | 11 | Signal quality (local_stats) | pending | App writes new Signal Quality log entries |
 
+### Session log (2026-06-04)
+
+| Check | Result |
+|-------|--------|
+| SSH `pi@192.168.0.141` | **blocked** — `MESHPOINT_PI_PASSWORD` unset; `id_ed25519` not authorized |
+| `GET /api/identity` | 200 — device `Meshpoint-KS-RAKV2`, firmware **0.7.5.1**, `setup_required: false`, Online |
+| Playwright `/login` | Auth shell loads; identity strip shows v0.7.5.1 Online |
+| Deploy to `feat/v0.7.6` | **not run** — needs SSH |
+
+**Unblock:** In Cursor terminal: `$env:MESHPOINT_PI_PASSWORD = '<pi-password>'` then ask agent to retry deploy.
+
 ### Testing queue (order)
 
-1. **Deploy** `.141` to `feat/v0.7.6` @ `c5db5bd` (block below). Confirm `transmit.enabled: true`.
+1. **Deploy** `.141` to `feat/v0.7.6` @ `51a5102` (block below). Confirm `transmit.enabled: true`.
 2. **Row 0** — clean boot, dashboard loads, Messages tab opens (validates `1fb3f34`).
 3. **Row 9** — hear a public LongFast TEXT from another node; sender name correct in Messages + packet feed.
 4. **Rows 1, 5, 6, 7, 8, 11** — PKI spot-check pass (same procedure as May 30 run; see [`AGENT-HANDOFF.md`](AGENT-HANDOFF.md)).
