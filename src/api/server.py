@@ -70,6 +70,7 @@ from src.coordinator import PipelineCoordinator
 from src.log_format import print_banner, print_packet, setup_logging
 from src.models.device_identity import DeviceIdentity, _stable_device_id
 from src.models.packet import Packet
+from src.platform_guards import is_node_platform as _is_node_platform
 from src.storage.message_repository import MessageRepository
 from src.api.telemetry.noise_floor import NoiseFloorTracker
 from src.api.telemetry.spectral_scan_service import SpectralScanService
@@ -165,8 +166,11 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         if config.transmit.enabled and not _is_node_platform(config):
             _inject_tx_gain_into_source(pipeline)
 
-        _bootstrap_pki(config, pipeline)
-        await _hydrate_public_keys(pipeline)
+        # PKI keypair + peer-key hydration are gateway-only: meshtasticd owns
+        # crypto identity and mesh responses on the WisMesh Node platform.
+        if not _is_node_platform(config):
+            _bootstrap_pki(config, pipeline)
+            await _hydrate_public_keys(pipeline)
 
         await pipeline.start()
 
@@ -361,10 +365,6 @@ def _build_pipeline(config: AppConfig) -> PipelineCoordinator:
     return coordinator
 
 
-def _is_node_platform(config: AppConfig) -> bool:
-    return config.device.platform == "node"
-
-
 def _add_serial_source(coordinator: PipelineCoordinator, config: AppConfig):
     try:
         from src.capture.serial_source import SerialCaptureSource
@@ -450,7 +450,9 @@ def _resolve_mesh_node_id(config: AppConfig) -> int | None:
 
 
 def _bootstrap_pki(config: AppConfig, coord: PipelineCoordinator) -> None:
-    """Load PKI keypair and wire decoder identity before packet capture starts."""
+    """Load PKI keypair and wire decoder identity (gateway platform only)."""
+    if _is_node_platform(config):
+        return
     from src.identity.keypair import (
         KeypairStore,
         resolve_keypair_path,
@@ -478,7 +480,11 @@ def _bootstrap_pki(config: AppConfig, coord: PipelineCoordinator) -> None:
         logger.exception("Failed to load Meshtastic PKI keypair")
 
 
-async def _hydrate_public_keys(coord: PipelineCoordinator) -> None:
+async def _hydrate_public_keys(
+    coord: PipelineCoordinator, config: AppConfig | None = None
+) -> None:
+    if config is not None and _is_node_platform(config):
+        return
     if not hasattr(coord, "_crypto"):
         return
     await coord.database.connect()
@@ -559,6 +565,12 @@ def _setup_inbound_responder(
     tx_service: TxService | None,
     config: AppConfig,
 ) -> None:
+    if _is_node_platform(config):
+        logger.info(
+            "Skipping inbound mesh participant replies on node platform "
+            "(meshtasticd owns RF identity and responses)"
+        )
+        return
     if tx_service is None or not tx_service.meshtastic_enabled:
         return
 
@@ -594,6 +606,8 @@ def _build_telemetry_broadcaster(
     tx_service: TxService | None,
     coord: PipelineCoordinator,
 ) -> TelemetryBroadcaster | None:
+    if _is_node_platform(config):
+        return None
     if tx_service is None or not tx_service.meshtastic_enabled:
         return None
     telem = config.transmit.telemetry
@@ -624,6 +638,8 @@ def _build_position_broadcaster(
     tx_service: TxService | None,
     coord: PipelineCoordinator,
 ) -> PositionBroadcaster | None:
+    if _is_node_platform(config):
+        return None
     if tx_service is None or not tx_service.meshtastic_enabled:
         return None
     pos_cfg = config.transmit.position
@@ -936,12 +952,15 @@ def _build_spectral_scan_service(
     """Build the spectral scan service if hardware + config allow.
 
     Returns None when:
+      - Node platform (no SX1302)
       - The concentrator is not present (e.g. test container)
       - radio.spectral_scan_interval_seconds is 0 (user disabled)
       - The loaded HAL does not expose spectral scan symbols (the
         service itself will detect this and no-op on start, but we
         also early-return to avoid the log noise)
     """
+    if _is_node_platform(config):
+        return None
     interval = config.radio.spectral_scan_interval_seconds
     if interval is None or interval <= 0:
         logger.info("Spectral scan disabled via radio.spectral_scan_interval_seconds")
