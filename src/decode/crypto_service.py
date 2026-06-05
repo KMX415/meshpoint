@@ -6,6 +6,12 @@ import struct
 
 from Crypto.Cipher import AES  # nosec B413 -- pycryptodome, not deprecated pyCrypto
 
+from src.decode.pki_crypto import (
+    PKC_OVERHEAD,
+    decrypt_pki_payload,
+    encrypt_pki_payload,
+)
+
 logger = logging.getLogger(__name__)
 
 MESHTASTIC_DEFAULT_KEY_B64 = "AQ=="
@@ -22,6 +28,10 @@ class CryptoService:
 
     def __init__(self, default_key_b64: str = MESHTASTIC_DEFAULT_KEY_B64):
         self._keys: dict[str, bytes] = {}
+        self._private_key: bytes | None = None
+        self._public_key: bytes | None = None
+        self._public_keys: dict[int, bytes] = {}
+        self._node_db_path: str | None = None
         if default_key_b64:
             self._default_key = self._expand_key(
                 base64.b64decode(default_key_b64)
@@ -36,6 +46,118 @@ class CryptoService:
     def clear_channel_keys(self) -> None:
         """Drop all non-default channel keys."""
         self._keys.clear()
+
+    def set_keypair(self, private_key: bytes, public_key: bytes) -> None:
+        """Install the Meshpoint Meshtastic PKI keypair."""
+        self._private_key = private_key
+        self._public_key = public_key
+
+    @property
+    def public_key(self) -> bytes | None:
+        return self._public_key
+
+    def has_pki(self) -> bool:
+        return self._private_key is not None and self._public_key is not None
+
+    def set_node_db_path(self, db_path: str) -> None:
+        """Optional SQLite path for on-demand peer public_key lookup."""
+        self._node_db_path = db_path
+
+    def register_public_key(self, node_id: int, public_key: bytes) -> None:
+        if public_key and len(public_key) == 32:
+            self._public_keys[node_id] = public_key
+
+    def lookup_public_key(self, node_id: int) -> bytes | None:
+        cached = self._public_keys.get(node_id)
+        if cached is not None:
+            return cached
+        loaded = self._load_public_key_from_db(node_id)
+        if loaded is not None:
+            self._public_keys[node_id] = loaded
+        return loaded
+
+    def refresh_public_key_from_db(self, node_id: int) -> bytes | None:
+        """Drop cached peer key and reload from SQLite if configured."""
+        self._public_keys.pop(node_id, None)
+        return self.lookup_public_key(node_id)
+
+    def _load_public_key_from_db(self, node_id: int) -> bytes | None:
+        if not self._node_db_path:
+            return None
+        import sqlite3
+
+        node_hex = f"{node_id:08x}"
+        try:
+            with sqlite3.connect(self._node_db_path) as conn:
+                row = conn.execute(
+                    "SELECT public_key FROM nodes "
+                    "WHERE lower(node_id) = lower(?) "
+                    "AND public_key IS NOT NULL AND public_key != ''",
+                    (node_hex,),
+                ).fetchone()
+            if not row or not row[0]:
+                return None
+            key = bytes.fromhex(row[0])
+            if len(key) != 32:
+                logger.warning(
+                    "Ignoring invalid public_key length for node %s", node_hex
+                )
+                return None
+            return key
+        except (ValueError, sqlite3.Error):
+            logger.debug(
+                "Failed to load public_key for %s from DB", node_hex, exc_info=True
+            )
+            return None
+
+    def decrypt_meshtastic_pki(
+        self,
+        encrypted_payload: bytes,
+        packet_id: int,
+        sender_node_id: int,
+        sender_public_key: bytes,
+    ) -> bytes | None:
+        if self._private_key is None:
+            return None
+        return decrypt_pki_payload(
+            encrypted_payload,
+            private_key=self._private_key,
+            remote_public_key=sender_public_key,
+            from_node_id=sender_node_id,
+            packet_id=packet_id,
+        )
+
+    def encrypt_meshtastic_pki(
+        self,
+        plaintext: bytes,
+        packet_id: int,
+        source_node_id: int,
+        recipient_public_key: bytes,
+    ) -> bytes | None:
+        if self._private_key is None:
+            return None
+        return encrypt_pki_payload(
+            plaintext,
+            private_key=self._private_key,
+            remote_public_key=recipient_public_key,
+            from_node_id=source_node_id,
+            packet_id=packet_id,
+        )
+
+    @staticmethod
+    def is_pki_packet(
+        channel_hash: int,
+        dest_id: int,
+        our_node_id: int | None,
+        payload_len: int,
+    ) -> bool:
+        return (
+            channel_hash == 0
+            and our_node_id is not None
+            and dest_id == our_node_id
+            and dest_id != 0xFFFFFFFF
+            and payload_len > PKC_OVERHEAD
+        )
 
     def get_all_keys(self) -> list[bytes]:
         """Return all available keys, default first then channel keys."""

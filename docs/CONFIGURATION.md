@@ -173,25 +173,48 @@ location:
   min_fix_quality: 1         # minimum NMEA fix quality (1=2D, 3=3D)
 ```
 
-`location.source` selects where the Meshpoint reads its current
-position. The setup wizard always writes static lat/lon/alt under
-`device.*` (see [Device Identity](#device-identity)); the choice
-here is whether to **also** consult a live GPS at runtime. Source
-changes require a service restart; everything else hot-reloads.
+`location.source` selects where the Meshpoint reads **live GPS fixes**
+(for the Configuration → GPS skyplot and optional mesh POSITION
+broadcasts). The setup wizard always writes static lat/lon/alt under
+`device.*` as the **registered Meshradar fleet pin** (see
+[Device Identity](#device-identity)); live gpsd does **not** overwrite
+those values. Source changes require a service restart; registered
+coordinates and mesh position settings hot-reload from the dashboard.
 
 | Source | Behavior |
 |---|---|
-| `static` (default) | Uses `device.latitude` / `device.longitude` / `device.altitude` exactly as set during the wizard. No GPS hardware required. |
-| `gpsd` | Reads live fixes from the system `gpsd` daemon over TCP (`127.0.0.1:2947`). Recommended for any USB GPS receiver (u-blox 7, u-blox 8, VFAN puck, generic CDC ACM sticks). |
+| `static` (default) | No live GPS hardware. Registered coordinates live in `device.*` only. Skyplot shows the static pin. |
+| `gpsd` | Reads live fixes from the system `gpsd` daemon over TCP (`127.0.0.1:2947`). Recommended for any USB GPS receiver (u-blox 7, u-blox 8, VFAN puck, generic CDC ACM sticks). Skyplot and stats update from the live fix. |
 | `uart` | Reserved for direct-serial reads from a Pi HAT GPS (e.g. RAK 7248). Currently a placeholder; falls back to static and surfaces an explanatory error in the dashboard. |
 
-When `source: gpsd` is active and the daemon has a 2D or 3D fix,
-the coordinator updates `_config.device.latitude` / `.longitude` /
-`.altitude` in place every `update_interval_seconds`. Anything that
-reads from `device.*` (NodeInfo broadcasts, MQTT, the dashboard map,
-Meshradar cloud) automatically sees the live position. If the fix
-is lost, the last known coordinates remain in use until a fresh fix
-arrives — there is no fallback to the wizard-time static value.
+### Mesh position broadcasts (LoRa / Meshtastic app map)
+
+When native TX is enabled (`transmit.enabled: true`), the Meshpoint can
+send periodic Meshtastic POSITION packets. That is **separate** from
+the Meshradar fleet pin in `device.*`.
+
+Configure on **Configuration → GPS → Mesh position broadcasts**, or in
+yaml:
+
+```yaml
+transmit:
+  position:
+    interval_minutes: 15
+    startup_delay_seconds: 180
+    coordinate_source: "static"       # static | live
+    location_precision: "approximate"  # exact | approximate | none (live only)
+```
+
+| Setting | Values | Meaning |
+|---|---|---|
+| `coordinate_source` | `static` (default) | Broadcast the registered pin from `device.latitude/longitude`. |
+| | `live` | Broadcast the live gpsd/UART fix. Requires `location.source` other than `static`. |
+| `location_precision` | `approximate` (default for live) | Round to ~2 decimal places before POSITION TX (about **0.7 mi** / **1.1 km**; the dashboard label follows Settings → Meshpoint distance units). |
+| | `exact` | Full precision from the live fix. |
+| | `none` | Skip POSITION broadcasts when using live (privacy: no position on mesh). |
+
+When `coordinate_source: static`, coordinates are sent at full wizard
+precision regardless of `location_precision`.
 
 ### Using gpsd (USB GPS receivers)
 
@@ -208,10 +231,12 @@ To enable live GPS:
    The MeshCore USB auto-detect path (`UsbPortClassifier`) skips
    any port classified as `gps_known`, so a u-blox stick will
    never be probed as a MeshCore companion.
-2. Open the dashboard at **Configuration → GPS**, switch the source
-   to **gpsd**, and click **Save**. The Meshpoint restarts the
-   location source in-place; no full service restart needed unless
-   you also changed `gpsd_host` / `gpsd_port`.
+2. Open the dashboard at **Configuration → GPS**. Set **Registered
+   coordinates** (Meshradar fleet pin). Switch **Source** to **gpsd**
+   for live skyplot data. Optionally set **Mesh position broadcasts**
+   to **Live GPS** with **Approximate** or **Precise** privacy, then
+   click **Save**. Changing the GPS source type requires a service
+   restart; coordinate and mesh-position edits hot-reload.
 3. Watch the **GPS** card. The skyplot animates, satellite dots
    render at their azimuth/elevation, and the fix-mode lamp flips
    from grey (no fix) → amber (2D) → green (3D) as the receiver
@@ -237,14 +262,19 @@ errors and confirm `source: gpsd` in `local.yaml`.
 
 ### Privacy
 
-Live GPS coordinates flow through the same surfaces as the static
-wizard values: NodeInfo broadcasts (off-air to the mesh), MQTT
-(only when `mqtt.enabled: true` and the channel is allow-listed,
-respecting `mqtt.location_precision`), and the upstream WebSocket
-to meshradar.io (only when `upstream.enabled: true`). To run a
-mobile / wardriving Meshpoint without leaking position upstream,
-either `mqtt.location_precision: none` (or `approximate`) or
-`upstream.enabled: false`.
+Three independent surfaces:
+
+| Surface | Config | Notes |
+|---|---|---|
+| **Meshradar cloud** | `device.latitude/longitude` | Always the registered pin. Live GPS never moves the fleet marker. |
+| **LoRa mesh (POSITION)** | `transmit.position.coordinate_source` + `location_precision` | Choose registered pin or live GPS; approximate / precise / hidden on live. |
+| **MQTT** | `mqtt.location_precision` | Applies to position fields in MQTT publishes only (`exact` / `approximate` / `none`). |
+
+To run a mobile Meshpoint without leaking live coordinates on the mesh,
+use **Live GPS** with **Hidden** mesh privacy, or keep mesh source on
+**Registered pin**. To keep Meshradar on your home pin while testing
+gpsd outdoors, leave registered coordinates at home and use live mesh
+POSITION only if you intend to advertise on the LoRa map.
 
 ---
 
@@ -572,7 +602,7 @@ Control how much location detail leaves the device via MQTT:
 | Value | Behavior |
 |---|---|
 | `exact` | Full GPS coordinates (default) |
-| `approximate` | Rounded to ~1.1km precision (2 decimal places) |
+| `approximate` | Rounded to ~2 decimal places (about 0.7 mi / 1.1 km; Configuration → MQTT and GPS labels follow Settings → Meshpoint distance units) |
 | `none` | Location stripped entirely from MQTT messages |
 
 Full-precision location data is always available on the [Meshradar](https://meshradar.io) dashboard regardless of this setting.
@@ -674,6 +704,10 @@ transmit:              # native messaging TX (Meshtastic via SX1302, MeshCore vi
   long_name: "Meshpoint"
   short_name: "MPNT"
   hop_limit: 3
+  position:
+    interval_minutes: 15
+    coordinate_source: "static"      # static | live
+    location_precision: "approximate"  # exact | approximate | none (live only)
 
 relay:                 # experimental: re-broadcast captured packets via USB radio
   enabled: false

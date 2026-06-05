@@ -95,6 +95,22 @@ class NodeMap {
                 }
             });
         }
+
+        document.addEventListener('meshpoint:nodeCardsFilter', () => {
+            if (this._lastNodes) {
+                this.loadNodes(this._lastNodes, this._lastDevice);
+            }
+        });
+    }
+
+    _nodesForMapMarkers(nodes) {
+        const filter = window.MeshpointNodeCardsSort
+            ? window.MeshpointNodeCardsSort.readSavedFilter()
+            : 'all';
+        if (filter === 'all' || !window.MeshpointNodeCardsSort) {
+            return nodes;
+        }
+        return window.MeshpointNodeCardsSort.applyFilter(nodes, filter);
     }
 
     _loadSavedView() {
@@ -146,7 +162,8 @@ class NodeMap {
             bounds.push([device.latitude, device.longitude]);
         }
 
-        for (const n of nodes) {
+        const mapNodes = this._nodesForMapMarkers(nodes);
+        for (const n of mapNodes) {
             const lat = n.latitude;
             const lon = n.longitude;
             if (lat == null || lon == null) continue;
@@ -162,6 +179,10 @@ class NodeMap {
                 this._map.setView(bounds[0], 13);
             }
             this._hasFitBounds = true;
+        }
+
+        if (this._topologyVisible) {
+            this._loadTopology();
         }
     }
 

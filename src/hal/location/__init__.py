@@ -13,8 +13,8 @@ Public API:
     )
 
 Coordinator owns the lifecycle: ``start()`` after config load, poll
-``get_status()`` periodically into ``DeviceConfig.{lat,lon,alt}``,
-``stop()`` on shutdown.
+``get_status()`` for live fixes (gpsd/uart). Registered coordinates in
+``device.{lat,lon,alt}`` are not overwritten by live GPS.
 """
 
 from src.hal.location.base import LocationSource

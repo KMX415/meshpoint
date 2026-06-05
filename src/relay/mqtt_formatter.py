@@ -13,6 +13,7 @@ from typing import Optional
 
 from src.models.packet import Packet, PacketType
 from src.relay.channel_resolver import ChannelResolver
+from src.hal.location.privacy import LocationPrivacy as LocationRounder
 
 logger = logging.getLogger(__name__)
 
@@ -38,21 +39,6 @@ PORTNUM_MAP = {
 class MqttMessage:
     topic: str
     payload: bytes
-
-
-class LocationRounder:
-    """Reduces coordinate precision for privacy-controlled publishing."""
-
-    @staticmethod
-    def apply(lat: Optional[float], lon: Optional[float],
-              precision: str) -> tuple[Optional[float], Optional[float]]:
-        if lat is None or lon is None:
-            return lat, lon
-        if precision == "none":
-            return None, None
-        if precision == "approximate":
-            return round(lat, 2), round(lon, 2)
-        return lat, lon
 
 
 class MeshtasticMqttFormatter:

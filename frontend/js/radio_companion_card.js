@@ -23,13 +23,23 @@ class RadioCompanionCard {
     render(config) {
         const mc = config.meshcore || {};
         if (!mc.connected) {
-            this._renderOffline();
+            this._renderOffline(config);
             return;
         }
         this._renderOnline(mc);
     }
 
-    _renderOffline() {
+    _renderOffline(config) {
+        const tx = (config && config.transmit) || {};
+        const mc = (config && config.meshcore) || {};
+        const transmitOff = !tx.enabled || mc.status_note === 'transmit_disabled';
+        const body = transmitOff
+            ? `Native TX is disabled under
+                <a class="r-config-link" href="#/configuration/transmit">Configuration → Transmit</a>.
+                Enable it and restart to show companion status here. USB capture may
+                still be receiving MeshCore packets in the background.`
+            : `Plug in a MeshCore USB companion (Heltec V3/V4, T-Beam, ...)
+                and restart to enable MC messaging.`;
         this._root.innerHTML = `
             <div class="r-card__header">
                 <h3 class="r-card__title">MeshCore Companion</h3>
@@ -38,10 +48,7 @@ class RadioCompanionCard {
                     <span class="status-lamp__label">NONE</span>
                 </span>
             </div>
-            <div class="companion-empty">
-                Plug in a MeshCore USB companion (Heltec V3/V4, T-Beam, ...)
-                and restart to enable MC messaging.
-            </div>
+            <div class="companion-empty">${body}</div>
         `;
     }
 

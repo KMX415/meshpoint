@@ -164,7 +164,8 @@ PKI support, which needs `cryptography>=43.0.0`) can fail at startup if
 the dashboard apply path reset git to the new branch and restarted the
 service before `pip install -r requirements.txt` finished. Older apply
 builds ran `install.sh` synchronously while the service was still up, or
-skipped pip entirely.
+skipped pip entirely. The new code then fails at startup in
+`_bootstrap_pki()`.
 
 **Fix (recovery):** Refresh the venv, then restart:
 
@@ -173,7 +174,8 @@ sudo /opt/meshpoint/venv/bin/pip install -r /opt/meshpoint/requirements.txt
 sudo systemctl restart meshpoint
 ```
 
-Or run the full installer:
+Or run the full installer (also clears stale `.so` files on older
+upgrades):
 
 ```bash
 cd /opt/meshpoint
@@ -706,6 +708,30 @@ the other browser will get bumped.
 
 ## MeshCore companion
 
+### Dashboard says not connected but MeshCore packets appear in logs
+
+**Cause:** `transmit.enabled` is `false` (the default in `config/default.yaml`).
+The dashboard reads MeshCore companion status from the Native TX path, not from
+the USB capture source. USB capture can still ingest MeshCore packets and show
+them in the packet feed while the Configuration and Radio companion cards report
+"not connected."
+
+**Fix:** If you want companion status, messaging, or Send Advert on the
+dashboard, enable Native TX under **Configuration → Transmit**, save, and
+restart the service:
+
+```yaml
+transmit:
+  enabled: true
+```
+
+If you only need passive USB capture (no dashboard MC controls), you can ignore
+the offline companion card. Confirm USB capture is working with:
+
+```bash
+meshpoint logs | grep -i meshcore
+```
+
 ### MeshCore companion not receiving packets
 
 **Cause:** Wrong firmware, wrong port, wrong frequency, or the device
@@ -975,26 +1001,38 @@ You should see all four settings. If you customized
 desired settings (USB hotplug + no-wait mode) are now in place.
 Re-add any custom flags after the installer runs.
 
-### Live GPS coordinates not updating on the dashboard map / NodeInfo
+### Live GPS skyplot works but Meshradar fleet pin does not move
+
+**Expected behavior (v0.7.6+).** Registered coordinates in
+`device.latitude/longitude` are the Meshradar fleet pin. Live gpsd
+fixes power the Configuration → GPS skyplot and optional mesh
+POSITION broadcasts, but they do **not** overwrite the registered
+pin or the upstream WebSocket registration payload.
+
+**To advertise live position on the Meshtastic app map:** open
+Configuration → GPS, set **Mesh position broadcasts** to **Live GPS**
+and pick **Approximate** or **Precise** privacy, then Save.
+
+**To move the Meshradar pin:** edit **Registered coordinates** on the
+same card (or `device:` in `local.yaml`) and Save.
+
+### gpsd enabled but skyplot still shows the static pin only
 
 **Cause:** `location.source` in `local.yaml` is still `static`
-(or unset, which defaults to static). The Meshpoint is reading
-the wizard-time lat/lon/alt and ignoring `gpsd` even though the
-daemon is happily tracking satellites.
+(or unset, which defaults to static). The Meshpoint is not polling
+gpsd even though the daemon may be tracking satellites.
 
-**Fix:** Open Configuration → GPS and switch the source to
-**gpsd**, then click **Save**. Or edit `local.yaml`:
+**Fix:** Open Configuration → GPS and switch **Source** to **gpsd**,
+then click **Save** (service restart required). Or edit `local.yaml`:
 
 ```yaml
 location:
   source: "gpsd"
 ```
 
-Restart the service. The live fix flows into `device.latitude` /
-`device.longitude` / `device.altitude` once the receiver has a
-2D fix or better. The static wizard-time values are still in
-`device.*` but the coordinator overwrites them with the live fix
-on every update interval (default 5 s).
+Restart the service. The skyplot and stats column update from the live
+fix once the receiver has a 2D fix or better. Registered coordinates
+in `device.*` stay unchanged unless you edit them explicitly.
 
 ### MeshCore USB companion connection fails after plugging in a GPS
 

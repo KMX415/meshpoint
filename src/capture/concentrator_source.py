@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, AsyncIterator, Optional
 
@@ -75,8 +76,21 @@ class ConcentratorCaptureSource(CaptureSource):
 
     async def start(self) -> None:
         self._wrapper.load()
-        self._wrapper.reset()
+
+        late_reset = os.environ.get("CONCENTRATOR_LATE_RESET", "0") == "1"
+
+        if not late_reset:
+            self._wrapper.reset()
+
         self._wrapper.configure(self._channel_plan)
+
+        if late_reset:
+            # Perform reset as late as possible, right before lgw_start().
+            # This is required on some sensitive RAK Hotspot V2 / RAK7248
+            # carriers where an earlier reset (from the pre-script or early
+            # Python call) can leave the chip in a bad state.
+            self._wrapper.reset()
+
         self._wrapper.start()
         self._wrapper.set_syncword(self._syncword)
         self._running = True

@@ -104,7 +104,7 @@ class TestSelectPreviewSection(unittest.TestCase):
 
     def test_rc_tier_does_not_surface_older_release_when_076_missing(self) -> None:
         section = select_preview_section(
-            self.sections, tier="rc", channel_id="rc-076",
+            self.sections, tier="rc", channel_id="rc-077",
         )
         self.assertIsNone(section)
 

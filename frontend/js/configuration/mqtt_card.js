@@ -10,6 +10,7 @@ class MqttConfigCard {
         this._api = api;
         this._root = null;
         this._passwordDirty = false;
+        this._unsubDisplayUnits = null;
     }
 
     mount(root) {
@@ -89,7 +90,7 @@ class MqttConfigCard {
                             <span class="cfg-field__label">Location on MQTT</span>
                             <select class="cfg-field__input" data-mqtt-loc-precision>
                                 <option value="exact">Exact coordinates</option>
-                                <option value="approximate">Approximate (~1.1 km)</option>
+                                <option value="approximate" data-approximate-option>Approximate</option>
                                 <option value="none">None (strip from MQTT)</option>
                             </select>
                         </label>
@@ -104,6 +105,10 @@ class MqttConfigCard {
                         <label class="cfg-field cfg-field--toggle">
                             <input type="checkbox" data-mqtt-ha>
                             <span class="cfg-field__label">Home Assistant auto-discovery</span>
+                        </label>
+                        <label class="cfg-field cfg-field--toggle">
+                            <input type="checkbox" data-mqtt-tls>
+                            <span class="cfg-field__label">Use TLS (mqtts)</span>
                         </label>
                     </fieldset>
                     <div class="cfg-preview" data-mqtt-previews>
@@ -134,6 +139,7 @@ class MqttConfigCard {
         this._locPrecision = this._root.querySelector('[data-mqtt-loc-precision]');
         this._json = this._root.querySelector('[data-mqtt-json]');
         this._ha = this._root.querySelector('[data-mqtt-ha]');
+        this._tls = this._root.querySelector('[data-mqtt-tls]');
         this._previewMt = this._root.querySelector('[data-mqtt-preview-mt]');
         this._previewMc = this._root.querySelector('[data-mqtt-preview-mc]');
         this._previewJson = this._root.querySelector('[data-mqtt-preview-json]');
@@ -145,6 +151,19 @@ class MqttConfigCard {
         ['input', 'change'].forEach((ev) => {
             this._form.addEventListener(ev, () => this._renderPreviews());
         });
+        this._refreshApproximateOptionLabels();
+        if (window.MeshpointDisplayUnits) {
+            this._unsubDisplayUnits = window.MeshpointDisplayUnits.onChange(
+                () => this._refreshApproximateOptionLabels(),
+            );
+        }
+    }
+
+    _refreshApproximateOptionLabels() {
+        const Units = window.MeshpointDisplayUnits;
+        if (!Units || !this._locPrecision) return;
+        const opt = this._locPrecision.querySelector('option[value="approximate"]');
+        if (opt) opt.textContent = Units.approximateLocationOptionLabel();
     }
 
     render(config) {
@@ -175,6 +194,7 @@ class MqttConfigCard {
         }
         if (this._json) this._json.checked = !!mqtt.publish_json;
         if (this._ha) this._ha.checked = !!mqtt.homeassistant_discovery;
+        if (this._tls) this._tls.checked = !!mqtt.tls_enabled;
         this._renderPreviews(mqtt);
     }
 
@@ -239,6 +259,8 @@ class MqttConfigCard {
             publish_json: this._json.checked,
             location_precision: this._locPrecision.value,
             homeassistant_discovery: this._ha.checked,
+            tls_enabled: this._tls ? this._tls.checked : false,
+            tls_ca_cert: '',
         };
         if (this._passwordDirty) {
             payload.password = this._pass.value;

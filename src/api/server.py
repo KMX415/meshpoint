@@ -77,6 +77,9 @@ from src.transmit.nodeinfo_broadcaster import (
     NodeInfoBroadcaster,
     clamp_interval_minutes,
 )
+from src.transmit.position_broadcaster import PositionBroadcaster
+from src.transmit.telemetry_broadcaster import TelemetryBroadcaster
+from src.transmit.meshtastic_inbound_handler import MeshtasticInboundHandler
 from src.transmit.tx_service import TxService
 from src.version import __version__
 
@@ -87,6 +90,8 @@ ws_manager = WebSocketManager()
 pipeline: PipelineCoordinator | None = None
 upstream: UpstreamClient | None = None
 nodeinfo_broadcaster: NodeInfoBroadcaster | None = None
+telemetry_broadcaster: TelemetryBroadcaster | None = None
+position_broadcaster: PositionBroadcaster | None = None
 noise_floor_tracker = NoiseFloorTracker()
 _noise_floor_emitter_task = None
 _spectral_scan_service: SpectralScanService | None = None
@@ -127,6 +132,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         global pipeline, upstream, nodeinfo_broadcaster
+        global telemetry_broadcaster, position_broadcaster
         warn_if_stale_so_files()
         validate_activation(config)
         identity = DeviceIdentity(
@@ -159,6 +165,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         if config.transmit.enabled and not _is_node_platform(config):
             _inject_tx_gain_into_source(pipeline)
 
+        _bootstrap_pki(config, pipeline)
+        await _hydrate_public_keys(pipeline)
+
         await pipeline.start()
 
         message_repo = MessageRepository(pipeline.database)
@@ -173,8 +182,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                     _send_meshcore_advert(meshcore_tx_ref, mc_source)
                 )
         _setup_message_interception(
-            pipeline, message_repo, config, meshcore_tx_ref
+            pipeline, message_repo, config, meshcore_tx_ref, tx_service
         )
+        _setup_inbound_responder(pipeline, tx_service, config)
         setup_meshcore_contact_enrichment(pipeline, meshcore_tx_ref)
         if meshcore_tx_ref and meshcore_tx_ref.connected:
             import asyncio
@@ -196,6 +206,18 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         nodeinfo_broadcaster = _build_nodeinfo_broadcaster(config, tx_service)
         if nodeinfo_broadcaster is not None:
             await nodeinfo_broadcaster.start()
+
+        telemetry_broadcaster = _build_telemetry_broadcaster(
+            config, tx_service, pipeline
+        )
+        if telemetry_broadcaster is not None:
+            await telemetry_broadcaster.start()
+
+        position_broadcaster = _build_position_broadcaster(
+            config, tx_service, pipeline
+        )
+        if position_broadcaster is not None:
+            await position_broadcaster.start()
 
         _wire_native_relay(pipeline, tx_service)
 
@@ -229,6 +251,10 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                 pass
         if nodeinfo_broadcaster is not None:
             await nodeinfo_broadcaster.stop()
+        if telemetry_broadcaster is not None:
+            await telemetry_broadcaster.stop()
+        if position_broadcaster is not None:
+            await position_broadcaster.stop()
         await upstream.stop()
         await pipeline.stop()
         session_manager.shutdown()
@@ -410,6 +436,212 @@ def _add_meshtasticd_source(
         )
 
 
+def _resolve_mesh_node_id(config: AppConfig) -> int | None:
+    configured = config.transmit.node_id
+    if configured is not None:
+        return configured
+    device_id = (config.device.device_id or "").strip()
+    if not device_id:
+        return None
+    try:
+        return TxService._derive_node_id(device_id)
+    except RuntimeError:
+        return None
+
+
+def _bootstrap_pki(config: AppConfig, coord: PipelineCoordinator) -> None:
+    """Load PKI keypair and wire decoder identity before packet capture starts."""
+    from src.identity.keypair import (
+        KeypairStore,
+        resolve_keypair_path,
+        resolve_keypair_path_from_env,
+    )
+
+    if not hasattr(coord, "_crypto"):
+        return
+
+    coord._crypto.set_node_db_path(config.storage.database_path)
+    our_node_id = _resolve_mesh_node_id(config)
+    if our_node_id is not None:
+        coord._router.meshtastic_decoder.configure_identity(our_node_id)
+        logger.info(
+            "Meshtastic PKI identity configured: 0x%08x", our_node_id
+        )
+
+    override = resolve_keypair_path_from_env()
+    key_path = override or resolve_keypair_path(config.storage.database_path)
+    try:
+        keypair = KeypairStore(key_path).load_or_create()
+        coord._crypto.set_keypair(keypair.private_key, keypair.public_key)
+        logger.info("Meshtastic PKI keypair loaded from %s", key_path)
+    except Exception:
+        logger.exception("Failed to load Meshtastic PKI keypair")
+
+
+async def _hydrate_public_keys(coord: PipelineCoordinator) -> None:
+    if not hasattr(coord, "_crypto"):
+        return
+    await coord.database.connect()
+    rows = await coord.database.fetch_all(
+        """
+        SELECT node_id, public_key FROM nodes
+        WHERE public_key IS NOT NULL AND public_key != ''
+        LIMIT 5000
+        """
+    )
+    for row in rows:
+        node_id = row.get("node_id")
+        public_key = row.get("public_key")
+        if not node_id or not public_key:
+            continue
+        try:
+            coord._crypto.register_public_key(
+                int(node_id, 16),
+                bytes.fromhex(public_key),
+            )
+        except ValueError:
+            continue
+
+
+def _telemetry_metrics_providers(
+    tx_service: TxService,
+    coord: PipelineCoordinator,
+    service_started: float,
+    *,
+    noise_floor_tracker=None,
+    relay_manager=None,
+):
+    """Shared device_metrics / local_stats snapshots for TX paths."""
+    import time
+
+    duty = getattr(tx_service, "_duty", None)
+    stats = getattr(coord, "stats_reporter", None)
+
+    def device_metrics() -> dict:
+        air_util = duty.current_usage_percent() if duty else 0.0
+        return {
+            "battery_level": 101,
+            "voltage": 5.0,
+            "channel_utilization": 0.0,
+            "air_util_tx": round(air_util, 2),
+            "uptime_seconds": int(time.monotonic() - service_started),
+        }
+
+    def local_stats() -> dict:
+        dm = device_metrics()
+        noise_floor = None
+        if noise_floor_tracker is not None:
+            snap = noise_floor_tracker.snapshot()
+            value_dbm = snap.get("value_dbm")
+            if value_dbm is not None:
+                noise_floor = int(round(value_dbm))
+        relayed = 0
+        if relay_manager is not None:
+            relayed = int(relay_manager.get_stats().get("relayed", 0))
+        return {
+            "uptime_seconds": dm["uptime_seconds"],
+            "channel_utilization": dm["channel_utilization"],
+            "air_util_tx": dm["air_util_tx"],
+            "num_packets_tx": 0,
+            "num_packets_rx": stats.total_packets if stats else 0,
+            "num_packets_rx_bad": 0,
+            "num_online_nodes": 0,
+            "num_total_nodes": 0,
+            "num_tx_relay": relayed,
+            "noise_floor": noise_floor,
+        }
+
+    return device_metrics, local_stats
+
+
+def _setup_inbound_responder(
+    coord: PipelineCoordinator,
+    tx_service: TxService | None,
+    config: AppConfig,
+) -> None:
+    if tx_service is None or not tx_service.meshtastic_enabled:
+        return
+
+    import time
+
+    our_node_id = tx_service.source_node_id
+    our_node_hex = f"{our_node_id:08x}"
+    coord._router.meshtastic_decoder.configure_identity(our_node_id)
+    coord.relay_manager.set_local_node_id(our_node_hex)
+    device_fn, local_fn = _telemetry_metrics_providers(
+        tx_service,
+        coord,
+        time.monotonic(),
+        noise_floor_tracker=noise_floor_tracker,
+        relay_manager=coord.relay_manager,
+    )
+    tx_service.set_telemetry_reply_providers(device_fn, local_fn)
+    handler = MeshtasticInboundHandler(tx_service, our_node_id)
+
+    def on_packet(packet: Packet) -> None:
+        import asyncio
+
+        try:
+            asyncio.get_running_loop().create_task(handler.handle(packet))
+        except RuntimeError:
+            pass
+
+    coord.on_packet(on_packet)
+
+
+def _build_telemetry_broadcaster(
+    config: AppConfig,
+    tx_service: TxService | None,
+    coord: PipelineCoordinator,
+) -> TelemetryBroadcaster | None:
+    if tx_service is None or not tx_service.meshtastic_enabled:
+        return None
+    telem = config.transmit.telemetry
+    if clamp_interval_minutes(telem.interval_minutes) == 0:
+        return None
+
+    import time
+
+    service_started = time.monotonic()
+    device_fn, _local_fn = _telemetry_metrics_providers(
+        tx_service,
+        coord,
+        service_started,
+        noise_floor_tracker=noise_floor_tracker,
+        relay_manager=coord.relay_manager,
+    )
+
+    return TelemetryBroadcaster(
+        tx_service,
+        interval_minutes=telem.interval_minutes,
+        startup_delay_seconds=telem.startup_delay_seconds,
+        metrics_provider=device_fn,
+    )
+
+
+def _build_position_broadcaster(
+    config: AppConfig,
+    tx_service: TxService | None,
+    coord: PipelineCoordinator,
+) -> PositionBroadcaster | None:
+    if tx_service is None or not tx_service.meshtastic_enabled:
+        return None
+    pos_cfg = config.transmit.position
+    if clamp_interval_minutes(pos_cfg.interval_minutes) == 0:
+        return None
+
+    from src.transmit.mesh_position_resolver import MeshPositionResolver
+
+    resolver = MeshPositionResolver(config, coord.location_source)
+
+    return PositionBroadcaster(
+        tx_service,
+        interval_minutes=pos_cfg.interval_minutes,
+        startup_delay_seconds=pos_cfg.startup_delay_seconds,
+        coords_provider=resolver.resolve,
+    )
+
+
 def _build_tx_service(
     config: AppConfig, coord: PipelineCoordinator
 ) -> TxService | None:
@@ -527,6 +759,7 @@ def _wire_native_relay(
             )
 
     relay.set_transmit_function(_native_relay)
+    relay.set_local_node_id(f"{tx_service.source_node_id:08x}")
     logger.info(
         "Relay backend: native onboard SX1302 (identity-preserving)"
     )
@@ -770,6 +1003,7 @@ def _setup_message_interception(
     message_repo: MessageRepository,
     config: AppConfig,
     meshcore_tx=None,
+    tx_service: TxService | None = None,
 ) -> None:
     """Register a callback to intercept TEXT messages for storage.
 
@@ -789,8 +1023,11 @@ def _setup_message_interception(
         else None
     )
     md_node_hex = md_source.local_node_id_hex if md_source else None
+    configured_node_id = config.transmit.node_id
+    if configured_node_id is None and tx_service is not None:
+        configured_node_id = tx_service.source_node_id
     our_node_ids = build_our_meshtastic_node_ids(
-        config.transmit.node_id,
+        configured_node_id,
         md_node_hex,
     )
     if md_node_hex and config.transmit.node_id:
@@ -802,7 +1039,7 @@ def _setup_message_interception(
                 md_node_hex,
                 configured_hex,
             )
-    if md_node_hex:
+    if our_node_ids:
         logger.info("Meshtastic DM identity: %s", ", ".join(sorted(our_node_ids)))
 
     mc_name_cache: dict[str, str] = {}

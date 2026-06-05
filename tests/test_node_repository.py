@@ -71,6 +71,28 @@ class TestNodeRepository(unittest.TestCase):
         self.assertIsNotNone(node)
         self.assertEqual(node.long_name, "Trail Relay")
 
+    def test_meshtastic_long_name_updates_from_nodeinfo(self):
+        node_id = "7d8b98a9"
+        _run(self.repo.upsert(
+            Node(
+                node_id=node_id,
+                long_name="Guzii",
+                protocol="meshtastic",
+            )
+        ))
+
+        _run(self.repo.upsert(
+            Node(
+                node_id=node_id,
+                long_name="Guziii",
+                protocol="meshtastic",
+            )
+        ))
+
+        node = _run(self.repo.get_by_id(node_id))
+        self.assertIsNotNone(node)
+        self.assertEqual(node.long_name, "Guziii")
+
     def test_delete_phantom_rows_removes_unidentified_zero_packet_nodes(self) -> None:
         now = "2026-05-19T12:00:00+00:00"
         _run(

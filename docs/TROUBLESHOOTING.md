@@ -22,6 +22,53 @@ The SPI bus latched due to a hard power cut. `sudo reboot` and `meshpoint restar
 2. Wait for the green LED to stop blinking
 3. Unplug power for 10+ seconds, then plug back in
 
+### RAK Hotspot V2 (RAK7248) specific issues
+
+Some RAK7248 carriers (especially enclosed Helium Hotspot V2 units) are more
+sensitive to reset timing than standard RAK Pi HATs.
+
+**Symptoms**
+- `lgw_start()` returns -1 with "chip version is 0x00" or "0x05"
+- "Failed to set SX1250_0 in STANDBY_RC mode" even after a full power cycle
+- Works when running manually as the `pi` user but fails under the `meshpoint` service user
+
+**Common fixes**
+
+1. **Increase reset hold time** (most effective for many users):
+
+   Add this to your systemd service (or the environment section):
+
+   ```ini
+   Environment=CONCENTRATOR_RESET_HOLD_SEC=1.0
+   ```
+
+   This makes the Python-side reset use a longer pulse (the shell pre-script
+   still runs with its default timing).
+
+2. **SPI device-tree overlay conflict**:
+
+   On some RAK7248 boards the line `dtoverlay=spi0-0cs` in `/boot/firmware/config.txt`
+   produces the kernel error:
+
+   ```
+   spi-bcm2835 ... there is not valid maps for state default
+   ```
+
+   Try commenting it out:
+
+   ```bash
+   sudo sed -i 's/^dtoverlay=spi0-0cs/#dtoverlay=spi0-0cs/' /boot/firmware/config.txt
+   sudo reboot
+   ```
+
+3. **GPIO 25 behavior**:
+
+   On certain RAK7248 carriers GPIO 25 is part of the reset circuit rather than
+   (or in addition to) a power-enable line. Using it as a separate "power GPIO"
+   in custom reset sequences can hold the chip in reset.
+
+After making changes, do a full physical power cycle (unplug 15–20 s) before testing.
+
 ### Database errors after update
 
 If logs show `sqlite3.OperationalError: table nodes has no column named <column>`:

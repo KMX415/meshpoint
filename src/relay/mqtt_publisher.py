@@ -112,6 +112,14 @@ class MqttPublisher:
                     self._config.username, self._config.password
                 )
 
+            if self._config.tls_enabled:
+                ca_path = (self._config.tls_ca_cert or "").strip()
+                if ca_path:
+                    self._client.tls_set(ca_certs=ca_path)
+                else:
+                    self._client.tls_set()
+                logger.info("MQTT TLS enabled for %s:%d", self._config.broker, self._config.port)
+
             self._client.connect(
                 self._config.broker, self._config.port, keepalive=60
             )

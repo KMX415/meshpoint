@@ -70,6 +70,11 @@ def _decode_nodeinfo(payload: bytes) -> _Result:
             "hw_model": str(user.hw_model) if user.hw_model else None,
             "id": user.id or None,
             "role": str(user.role) if user.role else None,
+            "public_key": (
+                user.public_key.hex()
+                if user.public_key and len(user.public_key) == 32
+                else None
+            ),
         }, PacketType.NODEINFO
     except Exception:
         return None, PacketType.NODEINFO
@@ -82,6 +87,14 @@ def _decode_telemetry(payload: bytes) -> _Result:
         telem = telemetry_pb2.Telemetry()
         telem.ParseFromString(payload)
         result: dict[str, Any] = {}
+        if telem.HasField("local_stats"):
+            result["telemetry_variant"] = "local_stats"
+        elif telem.HasField("device_metrics"):
+            result["telemetry_variant"] = "device_metrics"
+        elif payload.startswith(b"\x32"):
+            result["telemetry_variant"] = "local_stats"
+        else:
+            result["telemetry_variant"] = "device_metrics"
         if telem.HasField("device_metrics"):
             dm = telem.device_metrics
             result["battery_level"] = dm.battery_level or None
@@ -89,6 +102,13 @@ def _decode_telemetry(payload: bytes) -> _Result:
             result["channel_utilization"] = dm.channel_utilization or None
             result["air_util_tx"] = dm.air_util_tx or None
             result["uptime_seconds"] = dm.uptime_seconds or None
+        if telem.HasField("local_stats"):
+            ls = telem.local_stats
+            result["local_uptime_seconds"] = ls.uptime_seconds or None
+            result["local_channel_utilization"] = ls.channel_utilization or None
+            result["local_air_util_tx"] = ls.air_util_tx or None
+            result["num_packets_tx"] = ls.num_packets_tx or None
+            result["num_packets_rx"] = ls.num_packets_rx or None
         if telem.HasField("environment_metrics"):
             em = telem.environment_metrics
             result["temperature"] = em.temperature or None
