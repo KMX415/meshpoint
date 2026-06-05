@@ -708,6 +708,30 @@ the other browser will get bumped.
 
 ## MeshCore companion
 
+### Dashboard says not connected but MeshCore packets appear in logs
+
+**Cause:** `transmit.enabled` is `false` (the default in `config/default.yaml`).
+The dashboard reads MeshCore companion status from the Native TX path, not from
+the USB capture source. USB capture can still ingest MeshCore packets and show
+them in the packet feed while the Configuration and Radio companion cards report
+"not connected."
+
+**Fix:** If you want companion status, messaging, or Send Advert on the
+dashboard, enable Native TX under **Configuration → Transmit**, save, and
+restart the service:
+
+```yaml
+transmit:
+  enabled: true
+```
+
+If you only need passive USB capture (no dashboard MC controls), you can ignore
+the offline companion card. Confirm USB capture is working with:
+
+```bash
+meshpoint logs | grep -i meshcore
+```
+
 ### MeshCore companion not receiving packets
 
 **Cause:** Wrong firmware, wrong port, wrong frequency, or the device

@@ -89,7 +89,7 @@ class MeshcoreConfigCard {
 
         const mc = (config && config.meshcore) || {};
         if (!mc.connected) {
-            this._renderOffline();
+            this._renderOffline(config);
             return;
         }
         this._renderOnline(mc);
@@ -121,8 +121,21 @@ class MeshcoreConfigCard {
         }
     }
 
-    _renderOffline() {
+    _renderOffline(config) {
+        const tx = (config && config.transmit) || {};
+        const mc = (config && config.meshcore) || {};
+        const transmitOff = !tx.enabled || mc.status_note === 'transmit_disabled';
+        const transmitCallout = transmitOff ? `
+            <p class="cfg-callout">
+                <strong>Native TX is disabled.</strong>
+                Enable it under
+                <a class="cfg-inline-link" href="#/configuration/transmit">Configuration → Transmit</a>,
+                then restart the service. Until then this card cannot query the
+                USB companion, even if USB capture is already receiving packets.
+            </p>
+        ` : '';
         this._body.innerHTML = `
+            ${transmitCallout}
             <div class="cfg-empty">
                 <div class="cfg-empty__title">No companion connected</div>
                 <p class="cfg-empty__body">

@@ -26,6 +26,11 @@ class TransmitConfigCard {
                         <input type="checkbox" data-tx-enabled>
                         <span class="cfg-field__label">Native TX enabled</span>
                     </label>
+                    <p class="cfg-card__hint cfg-card__hint--nested">
+                        Required for MeshCore companion status, dashboard messaging,
+                        and Send Advert. USB packet capture works independently when
+                        the MeshCore USB source is enabled.
+                    </p>
                     <label class="cfg-field">
                         <span class="cfg-field__label">TX power (dBm)</span>
                         <input class="cfg-field__input" type="number" min="0" max="30" step="1" data-tx-power>
