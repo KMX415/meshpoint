@@ -1,6 +1,6 @@
 # WisMesh Node (RAK6421 HAT)
 
-Experimental **Meshpoint Node** support for the [RAK6421 WisMesh Pi HAT](https://store.rakwireless.com/products/wismesh-pi-hat-for-raspberry-pi) and compatible WisBlock LoRa modules. This path uses **meshtasticd** (Portduino) for RF instead of an SX1302/SX1303 concentrator.
+Experimental **Meshpoint Node** support for the [RAK6421 WisMesh Pi HAT](https://store.rakwireless.com/products/meshtastic-raspberry-pi-hat-rak6421) and compatible WisBlock LoRa modules. This path uses **meshtasticd** (Portduino) for RF instead of an SX1302/SX1303 concentrator.
 
 **Status:** Experimental. Available on the **`feat/wismesh-hat`** branch via Settings → Updates → **Experimental: WisMesh Node**. Not merged to Stable (`main`) yet.
 
