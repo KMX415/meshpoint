@@ -2,22 +2,40 @@
 
 ### Unreleased
 
-Queued for the next version bump (v0.7.6 mesh participant RC on `feat/v0.7.6`).
+- **MQTT broker TLS.** Transport TLS (`mqtts`, CA bundle, cert validation) is not implemented on `mqtt_publisher.py` (plain TCP only). Until then use plain port 1883 or a LAN broker without TLS.
 
-#### Meshtastic mesh participant (inbound TX)
+### v0.7.6 (June 2026)
 
-- **PKI + channel reply encryption.** Unicast replies (routing ACK, traceroute, telemetry) use PKI only when the inbound packet has `channel_hash == 0`. Channel-based requests stay on channel AES even when the peer pubkey is known.
-- **Traceroute reply.** Preserve inbound route/SNR, populate `route_back`/`snr_back`, set `request_id`, fix duplicate-node SNR display in Meshtastic app.
+Meshtastic mesh participant release on `main` (merge `feat/v0.7.6`). Edge-only, pure Python, no concentrator recompile. **Upgrade:** Settings → Updates → **Stable**, or `git pull` on `main` plus `systemctl restart meshpoint`. Witness-tested on RAK V2. Settings → Updates RC picker now points at **v0.7.7** on `feat/v0.7.7`.
+
+#### Meshtastic mesh participant
+
+- **PKI (2.5+ clients).** X25519 keypair in `data/keys.yaml`, `public_key` in NodeInfo, AES-CCM encrypt/decrypt for DMs when peers advertise keys. Meshtastic apps show a closed lock instead of Shared Key-only mode.
+- **DM routing ACKs.** Inbound `want_ack` TEXT to our node_id triggers a routing ACK on the same channel.
+- **Periodic telemetry and position TX.** `device_metrics` and POSITION broadcasts when configured; position source and privacy are separate from the Meshradar registration pin (see GPS below).
+- **Traceroute replies.** Answer unicast traceroute requests with preserved inbound route/SNR, populated `route_back`/`snr_back`, and `request_id` so the app does not show `? dB` on direct hops.
 - **Telemetry request response.** Answer unicast `TELEMETRY` probes (Signal quality / `local_stats`) with matching variant, `request_id`, `Telemetry.time`, and `LocalStats.noise_floor`.
+- **PKI + channel reply encryption.** Unicast replies (routing ACK, traceroute, telemetry) use PKI only when the inbound packet has `channel_hash == 0`. Channel-based requests stay on channel AES even when the peer pubkey is known.
 - **Relay vs inbound replies.** Skip relay for unicast packets addressed to our node; run inbound auto-responders before relay evaluation so replies are not delayed behind relay airtime on the SX1302.
 
-#### Other queued
+#### Dashboard and updates
 
-- **Location split: Meshradar pin vs mesh POSITION.** Registered coordinates in `device.latitude/longitude` (setup wizard / Configuration → GPS) are always sent to Meshradar upstream and never overwritten by live gpsd fixes. Live GPS still powers the Configuration → GPS skyplot when `location.source: gpsd`. Meshtastic POSITION packets on the LoRa mesh are configured separately under **Configuration → GPS → Mesh position broadcasts**: **Registered pin** (static wizard coords) or **Live GPS** (requires gpsd/UART), with **Approximate** (~1.1 km), **Precise**, or **Hidden** privacy when using live. New `transmit.position.coordinate_source` and `transmit.position.location_precision` in `local.yaml`. MQTT location privacy (`mqtt.location_precision`) is unchanged and independent.
+- **Public channel sender names.** Channel TEXT from other nodes shows the resolved node name in Messages and the packet feed, not the literal "Broadcast" label ([#38](https://github.com/KMX415/meshpoint/pull/38) sender-name regression).
+- **Map Direct/Relayed filters.** Node map markers stay in sync with the Direct and Relayed filter pills.
+- **Apply finish reliability.** Dashboard Apply uses a detached `apply_finish.sh` so `pip install` and `post_update.sh` complete before restart; fixes crash loops when new dependencies land on RC branches.
+- **Messages startup fix.** Resolves `MessageNameResolver` crash on boot when the message store initializes before the node roster is ready.
+- **MeshCore offline copy.** When Native TX is disabled, Configuration and Radio explain that USB capture can still work while the companion card shows `transmit_disabled` instead of a generic disconnect.
 
-- **Config: warn on unknown `local.yaml` keys.** The loader (`src/config.py`) now logs a single `WARNING` listing any config keys it could not apply: a misspelled field (`tx_powr_dbm`), a stray nested key, or a whole mistyped section (`transmt:`), instead of silently dropping them. Behaviour is otherwise unchanged: unknown keys are still ignored, known keys still merge as before. Helps diagnose "I set it in `local.yaml` but nothing happened". Adds `tests/test_config_loader.py` covering the merge path and the warning.
+#### Configuration, GPS, and config hygiene
 
-- **MQTT broker TLS (deferred).** Transport TLS (`mqtts`, CA bundle, cert validation) is not implemented on `mqtt_publisher.py` (plain TCP only). Planned for v0.7.6. Until then use plain port 1883 or a LAN broker without TLS.
+- **Location split: Meshradar pin vs mesh POSITION.** Registered coordinates in `device.latitude/longitude` are always sent to Meshradar upstream and are not overwritten by live gpsd fixes. Meshtastic POSITION on the LoRa mesh is configured under **Configuration → GPS → Mesh position broadcasts** (registered pin vs live GPS, with approximate/precise/hidden privacy). MQTT `location_precision` remains independent.
+- **Message display names.** Outbound and inbound chat bubbles resolve sender names from the live node roster instead of stale or cross-protocol fallbacks.
+- **Unknown `local.yaml` keys.** Config loader logs a single `WARNING` listing keys it could not apply (typos, mistyped sections) instead of failing silently ([#63](https://github.com/KMX415/meshpoint/pull/63)).
+
+#### Hardware and experimental tracks
+
+- **RAK Hotspot V2 reset robustness.** Systemd `ExecStartPre`/`ExecStopPost` concentrator reset uses `+` prefix so root-owned reset runs reliably on sensitive RAK7248 carriers ([#62](https://github.com/KMX415/meshpoint/pull/62)).
+- **WisMesh Node experimental channel.** Settings → Updates adds an optional **WisMesh Node (RAK6421 HAT)** track on `feat/wismesh-hat` (not for standard SX1302 gateways). See `docs/WISMESH-NODE.md`.
 
 ### v0.7.5.1 (May 2026)
 

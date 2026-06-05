@@ -38,6 +38,7 @@ _PREVIEW_DETAIL_MAX = 140
 _RC_CHANNEL_VERSION: dict[str, str] = {
     "rc-075": "0.7.5",
     "rc-076": "0.7.6",
+    "rc-077": "0.7.7",
 }
 
 
