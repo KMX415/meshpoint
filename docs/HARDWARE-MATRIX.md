@@ -80,7 +80,7 @@ equivalent). Prefer `sudo poweroff` before removing PoE to avoid SPI latch
 
 ## WisMesh Node (RAK6421 HAT, experimental)
 
-Meshpoint **Node** platform for the [RAK WisMesh Pi Node](https://store.rakwireless.com/products/wismesh-pi-node): Pi 4 + **RAK6421** HAT + WisBlock **SX1262** (slot 1). RF is owned by **meshtasticd** (single-channel Meshtastic participant), not the SX1302 concentrator stack used elsewhere in this matrix.
+Meshpoint **Node** platform for the [RAK WisMesh Pi Node](https://store.rakwireless.com/products/meshtastic-raspberry-pi-hat-rak6421): Pi 4 + **RAK6421** HAT + WisBlock **SX1262** (slot 1). RF is owned by **meshtasticd** (single-channel Meshtastic participant), not the SX1302 concentrator stack used elsewhere in this matrix.
 
 | | WisMesh Node (RAK6421) |
 |---|---|
