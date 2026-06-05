@@ -132,7 +132,6 @@ def _modem_preset_name_from_lora(lora: Any) -> str:
 def apply_write_lora(node: Any, request: MeshtasticdWriteLoraRequest) -> list[str]:
     """Apply LoRa/channel writes; returns human-readable change log lines."""
     from src.capture.meshtasticd_config_sync import (
-        MeshtasticdSyncSettings,
         _sync_lora_region,
         _sync_modem_preset,
         _sync_primary_channel_name,

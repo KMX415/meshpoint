@@ -4,7 +4,7 @@ import unittest
 from argparse import Namespace
 from unittest.mock import patch
 
-from src.cli.hardware_detect import HardwareReport, PLATFORM_GATEWAY, PLATFORM_NODE
+from src.cli.hardware_detect import HardwareReport, PLATFORM_NODE
 from src.cli.migrate_platform_command import run_migrate_platform
 
 

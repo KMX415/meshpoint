@@ -8,7 +8,7 @@ import multiprocessing as mp
 import queue
 import time
 from dataclasses import asdict
-from typing import AsyncIterator, Optional
+from typing import Any, AsyncIterator, Optional
 
 from src.capture.base import CaptureSource
 from src.capture.meshtasticd_bridge_ipc import (

@@ -1,7 +1,6 @@
 """Node platform PUT guards on config routes."""
 
 import unittest
-from unittest.mock import MagicMock
 
 from fastapi import HTTPException
 
