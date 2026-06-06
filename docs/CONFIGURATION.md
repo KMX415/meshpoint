@@ -26,6 +26,7 @@ radio:
   tx_power_dbm: 22             # SX1302 concentrator output power
   spectral_scan_interval_seconds: 60   # noise floor sampler cadence (0 disables)
   sx1261_spi_path: ""          # SX1261 SPI device for spectral scan (empty = disabled)
+  carrier_type: ""             # rak | sensecap_m1 (set by meshpoint setup; guards SX1261 path)
 ```
 
 The region sets the base frequency, spreading factor, and bandwidth automatically. You only need `region` in most cases. Override `frequency_mhz`, `spreading_factor`, or `bandwidth_khz` individually to tune for non-default presets (MediumFast, ShortFast, etc.) or custom frequency slots.
@@ -75,6 +76,8 @@ ERROR: failed to patch sx1261 radio for LBT/Spectral Scan
 ```
 
 …and `lgw_start()` may then refuse to bring up the concentrator. If you see that, revert `sx1261_spi_path` to `""`, restart the service, and stay on the packet-derived fallback.
+
+On RAK and SenseCap carriers, `meshpoint setup` writes `radio.carrier_type`. When that field is `rak` or `sensecap_m1`, Meshpoint **clears** a non-empty `sx1261_spi_path` at startup and logs a warning instead of calling `lgw_sx1261_setconf`.
 
 If your `libloragw` build does not expose the spectral scan symbols at all (older HAL revisions), the service logs a single info line at startup and falls back automatically.
 
@@ -169,8 +172,10 @@ location:
   source: "static"           # static | gpsd | uart
   gpsd_host: "127.0.0.1"     # gpsd TCP host (only when source=gpsd)
   gpsd_port: 2947            # gpsd TCP port
+  uart_path: "/dev/ttyAMA0"  # serial device (only when source=uart)
+  uart_baud: 9600            # NMEA baud (uart only)
   update_interval_seconds: 5 # how often the coordinator polls the source
-  min_fix_quality: 1         # minimum NMEA fix quality (1=2D, 3=3D)
+  min_fix_quality: 1         # minimum fix quality (1=2D, 2=3D for gpsd/uart)
 ```
 
 `location.source` selects where the Meshpoint reads **live GPS fixes**
@@ -185,7 +190,7 @@ coordinates and mesh position settings hot-reload from the dashboard.
 |---|---|
 | `static` (default) | No live GPS hardware. Registered coordinates live in `device.*` only. Skyplot shows the static pin. |
 | `gpsd` | Reads live fixes from the system `gpsd` daemon over TCP (`127.0.0.1:2947`). Recommended for any USB GPS receiver (u-blox 7, u-blox 8, VFAN puck, generic CDC ACM sticks). Skyplot and stats update from the live fix. |
-| `uart` | Reserved for direct-serial reads from a Pi HAT GPS (e.g. RAK 7248). Currently a placeholder; falls back to static and surfaces an explanatory error in the dashboard. |
+| `uart` | Reads NMEA GGA from the on-board RAK Pi HAT GPS on `/dev/ttyAMA0` (or `uart_path`). Fix and satellite count update live; full skyplot az/el/SNR needs `gpsd` + USB receiver. |
 
 ### Mesh position broadcasts (LoRa / Meshtastic app map)
 
@@ -253,12 +258,34 @@ in `gpsd-clients`) or `gpsmon`.
 | u-blox 7 USB stick | USB CDC ACM, NMEA + UBX | yes (RAK V2 .141) |
 | u-blox 8 USB stick | USB CDC ACM, NMEA + UBX | yes |
 | VFAN ublox 7 USB puck | USB CDC ACM, NMEA + UBX | yes |
-| RAK 7248 onboard u-blox via UART (`/dev/ttyAMA0`) | NMEA over UART | placeholder (`source: uart`, not yet wired) |
+| RAK 7248 onboard u-blox via UART (`/dev/ttyAMA0`) | NMEA over UART | yes (`source: uart`; `install.sh` enables UART) |
 
 Other USB receivers should work as long as `gpsd` recognizes the
 device's VID. If `cgps` shows data but the dashboard does not,
 check `journalctl -u meshpoint | grep -i gpsd` for connection
 errors and confirm `source: gpsd` in `local.yaml`.
+
+### Using uart (RAK Pi HAT onboard GPS)
+
+`scripts/install.sh` enables the primary UART (`/dev/ttyAMA0`), disables
+the serial console, and turns off Bluetooth on the UART pins so the HAT
+GPS module can talk to the Pi.
+
+1. Run `sudo meshpoint setup` outdoors and accept **Use live UART GPS**
+   when the wizard acquires a fix, **or** set in `local.yaml`:
+
+   ```yaml
+   location:
+     source: "uart"
+     uart_path: "/dev/ttyAMA0"
+     uart_baud: 9600
+   ```
+
+2. Restart: `sudo systemctl restart meshpoint`.
+
+3. Open **Configuration → GPS** → **UART**. Coordinates and satellite
+   count update every few seconds outdoors. The skyplot stays empty
+   until GSV parsing is added (use `gpsd` for a full skyplot today).
 
 ### Privacy
 
@@ -693,6 +720,8 @@ location:              # GPS / location source
   source: "static"            # static | gpsd | uart
   gpsd_host: "127.0.0.1"
   gpsd_port: 2947
+  uart_path: "/dev/ttyAMA0"
+  uart_baud: 9600
   update_interval_seconds: 5
   min_fix_quality: 1
 

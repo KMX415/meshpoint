@@ -47,6 +47,7 @@ class ConcentratorCaptureSource(CaptureSource):
         )
         self._poll_interval = poll_interval_ms / 1000.0
         self._syncword = syncword
+        self._radio_config = radio_config
         self._running = False
         self._restart_lock = asyncio.Lock()
 
@@ -76,6 +77,8 @@ class ConcentratorCaptureSource(CaptureSource):
 
     async def start(self) -> None:
         self._wrapper.load()
+        if self._radio_config is not None:
+            self._wrapper.set_carrier_type(self._radio_config.carrier_type)
 
         late_reset = os.environ.get("CONCENTRATOR_LATE_RESET", "0") == "1"
 

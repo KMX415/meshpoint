@@ -56,11 +56,14 @@ def enrich_config_payload(cfg: AppConfig, base: dict) -> dict:
     base["radio_advanced"] = {
         "spectral_scan_interval_seconds": radio.spectral_scan_interval_seconds,
         "sx1261_spi_path": radio.sx1261_spi_path or "",
+        "carrier_type": radio.carrier_type or "",
     }
     base["location"] = {
         "source": location.source,
         "gpsd_host": location.gpsd_host,
         "gpsd_port": location.gpsd_port,
+        "uart_path": location.uart_path,
+        "uart_baud": location.uart_baud,
         "update_interval_seconds": location.update_interval_seconds,
         "min_fix_quality": location.min_fix_quality,
     }
