@@ -21,6 +21,7 @@ leak which step rejected the request.
 
 from __future__ import annotations
 
+import secrets
 from typing import NoReturn, Optional
 
 from fastapi import Header, HTTPException, Request, status
@@ -30,11 +31,14 @@ from src.api.auth.jwt_session import (
     JwtSessionService,
     SessionClaims,
 )
+from src.config import ApiAutomationConfig
 
 SESSION_COOKIE_NAME = "meshpoint_session"
 _BEARER_PREFIX = "Bearer "
 
 _jwt_service: JwtSessionService | None = None
+_automation_cfg: ApiAutomationConfig | None = None
+_MIN_AUTOMATION_TOKEN_LEN = 32
 
 
 def init_auth(jwt_service: JwtSessionService) -> None:
@@ -43,10 +47,17 @@ def init_auth(jwt_service: JwtSessionService) -> None:
     _jwt_service = jwt_service
 
 
+def init_automation(config: ApiAutomationConfig) -> None:
+    """Bind automation API settings used by ``require_automation_auth``."""
+    global _automation_cfg
+    _automation_cfg = config
+
+
 def reset_auth() -> None:
     """Test helper: clear module-level state between cases."""
-    global _jwt_service
+    global _jwt_service, _automation_cfg
     _jwt_service = None
+    _automation_cfg = None
 
 
 def _extract_token(request: Request, authorization: Optional[str]) -> str:
@@ -109,3 +120,46 @@ async def optional_auth(
 ) -> Optional[SessionClaims]:
     """Dependency: returns claims if presented, ``None`` otherwise."""
     return _claims_or_none(_extract_token(request, authorization))
+
+
+def _automation_token_configured() -> str:
+    cfg = _automation_cfg
+    if cfg is None or not cfg.enabled:
+        return ""
+    token = (cfg.token or "").strip()
+    if len(token) < _MIN_AUTOMATION_TOKEN_LEN:
+        return ""
+    return token
+
+
+async def require_automation_auth(
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+    x_meshpoint_token: Optional[str] = Header(default=None, alias="X-Meshpoint-Token"),
+) -> None:
+    """Dependency: 403 when disabled; 401 unless JWT or automation token is valid."""
+    if _automation_cfg is None or not _automation_cfg.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="automation API disabled",
+        )
+
+    api_token = _automation_token_configured()
+    if not api_token:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="automation API misconfigured: token required",
+        )
+
+    session_token = _extract_token(request, authorization)
+    if session_token:
+        if _claims_or_none(session_token) is not None:
+            return
+        if secrets.compare_digest(session_token, api_token):
+            return
+
+    header_token = (x_meshpoint_token or "").strip()
+    if header_token and secrets.compare_digest(header_token, api_token):
+        return
+
+    _raise_unauthorized()

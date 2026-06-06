@@ -492,6 +492,28 @@ Access at `http://<pi-ip>:8080`. Bind to `127.0.0.1` to restrict to local access
 
 ---
 
+## LAN Automation API
+
+Optional REST endpoints for Home Assistant, Node-RED, and other LAN scripts. **Off by default** — enabling does not change dashboard behaviour.
+
+```yaml
+automation:
+  enabled: false
+  token: ""   # required when enabled; use 32+ random characters
+```
+
+Generate a token:
+
+```bash
+openssl rand -hex 32
+```
+
+Add the `automation` block to `config/local.yaml`, set `enabled: true`, paste the token, and restart Meshpoint. Scripts authenticate with `X-Meshpoint-Token: <token>` or `Authorization: Bearer <token>`.
+
+**Security:** use only on a trusted LAN. Do not port-forward the dashboard port. See [API-AUTOMATION.md](API-AUTOMATION.md) for endpoint reference and copy-paste Home Assistant examples.
+
+---
+
 ## Device Identity
 
 ```yaml
@@ -748,6 +770,10 @@ dashboard:             # local web UI
   host: "0.0.0.0"
   port: 8080
   static_dir: "frontend"
+
+automation:             # LAN REST API for scripts (off by default)
+  enabled: false
+  token: ""
 ```
 
 You only need to put the keys you want to override into `local.yaml`. Every key omitted from `local.yaml` falls back to the value in `config/default.yaml`.

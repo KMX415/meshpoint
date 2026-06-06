@@ -16,7 +16,11 @@ from src.api.audit import AuditLogWriter
 from src.api.audit import dependencies as audit_deps
 from src.api.auth import dependencies as auth_deps
 from src.api.auth.auth_bootstrap import AuthSubsystem, build_auth_subsystem
-from src.api.auth.dependencies import SESSION_COOKIE_NAME, require_auth
+from src.api.auth.dependencies import (
+    SESSION_COOKIE_NAME,
+    init_automation,
+    require_auth,
+)
 from src.api.auth.jwt_session import JwtSessionService
 from src.api.auth.ws_guard import WS_AUTH_CLOSE_CODE, authenticate_websocket
 from src.api.dangerous import DangerousActionRegistry
@@ -35,6 +39,7 @@ from src.api.meshcore_contacts import (
 )
 from src.api.routes import (
     analytics,
+    automation_routes,
     auth_config_routes,
     auth_routes,
     config_routes,
@@ -104,6 +109,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     auth_routes.init_routes(auth_subsystem.service)
     auth_config_routes.init_routes(auth_subsystem.service)
     auth_deps.init_auth(auth_subsystem.jwt_service)
+    init_automation(config.automation)
     audit_writer = AuditLogWriter()
     audit_deps.init_audit(audit_writer)
     session_manager = SessionManager(cwd="/opt/meshpoint")
@@ -261,6 +267,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(terminal_routes.router)
     app.include_router(update_routes.router)
     app.include_router(dangerous_routes.router)
+    app.include_router(automation_routes.router)
 
     protected = [Depends(require_auth)]
     app.include_router(nodes.router, dependencies=protected)

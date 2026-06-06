@@ -139,3 +139,9 @@ location:
   update_interval_seconds: 5
   # Minimum acceptable fix mode: 0=any (incl. no-fix), 1=2D, 2=3D.
   min_fix_quality: 1
+
+# automation:
+#   enabled: false
+#   # Long random secret for LAN scripts (Home Assistant, Node-RED). Generate with:
+#   #   openssl rand -hex 32
+#   token: ""
