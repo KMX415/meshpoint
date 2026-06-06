@@ -160,6 +160,14 @@
     max-height: 220px;
 }
 
+.stats-card--hourly {
+    min-height: 300px;
+}
+
+.stats-card--hourly canvas {
+    max-height: 260px;
+}
+
 /* --- Range cards --- */
 .stats-range-grid {
     display: grid;

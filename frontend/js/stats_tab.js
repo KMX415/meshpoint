@@ -69,6 +69,8 @@ class StatsTab {
         this._container = document.getElementById(containerId);
         this._charts = {};
         this._refreshInterval = null;
+        this._hourlyInterval = null;
+        this._region = 'US';
         this._rendered = false;
     }
 
@@ -93,8 +95,47 @@ class StatsTab {
                 } else {
                     clearInterval(this._refreshInterval);
                     this._refreshInterval = null;
+                    this._stopHourlyRefresh();
                 }
             }, 15000);
+        }
+
+        this._ensureHourlyRefresh();
+    }
+
+    async refreshHourly() {
+        try {
+            const res = await fetch('/api/stats/hourly?hours=24');
+            if (!res.ok) return;
+            const data = await res.json();
+            if (data.region) this._region = data.region;
+            this._updateHourly24(data.buckets || [], data.region || this._region);
+        } catch (e) {
+            console.error('Hourly traffic refresh failed:', e);
+        }
+    }
+
+    _ensureHourlyRefresh() {
+        const section = document.querySelector('[data-section="stats"]');
+        if (!section || !section.classList.contains('section--active')) return;
+
+        this.refreshHourly();
+        if (!this._hourlyInterval) {
+            this._hourlyInterval = setInterval(() => {
+                const active = document.querySelector('[data-section="stats"]');
+                if (active && active.classList.contains('section--active')) {
+                    this.refreshHourly();
+                } else {
+                    this._stopHourlyRefresh();
+                }
+            }, 300000);
+        }
+    }
+
+    _stopHourlyRefresh() {
+        if (this._hourlyInterval) {
+            clearInterval(this._hourlyInterval);
+            this._hourlyInterval = null;
         }
     }
 
@@ -265,6 +306,11 @@ class StatsTab {
                         <div class="stats-card__desc">Packets per 5-minute bucket over the last hour</div>
                         <canvas id="sc-timeline"></canvas>
                     </div>
+                    <div class="stats-card stats-card--full stats-card--hourly">
+                        <div class="stats-card__label">Traffic (24h)</div>
+                        <div class="stats-card__desc">Hourly packet volume from SQLite with estimated duty cycle (est.)</div>
+                        <canvas id="sc-hourly-24"></canvas>
+                    </div>
                 </div>
             </section>
 
@@ -284,6 +330,7 @@ class StatsTab {
         this._setText('ss-days', this._calcDays(data.first_packet_time, device.days_online));
         this._setText('ss-region', device.region || '--');
         this._setText('ss-firmware', device.firmware || '--');
+        if (device.region) this._region = device.region;
 
         this._setText('ss-best-rssi', signal.best_rssi != null ? `${signal.best_rssi} dBm` : '--');
         this._setText('ss-avg-rssi', signal.avg_rssi != null ? `${signal.avg_rssi} dBm` : '--');
@@ -482,6 +529,106 @@ class StatsTab {
         }, { plugins: { legend: { display: false } } });
     }
 
+    _updateHourly24(buckets, region) {
+        const labels = buckets.map((b) => this._formatHourLabel(b.hour));
+        const meshtastic = buckets.map((b) => b.meshtastic || 0);
+        const meshcore = buckets.map((b) => b.meshcore || 0);
+        const duty = buckets.map((b) => b.duty_cycle_pct || 0);
+
+        const datasets = [
+            {
+                type: 'bar',
+                label: 'Meshtastic',
+                data: meshtastic,
+                stack: 'traffic',
+                backgroundColor: 'rgba(6, 182, 212, 0.75)',
+                borderColor: '#06b6d4',
+                borderWidth: 1,
+                yAxisID: 'y',
+            },
+            {
+                type: 'bar',
+                label: 'MeshCore',
+                data: meshcore,
+                stack: 'traffic',
+                backgroundColor: 'rgba(168, 85, 247, 0.75)',
+                borderColor: '#a855f7',
+                borderWidth: 1,
+                yAxisID: 'y',
+            },
+            {
+                type: 'line',
+                label: 'Duty cycle (est.)',
+                data: duty,
+                borderColor: '#f59e0b',
+                backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                borderWidth: 2,
+                pointRadius: 0,
+                tension: 0.2,
+                yAxisID: 'y1',
+            },
+        ];
+
+        if (region === 'EU_868') {
+            datasets.push({
+                type: 'line',
+                label: 'EU limit (1%)',
+                data: labels.map(() => 1),
+                borderColor: '#ef4444',
+                borderDash: [6, 4],
+                borderWidth: 1.5,
+                pointRadius: 0,
+                fill: false,
+                yAxisID: 'y1',
+            });
+        }
+
+        this._renderMixedChart('sc-hourly-24', {
+            labels,
+            datasets,
+        }, {
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#94a3b8',
+                        font: { size: 10 },
+                        usePointStyle: true,
+                        pointStyleWidth: 8,
+                    },
+                },
+            },
+            scales: {
+                x: {
+                    stacked: true,
+                    ticks: { color: '#64748b', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 },
+                    grid: { color: 'rgba(30,41,59,0.5)' },
+                },
+                y: {
+                    stacked: true,
+                    position: 'left',
+                    title: { display: true, text: 'Packets', color: '#64748b', font: { size: 10 } },
+                    ticks: { color: '#64748b' },
+                    grid: { color: 'rgba(30,41,59,0.5)' },
+                },
+                y1: {
+                    position: 'right',
+                    title: { display: true, text: 'Duty % (est.)', color: '#64748b', font: { size: 10 } },
+                    ticks: { color: '#f59e0b' },
+                    grid: { drawOnChartArea: false },
+                    min: 0,
+                },
+            },
+        });
+    }
+
+    _formatHourLabel(isoHour) {
+        if (!isoHour) return '';
+        const d = new Date(isoHour);
+        if (Number.isNaN(d.getTime())) return isoHour.slice(11, 16);
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
     _updateRelay(relay) {
         const relayed = relay.relayed || 0;
         const rejected = relay.rejected || 0;
@@ -587,6 +734,28 @@ class StatsTab {
         const plugins = extraPlugins || [];
 
         this._charts[canvasId] = new Chart(canvas, { type, data, options: opts, plugins });
+    }
+
+    _renderMixedChart(canvasId, data, extraOpts) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+
+        const opts = {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            ...(extraOpts || {}),
+        };
+
+        if (this._charts[canvasId]) {
+            const chart = this._charts[canvasId];
+            chart.data = data;
+            chart.options = opts;
+            chart.update('none');
+            return;
+        }
+
+        this._charts[canvasId] = new Chart(canvas, { type: 'bar', data, options: opts });
     }
 }
 
