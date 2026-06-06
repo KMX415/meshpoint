@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 import os
 import sys
 from dataclasses import dataclass, field
@@ -10,6 +11,8 @@ from typing import Optional
 import yaml
 
 from src.version import __version__
+
+logger = logging.getLogger(__name__)
 
 
 # Band-start frequencies (MHz) for the Meshtastic slot formula
@@ -154,6 +157,29 @@ class RelayConfig:
 
 
 @dataclass
+class TelemetryConfig:
+    """Periodic device_metrics telemetry broadcast settings."""
+
+    interval_minutes: int = 30
+    startup_delay_seconds: int = 120
+
+
+@dataclass
+class PositionConfig:
+    """Periodic POSITION broadcast settings."""
+
+    interval_minutes: int = 15
+    startup_delay_seconds: int = 180
+    # Coordinates sent on the public LoRa mesh (Meshtastic POSITION packets).
+    # ``static`` uses ``device.{latitude,longitude,altitude}`` (wizard pin).
+    # ``live`` reads the active ``LocationSource`` (gpsd/uart) when a fix exists.
+    coordinate_source: str = "static"
+    # Privacy when ``coordinate_source`` is ``live``: exact, approximate
+    # (~1.1 km rounding), or none (skip position on mesh). Ignored for static.
+    location_precision: str = "approximate"
+
+
+@dataclass
 class MqttConfig:
     enabled: bool = False
     broker: str = "mqtt.meshtastic.org"
@@ -162,6 +188,8 @@ class MqttConfig:
     password: str = "large4cats"
     topic_root: str = "msh"
     region: str = "US"
+    tls_enabled: bool = False
+    tls_ca_cert: str = ""
     # Optional ``!xxxxxxxx`` override; blank uses MD5 hash of device name.
     gateway_id: Optional[str] = None
     publish_channels: list[str] = field(default_factory=lambda: ["LongFast", "MeshCore"])
@@ -206,6 +234,8 @@ class TransmitConfig:
     short_name: str = "MPNT"
     hop_limit: int = 3
     nodeinfo: NodeInfoConfig = field(default_factory=NodeInfoConfig)
+    telemetry: TelemetryConfig = field(default_factory=TelemetryConfig)
+    position: PositionConfig = field(default_factory=PositionConfig)
 
 
 @dataclass
@@ -215,12 +245,15 @@ class LocationConfig:
     ``source`` values:
         - ``"static"``   : use ``device.latitude/longitude/altitude`` from
                            ``local.yaml``. Backward-compatible default.
-        - ``"gpsd"``     : connect to a local or remote ``gpsd`` daemon and
-                           overwrite ``device.{lat,lon,alt}`` when fixes
-                           arrive. Auto-installed by ``scripts/install.sh``.
+        - ``"gpsd"``     : connect to a local or remote ``gpsd`` daemon for
+                           live fixes (skyplot, optional mesh POSITION).
+                           Does not change ``device.{lat,lon,alt}`` (Meshradar
+                           pin). Auto-installed by ``scripts/install.sh``.
         - ``"uart"``     : read NMEA GGA from an on-board UART GPS (RAK Pi
                            HAT on ``/dev/ttyAMA0``). Uses
-                           ``src.hal.gps_reader.GpsReader``.
+                           ``src.hal.gps_reader.GpsReader``. Same Meshradar
+                           pin split as gpsd; live fix feeds skyplot and
+                           optional mesh POSITION only.
 
     ``gpsd_host`` / ``gpsd_port`` default to gpsd's well-known
     localhost socket. Override only when running gpsd on a peer
@@ -329,6 +362,25 @@ def _merge_dataclass(instance, overrides: dict):
             setattr(instance, key, value)
 
 
+def _collect_unknown_keys(instance, overrides: dict, prefix: str = "") -> list[str]:
+    """Return dotted paths of override keys with no matching dataclass field.
+
+    Mirrors the descent rules in :func:`_merge_dataclass`: it only recurses
+    into a nested dataclass (e.g. ``transmit.nodeinfo``), so user-supplied
+    mapping fields such as ``meshtastic.channel_keys`` are treated as opaque
+    values rather than scanned for "unknown" keys.
+    """
+    unknown: list[str] = []
+    for key, value in overrides.items():
+        if not hasattr(instance, key):
+            unknown.append(f"{prefix}{key}")
+            continue
+        current = getattr(instance, key)
+        if dataclasses.is_dataclass(current) and isinstance(value, dict):
+            unknown.extend(_collect_unknown_keys(current, value, f"{prefix}{key}."))
+    return unknown
+
+
 def _apply_yaml(cfg: AppConfig, path: Path) -> None:
     """Merge a single YAML file into an existing AppConfig."""
     if not path.exists():
@@ -336,6 +388,10 @@ def _apply_yaml(cfg: AppConfig, path: Path) -> None:
 
     with open(path, "r") as fh:
         raw = yaml.safe_load(fh) or {}
+
+    if not isinstance(raw, dict):
+        logger.warning("Ignoring %s: top-level YAML is not a mapping.", path)
+        return
 
     section_map = {
         "radio": cfg.radio,
@@ -353,9 +409,26 @@ def _apply_yaml(cfg: AppConfig, path: Path) -> None:
         "location": cfg.location,
     }
 
-    for section_name, section_instance in section_map.items():
-        if section_name in raw:
-            _merge_dataclass(section_instance, raw[section_name])
+    unknown_keys: list[str] = []
+    for section_name, section_value in raw.items():
+        section_instance = section_map.get(section_name)
+        if section_instance is None:
+            unknown_keys.append(section_name)
+            continue
+        _merge_dataclass(section_instance, section_value)
+        if isinstance(section_value, dict):
+            unknown_keys.extend(
+                _collect_unknown_keys(section_instance, section_value, f"{section_name}.")
+            )
+
+    if unknown_keys:
+        logger.warning(
+            "Ignoring %d unknown config key(s) in %s: %s. "
+            "These were not applied -- check for typos against the documented schema.",
+            len(unknown_keys),
+            path,
+            ", ".join(sorted(unknown_keys)),
+        )
 
 
 _VALID_CONFIG_EXTENSIONS = {".yaml", ".yml"}

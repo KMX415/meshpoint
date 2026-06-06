@@ -92,6 +92,19 @@ class MeshpointDisplayUnits {
     static temperatureUnitLabel() {
         return _prefs.temperature === 'celsius' ? 'C' : 'F';
     }
+
+    /** Grid step for approximate location privacy (2-decimal lat/lon). */
+    static get APPROXIMATE_LOCATION_PRIVACY_KM() {
+        return 1.1;
+    }
+
+    /** Select option label for approximate MQTT/mesh location privacy. */
+    static approximateLocationOptionLabel() {
+        const dist = MeshpointDisplayUnits.formatDistanceKm(
+            MeshpointDisplayUnits.APPROXIMATE_LOCATION_PRIVACY_KM,
+        );
+        return dist ? `Approximate (~${dist})` : 'Approximate (reduced precision)';
+    }
 }
 
 window.MeshpointDisplayUnits = MeshpointDisplayUnits;

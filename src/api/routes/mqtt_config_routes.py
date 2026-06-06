@@ -57,6 +57,8 @@ def build_mqtt_status(mqtt: MqttConfig, device_name: str) -> dict:
         "publish_json": mqtt.publish_json,
         "location_precision": mqtt.location_precision,
         "homeassistant_discovery": mqtt.homeassistant_discovery,
+        "tls_enabled": mqtt.tls_enabled,
+        "tls_ca_cert": mqtt.tls_ca_cert or "",
         "topic_preview_meshtastic": _topic_example(
             mqtt.topic_root, mqtt.region, "e", "LongFast", gateway
         ),
@@ -91,6 +93,8 @@ class MqttUpdate(BaseModel):
     publish_json: bool = False
     location_precision: Literal["exact", "approximate", "none"] = "exact"
     homeassistant_discovery: bool = False
+    tls_enabled: bool = False
+    tls_ca_cert: str = ""
 
     @field_validator("publish_channels")
     @classmethod
@@ -154,6 +158,8 @@ async def update_mqtt(
         "location_precision": req.location_precision,
         "homeassistant_discovery": req.homeassistant_discovery,
         "gateway_id": gateway_override or None,
+        "tls_enabled": req.tls_enabled,
+        "tls_ca_cert": req.tls_ca_cert.strip(),
     }
 
     if not req.password_unchanged and req.password is not None:
@@ -183,6 +189,8 @@ async def update_mqtt(
         mqtt.location_precision = updates["location_precision"]
         mqtt.homeassistant_discovery = updates["homeassistant_discovery"]
         mqtt.gateway_id = updates["gateway_id"]
+        mqtt.tls_enabled = updates["tls_enabled"]
+        mqtt.tls_ca_cert = updates["tls_ca_cert"]
         if "password" in updates:
             mqtt.password = updates["password"]
 

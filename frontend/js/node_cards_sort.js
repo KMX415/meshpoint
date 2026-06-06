@@ -12,13 +12,25 @@
  *   hops       -> latest_hops ascending (direct first); null at end; tie-break by last_heard
  *   name       -> locale-aware case-insensitive ascending
  *
- * Filter modes:
+ * Filter modes (node list + map markers):
  *   all       -> pass through
  *   direct    -> keep nodes with hop_count == 0
  *   relayed   -> keep nodes with hop_count  > 0
  */
 
 class MeshpointNodeCardsSort {
+    static FILTER_STORAGE_KEY = 'meshpoint.nodeCards.filter';
+    static FILTER_KEYS = new Set(['all', 'direct', 'relayed']);
+
+    static readSavedFilter() {
+        try {
+            const v = localStorage.getItem(MeshpointNodeCardsSort.FILTER_STORAGE_KEY);
+            return MeshpointNodeCardsSort.FILTER_KEYS.has(v) ? v : 'all';
+        } catch (_e) {
+            return 'all';
+        }
+    }
+
     static applyFilter(nodes, filter) {
         if (filter === 'direct') {
             return nodes.filter((n) => Number(n.latest_hops ?? n.hop_count ?? 0) === 0);

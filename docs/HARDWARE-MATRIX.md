@@ -47,6 +47,13 @@ If your deployment cannot guarantee clean shutdowns, either:
 1. Buy a SenseCap M1 instead, or
 2. Add a small UPS (PiSugar, USB battery with passthrough) to the RAK V2.
 
+**RAK Hotspot V2 note:** Some units are particularly sensitive to reset
+timing. If you see repeated `lgw_start()` failures with chip version 0x00
+even after power cycles, try setting
+`Environment=CONCENTRATOR_RESET_HOLD_SEC=1.0` (or `CONCENTRATOR_LATE_RESET=1`)
+in the service. Also see the "RAK Hotspot V2 specific issues" section in
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
 ### Choosing between them
 
 | If... | Buy... |
@@ -79,23 +86,28 @@ equivalent). Prefer `sudo poweroff` before removing PoE to avoid SPI latch
 
 ---
 
-## WisMesh Node (RAK6421 HAT, experimental)
+## Experimental: WisMesh Node (RAK6421 HAT)
 
-Meshpoint **Node** platform for the [RAK WisMesh Pi Node](https://store.rakwireless.com/products/wismesh-pi-node): Pi 4 + **RAK6421** HAT + WisBlock **SX1262** (slot 1). RF is owned by **meshtasticd** (single-channel Meshtastic participant), not the SX1302 concentrator stack used elsewhere in this matrix.
+Meshpoint **Node** platform for the [RAK Meshtastic Raspberry Pi HAT (RAK6421)](https://store.rakwireless.com/products/meshtastic-raspberry-pi-hat-rak6421): Pi 4 + **RAK6421** HAT + WisBlock **SX1262** (slot 1). RF is owned by **meshtasticd** (single-channel Meshtastic participant), not the SX1302 concentrator stack used elsewhere in this matrix.
 
-| | WisMesh Node (RAK6421) |
+| | RAK6421 WisMesh Pi HAT |
 |---|---|
-| **Host** | Pi 4 (SD), 64-bit OS |
-| **Radio** | WisBlock RAK13300 (~22 dBm) or **RAK13302 1W** (PA, default preset) |
-| **RF stack** | meshtasticd → TCP Phone API (`:4403`) → Meshpoint bridge |
-| **RX channels** | One LoRa channel at a time (modem preset), not 8-ch SF7–SF12 parallel |
-| **TX** | Yes (via meshtasticd) |
-| **Meshpoint role** | Observer + participant on Meshtastic; same dashboard chat and upstream as Gateway |
-| **MeshCore** | Optional USB companion (same as Gateway); concentrator-free |
+| **Platform tier** | **Experimental (Node)** — not Stable |
+| **Host** | Raspberry Pi 4 (64-bit OS Lite) |
+| **RF path** | **meshtasticd** (Portduino) + WisBlock LoRa module |
+| **LoRa modules** | **RAK13300** (validated), **RAK13302** (when meshtasticd preset available) |
+| **Concentrator** | None (single-radio via meshtasticd, not 8-channel SX1302) |
+| **Meshpoint branch** | `feat/wismesh-hat` (Settings → Updates → Experimental) |
+| **Install** | `./scripts/install.sh --platform node` |
+| **Gateway TX/RX** | No native concentrator path; meshtasticd owns the radio |
+| **Dashboard** | Same browser UI; packet source is TCP Phone API (:4403) |
 
-**Docs on `main`:** this section, [README > Option E](../README.md#option-e-wismesh-node-rak6421-hat-experimental), [Onboarding](ONBOARDING.md), [Migrate Gateway ↔ Node](MIGRATE-GATEWAY-TO-NODE.md).
+Popular add-on for Pi users who want Meshtastic on a HAT without retiring a
+Helium-class gateway. **Do not flash this track onto RAK V2, SenseCap M1,
+Chameleon, or RAK2287 DIY units** unless you are intentionally converting
+that Pi to a Node-only install.
 
-**Software today:** branch **`feat/wismesh-hat`** (`install.sh --platform node`). Planned merge: **v0.7.6** on `main`. Full architecture and dashboard behavior: [`docs/plans/WISMESH-BRANCH.md`](plans/WISMESH-BRANCH.md).
+Full runbook: **[WisMesh Node guide](WISMESH-NODE.md)**. See also [Onboarding](ONBOARDING.md) and [Migrate Gateway ↔ Node](MIGRATE-GATEWAY-TO-NODE.md).
 
 **Do not** run Gateway `install.sh` on a Pi that only has the WisMesh HAT (no SX1302). The setup wizard and `chip_id` probe expect a concentrator on Gateway installs.
 

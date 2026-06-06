@@ -303,3 +303,8 @@
 .gps-source-chip:hover {
     color: rgba(243, 244, 246, 0.92);
 }
+
+.gps-source-chip--disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}

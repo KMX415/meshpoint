@@ -19,6 +19,7 @@ class Node:
     firmware_version: Optional[str] = None
     protocol: str = "meshtastic"
     role: Optional[str] = None
+    public_key: Optional[str] = None
 
     latitude: Optional[float] = None
     longitude: Optional[float] = None
@@ -59,6 +60,7 @@ class Node:
             "firmware_version": self.firmware_version,
             "protocol": self.protocol,
             "role": self.role,
+            "public_key": self.public_key,
             "latitude": self.latitude,
             "longitude": self.longitude,
             "altitude": self.altitude,

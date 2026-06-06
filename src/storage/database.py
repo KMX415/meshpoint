@@ -100,6 +100,8 @@ class DatabaseManager:
         self._connection: aiosqlite.Connection | None = None
 
     async def connect(self) -> None:
+        if self._connection is not None:
+            return
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         self._connection = await aiosqlite.connect(self._db_path)
         self._connection.row_factory = aiosqlite.Row
@@ -122,6 +124,11 @@ class DatabaseManager:
         if "role" not in columns:
             await self._connection.execute("ALTER TABLE nodes ADD COLUMN role TEXT")
             logger.info("Migration: added 'role' column to nodes table")
+        if "public_key" not in columns:
+            await self._connection.execute(
+                "ALTER TABLE nodes ADD COLUMN public_key TEXT"
+            )
+            logger.info("Migration: added 'public_key' column to nodes table")
 
         cursor = await self._connection.execute("PRAGMA table_info(messages)")
         msg_cols = {row[1] for row in await cursor.fetchall()}

@@ -38,6 +38,7 @@ class RelayManager:
     - Hop filtering: don't relay packets with 0 hops remaining
     - Type filtering: only relay useful packet types
     - Signal filtering: don't relay strong signals (nearby nodes)
+    - Destination filtering: never relay unicast packets addressed to us
 
     The actual transmission is handled by an external radio
     (SX1262 via meshtastic-python serial interface).
@@ -56,10 +57,15 @@ class RelayManager:
         self._min_rssi = min_relay_rssi
         self._max_rssi = max_relay_rssi
         self._enabled = enabled
+        self._local_node_hex: str | None = None
         self._relay_count = 0
         self._rejected_count = 0
         self._rejection_reasons: dict[str, int] = {}
         self._transmit_fn: Optional[callable] = None
+
+    def set_local_node_id(self, node_hex: str) -> None:
+        """Skip relay for unicast packets addressed to this Meshpoint."""
+        self._local_node_hex = node_hex.lower()
 
     @property
     def enabled(self) -> bool:
@@ -84,6 +90,14 @@ class RelayManager:
 
         if packet.hop_limit <= 0:
             return RelayDecision(False, "no_hops_remaining")
+
+        dest = (packet.destination_id or "").lower()
+        if (
+            self._local_node_hex
+            and dest == self._local_node_hex
+            and dest not in (BROADCAST_ADDR_MESHTASTIC, BROADCAST_ADDR_MESHCORE)
+        ):
+            return RelayDecision(False, "dest_local")
 
         if packet.packet_type not in RELAY_WORTHY_TYPES:
             return RelayDecision(False, "non_relayable_type")

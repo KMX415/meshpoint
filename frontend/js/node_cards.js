@@ -49,12 +49,9 @@ class NodeCards {
     }
 
     _loadSavedFilter() {
-        try {
-            const v = localStorage.getItem(NodeCards.FILTER_STORAGE_KEY);
-            return NodeCards.FILTER_KEYS.has(v) ? v : 'all';
-        } catch (_e) {
-            return 'all';
-        }
+        return window.MeshpointNodeCardsSort
+            ? window.MeshpointNodeCardsSort.readSavedFilter()
+            : 'all';
     }
 
     _loadSavedFavoritesOnly() {
@@ -108,6 +105,9 @@ class NodeCards {
                     b.classList.toggle('nc-pill--active', b.dataset.filter === value);
                 });
                 this._render();
+                document.dispatchEvent(new CustomEvent('meshpoint:nodeCardsFilter', {
+                    detail: { filter: value },
+                }));
             });
         });
     }

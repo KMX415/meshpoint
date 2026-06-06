@@ -50,7 +50,7 @@ device:
   longitude: 0.0
   altitude: 25
   hardware_description: "RAK2287 + Raspberry Pi 4"
-  firmware_version: "0.7.5.1"
+  firmware_version: "0.7.6"
 
 relay:
   enabled: false
@@ -80,6 +80,13 @@ transmit:
   nodeinfo:
     interval_minutes: 180      # 5..1440 min, default 180 (3 hr); 0 = disabled
     startup_delay_seconds: 60  # delay before first broadcast on boot
+  position:
+    interval_minutes: 15
+    startup_delay_seconds: 180
+    # LoRa mesh POSITION packets (Meshtastic app map). Meshradar fleet pin
+    # always uses device.latitude/longitude above, not live GPS.
+    coordinate_source: "static"   # static | live (live needs gpsd/uart source)
+    location_precision: "approximate"  # exact | approximate | none (live only)
 
 web_auth:
   # First-run state: hashes are empty -> dashboard forces /setup.
@@ -117,7 +124,9 @@ mqtt:
   homeassistant_discovery: false
 
 location:
-  # Where the Meshpoint's reported lat/lon/alt comes from.
+  # Where live GPS fixes come from (skyplot + optional mesh POSITION).
+  # Registered coordinates for Meshradar live in device.latitude/longitude
+  # and are not overwritten by gpsd.
   #   static : use device.latitude/longitude/altitude (default)
   #   gpsd   : poll a local or remote gpsd daemon for live fixes
   #   uart   : on-board RAK Pi HAT GPS via /dev/ttyAMA0 (NMEA GGA)

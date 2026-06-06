@@ -73,6 +73,7 @@ async def get_config():
         "companion_name": "",
         "radio": {},
         "companion_expected": "meshcore_usb" in (_config.capture.sources or []),
+        "status_note": "",
     }
     if _tx_service and hasattr(_tx_service, "_meshcore_tx"):
         mc_tx = _tx_service._meshcore_tx
@@ -90,6 +91,8 @@ async def get_config():
                     }
             except Exception:
                 pass
+    if not mc_status["connected"] and not tx.enabled:
+        mc_status["status_note"] = "transmit_disabled"
     mc_status["channel_keys"] = [
         {"name": name, "key_hex": _meshcore_key_hex_for_response(key)}
         for name, key in (_config.meshcore.channel_keys.items() if _config else [])

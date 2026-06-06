@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from src.decode.crypto_service import CryptoService
+from src.decode.pki_crypto import PKC_OVERHEAD
 from src.decode.portnum_handlers import dispatch_portnum
 from src.models.node import Node
 from src.models.packet import Packet, PacketType, Protocol
@@ -23,6 +24,11 @@ class MeshtasticDecoder:
 
     def __init__(self, crypto: CryptoService):
         self._crypto = crypto
+        self._our_node_id: int | None = None
+
+    def configure_identity(self, our_node_id: int | None) -> None:
+        """Set this Meshpoint's Meshtastic node id for PKI DM detection."""
+        self._our_node_id = our_node_id
 
     def decode(
         self, raw_bytes: bytes, signal: Optional[SignalMetrics] = None
@@ -41,22 +47,94 @@ class MeshtasticDecoder:
         packet_type = PacketType.UNKNOWN
         decrypted = False
         raw_app_payload: Optional[bytes] = None
+        request_id = 0
 
-        for key in self._crypto.get_all_keys():
-            decrypted_bytes = self._crypto.decrypt_meshtastic(
-                encrypted_payload,
-                header["packet_id"],
-                header["source_id"],
-                key=key,
-            )
-            if decrypted_bytes is None:
-                continue
-            decoded_payload, packet_type, raw_app_payload = (
-                self._decode_payload(decrypted_bytes)
-            )
-            if decoded_payload is not None:
-                decrypted = True
-                break
+        if CryptoService.is_pki_packet(
+            header["channel_hash"],
+            header["dest_id"],
+            self._our_node_id,
+            len(encrypted_payload),
+        ):
+            sender_id = header["source_id"]
+            sender_key = self._crypto.lookup_public_key(sender_id)
+            if sender_key is None:
+                logger.warning(
+                    "PKI DM from %08x to %08x: no sender public_key "
+                    "(wait for NodeInfo or restart after key exchange)",
+                    sender_id,
+                    header["dest_id"],
+                )
+            elif not self._crypto.has_pki():
+                logger.warning(
+                    "PKI DM from %08x: local keypair not loaded", sender_id
+                )
+            else:
+                decrypted_bytes = self._crypto.decrypt_meshtastic_pki(
+                    encrypted_payload,
+                    header["packet_id"],
+                    sender_id,
+                    sender_key,
+                )
+                if decrypted_bytes is None:
+                    refreshed_key = self._crypto.refresh_public_key_from_db(sender_id)
+                    if refreshed_key is not None and refreshed_key != sender_key:
+                        decrypted_bytes = self._crypto.decrypt_meshtastic_pki(
+                            encrypted_payload,
+                            header["packet_id"],
+                            sender_id,
+                            refreshed_key,
+                        )
+                if decrypted_bytes is None:
+                    logger.warning(
+                        "PKI DM from %08x: decrypt failed. Keys may be out of sync: "
+                        "have the sender restart Meshtastic (fresh NodeInfo), tap "
+                        "Send Now on this Meshpoint's NodeInfo card, then retry.",
+                        sender_id,
+                    )
+                else:
+                    decoded_payload, packet_type, raw_app_payload, request_id = (
+                        self._decode_payload(decrypted_bytes)
+                    )
+                    if decoded_payload is not None:
+                        decrypted = True
+                    else:
+                        logger.warning(
+                            "PKI DM from %08x: decrypt OK but payload parse failed",
+                            sender_id,
+                        )
+        elif (
+            header["channel_hash"] == 0
+            and header["dest_id"] != BROADCAST_ADDR
+            and len(encrypted_payload) > PKC_OVERHEAD
+        ):
+            if self._our_node_id is None:
+                logger.warning(
+                    "PKI-shaped DM to %08x but decoder identity not configured",
+                    header["dest_id"],
+                )
+            elif header["dest_id"] != self._our_node_id:
+                logger.debug(
+                    "PKI-shaped packet to %08x (we are %08x)",
+                    header["dest_id"],
+                    self._our_node_id,
+                )
+
+        if not decrypted:
+            for key in self._crypto.get_all_keys():
+                decrypted_bytes = self._crypto.decrypt_meshtastic(
+                    encrypted_payload,
+                    header["packet_id"],
+                    header["source_id"],
+                    key=key,
+                )
+                if decrypted_bytes is None:
+                    continue
+                decoded_payload, packet_type, raw_app_payload, request_id = (
+                    self._decode_payload(decrypted_bytes)
+                )
+                if decoded_payload is not None:
+                    decrypted = True
+                    break
 
         if not decrypted and encrypted_payload:
             packet_type = PacketType.ENCRYPTED
@@ -65,6 +143,9 @@ class MeshtasticDecoder:
                 "payload_size": len(encrypted_payload),
                 "channel_hash": header["channel_hash"],
             }
+
+        if decoded_payload is not None and request_id:
+            decoded_payload["request_id"] = request_id
 
         return Packet(
             packet_id=f"{header['packet_id']:08x}",
@@ -147,29 +228,24 @@ class MeshtasticDecoder:
 
     def _decode_payload(
         self, decrypted: bytes
-    ) -> tuple[Optional[dict[str, Any]], PacketType, Optional[bytes]]:
+    ) -> tuple[Optional[dict[str, Any]], PacketType, Optional[bytes], int]:
         """Decode the decrypted protobuf payload.
 
-        The first byte after decryption is the portnum.
-        Returns (decoded_dict, packet_type, raw_app_payload). The
-        third element is the inner application-payload bytes (the
-        bytes that follow ``portnum`` in the Meshtastic Data
-        protobuf); the relay TX path needs these to re-emit the
-        packet via ``interface.sendData``.
+        Returns (decoded_dict, packet_type, raw_app_payload, request_id).
         """
         if len(decrypted) < 2:
-            return None, PacketType.UNKNOWN, None
+            return None, PacketType.UNKNOWN, None, 0
 
         try:
             return self._try_protobuf_decode(decrypted)
         except Exception:
             logger.debug("Protobuf decode failed", exc_info=True)
-            return None, PacketType.UNKNOWN, None
+            return None, PacketType.UNKNOWN, None, 0
 
     @staticmethod
     def _try_protobuf_decode(
         payload: bytes,
-    ) -> tuple[Optional[dict[str, Any]], PacketType, Optional[bytes]]:
+    ) -> tuple[Optional[dict[str, Any]], PacketType, Optional[bytes], int]:
         """Attempt to decode the inner Data protobuf message.
 
         The decrypted payload is a serialized protobuf `Data` message
@@ -182,18 +258,20 @@ class MeshtasticDecoder:
             data_msg.ParseFromString(payload)
             portnum = data_msg.portnum
             inner = data_msg.payload
+            request_id = int(data_msg.request_id) if data_msg.request_id else 0
 
             decoded, packet_type = dispatch_portnum(portnum, inner)
-            return decoded, packet_type, bytes(inner) if inner else None
+            return decoded, packet_type, bytes(inner) if inner else None, request_id
         except ImportError:
             return (
                 {"raw_hex": payload.hex(), "size": len(payload)},
                 PacketType.UNKNOWN,
                 None,
+                0,
             )
         except Exception:
             logger.debug("Data protobuf parse failed", exc_info=True)
-            return None, PacketType.UNKNOWN, None
+            return None, PacketType.UNKNOWN, None, 0
 
     def extract_node_update(self, packet: Packet) -> Optional[Node]:
         """Extract node metadata from a decoded packet if applicable."""
@@ -214,6 +292,7 @@ class MeshtasticDecoder:
             node.long_name = packet.decoded_payload.get("long_name")
             node.short_name = packet.decoded_payload.get("short_name")
             node.hardware_model = packet.decoded_payload.get("hw_model")
+            node.public_key = packet.decoded_payload.get("public_key")
 
         if packet.packet_type == PacketType.POSITION:
             node.latitude = packet.decoded_payload.get("latitude")

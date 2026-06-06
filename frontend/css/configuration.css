@@ -41,6 +41,19 @@
     line-height: 1.5;
 }
 
+.cfg-card__hint--nested {
+    margin: -4px 0 4px;
+}
+
+.cfg-inline-link {
+    color: var(--accent-cyan, #22d3ee);
+    text-decoration: none;
+}
+
+.cfg-inline-link:hover {
+    text-decoration: underline;
+}
+
 .cfg-form {
     display: flex;
     flex-direction: column;

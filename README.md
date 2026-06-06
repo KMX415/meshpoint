@@ -13,7 +13,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/KMX415/meshpoint?style=flat&color=yellow)](https://github.com/KMX415/meshpoint/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/KMX415/meshpoint)](https://github.com/KMX415/meshpoint/issues)
 [![Last commit](https://img.shields.io/github/last-commit/KMX415/meshpoint)](https://github.com/KMX415/meshpoint/commits/main)
-[![Version](https://img.shields.io/badge/version-0.7.5.1-orange.svg)](docs/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.6-orange.svg)](docs/CHANGELOG.md)
 
 ### Meshradar Cloud Dashboard
 ![Meshradar Cloud Dashboard](Meshradar414.png)
@@ -69,6 +69,8 @@ Everything is managed from a browser dashboard: full chat with channels and DMs,
 **6 frequency regions.** US, EU_868, ANZ, IN, KR, and SG_923. Select during setup or change from the Radio settings page. MeshCore companion radios configure to match automatically.
 
 **Real-time dashboard.** Live map with node positions, color-coded packet feed with frequency and spreading factor columns, traffic charts, signal analytics, and node cards. Accessible from any device on your network.
+
+**GPS and split placement.** USB GPS via `gpsd` drives the Configuration → GPS skyplot. Registered coordinates (wizard pin) always feed [Meshradar](https://meshradar.io) fleet view. Meshtastic POSITION broadcasts on the LoRa mesh are separately configurable: registered pin or live GPS, with approximate (~1.1 km), precise, or hidden privacy on live. See [Configuration > Location](docs/CONFIGURATION.md#location-gps-source).
 
 **Cloud integration.** Optional WebSocket uplink to [Meshradar](https://meshradar.io) for aggregated multi-site mesh intelligence. Fleet management, city-wide maps, and packet history across all your Meshpoints.
 

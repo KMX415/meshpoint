@@ -16,7 +16,11 @@
 const UPDATE_CHANNEL_STORAGE_KEY = 'meshpoint_update_channel_id';
 const UPDATE_CUSTOM_BRANCH_STORAGE_KEY = 'meshpoint_update_custom_branch';
 /** Retired picker ids remapped when the dashboard reloads after a release. */
-const UPDATE_CHANNEL_ALIASES = { 'rc-074': 'rc-075', 'rc-075': 'rc-076' };
+const UPDATE_CHANNEL_ALIASES = {
+    'rc-074': 'rc-075',
+    'rc-075': 'rc-076',
+    'rc-076': 'rc-077',
+};
 
 class UpdatePanelController {
     constructor(rootEl) {
@@ -363,10 +367,21 @@ class UpdatePanelController {
             this._setStatus('error', 'Custom channel requires a branch name.');
             return;
         }
-        const confirmed = window.confirm(
+        let confirmText = (
             `Apply update from "${channel.label}"? `
             + 'The service will restart at the end of the chain.'
         );
+        if (channel.tier === 'experimental') {
+            confirmText = (
+                `EXPERIMENTAL: "${channel.label}"\n\n`
+                + 'This switches to the meshtasticd Node platform (RAK6421 WisMesh HAT).\n\n'
+                + 'Do NOT use on RAK V2, SenseCap M1, Chameleon, or any SX1302 gateway.\n\n'
+                + 'After Apply, run: sudo ./scripts/install.sh --platform node\n'
+                + 'See docs/WISMESH-NODE.md on the Pi.\n\n'
+                + 'Continue anyway?'
+            );
+        }
+        const confirmed = window.confirm(confirmText);
         if (!confirmed) return;
         this._rememberChannelForReload(channel, customBranch);
         const branch = channel.tier === 'custom' ? customBranch : (channel.branch || '');
@@ -481,7 +496,7 @@ class UpdatePanelController {
             return;
         }
         const recovered = await this.progressView?.waitForServiceRecovery({
-            timeoutMs: 45000,
+            timeoutMs: 180000,
         });
         if (recovered) {
             // Apply may have succeeded; rollback is written before git fetch.

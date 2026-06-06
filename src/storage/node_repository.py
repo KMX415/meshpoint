@@ -31,13 +31,15 @@ class NodeRepository:
             """
             INSERT INTO nodes (
                 node_id, long_name, short_name, hardware_model,
-                firmware_version, protocol, role, latitude, longitude,
+                firmware_version, protocol, role, public_key, latitude, longitude,
                 altitude, last_heard, first_seen, packet_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(node_id) DO UPDATE SET
                 long_name = CASE
                     WHEN excluded.long_name IS NULL OR excluded.long_name = ''
                         THEN nodes.long_name
+                    WHEN excluded.protocol = 'meshtastic'
+                        THEN excluded.long_name
                     WHEN nodes.long_name IS NULL OR nodes.long_name = ''
                         THEN excluded.long_name
                     WHEN nodes.protocol = 'meshcore'
@@ -49,6 +51,7 @@ class NodeRepository:
                 hardware_model = COALESCE(excluded.hardware_model, nodes.hardware_model),
                 firmware_version = COALESCE(excluded.firmware_version, nodes.firmware_version),
                 role = COALESCE(excluded.role, nodes.role),
+                public_key = COALESCE(excluded.public_key, nodes.public_key),
                 latitude = COALESCE(excluded.latitude, nodes.latitude),
                 longitude = COALESCE(excluded.longitude, nodes.longitude),
                 altitude = COALESCE(excluded.altitude, nodes.altitude),
@@ -58,7 +61,7 @@ class NodeRepository:
             (
                 node.node_id, node.long_name, node.short_name,
                 node.hardware_model, node.firmware_version, node.protocol,
-                node.role, node.latitude, node.longitude, node.altitude,
+                node.role, node.public_key, node.latitude, node.longitude, node.altitude,
                 node.last_heard.isoformat(), node.first_seen.isoformat(),
                 node.packet_count,
             ),
@@ -182,6 +185,7 @@ class NodeRepository:
             firmware_version=row.get("firmware_version"),
             protocol=row.get("protocol", "meshtastic"),
             role=row.get("role"),
+            public_key=row.get("public_key"),
             latitude=row.get("latitude"),
             longitude=row.get("longitude"),
             altitude=row.get("altitude"),

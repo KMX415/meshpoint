@@ -24,6 +24,7 @@ class GpsConfigCard {
         this._stats = new window.GpsStatsColumn();
         this._timer = null;
         this._currentSource = 'static';
+        this._unsubDisplayUnits = null;
     }
 
     mount(root) {
@@ -33,9 +34,10 @@ class GpsConfigCard {
                 <header class="cfg-card__head">
                     <h3 class="cfg-card__title">GPS and placement</h3>
                     <p class="cfg-card__hint">
-                        Live fix from gpsd (USB GPS), UART (RAK Pi HAT), or static
-                        coordinates you enter manually. Used by the local map and
-                        Meshradar fleet view.
+                        Registered coordinates go to Meshradar. Live fixes from
+                        gpsd (USB), UART (RAK Pi HAT), or static entry feed the
+                        skyplot. Mesh position broadcasts on the LoRa mesh are
+                        configured separately below.
                     </p>
                 </header>
 
@@ -65,7 +67,11 @@ class GpsConfigCard {
                     </fieldset>
 
                     <fieldset class="cfg-fieldset" data-static-fields>
-                        <legend class="cfg-fieldset__legend">Static coordinates</legend>
+                        <legend class="cfg-fieldset__legend">Registered coordinates</legend>
+                        <p class="cfg-field__hint">
+                            Meshradar fleet pin. Also used on the mesh when
+                            mesh position source is Registered below.
+                        </p>
                         <div class="cfg-row">
                             <label class="cfg-field">
                                 <span class="cfg-field__label">Latitude</span>
@@ -163,6 +169,34 @@ class GpsConfigCard {
                         </p>
                     </fieldset>
 
+                    <fieldset class="cfg-fieldset" data-mesh-position-fields>
+                        <legend class="cfg-fieldset__legend">Mesh position broadcasts</legend>
+                        <p class="cfg-field__hint">
+                            Coordinates sent as Meshtastic POSITION packets on
+                            the LoRa mesh (Meshtastic app map).
+                        </p>
+                        <div class="gps-source-switch" role="radiogroup">
+                            <label class="gps-source-chip">
+                                <input type="radio" name="mesh-coord-source"
+                                       value="static" checked>
+                                <span>Registered pin</span>
+                            </label>
+                            <label class="gps-source-chip" data-mesh-live-chip>
+                                <input type="radio" name="mesh-coord-source"
+                                       value="live">
+                                <span>Live GPS</span>
+                            </label>
+                        </div>
+                        <label class="cfg-field" data-mesh-precision-wrap hidden>
+                            <span class="cfg-field__label">Live GPS privacy</span>
+                            <select class="cfg-field__input" data-mesh-precision>
+                                <option value="approximate" data-approximate-option>Approximate</option>
+                                <option value="exact">Precise</option>
+                                <option value="none">Hidden (no position on mesh)</option>
+                            </select>
+                        </label>
+                    </fieldset>
+
                     <div class="cfg-card__actions">
                         <button class="terminal-button terminal-button--primary" type="submit">
                             Save GPS settings
@@ -196,11 +230,23 @@ class GpsConfigCard {
         this._uartBaud = this._root.querySelector('[data-uart-baud]');
         this._uartInterval = this._root.querySelector('[data-uart-interval]');
         this._uartQuality = this._root.querySelector('[data-uart-quality]');
+        this._meshLiveChip = this._root.querySelector('[data-mesh-live-chip]');
+        this._meshPrecisionWrap = this._root.querySelector('[data-mesh-precision-wrap]');
+        this._meshPrecision = this._root.querySelector('[data-mesh-precision]');
 
         this._form.addEventListener('submit', (e) => this._onSubmit(e));
         this._root.querySelectorAll('input[name="gps-source"]').forEach((radio) => {
             radio.addEventListener('change', () => this._onSourceChange(radio.value));
         });
+        this._root.querySelectorAll('input[name="mesh-coord-source"]').forEach((radio) => {
+            radio.addEventListener('change', () => this._onMeshSourceChange(radio.value));
+        });
+        this._refreshApproximateOptionLabels();
+        if (window.MeshpointDisplayUnits) {
+            this._unsubDisplayUnits = window.MeshpointDisplayUnits.onChange(
+                () => this._refreshApproximateOptionLabels(),
+            );
+        }
     }
 
     render(config) {
@@ -242,24 +288,74 @@ class GpsConfigCard {
             this._uartQuality.value = String(location.min_fix_quality);
         }
 
+        const position = (config && config.transmit && config.transmit.position) || {};
+        const meshSource = (position.coordinate_source || 'static').toLowerCase();
+        const meshRadio = this._root.querySelector(
+            `input[name="mesh-coord-source"][value="${meshSource}"]`,
+        );
+        if (meshRadio) meshRadio.checked = true;
+        if (this._meshPrecision && position.location_precision) {
+            this._meshPrecision.value = position.location_precision;
+        }
+        this._updateMeshControls(source, meshSource);
+
         this._restartPolling(source);
     }
 
     destroy() {
         this._stopPolling();
+        if (this._unsubDisplayUnits) {
+            this._unsubDisplayUnits();
+            this._unsubDisplayUnits = null;
+        }
+    }
+
+    _refreshApproximateOptionLabels() {
+        const Units = window.MeshpointDisplayUnits;
+        if (!Units || !this._meshPrecision) return;
+        const opt = this._meshPrecision.querySelector('option[value="approximate"]');
+        if (opt) opt.textContent = Units.approximateLocationOptionLabel();
     }
 
     _onSourceChange(value) {
         this._showFieldsetForSource(value);
         this._updateSourceHint(value);
+        this._updateMeshControls(value, this._selectedMeshSource());
+    }
+
+    _onMeshSourceChange(value) {
+        this._updateMeshControls(this._selectedSource(), value);
+    }
+
+    _selectedMeshSource() {
+        const checked = this._root.querySelector('input[name="mesh-coord-source"]:checked');
+        return checked ? checked.value : 'static';
+    }
+
+    _updateMeshControls(gpsSource, meshSource) {
+        const liveAvailable = gpsSource === 'gpsd' || gpsSource === 'uart';
+        if (this._meshLiveChip) {
+            this._meshLiveChip.classList.toggle('gps-source-chip--disabled', !liveAvailable);
+            const liveInput = this._meshLiveChip.querySelector('input');
+            if (liveInput) liveInput.disabled = !liveAvailable;
+        }
+        if (!liveAvailable && meshSource === 'live') {
+            const staticRadio = this._root.querySelector(
+                'input[name="mesh-coord-source"][value="static"]',
+            );
+            if (staticRadio) staticRadio.checked = true;
+            meshSource = 'static';
+        }
+        if (this._meshPrecisionWrap) {
+            this._meshPrecisionWrap.hidden = meshSource !== 'live';
+        }
     }
 
     _showFieldsetForSource(source) {
         if (!this._staticFields || !this._gpsdFields) return;
-        const isStatic = source === 'static';
         const isGpsd = source === 'gpsd';
         const isUart = source === 'uart';
-        this._staticFields.hidden = !isStatic;
+        this._staticFields.hidden = false;
         this._gpsdFields.hidden = !isGpsd;
         if (this._uartFields) this._uartFields.hidden = !isUart;
     }
@@ -314,21 +410,27 @@ class GpsConfigCard {
         this._setStatus('pending', 'Saving…');
 
         const payload = { source };
-        if (source === 'static') {
-            const lat = Number(this._lat.value);
-            const lng = Number(this._lng.value);
-            if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-                this._setStatus('error', 'Latitude and longitude are required.');
-                return;
-            }
+        const lat = Number(this._lat.value);
+        const lng = Number(this._lng.value);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
             payload.latitude = lat;
             payload.longitude = lng;
-            const altRaw = this._alt.value.trim();
-            if (altRaw !== '') {
-                const alt = Number(altRaw);
-                if (Number.isFinite(alt)) payload.altitude = alt;
-            }
-        } else if (source === 'gpsd') {
+        } else if (source === 'static') {
+            this._setStatus('error', 'Latitude and longitude are required.');
+            return;
+        }
+        const altRaw = this._alt.value.trim();
+        if (altRaw !== '') {
+            const alt = Number(altRaw);
+            if (Number.isFinite(alt)) payload.altitude = alt;
+        }
+
+        payload.mesh_coordinate_source = this._selectedMeshSource();
+        if (this._meshPrecision) {
+            payload.mesh_location_precision = this._meshPrecision.value;
+        }
+
+        if (source === 'gpsd') {
             const host = this._gpsdHost.value.trim();
             if (host) payload.gpsd_host = host;
             const portRaw = this._gpsdPort.value.trim();
