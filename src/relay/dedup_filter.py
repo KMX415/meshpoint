@@ -54,5 +54,13 @@ class DeduplicationFilter:
     def size(self) -> int:
         return len(self._seen)
 
+    @property
+    def ttl_seconds(self) -> float:
+        return self._ttl
+
+    def set_ttl(self, ttl_seconds: float) -> None:
+        """Update duplicate window without clearing the cache."""
+        self._ttl = max(1.0, float(ttl_seconds))
+
     def clear(self) -> None:
         self._seen.clear()
