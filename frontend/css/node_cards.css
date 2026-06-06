@@ -211,6 +211,59 @@
     color: var(--accent-purple);
 }
 
+/* ---- Signal health sparkline + badge ---- */
+
+.nc-card__health {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.3rem;
+    min-height: 28px;
+}
+
+.nc-health-badge {
+    flex-shrink: 0;
+    font-size: 0.55rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.12rem 0.35rem;
+    border-radius: 999px;
+    line-height: 1.2;
+}
+
+.nc-health-badge--hidden {
+    display: none;
+}
+
+.nc-health-badge--green {
+    background: rgba(34, 197, 94, 0.18);
+    color: #22c55e;
+    border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+.nc-health-badge--yellow {
+    background: rgba(245, 158, 11, 0.18);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.nc-health-badge--red {
+    background: rgba(239, 68, 68, 0.18);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.nc-sparkline {
+    flex: 1;
+    min-width: 0;
+    height: 28px;
+    width: 100%;
+    display: block;
+    opacity: 0.9;
+}
+
 /* ---- Card Rows ---- */
 
 .nc-card__row {
