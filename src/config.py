@@ -150,6 +150,7 @@ class RelayConfig:
     burst_size: int = 5
     min_relay_rssi: float = -110.0
     max_relay_rssi: float = -50.0
+    channel_throttle_percent: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass

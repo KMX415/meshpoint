@@ -405,6 +405,19 @@ relay:
 
 The relay path is independent from RX: transmission never blocks packet reception. Packets are deduplicated by ID, rate-limited, and filtered by signal strength before relay.
 
+### Per-channel relay throttle (est.)
+
+Optional rolling 1-hour ToA budget per Meshtastic channel index. **Relay TX only** — does not change native `transmit` messaging. Omitted channels default to 100%.
+
+```yaml
+relay:
+  channel_throttle_percent:
+    "0": 100
+    "1": 50
+```
+
+On EU868 the effective ceiling is capped at the 1% regional hint. Values are **estimates**, not spectrum-analyser measurements. Configure from **Configuration → Advanced → Relay channel throttle** or edit `local.yaml`.
+
 ---
 
 ## Transmit (Native Messaging)
@@ -717,6 +730,7 @@ relay:                 # experimental: re-broadcast captured packets via USB rad
   burst_size: 5
   min_relay_rssi: -110.0
   max_relay_rssi: -50.0
+  channel_throttle_percent: {}  # per-channel relay ToA budget (est.); omit = 100%
 
 upstream:              # cloud (Meshradar) connection
   enabled: true
