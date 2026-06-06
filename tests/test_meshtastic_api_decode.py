@@ -58,6 +58,26 @@ class TestMeshtasticApiDecode(unittest.TestCase):
         self.assertEqual(result.source_id, "9ea7e9d9")
         self.assertEqual(result.decoded_payload.get("long_name"), "Mesh Node")
 
+    def test_decode_inner_payload_bytes(self):
+        """Regression: v0.7.6 _decode_payload returns 4-tuple (incl. request_id)."""
+        packet = {
+            "from": 0xDEADBEEF,
+            "to": 0xFFFFFFFF,
+            "id": 0x01020304,
+            "hopLimit": 3,
+            "hopStart": 3,
+            "channel": 8,
+            "decoded": {
+                "portnum": "TEXT_MESSAGE_APP",
+                "payload": b"hello bytes",
+            },
+        }
+        result = self.decoder.decode_from_api_packet(packet)
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result.packet_type, PacketType.TEXT)
+        self.assertEqual(result.decoded_payload.get("text"), "hello bytes")
+
 
 if __name__ == "__main__":
     unittest.main()

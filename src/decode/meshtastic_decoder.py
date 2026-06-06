@@ -214,10 +214,11 @@ class MeshtasticDecoder:
         decoded_payload = None
         packet_type = PacketType.UNKNOWN
         raw_app_payload: Optional[bytes] = None
+        request_id = 0
 
         if inner:
-            decoded_payload, packet_type, raw_app_payload = self._decode_payload(
-                _build_data_bytes(portnum, inner)
+            decoded_payload, packet_type, raw_app_payload, request_id = (
+                self._decode_payload(_build_data_bytes(portnum, inner))
             )
 
         if decoded_payload is None:
@@ -226,6 +227,9 @@ class MeshtasticDecoder:
 
         if decoded_payload is None:
             return None
+
+        if request_id:
+            decoded_payload["request_id"] = request_id
 
         return Packet(
             packet_id=f"{packet_id:08x}",
