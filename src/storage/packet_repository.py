@@ -137,6 +137,178 @@ class PacketRepository:
         )
         return {r["packet_type"]: r["cnt"] for r in rows}
 
+    async def get_topology_graph(
+        self,
+        hours: float = 24,
+        *,
+        edge_limit: int = 500,
+        route_limit: int = 100,
+    ) -> dict:
+        """Build nodes, NEIGHBORINFO edges, and TRACEROUTE paths for the graph tab."""
+        hours = max(1.0, min(float(hours), 168.0))
+        since = (
+            datetime.now(timezone.utc) - timedelta(hours=hours)
+        ).isoformat()
+
+        ni_rows = await self._db.fetch_all(
+            """
+            SELECT source_id, decoded_payload, rssi, snr, timestamp, protocol
+            FROM packets
+            WHERE packet_type = 'neighborinfo'
+              AND decoded_payload IS NOT NULL
+              AND timestamp >= ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+            """,
+            (since, edge_limit),
+        )
+
+        edges_by_key: dict[str, dict] = {}
+        for row in ni_rows:
+            source = row["source_id"]
+            try:
+                payload = json.loads(row["decoded_payload"])
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            neighbors = payload.get("neighbors", [])
+            if not isinstance(neighbors, list):
+                continue
+
+            for neighbor in neighbors:
+                nid = neighbor.get("node_id") or neighbor.get("id")
+                if not nid:
+                    continue
+                target = str(nid).lower().lstrip("!")
+                link_key = f"{min(source, target)}_{max(source, target)}"
+                if link_key in edges_by_key:
+                    continue
+
+                neighbor_snr = neighbor.get("snr")
+                rssi = row.get("rssi")
+                weak = rssi is not None and rssi < -110
+
+                edges_by_key[link_key] = {
+                    "source": source,
+                    "target": target,
+                    "rssi": round(rssi, 1) if rssi is not None else None,
+                    "snr": (
+                        round(row["snr"], 1)
+                        if row.get("snr") is not None
+                        else None
+                    ),
+                    "neighbor_snr": (
+                        round(neighbor_snr, 1)
+                        if neighbor_snr is not None
+                        else None
+                    ),
+                    "last_seen": row["timestamp"],
+                    "weak": weak,
+                }
+
+        route_rows = await self._db.fetch_all(
+            """
+            SELECT source_id, decoded_payload, timestamp
+            FROM packets
+            WHERE packet_type = 'traceroute'
+              AND decoded_payload IS NOT NULL
+              AND timestamp >= ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+            """,
+            (since, route_limit),
+        )
+
+        routes: list[dict] = []
+        seen_routes: set[str] = set()
+        for row in route_rows:
+            try:
+                payload = json.loads(row["decoded_payload"])
+            except (json.JSONDecodeError, TypeError):
+                continue
+            route = payload.get("route")
+            if not isinstance(route, list) or len(route) < 2:
+                continue
+            normalized = [str(n).lower().lstrip("!") for n in route]
+            key = f"{row['source_id']}:{'-'.join(normalized)}"
+            if key in seen_routes:
+                continue
+            seen_routes.add(key)
+            routes.append({
+                "source": row["source_id"],
+                "route": normalized,
+                "last_seen": row["timestamp"],
+            })
+
+        node_ids: set[str] = set()
+        for edge in edges_by_key.values():
+            node_ids.add(edge["source"])
+            node_ids.add(edge["target"])
+        for route in routes:
+            node_ids.update(route["route"])
+
+        nodes: list[dict] = []
+        if node_ids:
+            counts = await self._db.fetch_all(
+                f"""
+                SELECT source_id, protocol, COUNT(*) AS packet_count,
+                       MAX(rssi) AS latest_rssi
+                FROM packets
+                WHERE timestamp >= ? AND source_id IN ({",".join("?" * len(node_ids))})
+                GROUP BY source_id, protocol
+                """,
+                (since, *sorted(node_ids)),
+            )
+            count_by_id: dict[str, dict] = {}
+            for row in counts:
+                nid = row["source_id"]
+                entry = count_by_id.setdefault(nid, {
+                    "packet_count": 0,
+                    "latest_rssi": row.get("latest_rssi"),
+                    "protocol": row.get("protocol") or "meshtastic",
+                })
+                entry["packet_count"] += int(row["packet_count"] or 0)
+                rssi = row.get("latest_rssi")
+                if rssi is not None and (
+                    entry["latest_rssi"] is None or rssi > entry["latest_rssi"]
+                ):
+                    entry["latest_rssi"] = rssi
+
+            meta_rows = await self._db.fetch_all(
+                f"""
+                SELECT node_id, long_name, short_name, protocol
+                FROM nodes
+                WHERE node_id IN ({",".join("?" * len(node_ids))})
+                """,
+                tuple(sorted(node_ids)),
+            )
+            meta_by_id = {r["node_id"]: r for r in meta_rows}
+
+            for nid in sorted(node_ids):
+                meta = meta_by_id.get(nid, {})
+                stats = count_by_id.get(nid, {})
+                label = (
+                    meta.get("long_name")
+                    or meta.get("short_name")
+                    or f"!{nid[-4:]}"
+                )
+                nodes.append({
+                    "id": nid,
+                    "label": label,
+                    "protocol": meta.get("protocol")
+                    or stats.get("protocol")
+                    or "meshtastic",
+                    "packet_count": int(stats.get("packet_count") or 0),
+                    "latest_rssi": stats.get("latest_rssi"),
+                })
+
+        return {
+            "hours": hours,
+            "nodes": nodes,
+            "edges": list(edges_by_key.values()),
+            "routes": routes,
+        }
+
     async def cleanup_old(self, max_retained: int) -> int:
         total = await self.get_count()
         if total <= max_retained:

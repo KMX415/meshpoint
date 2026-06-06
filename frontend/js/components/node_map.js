@@ -406,8 +406,9 @@ class NodeMap {
 
     async _loadTopology() {
         try {
-            const res = await fetch('/api/analytics/topology');
-            const links = await res.json();
+            const res = await fetch('/api/analytics/topology?hours=24');
+            const data = await res.json();
+            const links = Array.isArray(data) ? data : (data.edges || []);
             this._topologyLayer.clearLayers();
 
             for (const link of links) {
