@@ -41,6 +41,17 @@ class RateLimiter:
         self._timestamps.append(now)
         return True
 
+    def allow_priority(self) -> bool:
+        """Allow relay while enforcing per-minute cap but skipping burst gate."""
+        now = time.monotonic()
+        self._prune(now)
+
+        if len(self._timestamps) >= self._max_per_minute:
+            return False
+
+        self._timestamps.append(now)
+        return True
+
     def _prune(self, now: float) -> None:
         cutoff = now - self._window_seconds
         while self._timestamps and self._timestamps[0] < cutoff:

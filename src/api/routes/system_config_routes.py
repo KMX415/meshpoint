@@ -13,22 +13,30 @@ from src.api.audit.dependencies import get_audit_writer
 from src.api.auth.dependencies import require_admin
 from src.api.auth.jwt_session import SessionClaims
 from src.config import AppConfig, save_section_to_yaml
+from src.relay.node_id import validate_node_ids
+from src.relay.relay_manager import RelayManager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
 _config: AppConfig | None = None
+_relay_manager: RelayManager | None = None
 
 
-def init_routes(config: AppConfig) -> None:
-    global _config
+def init_routes(
+    config: AppConfig,
+    relay_manager: RelayManager | None = None,
+) -> None:
+    global _config, _relay_manager
     _config = config
+    _relay_manager = relay_manager
 
 
 def reset_routes() -> None:
-    global _config
+    global _config, _relay_manager
     _config = None
+    _relay_manager = None
 
 
 class StorageUpdate(BaseModel):
@@ -51,6 +59,9 @@ class RelayUpdate(BaseModel):
     burst_size: Optional[int] = Field(None, ge=1, le=50)
     min_relay_rssi: Optional[float] = Field(None, ge=-150, le=0)
     max_relay_rssi: Optional[float] = Field(None, ge=-150, le=0)
+    blocklist: Optional[list[str]] = None
+    priority_list: Optional[list[str]] = None
+    dedup_ttl_seconds: Optional[int] = Field(None, ge=5, le=3600)
 
 
 class RadioAdvancedUpdate(BaseModel):
@@ -195,6 +206,26 @@ async def update_relay(
         relay.max_relay_rssi = req.max_relay_rssi
         updates["max_relay_rssi"] = req.max_relay_rssi
 
+    filter_reload = False
+    if req.blocklist is not None:
+        try:
+            relay.blocklist = validate_node_ids(req.blocklist)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        updates["blocklist"] = relay.blocklist
+        filter_reload = True
+    if req.priority_list is not None:
+        try:
+            relay.priority_list = validate_node_ids(req.priority_list)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        updates["priority_list"] = relay.priority_list
+        filter_reload = True
+    if req.dedup_ttl_seconds is not None:
+        relay.dedup_ttl_seconds = req.dedup_ttl_seconds
+        updates["dedup_ttl_seconds"] = req.dedup_ttl_seconds
+        filter_reload = True
+
     if not updates:
         return {"saved": False, "restart_required": False}
 
@@ -205,6 +236,13 @@ async def update_relay(
             save_section_to_yaml("relay", updates)
         except PermissionError as exc:
             raise HTTPException(403, str(exc)) from exc
+
+    if filter_reload and _relay_manager is not None:
+        _relay_manager.reload_filters(
+            blocklist=relay.blocklist,
+            priority_list=relay.priority_list,
+            dedup_ttl_seconds=relay.dedup_ttl_seconds,
+        )
 
     return {"saved": True, "restart_required": restart_needed, "updates": updates}
 
