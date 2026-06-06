@@ -305,6 +305,14 @@ class WebAuthConfig:
 
 
 @dataclass
+class ApiAutomationConfig:
+    """LAN automation API for Home Assistant / Node-RED scripting."""
+
+    enabled: bool = False
+    token: str = ""
+
+
+@dataclass
 class AppConfig:
     radio: RadioConfig = field(default_factory=RadioConfig)
     meshtastic: MeshtasticConfig = field(default_factory=MeshtasticConfig)
@@ -319,6 +327,7 @@ class AppConfig:
     transmit: TransmitConfig = field(default_factory=TransmitConfig)
     web_auth: WebAuthConfig = field(default_factory=WebAuthConfig)
     location: LocationConfig = field(default_factory=LocationConfig)
+    automation: ApiAutomationConfig = field(default_factory=ApiAutomationConfig)
 
 
 def _resolve_radio_frequency(radio: "RadioConfig") -> None:
@@ -401,6 +410,7 @@ def _apply_yaml(cfg: AppConfig, path: Path) -> None:
         "transmit": cfg.transmit,
         "web_auth": cfg.web_auth,
         "location": cfg.location,
+        "automation": cfg.automation,
     }
 
     unknown_keys: list[str] = []

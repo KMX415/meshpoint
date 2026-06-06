@@ -72,4 +72,9 @@ def enrich_config_payload(cfg: AppConfig, base: dict) -> dict:
             "coordinate_source": pos.coordinate_source,
             "location_precision": pos.location_precision,
         }
+    auto = cfg.automation
+    base["automation"] = {
+        "enabled": auto.enabled,
+        "token_set": bool((auto.token or "").strip()),
+    }
     return base
