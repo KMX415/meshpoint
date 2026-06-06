@@ -15,12 +15,14 @@ from dataclasses import dataclass
 from typing import Optional
 
 from src.hal.concentrator_config import ConcentratorChannelPlan
+from src.hal.sx1302_gps import HalGpsPpsSync
 from src.hal.sx1302_signatures import apply_signatures
 from src.hal.sx1302_spectral_scan import (
     SpectralScanResult,
     SX1302SpectralScan,
 )
 from src.hal.sx1302_types import (
+    CARRIERS_WITHOUT_PI_SX1261,
     LgwConfBoardS,
     LgwConfRxifS,
     LgwConfRxrfS,
@@ -28,6 +30,8 @@ from src.hal.sx1302_types import (
     LgwPktRxS,
     LgwPktTxS,
     LgwTxGainLutS,
+    SX1302_MODEL_ID_SX1302,
+    SX1302_MODEL_ID_SX1303,
 )
 
 logger = logging.getLogger(__name__)
@@ -110,6 +114,32 @@ class SX1302Wrapper:
         self._unknown_status_count = 0
         self._spectral_scan: Optional[SX1302SpectralScan] = None
         self._sx1261_configured = False
+        self._carrier_type: str = ""
+        self._concentrator_model_id: Optional[int] = None
+        self._gps_pps: Optional[HalGpsPpsSync] = None
+
+    @property
+    def gps_pps(self) -> Optional[HalGpsPpsSync]:
+        return self._gps_pps
+
+    def set_carrier_type(self, carrier_type: str) -> None:
+        """Set carrier signature for SX1261 path guardrails (from config or wizard)."""
+        self._carrier_type = (carrier_type or "").strip().lower()
+
+    @property
+    def concentrator_model_id(self) -> Optional[int]:
+        """Raw model byte from ``sx1302_get_model_id`` (0x02 / 0x03), or None."""
+        return self._concentrator_model_id
+
+    @property
+    def concentrator_model_label(self) -> str:
+        """Human label for telemetry and startup banners."""
+        mid = self._concentrator_model_id
+        if mid == SX1302_MODEL_ID_SX1303:
+            return "SX1303"
+        if mid == SX1302_MODEL_ID_SX1302:
+            return "SX1302"
+        return "unknown"
 
     def load(self) -> None:
         if not self._lib_path or not os.path.exists(self._lib_path):
@@ -167,9 +197,12 @@ class SX1302Wrapper:
         if self._lib is None:
             self.load()
 
+        self._preflight_spi()
+        self._guard_sx1261_spi_path()
         self._configure_board()
         self._configure_rf_chains(plan)
         self._configure_if_channels(plan)
+        self._read_concentrator_model_id()
         self._configure_sx1261_for_spectral_scan()
         logger.info("Concentrator configured with %d IF channels",
                      len(plan.multi_sf_channels) + (1 if plan.single_sf_channel else 0))
@@ -179,15 +212,47 @@ class SX1302Wrapper:
             self.load()
         result = self._lib.lgw_start()
         if result != LGW_HAL_SUCCESS:
-            raise RuntimeError("lgw_start() failed")
+            raise RuntimeError(
+                f"lgw_start() failed (spi={self._spi_path}, "
+                f"model={self.concentrator_model_label})"
+            )
         self._started = True
-        logger.info("SX1302 concentrator started")
+        logger.info(
+            "%s concentrator started",
+            self.concentrator_model_label,
+        )
 
     def stop(self) -> None:
+        self.stop_gps_pps()
         if self._started and self._lib:
             self._lib.lgw_stop()
             self._started = False
             logger.info("SX1302 concentrator stopped")
+
+    def start_gps_pps(
+        self,
+        tty_path: str = "/dev/ttyAMA0",
+        gps_family: str = "ubx7",
+        target_baud: int = 0,
+    ) -> bool:
+        """Enable HAL GPS UART + PPS sync (call after ``lgw_start``)."""
+        if self._lib is None:
+            self.load()
+        if self._gps_pps is None:
+            self._gps_pps = HalGpsPpsSync(
+                self._lib,
+                tty_path=tty_path,
+                gps_family=gps_family,
+                target_baud=target_baud,
+            )
+        if not self._started:
+            logger.warning("GPS/PPS: concentrator not started yet")
+            return False
+        return self._gps_pps.start()
+
+    def stop_gps_pps(self) -> None:
+        if self._gps_pps is not None:
+            self._gps_pps.stop()
 
     def receive(self) -> list[ConcentratorPacket]:
         """Poll for received packets. Non-blocking.
@@ -417,6 +482,44 @@ class SX1302Wrapper:
         return self._spectral_scan.supported and self._sx1261_configured
 
     # ── Private: HAL configuration ──────────────────────────────────
+
+    def _preflight_spi(self) -> None:
+        if not os.path.exists(self._spi_path):
+            raise FileNotFoundError(
+                f"Concentrator SPI device {self._spi_path} not found. "
+                "Enable SPI in raspi-config (Interface Options → SPI) and "
+                "confirm the meshpoint user is in the spi group."
+            )
+
+    def _guard_sx1261_spi_path(self) -> None:
+        """Clear sx1261_spi_path on carriers where the chip is not Pi-visible."""
+        if not self._sx1261_spi_path:
+            return
+        if self._carrier_type not in CARRIERS_WITHOUT_PI_SX1261:
+            return
+        logger.warning(
+            "radio.sx1261_spi_path=%r is not supported on %s carriers "
+            "(SX1261 not reachable from the Pi); clearing path. "
+            "See docs/CONFIGURATION.md § Spectral Scan.",
+            self._sx1261_spi_path,
+            self._carrier_type,
+        )
+        self._sx1261_spi_path = ""
+
+    def _read_concentrator_model_id(self) -> None:
+        if self._lib is None or not hasattr(self._lib, "sx1302_get_model_id"):
+            return
+        model = ctypes.c_uint8()
+        rc = self._lib.sx1302_get_model_id(ctypes.byref(model))
+        if rc != LGW_HAL_SUCCESS:
+            logger.debug("sx1302_get_model_id returned rc=%d", rc)
+            return
+        self._concentrator_model_id = int(model.value)
+        logger.info(
+            "Concentrator model ID: 0x%02X (%s)",
+            self._concentrator_model_id,
+            self.concentrator_model_label,
+        )
 
     def _configure_board(self) -> None:
         conf = LgwConfBoardS()

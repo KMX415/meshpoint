@@ -60,14 +60,26 @@ class RadioConfig:
     # (default; spectral scan stays unavailable, packet-derived
     # noise floor remains in use).
     #
-    # On RAK2287 / RAK5146 / SenseCap M1 this is typically
-    # ``/dev/spidev0.1`` (separate from the SX1302's
-    # ``/dev/spidev0.0``). Some carriers daisy-chain the SX1261
-    # behind the SX1302's SPI router and want this set to the same
-    # path as the SX1302 SPI device. Wrong path = HAL refuses to
-    # ``lgw_start`` after our config attempt, so we ship empty by
-    # default and ask interested users to opt in explicitly.
+    # On RAK2287 / RAK5146 / SenseCap M1 the SX1261 is behind the
+    # concentrator's internal SPI router, not on a Pi chip-select —
+    # leave empty. Only the Semtech reference kit and custom carriers
+    # with a dedicated SX1261 CE line need a path (e.g.
+    # ``/dev/spidev0.1``). Wrong path can brick ``lgw_start`` on
+    # boards without Pi-visible SX1261; ``carrier_type`` guard clears
+    # mistaken values on RAK/SenseCap.
     sx1261_spi_path: str = ""
+    # Carrier board signature from setup wizard I2C probe (``rak``,
+    # ``sensecap_m1``, or empty). Used to block Pi-visible SX1261 SPI
+    # paths that brick ``lgw_start()`` on RAK/SenseCap concentrators.
+    carrier_type: str = ""
+    # HAL GPS/PPS: align concentrator packet timestamps with GPS time via
+    # libloragw ``lgw_gps_*`` + ``sx1302_gps_enable``. Requires a HAL build
+    # that includes loragw_gps.c. Exclusive with ``location.source: uart`` on
+    # the same TTY (only one process may open the GPS serial port).
+    gps_pps_enabled: bool = False
+    gps_pps_tty_path: str = "/dev/ttyAMA0"
+    gps_family: str = "ubx7"
+    gps_pps_target_baud: int = 0
 
 
 @dataclass
@@ -245,11 +257,11 @@ class LocationConfig:
                            live fixes (skyplot, optional mesh POSITION).
                            Does not change ``device.{lat,lon,alt}`` (Meshradar
                            pin). Auto-installed by ``scripts/install.sh``.
-        - ``"uart"``     : reserved for direct on-board UART NMEA reading
-                           (RAK Pi HAT GPS). Plumbing exists in
-                           ``src.hal.gps_reader`` but is not wired into
-                           the runtime yet; treated as ``static`` until
-                           the source is implemented.
+        - ``"uart"``     : read NMEA GGA from an on-board UART GPS (RAK Pi
+                           HAT on ``/dev/ttyAMA0``). Uses
+                           ``src.hal.gps_reader.GpsReader``. Same Meshradar
+                           pin split as gpsd; live fix feeds skyplot and
+                           optional mesh POSITION only.
 
     ``gpsd_host`` / ``gpsd_port`` default to gpsd's well-known
     localhost socket. Override only when running gpsd on a peer
@@ -269,6 +281,8 @@ class LocationConfig:
     source: str = "static"
     gpsd_host: str = "127.0.0.1"
     gpsd_port: int = 2947
+    uart_path: str = "/dev/ttyAMA0"
+    uart_baud: int = 9600
     update_interval_seconds: int = 5
     min_fix_quality: int = 1
 
@@ -449,8 +463,26 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
     local = config_path or os.environ.get("CONCENTRATOR_CONFIG", "config/local.yaml")
     _apply_yaml(cfg, _validated_config_path(local))
     _resolve_radio_frequency(cfg.radio)
+    validate_config_consistency(cfg)
 
     return cfg
+
+
+def validate_config_consistency(config: AppConfig) -> None:
+    """Reject impossible radio/location combinations before hardware starts."""
+    if not config.radio.gps_pps_enabled:
+        return
+    if config.location.source != "uart":
+        return
+    pps_tty = os.path.normpath(config.radio.gps_pps_tty_path)
+    uart_tty = os.path.normpath(config.location.uart_path)
+    if pps_tty == uart_tty:
+        raise ValueError(
+            "radio.gps_pps_enabled and location.source=uart cannot share "
+            f"the same serial device ({pps_tty!r}). Use location.source=gpsd "
+            "or static for dashboard coordinates while PPS owns the HAT UART, "
+            "or disable gps_pps_enabled when using UART for location only."
+        )
 
 
 def _get_local_yaml_path() -> Path:

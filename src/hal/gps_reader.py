@@ -61,14 +61,22 @@ class GpsReader:
         logger.info("GPS reader stopped")
 
     async def _read_loop(self) -> None:
-        """Read NMEA sentences from the GPS UART."""
+        """Read NMEA sentences from the GPS UART.
+
+        Linux device nodes (``/dev/tty*``) require pyserial; TCP-style
+        ``asyncio.open_connection`` only applies to network hosts.
+        """
+        if self._uart_path.startswith("/dev/"):
+            await self._fallback_loop()
+            return
+
         try:
             reader, writer = await asyncio.open_connection(
                 self._uart_path, self._baud
             )
         except Exception:
             logger.warning(
-                "GPS UART not available at %s -- using fallback polling",
+                "GPS UART not available at %s -- using serial fallback",
                 self._uart_path,
             )
             await self._fallback_loop()

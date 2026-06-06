@@ -466,8 +466,9 @@ class PipelineCoordinator:
             detail = f"gpsd @ {host}:{port}"
             color = GREEN
         elif source_name == "uart":
-            detail = "on-board UART (placeholder, falls back to static)"
-            color = DIM
+            path = self._config.location.uart_path
+            detail = f"UART NMEA @ {path}"
+            color = GREEN
         else:
             detail = "static config coordinates"
             color = DIM

@@ -198,6 +198,8 @@ def _step_capture_source(config: dict, report: HardwareReport) -> None:
         config.setdefault("device", {})["hardware_description"] = (
             report.hardware_description
         )
+        if report.carrier_type:
+            config.setdefault("radio", {})["carrier_type"] = report.carrier_type
     elif report.serial_ports:
         port = _choose_from_list(
             "Select capture serial port:", report.serial_ports
@@ -286,7 +288,23 @@ def _step_location(
     if gps.got_fix:
         print(f"        GPS fix acquired: {gps.latitude}, {gps.longitude}")
         print(f"        Altitude: {gps.altitude}m | Satellites: {gps.satellites}")
-        if _confirm("Use this GPS position?", default_yes=True):
+        if _confirm(
+            "Use live UART GPS for ongoing position (recommended on RAK HAT)?",
+            default_yes=True,
+        ):
+            config.setdefault("location", {}).update({
+                "source": "uart",
+                "uart_path": gps.uart_path,
+            })
+            config.setdefault("device", {}).update({
+                "latitude": gps.latitude,
+                "longitude": gps.longitude,
+                "altitude": gps.altitude,
+            })
+            print("        Location source set to uart (on-board GPS).")
+            print()
+            return
+        if _confirm("Use this GPS position as static coordinates only?", default_yes=True):
             config.setdefault("device", {}).update({
                 "latitude": gps.latitude,
                 "longitude": gps.longitude,

@@ -266,6 +266,8 @@ See [docs/COMMON-ERRORS.md](docs/COMMON-ERRORS.md#upgrades) if the service fails
 
 **Chip version 0x00:** Concentrator not responding. Check that the concentrator module is seated, SPI is enabled (`raspi-config` → Interface Options → SPI), and try a full power cycle (unplug for 10+ seconds). Normal chip versions are `0x10` (SX1302) and `0x12` (SX1303).
 
+**`sx1261_check_status` / `lgw_start() failed` on RAK V2:** Clear `radio.sx1261_spi_path` in `local.yaml` (leave it `""`). The SX1261 is not Pi-visible on RAK/SenseCap boards. Use `location.source: uart` for onboard HAT GPS or `gpsd` for USB GPS. See [Common Errors](docs/COMMON-ERRORS.md).
+
 **No packets:** Verify antenna is connected and frequency matches your region. Check `meshpoint logs` for `lgw_receive returned N packet(s)`.
 
 **Upstream 401:** Bad API key. Get a free one at [meshradar.io](https://meshradar.io) and re-run `sudo meshpoint setup`.

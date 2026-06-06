@@ -4,6 +4,12 @@
 
 - **MQTT broker TLS.** Transport TLS (`mqtts`, CA bundle, cert validation) is not implemented on `mqtt_publisher.py` (plain TCP only). Until then use plain port 1883 or a LAN broker without TLS.
 
+- **UART GPS.** `location.source: uart` reads NMEA GGA from the RAK Pi HAT (`/dev/ttyAMA0` by default). Configuration → GPS UART fieldset; `meshpoint setup` can select uart when the wizard probe gets a fix. Requires `pyserial` in the venv (`pip install -r requirements.txt` after upgrade).
+- **Concentrator model ID.** Startup logs SX1302 vs SX1303 when `libloragw` exposes `sx1302_get_model_id` (e.g. `Concentrator model ID: 0x12 (SX1303)`).
+- **SX1261 guard.** Non-empty `radio.sx1261_spi_path` on RAK/SenseCap carriers (`radio.carrier_type`) is cleared at configure time with an explicit warning, preventing `lgw_start()` failures from misconfigured spectral scan on Pi-invisible SX1261 wiring.
+- **SPI preflight.** Missing `/dev/spidev0.0` raises a clear error before `lgw_start()` (raspi-config / spi group hints).
+- **GPS PPS (HAL).** Optional `radio.gps_pps_*` enables `lgw_gps_*` / `sx1302_gps_enable` timestamp sync on RAK Pi HATs with PPS wired to the concentrator. `GET /api/device/gps-pps-status`; config rejects sharing the HAT UART with `location.source: uart`.
+
 ### v0.7.6 (June 2026)
 
 Meshtastic mesh participant release on `main` (merge `feat/v0.7.6`). Edge-only, pure Python, no concentrator recompile. **Upgrade:** Settings → Updates → **Stable**, or the full SSH block in `docs/COMMON-ERRORS.md` (`git fetch`, `checkout main`, `pull`, `scripts/install.sh`, `restart`). Required this release: new `cryptography` dependency for PKI and an updated `meshpoint.service` unit (RAK V2 reset fix). Pull-only upgrades can miss both. Witness-tested on RAK V2. Settings → Updates RC picker now points at **v0.7.7** on `feat/v0.7.7`.

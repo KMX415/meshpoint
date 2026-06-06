@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import ctypes
 
+from src.hal.sx1302_gps_signatures import apply_gps_signatures
 from src.hal.sx1302_types import (
     LgwConfBoardS,
     LgwConfRxifS,
@@ -89,3 +90,9 @@ def apply_signatures(lib: ctypes.CDLL) -> None:
     if hasattr(lib, "lgw_sx1261_setconf"):
         lib.lgw_sx1261_setconf.restype = ctypes.c_int
         lib.lgw_sx1261_setconf.argtypes = [ctypes.POINTER(LgwConfSx1261S)]
+
+    if hasattr(lib, "sx1302_get_model_id"):
+        lib.sx1302_get_model_id.restype = ctypes.c_int
+        lib.sx1302_get_model_id.argtypes = [ctypes.POINTER(ctypes.c_uint8)]
+
+    apply_gps_signatures(lib)

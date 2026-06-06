@@ -9,6 +9,16 @@ from __future__ import annotations
 
 import ctypes
 
+# sx1302_model_id_t values from loragw_sx1302.h (when HAL exposes them).
+SX1302_MODEL_ID_SX1302: int = 0x02
+SX1302_MODEL_ID_SX1303: int = 0x03
+
+# Carriers where the SX1261 is behind the concentrator SPI router, not
+# on a separate Pi chip-select. Non-empty sx1261_spi_path is cleared at
+# configure() time on these boards.
+CARRIERS_WITHOUT_PI_SX1261: frozenset[str] = frozenset(
+    {"rak", "sensecap_m1"}
+)
 
 # ── RX configuration structs ────────────────────────────────────────
 
