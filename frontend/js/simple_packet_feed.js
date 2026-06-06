@@ -1,6 +1,6 @@
 /**
  * Simple live packet feed for the local Meshpoint dashboard.
- * Renders incoming packets via WebSocket with expand-on-click.
+ * Renders incoming packets via WebSocket; row click opens PacketDetailModal.
  */
 class SimplePacketFeed {
     constructor(tbodyId, maxRows) {
@@ -27,7 +27,7 @@ class SimplePacketFeed {
 
     addPacket(packet) {
         const tr = document.createElement('tr');
-        tr.classList.add('packet-row--new');
+        tr.classList.add('packet-row', 'packet-row--new');
         tr.addEventListener('animationend', () => tr.classList.remove('packet-row--new'));
 
         const time = packet.rx_time
@@ -80,7 +80,7 @@ class SimplePacketFeed {
             <td class="packet-details-cell ${typeClass}">${this._esc(details)}</td>
         `;
 
-        tr.addEventListener('click', () => this._toggleDetail(tr, packet));
+        tr.addEventListener('click', () => this._openDetail(tr, packet));
 
         this._tbody.prepend(tr);
         this._count++;
@@ -88,39 +88,23 @@ class SimplePacketFeed {
         const countEl = document.getElementById('packet-count');
         if (countEl) countEl.textContent = this._count;
 
-        while (this._tbody.children.length > this._maxRows * 2) {
+        while (this._tbody.children.length > this._maxRows) {
             this._tbody.removeChild(this._tbody.lastChild);
         }
     }
 
-    _toggleDetail(tr, packet) {
-        const next = tr.nextElementSibling;
-        if (next && next.classList.contains('packet-detail-row')) {
-            next.remove();
-            if (this._onFocus) this._onFocus(null);
-            return;
-        }
-
-        const prev = this._tbody.querySelector('.packet-detail-row');
-        if (prev) prev.remove();
+    _openDetail(tr, packet) {
+        if (!window.PacketDetailModal) return;
 
         if (this._onFocus) this._onFocus(packet.source_id);
 
-        const detailTr = document.createElement('tr');
-        detailTr.classList.add('packet-detail-row');
-        const td = document.createElement('td');
-        td.colSpan = 11;
-
-
-        const payload = packet.decoded_payload;
-        if (payload && typeof payload === 'object') {
-            td.textContent = JSON.stringify(payload, null, 2);
-        } else {
-            td.textContent = `Source: ${packet.source_id || '--'}\nType: ${packet.packet_type || '--'}\nRSSI: ${packet.rssi || '--'} dBm\nSNR: ${packet.snr || '--'} dB`;
-        }
-
-        detailTr.appendChild(td);
-        tr.after(detailTr);
+        window.PacketDetailModal.show(packet, {
+            formatNodeId: (id) => this._shortId(id),
+            selectedRow: tr,
+            onClose: () => {
+                if (this._onFocus) this._onFocus(null);
+            },
+        });
     }
 
     _summarize(packet) {

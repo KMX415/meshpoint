@@ -469,16 +469,6 @@ html, body {
 
 .packet-row { cursor: pointer; }
 
-.packet-detail-row td {
-    padding: 0.5rem 0.75rem !important;
-    font-size: 0.7rem;
-    font-family: var(--font-mono);
-    color: var(--text-secondary);
-    white-space: pre-wrap;
-    word-break: break-word;
-    background: var(--bg-secondary);
-}
-
 .packet-count {
     background: rgba(6, 182, 212, 0.15);
     color: var(--accent-cyan);
