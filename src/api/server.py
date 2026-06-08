@@ -16,7 +16,11 @@ from src.api.audit import AuditLogWriter
 from src.api.audit import dependencies as audit_deps
 from src.api.auth import dependencies as auth_deps
 from src.api.auth.auth_bootstrap import AuthSubsystem, build_auth_subsystem
-from src.api.auth.dependencies import SESSION_COOKIE_NAME, require_auth
+from src.api.auth.dependencies import (
+    SESSION_COOKIE_NAME,
+    init_automation,
+    require_auth,
+)
 from src.api.auth.jwt_session import JwtSessionService
 from src.api.auth.ws_guard import WS_AUTH_CLOSE_CODE, authenticate_websocket
 from src.api.dangerous import DangerousActionRegistry
@@ -33,14 +37,20 @@ from src.api.meshcore_contacts import (
     setup_meshcore_contact_enrichment,
     sync_meshcore_contacts_to_nodes,
 )
+from src.admin.reader import AdminConfigReader
+from src.admin.writer import AdminConfigWriter
 from src.api.routes import (
+    admin_routes,
     analytics,
+    automation_routes,
     auth_config_routes,
     auth_routes,
     config_routes,
     dangerous_routes,
     device,
     device_config_routes,
+    firmware_routes,
+    gps_pps_status,
     gps_status,
     identity_routes,
     messages,
@@ -50,7 +60,12 @@ from src.api.routes import (
     nodes,
     packets,
     public_radar_routes,
+    relay_routes,
+    rf_routes,
+    metrics_routes,
     stats_routes,
+    stray_frames_routes,
+    webhooks_routes,
     system_config_routes,
     system_metrics,
     telemetry,
@@ -63,6 +78,7 @@ from src.api.terminal import CommandCatalog, SessionManager
 from src.api.update import ReleaseChannelRegistry, UpdateApplier
 from src.api.update.rollback_state import resolve_rollback_state_path
 from src.api.upstream_client import UpstreamClient
+from src.api.alert_emitter import AlertEmitter
 from src.api.websocket_manager import WebSocketManager
 from src.config import AppConfig, load_config, validate_activation
 from src.coordinator import PipelineCoordinator
@@ -76,9 +92,6 @@ from src.transmit.nodeinfo_broadcaster import (
     NodeInfoBroadcaster,
     clamp_interval_minutes,
 )
-from src.transmit.position_broadcaster import PositionBroadcaster
-from src.transmit.telemetry_broadcaster import TelemetryBroadcaster
-from src.transmit.meshtastic_inbound_handler import MeshtasticInboundHandler
 from src.transmit.tx_service import TxService
 from src.version import __version__
 
@@ -89,11 +102,11 @@ ws_manager = WebSocketManager()
 pipeline: PipelineCoordinator | None = None
 upstream: UpstreamClient | None = None
 nodeinfo_broadcaster: NodeInfoBroadcaster | None = None
-telemetry_broadcaster: TelemetryBroadcaster | None = None
-position_broadcaster: PositionBroadcaster | None = None
 noise_floor_tracker = NoiseFloorTracker()
 _noise_floor_emitter_task = None
 _spectral_scan_service: SpectralScanService | None = None
+_alert_emitter: AlertEmitter | None = None
+_webhook_engine = None
 
 
 def create_app(config: AppConfig | None = None) -> FastAPI:
@@ -104,6 +117,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     auth_routes.init_routes(auth_subsystem.service)
     auth_config_routes.init_routes(auth_subsystem.service)
     auth_deps.init_auth(auth_subsystem.jwt_service)
+    init_automation(config.automation)
     audit_writer = AuditLogWriter()
     audit_deps.init_audit(audit_writer)
     session_manager = SessionManager(cwd="/opt/meshpoint")
@@ -131,7 +145,6 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         global pipeline, upstream, nodeinfo_broadcaster
-        global telemetry_broadcaster, position_broadcaster
         warn_if_stale_so_files()
         validate_activation(config)
         identity = DeviceIdentity(
@@ -150,11 +163,19 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         pipeline.on_packet(lambda pkt: print_packet(pkt))
         pipeline.on_packet(public_radar_routes.public_radar_packet_callback)
 
+        # Mirror live GPS fixes from the location source into DeviceIdentity
+        # so /api/device (the local map) and the upstream registration
+        # payload (Meshradar fleet view) both see fresh coordinates.
+        def _sync_identity_position(lat, lon, alt):
+            identity.latitude = lat
+            identity.longitude = lon
+            if alt is not None:
+                identity.altitude = alt
+
+        pipeline.on_location_update(_sync_identity_position)
+
         if config.transmit.enabled:
             _inject_tx_gain_into_source(pipeline)
-
-        _bootstrap_pki(config, pipeline)
-        await _hydrate_public_keys(pipeline)
 
         await pipeline.start()
 
@@ -170,9 +191,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                     _send_meshcore_advert(meshcore_tx_ref, mc_source)
                 )
         _setup_message_interception(
-            pipeline, message_repo, config, meshcore_tx_ref, tx_service
+            pipeline, message_repo, config, meshcore_tx_ref
         )
-        _setup_inbound_responder(pipeline, tx_service, config)
         setup_meshcore_contact_enrichment(pipeline, meshcore_tx_ref)
         if meshcore_tx_ref and meshcore_tx_ref.connected:
             import asyncio
@@ -195,25 +215,41 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         if nodeinfo_broadcaster is not None:
             await nodeinfo_broadcaster.start()
 
-        telemetry_broadcaster = _build_telemetry_broadcaster(
-            config, tx_service, pipeline
-        )
-        if telemetry_broadcaster is not None:
-            await telemetry_broadcaster.start()
-
-        position_broadcaster = _build_position_broadcaster(
-            config, tx_service, pipeline
-        )
-        if position_broadcaster is not None:
-            await position_broadcaster.start()
-
         _wire_native_relay(pipeline, tx_service)
 
-        global _noise_floor_emitter_task
+        global _noise_floor_emitter_task, _alert_emitter, _webhook_engine
         import asyncio
         _noise_floor_emitter_task = asyncio.get_running_loop().create_task(
             _noise_floor_emitter_loop(noise_floor_tracker, ws_manager)
         )
+        _alert_emitter = AlertEmitter(pipeline.node_repo, ws_manager)
+        await _alert_emitter.start()
+
+        from src.webhook.engine import WebhookEngine
+
+        _webhook_engine = WebhookEngine(
+            config.webhooks,
+            config.device.device_name,
+            pipeline.node_repo,
+            pipeline.relay_manager,
+            audit_writer,
+        )
+        pipeline.on_packet(_webhook_engine.on_packet)
+        await _webhook_engine.start()
+
+        storm_guard = pipeline.relay_manager.storm_guard
+        if storm_guard is not None:
+
+            def _on_storm_quarantine(entry) -> None:
+                if (
+                    config.relay.storm_guard.notify_dashboard
+                    and _alert_emitter is not None
+                ):
+                    _alert_emitter.on_storm_quarantine(entry)
+                if _webhook_engine is not None:
+                    _webhook_engine.on_storm_quarantine(entry)
+
+            storm_guard.set_on_quarantine(_on_storm_quarantine)
 
         global _spectral_scan_service
         _spectral_scan_service = _build_spectral_scan_service(
@@ -231,6 +267,10 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         yield
         if _spectral_scan_service is not None:
             await _spectral_scan_service.stop()
+        if _alert_emitter is not None:
+            await _alert_emitter.stop()
+        if _webhook_engine is not None:
+            await _webhook_engine.stop()
         if _noise_floor_emitter_task is not None:
             _noise_floor_emitter_task.cancel()
             try:
@@ -239,10 +279,6 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                 pass
         if nodeinfo_broadcaster is not None:
             await nodeinfo_broadcaster.stop()
-        if telemetry_broadcaster is not None:
-            await telemetry_broadcaster.stop()
-        if position_broadcaster is not None:
-            await position_broadcaster.stop()
         await upstream.stop()
         await pipeline.stop()
         session_manager.shutdown()
@@ -255,16 +291,20 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     )
 
     app.include_router(auth_routes.router)
+    app.include_router(metrics_routes.router)
     app.include_router(identity_routes.router)
     app.include_router(auth_config_routes.router)
     app.include_router(public_radar_routes.router)
     app.include_router(terminal_routes.router)
+    app.include_router(firmware_routes.router)
     app.include_router(update_routes.router)
     app.include_router(dangerous_routes.router)
+    app.include_router(automation_routes.router)
 
     protected = [Depends(require_auth)]
     app.include_router(nodes.router, dependencies=protected)
     app.include_router(packets.router, dependencies=protected)
+    app.include_router(stray_frames_routes.router, dependencies=protected)
     app.include_router(analytics.router, dependencies=protected)
     app.include_router(device.router, dependencies=protected)
     app.include_router(system_metrics.router, dependencies=protected)
@@ -276,10 +316,15 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(upstream_config_routes.router, dependencies=protected)
     app.include_router(device_config_routes.router, dependencies=protected)
     app.include_router(gps_status.router, dependencies=protected)
+    app.include_router(gps_pps_status.router, dependencies=protected)
     app.include_router(system_config_routes.router, dependencies=protected)
     app.include_router(meshcore_config_routes.router, dependencies=protected)
     app.include_router(config_routes.router, dependencies=protected)
     app.include_router(stats_routes.router, dependencies=protected)
+    app.include_router(rf_routes.router, dependencies=protected)
+    app.include_router(webhooks_routes.router, dependencies=protected)
+    app.include_router(relay_routes.router, dependencies=protected)
+    app.include_router(admin_routes.router, dependencies=protected)
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
@@ -394,212 +439,6 @@ def _add_meshcore_usb_source(
         )
 
 
-def _resolve_mesh_node_id(config: AppConfig) -> int | None:
-    configured = config.transmit.node_id
-    if configured is not None:
-        return configured
-    device_id = (config.device.device_id or "").strip()
-    if not device_id:
-        return None
-    try:
-        return TxService._derive_node_id(device_id)
-    except RuntimeError:
-        return None
-
-
-def _bootstrap_pki(config: AppConfig, coord: PipelineCoordinator) -> None:
-    """Load PKI keypair and wire decoder identity before packet capture starts."""
-    from src.identity.keypair import (
-        KeypairStore,
-        resolve_keypair_path,
-        resolve_keypair_path_from_env,
-    )
-
-    if not hasattr(coord, "_crypto"):
-        return
-
-    coord._crypto.set_node_db_path(config.storage.database_path)
-    our_node_id = _resolve_mesh_node_id(config)
-    if our_node_id is not None:
-        coord._router.meshtastic_decoder.configure_identity(our_node_id)
-        logger.info(
-            "Meshtastic PKI identity configured: 0x%08x", our_node_id
-        )
-
-    override = resolve_keypair_path_from_env()
-    key_path = override or resolve_keypair_path(config.storage.database_path)
-    try:
-        keypair = KeypairStore(key_path).load_or_create()
-        coord._crypto.set_keypair(keypair.private_key, keypair.public_key)
-        logger.info("Meshtastic PKI keypair loaded from %s", key_path)
-    except Exception:
-        logger.exception("Failed to load Meshtastic PKI keypair")
-
-
-async def _hydrate_public_keys(coord: PipelineCoordinator) -> None:
-    if not hasattr(coord, "_crypto"):
-        return
-    await coord.database.connect()
-    rows = await coord.database.fetch_all(
-        """
-        SELECT node_id, public_key FROM nodes
-        WHERE public_key IS NOT NULL AND public_key != ''
-        LIMIT 5000
-        """
-    )
-    for row in rows:
-        node_id = row.get("node_id")
-        public_key = row.get("public_key")
-        if not node_id or not public_key:
-            continue
-        try:
-            coord._crypto.register_public_key(
-                int(node_id, 16),
-                bytes.fromhex(public_key),
-            )
-        except ValueError:
-            continue
-
-
-def _telemetry_metrics_providers(
-    tx_service: TxService,
-    coord: PipelineCoordinator,
-    service_started: float,
-    *,
-    noise_floor_tracker=None,
-    relay_manager=None,
-):
-    """Shared device_metrics / local_stats snapshots for TX paths."""
-    import time
-
-    duty = getattr(tx_service, "_duty", None)
-    stats = getattr(coord, "stats_reporter", None)
-
-    def device_metrics() -> dict:
-        air_util = duty.current_usage_percent() if duty else 0.0
-        return {
-            "battery_level": 101,
-            "voltage": 5.0,
-            "channel_utilization": 0.0,
-            "air_util_tx": round(air_util, 2),
-            "uptime_seconds": int(time.monotonic() - service_started),
-        }
-
-    def local_stats() -> dict:
-        dm = device_metrics()
-        noise_floor = None
-        if noise_floor_tracker is not None:
-            snap = noise_floor_tracker.snapshot()
-            value_dbm = snap.get("value_dbm")
-            if value_dbm is not None:
-                noise_floor = int(round(value_dbm))
-        relayed = 0
-        if relay_manager is not None:
-            relayed = int(relay_manager.get_stats().get("relayed", 0))
-        return {
-            "uptime_seconds": dm["uptime_seconds"],
-            "channel_utilization": dm["channel_utilization"],
-            "air_util_tx": dm["air_util_tx"],
-            "num_packets_tx": 0,
-            "num_packets_rx": stats.total_packets if stats else 0,
-            "num_packets_rx_bad": 0,
-            "num_online_nodes": 0,
-            "num_total_nodes": 0,
-            "num_tx_relay": relayed,
-            "noise_floor": noise_floor,
-        }
-
-    return device_metrics, local_stats
-
-
-def _setup_inbound_responder(
-    coord: PipelineCoordinator,
-    tx_service: TxService | None,
-    config: AppConfig,
-) -> None:
-    if tx_service is None or not tx_service.meshtastic_enabled:
-        return
-
-    import time
-
-    our_node_id = tx_service.source_node_id
-    our_node_hex = f"{our_node_id:08x}"
-    coord._router.meshtastic_decoder.configure_identity(our_node_id)
-    coord.relay_manager.set_local_node_id(our_node_hex)
-    device_fn, local_fn = _telemetry_metrics_providers(
-        tx_service,
-        coord,
-        time.monotonic(),
-        noise_floor_tracker=noise_floor_tracker,
-        relay_manager=coord.relay_manager,
-    )
-    tx_service.set_telemetry_reply_providers(device_fn, local_fn)
-    handler = MeshtasticInboundHandler(tx_service, our_node_id)
-
-    def on_packet(packet: Packet) -> None:
-        import asyncio
-
-        try:
-            asyncio.get_running_loop().create_task(handler.handle(packet))
-        except RuntimeError:
-            pass
-
-    coord.on_packet(on_packet)
-
-
-def _build_telemetry_broadcaster(
-    config: AppConfig,
-    tx_service: TxService | None,
-    coord: PipelineCoordinator,
-) -> TelemetryBroadcaster | None:
-    if tx_service is None or not tx_service.meshtastic_enabled:
-        return None
-    telem = config.transmit.telemetry
-    if clamp_interval_minutes(telem.interval_minutes) == 0:
-        return None
-
-    import time
-
-    service_started = time.monotonic()
-    device_fn, _local_fn = _telemetry_metrics_providers(
-        tx_service,
-        coord,
-        service_started,
-        noise_floor_tracker=noise_floor_tracker,
-        relay_manager=coord.relay_manager,
-    )
-
-    return TelemetryBroadcaster(
-        tx_service,
-        interval_minutes=telem.interval_minutes,
-        startup_delay_seconds=telem.startup_delay_seconds,
-        metrics_provider=device_fn,
-    )
-
-
-def _build_position_broadcaster(
-    config: AppConfig,
-    tx_service: TxService | None,
-    coord: PipelineCoordinator,
-) -> PositionBroadcaster | None:
-    if tx_service is None or not tx_service.meshtastic_enabled:
-        return None
-    pos_cfg = config.transmit.position
-    if clamp_interval_minutes(pos_cfg.interval_minutes) == 0:
-        return None
-
-    from src.transmit.mesh_position_resolver import MeshPositionResolver
-
-    resolver = MeshPositionResolver(config, coord.location_source)
-
-    return PositionBroadcaster(
-        tx_service,
-        interval_minutes=pos_cfg.interval_minutes,
-        startup_delay_seconds=pos_cfg.startup_delay_seconds,
-        coords_provider=resolver.resolve,
-    )
-
-
 def _build_tx_service(
     config: AppConfig, coord: PipelineCoordinator
 ) -> TxService | None:
@@ -690,7 +529,6 @@ def _wire_native_relay(
             )
 
     relay.set_transmit_function(_native_relay)
-    relay.set_local_node_id(f"{tx_service.source_node_id:08x}")
     logger.info(
         "Relay backend: native onboard SX1302 (identity-preserving)"
     )
@@ -925,7 +763,6 @@ def _setup_message_interception(
     message_repo: MessageRepository,
     config: AppConfig,
     meshcore_tx=None,
-    tx_service: TxService | None = None,
 ) -> None:
     """Register a callback to intercept TEXT messages for storage.
 
@@ -933,14 +770,9 @@ def _setup_message_interception(
     conversations. DMs between other nodes are tagged as 'overheard'.
     MeshCore DMs use destination_id='self' to indicate they're for us.
     """
-    from src.api.message_name_resolver import MessageNameResolver
     from src.models.packet import PacketType, Protocol
 
-    name_resolver = MessageNameResolver(coord.node_repo, meshcore_tx)
-
     our_node_id = config.transmit.node_id
-    if our_node_id is None and tx_service is not None:
-        our_node_id = tx_service.source_node_id
     our_node_hex = f"{our_node_id:08x}" if our_node_id else ""
 
     mc_name_cache: dict[str, str] = {}
@@ -1080,17 +912,19 @@ def _setup_message_interception(
             if (
                 packet.protocol == Protocol.MESHTASTIC
                 and direction == "received"
+                and not node_name
             ):
-                sender_lookup = (
-                    (packet.source_id or "")
-                    if is_broadcast
-                    else node_id
-                )
-                node_name = await name_resolver.resolve(
-                    sender_lookup,
-                    packet.protocol.value,
-                    node_name or packet.source_id or "",
-                )
+                src_id = (packet.source_id or "").lower()
+                if src_id:
+                    row = await coord.node_repo._db.fetch_one(
+                        "SELECT long_name, short_name FROM nodes "
+                        "WHERE LOWER(node_id) = ? AND protocol = 'meshtastic'",
+                        (src_id,),
+                    )
+                    if row:
+                        node_name = row["long_name"] or row["short_name"] or ""
+                    if not node_name:
+                        node_name = packet.source_id or ""
 
             if is_broadcast and packet.protocol == Protocol.MESHCORE:
                 node_name = (packet.decoded_payload or {}).get("long_name", "")
@@ -1170,20 +1004,10 @@ def _setup_message_interception(
                     "snr": round(row["snr"], 1) if row and row["snr"] else None,
                 })
             else:
-                ws_name_lookup = (
-                    (packet.source_id or "")
-                    if is_broadcast and packet.protocol == Protocol.MESHTASTIC
-                    else node_id
-                )
-                display_name = await name_resolver.resolve(
-                    ws_name_lookup,
-                    packet.protocol.value,
-                    node_name,
-                )
                 ws_payload = {
                     "text": text,
                     "node_id": node_id,
-                    "node_name": display_name,
+                    "node_name": node_name,
                     "protocol": packet.protocol.value,
                     "direction": direction,
                     "packet_id": packet.packet_id or "",
@@ -1224,6 +1048,7 @@ def _init_routes(
         telemetry_repo=coord.telemetry_repo,
     )
     packets.init_routes(coord.packet_repo)
+    stray_frames_routes.init_routes(coord.stray_repo)
     analytics.init_routes(signal_analyzer, traffic_monitor, coord.packet_repo)
     device.init_routes(identity, ws_manager, coord.relay_manager)
     telemetry.init_routes(coord.telemetry_repo)
@@ -1236,6 +1061,28 @@ def _init_routes(
         node_repo=coord.node_repo,
         packet_repo=coord.packet_repo,
     )
+    global _spectral_scan_service
+    rf_routes.init_routes(
+        noise_floor_tracker,
+        _spectral_scan_service,
+        config,
+    )
+    metrics_routes.init_routes(
+        metrics_config=config.metrics,
+        stats_reporter=coord.stats_reporter,
+        signal_analyzer=signal_analyzer,
+        traffic_monitor=traffic_monitor,
+        relay_manager=coord.relay_manager,
+        node_repo=coord.node_repo,
+        noise_floor_tracker=noise_floor_tracker,
+        capture_coordinator=coord.capture_coordinator,
+        region=config.radio.region or "US",
+    )
+    webhooks_routes.init_routes(_webhook_engine)
+    relay_routes.init_routes(
+        config=config,
+        relay_manager=coord.relay_manager,
+    )
 
     meshcore_tx = None
     if tx_service and hasattr(tx_service, '_meshcore_tx'):
@@ -1247,7 +1094,6 @@ def _init_routes(
         node_repo=coord.node_repo,
         meshcore_tx=meshcore_tx,
         config=config,
-        packet_repo=coord.packet_repo,
     )
 
     crypto = coord._crypto if hasattr(coord, "_crypto") else None
@@ -1265,8 +1111,61 @@ def _init_routes(
     upstream_config_routes.init_routes(config=config)
     device_config_routes.init_routes(config=config, identity=identity)
     gps_status.init_routes(location_source=coord.location_source)
-    system_config_routes.init_routes(config=config)
+    gps_pps_status.init_routes(
+        get_wrapper=lambda: _get_concentrator_wrapper(coord),
+    )
+    system_config_routes.init_routes(
+        config=config,
+        relay_manager=coord.relay_manager,
+    )
+
+    async def _suspend_meshcore_for_flash(port: str) -> None:
+        src = _find_meshcore_source(coord)
+        if src is None:
+            return
+        resolved = getattr(src, "_resolved_port", None) or port
+        configured = getattr(src, "_configured_port", None)
+        if resolved != port and configured != port:
+            logger.info(
+                "MeshCore USB port %s does not match active source %s — skip release",
+                port,
+                resolved,
+            )
+            return
+        await src.release_serial_for_flash()
+
+    mc_usb = config.capture.meshcore_usb
+    default_mc_port = (mc_usb.serial_port or "/dev/ttyUSB0").strip()
+    firmware_routes.init_routes(
+        jwt_service=auth_subsystem.jwt_service,
+        suspend_meshcore=_suspend_meshcore_for_flash,
+        default_serial_port=default_mc_port,
+    )
     meshcore_config_routes.init_routes(config=config, tx_service=tx_service)
+
+    local_node_id = 0
+    if tx_service is not None:
+        local_node_id = tx_service.source_node_id
+    elif config.transmit.node_id:
+        local_node_id = config.transmit.node_id
+
+    admin_reader = AdminConfigReader(
+        tx_service=tx_service,
+        crypto=crypto,
+        admin_key_b64=config.meshtastic.admin_key_b64,
+        admin_channel_name=config.meshtastic.admin_channel_name,
+        local_node_id=local_node_id,
+    )
+    admin_writer = AdminConfigWriter(
+        reader=admin_reader,
+        tx_service=tx_service,
+    )
+    admin_routes.init_routes(reader=admin_reader, writer=admin_writer)
+
+    def _on_admin_config_packet(packet: Packet) -> None:
+        admin_reader.try_consume_packet(packet)
+
+    coord.on_packet(_on_admin_config_packet)
 
 
 def _init_dangerous_registry(coord: PipelineCoordinator) -> None:
@@ -1405,6 +1304,8 @@ def _on_packet_received(packet: Packet) -> None:
             snr_db=packet.signal.snr,
             bandwidth_khz=packet.signal.bandwidth_khz,
         )
+    if _alert_emitter is not None:
+        _alert_emitter.on_packet(packet)
     try:
         loop = asyncio.get_running_loop()
         loop.create_task(ws_manager.broadcast("packet", packet.to_dict()))

@@ -26,6 +26,7 @@ radio:
   tx_power_dbm: 22             # SX1302 concentrator output power
   spectral_scan_interval_seconds: 60   # noise floor sampler cadence (0 disables)
   sx1261_spi_path: ""          # SX1261 SPI device for spectral scan (empty = disabled)
+  carrier_type: ""             # rak | sensecap_m1 (set by meshpoint setup; guards SX1261 path)
 ```
 
 The region sets the base frequency, spreading factor, and bandwidth automatically. You only need `region` in most cases. Override `frequency_mhz`, `spreading_factor`, or `bandwidth_khz` individually to tune for non-default presets (MediumFast, ShortFast, etc.) or custom frequency slots.
@@ -76,7 +77,37 @@ ERROR: failed to patch sx1261 radio for LBT/Spectral Scan
 
 …and `lgw_start()` may then refuse to bring up the concentrator. If you see that, revert `sx1261_spi_path` to `""`, restart the service, and stay on the packet-derived fallback.
 
+On RAK and SenseCap carriers, `meshpoint setup` writes `radio.carrier_type`. When that field is `rak` or `sensecap_m1`, Meshpoint **clears** a non-empty `sx1261_spi_path` at startup and logs a warning instead of calling `lgw_sx1261_setconf`.
+
 If your `libloragw` build does not expose the spectral scan symbols at all (older HAL revisions), the service logs a single info line at startup and falls back automatically.
+
+### GPS PPS time sync (HAL)
+
+Separate from [Location (GPS) source](#location-gps-source) (dashboard lat/lon). PPS sync wires the concentrator's internal packet counter to GPS time via Semtech `lgw_gps_*` and `sx1302_gps_enable` — useful when you need accurate `timestamp_us` on RX metadata (logging, TDoA-style analysis, correlating captures to wall clock).
+
+```yaml
+radio:
+  gps_pps_enabled: false          # set true on RAK Pi HAT with PPS wired to SX1303
+  gps_pps_tty_path: "/dev/ttyAMA0"
+  gps_family: "ubx7"              # passed to lgw_gps_enable
+  gps_pps_target_baud: 0           # 0 = HAL default (9600)
+```
+
+Requirements:
+
+- `libloragw` built from the SX1302 HAL tree with `loragw_gps.c` linked (stock `lora_gateway` packages on some images omit these symbols — startup logs `GPS/PPS sync unavailable` and continues).
+- u-blox on the HAT UART with PPS routed to the concentrator (RAK2287/5146/SX1303 HAT).
+- Clear sky: first `lgw_gps_sync` may take minutes until UBX time messages arrive.
+
+**Do not** enable `gps_pps_enabled` and `location.source: uart` on the same `tty_path`. Only one owner can open the serial port. Typical RAK deployments:
+
+| Goal | `location.source` | `radio.gps_pps_enabled` |
+|---|---|---|
+| Map position from HAT GPS | `uart` | `false` |
+| Accurate packet timestamps + map from USB gpsd | `gpsd` | `true` on `/dev/ttyAMA0` |
+| Timestamps only, static map coords | `static` | `true` |
+
+Status: `GET /api/device/gps-pps-status` (enabled, sync count, last error, reference counter). Config keys also appear under `radio_advanced` in `GET /api/config`.
 
 ### Standard Meshtastic Presets
 
@@ -160,6 +191,47 @@ The setup wizard configures sources automatically. To add or remove a MeshCore c
 
 When running both Meshtastic concentrator capture and a MeshCore USB companion, pin `meshcore_usb.serial_port` explicitly. Auto-detect can grab the wrong device when multiple Espressif boards are attached.
 
+### Companion firmware flash (dashboard)
+
+**Settings → System → Flash companion firmware** uploads a `.bin` and runs `esptool` against the USB companion. MeshCore USB capture releases the serial port during the flash; the existing auto-reconnect loop restores the connection after the ESP reboots (~5–15 s).
+
+- Admin-only; every attempt is audit-logged (`firmware_flash`).
+- Default port comes from `capture.meshcore_usb.serial_port` (falls back to `/dev/ttyUSB0`).
+- Default partition offset `0x10000` (typical MeshCore/Meshtastic app slot — verify for your board).
+- Requires `esptool>=4.7.0` (installed with Meshpoint dependencies).
+- **Not** OTA over LoRa — local USB only.
+
+### Remote node config read (ADMIN, read-only)
+
+**Node drawer → Remote Configuration** sends a single encrypted ADMIN `get_config_request` (or `get_owner_request`) per click. Responses display read-only in the drawer. Requires native TX (`transmit.enabled: true`) and a shared admin channel PSK on target nodes.
+
+```yaml
+meshtastic:
+  admin_key_b64: "base64PSK=="   # PSK for the shared "admin" channel
+  admin_channel_name: "admin"    # optional; default "admin"
+```
+
+- Admin-only API; audit action `admin.config_request` (target node + section only — no PSK in logs).
+- 30 s response timeout with retry UI; 30 s debounce between requests per node.
+- **Read-only** — use write path below for limited field updates.
+
+### Remote node config write (ADMIN, limited fields)
+
+**Node drawer → Remote Configuration → Apply changes** sends allow-listed ADMIN writes:
+
+| Field | Limit |
+|-------|-------|
+| `long_name` / `short_name` | 40 / 4 chars |
+| `role` | CLIENT, ROUTER, REPEATER, etc. — requires typing `CONFIRM` in modal |
+| `screen_on_secs` | 0–600 |
+| `telemetry_interval_secs` | 30–86400 |
+
+**Not writable:** LoRa frequency, PSK/security, factory reset, or other ADMIN commands.
+
+- Admin-only; audit action `admin.config_write` (changes only — no secrets).
+- Post-write automatic config read verifies the applied state.
+- 30 s debounce between writes per node.
+
 ---
 
 ## Location (GPS) source
@@ -169,52 +241,31 @@ location:
   source: "static"           # static | gpsd | uart
   gpsd_host: "127.0.0.1"     # gpsd TCP host (only when source=gpsd)
   gpsd_port: 2947            # gpsd TCP port
+  uart_path: "/dev/ttyAMA0"  # serial device (only when source=uart)
+  uart_baud: 9600            # NMEA baud (uart only)
   update_interval_seconds: 5 # how often the coordinator polls the source
-  min_fix_quality: 1         # minimum NMEA fix quality (1=2D, 3=3D)
+  min_fix_quality: 1         # minimum fix quality (1=2D, 2=3D for gpsd/uart)
 ```
 
-`location.source` selects where the Meshpoint reads **live GPS fixes**
-(for the Configuration → GPS skyplot and optional mesh POSITION
-broadcasts). The setup wizard always writes static lat/lon/alt under
-`device.*` as the **registered Meshradar fleet pin** (see
-[Device Identity](#device-identity)); live gpsd does **not** overwrite
-those values. Source changes require a service restart; registered
-coordinates and mesh position settings hot-reload from the dashboard.
+`location.source` selects where the Meshpoint reads its current
+position. The setup wizard always writes static lat/lon/alt under
+`device.*` (see [Device Identity](#device-identity)); the choice
+here is whether to **also** consult a live GPS at runtime. Source
+changes require a service restart; everything else hot-reloads.
 
 | Source | Behavior |
 |---|---|
-| `static` (default) | No live GPS hardware. Registered coordinates live in `device.*` only. Skyplot shows the static pin. |
-| `gpsd` | Reads live fixes from the system `gpsd` daemon over TCP (`127.0.0.1:2947`). Recommended for any USB GPS receiver (u-blox 7, u-blox 8, VFAN puck, generic CDC ACM sticks). Skyplot and stats update from the live fix. |
-| `uart` | Reserved for direct-serial reads from a Pi HAT GPS (e.g. RAK 7248). Currently a placeholder; falls back to static and surfaces an explanatory error in the dashboard. |
+| `static` (default) | Uses `device.latitude` / `device.longitude` / `device.altitude` exactly as set during the wizard. No GPS hardware required. |
+| `gpsd` | Reads live fixes from the system `gpsd` daemon over TCP (`127.0.0.1:2947`). Recommended for any USB GPS receiver (u-blox 7, u-blox 8, VFAN puck, generic CDC ACM sticks). |
+| `uart` | Reads NMEA GGA from the on-board RAK Pi HAT GPS on `/dev/ttyAMA0` (or `uart_path`). Fix and satellite count update live; full skyplot az/el/SNR needs `gpsd` + USB receiver. |
 
-### Mesh position broadcasts (LoRa / Meshtastic app map)
-
-When native TX is enabled (`transmit.enabled: true`), the Meshpoint can
-send periodic Meshtastic POSITION packets. That is **separate** from
-the Meshradar fleet pin in `device.*`.
-
-Configure on **Configuration → GPS → Mesh position broadcasts**, or in
-yaml:
-
-```yaml
-transmit:
-  position:
-    interval_minutes: 15
-    startup_delay_seconds: 180
-    coordinate_source: "static"       # static | live
-    location_precision: "approximate"  # exact | approximate | none (live only)
-```
-
-| Setting | Values | Meaning |
-|---|---|---|
-| `coordinate_source` | `static` (default) | Broadcast the registered pin from `device.latitude/longitude`. |
-| | `live` | Broadcast the live gpsd/UART fix. Requires `location.source` other than `static`. |
-| `location_precision` | `approximate` (default for live) | Round to ~2 decimal places before POSITION TX (about **0.7 mi** / **1.1 km**; the dashboard label follows Settings → Meshpoint distance units). |
-| | `exact` | Full precision from the live fix. |
-| | `none` | Skip POSITION broadcasts when using live (privacy: no position on mesh). |
-
-When `coordinate_source: static`, coordinates are sent at full wizard
-precision regardless of `location_precision`.
+When `source` is `gpsd` or `uart` and a 2D or 3D fix is available,
+the coordinator updates `_config.device.latitude` / `.longitude` /
+`.altitude` in place every `update_interval_seconds`. Anything that
+reads from `device.*` (NodeInfo broadcasts, MQTT, the dashboard map,
+Meshradar cloud) automatically sees the live position. If the fix
+is lost, the last known coordinates remain in use until a fresh fix
+arrives — there is no fallback to the wizard-time static value.
 
 ### Using gpsd (USB GPS receivers)
 
@@ -231,12 +282,10 @@ To enable live GPS:
    The MeshCore USB auto-detect path (`UsbPortClassifier`) skips
    any port classified as `gps_known`, so a u-blox stick will
    never be probed as a MeshCore companion.
-2. Open the dashboard at **Configuration → GPS**. Set **Registered
-   coordinates** (Meshradar fleet pin). Switch **Source** to **gpsd**
-   for live skyplot data. Optionally set **Mesh position broadcasts**
-   to **Live GPS** with **Approximate** or **Precise** privacy, then
-   click **Save**. Changing the GPS source type requires a service
-   restart; coordinate and mesh-position edits hot-reload.
+2. Open the dashboard at **Configuration → GPS**, switch the source
+   to **gpsd**, and click **Save**. The Meshpoint restarts the
+   location source in-place; no full service restart needed unless
+   you also changed `gpsd_host` / `gpsd_port`.
 3. Watch the **GPS** card. The skyplot animates, satellite dots
    render at their azimuth/elevation, and the fix-mode lamp flips
    from grey (no fix) → amber (2D) → green (3D) as the receiver
@@ -253,28 +302,45 @@ in `gpsd-clients`) or `gpsmon`.
 | u-blox 7 USB stick | USB CDC ACM, NMEA + UBX | yes (RAK V2 .141) |
 | u-blox 8 USB stick | USB CDC ACM, NMEA + UBX | yes |
 | VFAN ublox 7 USB puck | USB CDC ACM, NMEA + UBX | yes |
-| RAK 7248 onboard u-blox via UART (`/dev/ttyAMA0`) | NMEA over UART | placeholder (`source: uart`, not yet wired) |
+| RAK 7248 onboard u-blox via UART (`/dev/ttyAMA0`) | NMEA over UART | yes (`source: uart`; `install.sh` enables UART) |
 
 Other USB receivers should work as long as `gpsd` recognizes the
 device's VID. If `cgps` shows data but the dashboard does not,
 check `journalctl -u meshpoint | grep -i gpsd` for connection
 errors and confirm `source: gpsd` in `local.yaml`.
 
+### Using uart (RAK Pi HAT onboard GPS)
+
+`scripts/install.sh` enables the primary UART (`/dev/ttyAMA0`), disables
+the serial console, and turns off Bluetooth on the UART pins so the HAT
+GPS module can talk to the Pi.
+
+1. Run `sudo meshpoint setup` outdoors and accept **Use live UART GPS**
+   when the wizard acquires a fix, **or** set in `local.yaml`:
+
+   ```yaml
+   location:
+     source: "uart"
+     uart_path: "/dev/ttyAMA0"
+     uart_baud: 9600
+   ```
+
+2. Restart: `sudo systemctl restart meshpoint`.
+
+3. Open **Configuration → GPS** → **UART**. Coordinates and satellite
+   count update every few seconds outdoors. The skyplot stays empty
+   until GSV parsing is added (use `gpsd` for a full skyplot today).
+
 ### Privacy
 
-Three independent surfaces:
-
-| Surface | Config | Notes |
-|---|---|---|
-| **Meshradar cloud** | `device.latitude/longitude` | Always the registered pin. Live GPS never moves the fleet marker. |
-| **LoRa mesh (POSITION)** | `transmit.position.coordinate_source` + `location_precision` | Choose registered pin or live GPS; approximate / precise / hidden on live. |
-| **MQTT** | `mqtt.location_precision` | Applies to position fields in MQTT publishes only (`exact` / `approximate` / `none`). |
-
-To run a mobile Meshpoint without leaking live coordinates on the mesh,
-use **Live GPS** with **Hidden** mesh privacy, or keep mesh source on
-**Registered pin**. To keep Meshradar on your home pin while testing
-gpsd outdoors, leave registered coordinates at home and use live mesh
-POSITION only if you intend to advertise on the LoRa map.
+Live GPS coordinates flow through the same surfaces as the static
+wizard values: NodeInfo broadcasts (off-air to the mesh), MQTT
+(only when `mqtt.enabled: true` and the channel is allow-listed,
+respecting `mqtt.location_precision`), and the upstream WebSocket
+to meshradar.io (only when `upstream.enabled: true`). To run a
+mobile / wardriving Meshpoint without leaking position upstream,
+either `mqtt.location_precision: none` (or `approximate`) or
+`upstream.enabled: false`.
 
 ---
 
@@ -288,6 +354,15 @@ meshtastic:
 ```
 
 The default is `LongFast` (Meshtastic's standard public channel). Change it only if your mesh uses a custom primary channel name. You can also edit this from the dashboard: open the **Radio** tab, edit **Channel 0**, and save. The Radio and Messages tabs reflect the same value.
+
+### Quick Deploy (QR export)
+
+**Configuration → Channels → Quick Deploy** exports public channel parameters for field radios:
+
+- QR code and `https://meshtastic.org/e/#…` URL (Meshtastic app compatible)
+- Downloadable JSON via `GET /api/config/export`
+
+**Private channel keys are never exported.** The QR uses the standard Meshtastic default PSK only (`AQ==`), matching a public primary channel deployment. Scan with the Meshtastic mobile app (Android in-app scanner; iOS camera).
 
 ---
 
@@ -405,6 +480,36 @@ relay:
 
 The relay path is independent from RX: transmission never blocks packet reception. Packets are deduplicated by ID, rate-limited, and filtered by signal strength before relay.
 
+### Per-channel relay throttle (est.)
+
+Optional rolling 1-hour ToA budget per Meshtastic channel index. **Relay TX only** — does not change native `transmit` messaging. Omitted channels default to 100% (today's behaviour).
+
+```yaml
+relay:
+  channel_throttle_percent:
+    "0": 100
+    "1": 50
+```
+
+On EU868 the effective ceiling is capped at the 1% regional hint regardless of slider value. Values are **estimates** (same ToA math as the Stats traffic chart), not spectrum-analyser measurements. Configure from **Configuration → Advanced → Relay filters** or edit `local.yaml`.
+
+### Storm guard quarantine (memory-only)
+
+Temporary relay blocks for replay storms or excessive per-node packet rates. **Does not write to SQLite** and is separate from the permanent YAML blocklist (PR 13). Quarantined nodes still appear in the live packet feed; only relay TX is blocked. Auto-releases after `quarantine_duration_seconds`. Operators can release early or promote to blocklist from **Configuration → Advanced**.
+
+```yaml
+relay:
+  storm_guard:
+    enabled: true
+    window_seconds: 60
+    identical_packet_threshold: 5   # same packet_id N times in window
+    rate_threshold_per_minute: 30   # packets from one node in window
+    quarantine_duration_seconds: 300
+    notify_dashboard: true          # WS alert + push notification toggle
+```
+
+**Interaction with other filters:** blocklist is checked first (permanent deny). Storm guard runs next (temporary deny). `channel_throttled` and `rate_limited` apply only after a packet passes blocklist and quarantine. Busy legitimate nodes can false-positive if thresholds are too low — tune `rate_threshold_per_minute` for your mesh density.
+
 ---
 
 ## Transmit (Native Messaging)
@@ -477,6 +582,100 @@ storage:
 
 Packets are stored in a local SQLite database. Old packets are pruned automatically based on `max_packets_retained`.
 
+### Stray frames (Unknown RF)
+
+When a LoRa frame fails **both** Meshtastic and MeshCore decode, Meshpoint can log RF metadata only (no relay, no re-encode). View results in the dashboard **Unknown RF** tab or export via `GET /api/stray_frames?format=csv`.
+
+```yaml
+stray_frames:
+  enabled: true
+  max_retained: 10000      # hard cap on SQLite rows
+  retention_hours: 168       # drop rows older than this (7 days)
+```
+
+Pruning runs in the background during the normal storage cleanup loop and does not block the receive path.
+
+### Prometheus metrics (`/metrics`)
+
+Optional Prometheus text scrape endpoint for LAN monitoring. **Off by default** — enabling does not change packet capture, relay, or dashboard behaviour.
+
+```yaml
+metrics:
+  enabled: false
+  require_auth: true    # when false, /metrics is open on the LAN (use firewall rules)
+```
+
+When `metrics.enabled: true`, Prometheus (or any scraper) can poll:
+
+```text
+http://<pi-ip>:8080/metrics
+```
+
+Exposed series include packet counts, node totals, RSSI/SNR averages, noise floor, relay stats, per-channel duty estimates (ToA), SX1302 CRC counters, and process uptime. Labels use protocol/channel/reason only — never PSKs, tokens, or node secrets.
+
+**Example `prometheus.yml` scrape job (auth disabled):**
+
+```yaml
+scrape_configs:
+  - job_name: meshpoint
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["192.168.1.50:8080"]
+    metrics_path: /metrics
+```
+
+When `require_auth: true`, configure your scraper to send the dashboard session cookie or Bearer JWT (same as other protected API routes).
+
+### Webhooks (outbound HTTP)
+
+Fire async HTTP POSTs to LAN services (Home Assistant, Node-RED, Slack-compatible hooks) when mesh events occur. **Off by default.** Failures are logged to the admin audit log and never block packet processing.
+
+```yaml
+webhooks:
+  enabled: false
+  rules:
+    - name: low-battery-ha
+      url: "http://192.168.1.10:8123/api/webhook/mesh_low_battery"
+      event: battery_low
+      cooldown_seconds: 3600
+      battery_threshold_percent: 20
+    - name: sos-keyword
+      url: "https://hooks.example.com/sos"
+      event: keyword_match
+      keyword: "SOS"
+      cooldown_seconds: 300
+    - name: node-return
+      url: "http://192.168.1.10:8123/api/webhook/mesh_online"
+      event: node_online
+      cooldown_seconds: 600
+    - name: node-silent
+      url: "http://192.168.1.10:8123/api/webhook/mesh_offline"
+      event: node_offline
+      cooldown_seconds: 7200
+    - name: relay-duty-high
+      url: "http://192.168.1.10:8123/api/webhook/mesh_duty"
+      event: duty_spike
+      duty_threshold_percent: 80
+      cooldown_seconds: 1800
+```
+
+**Supported events:**
+
+| Event | When it fires |
+|-------|----------------|
+| `battery_low` | Telemetry reports at or below `battery_threshold_percent` (default 20%) |
+| `node_offline` | Node not heard for 2+ hours (same window as dashboard online dot) |
+| `node_online` | Node heard again after being offline |
+| `keyword_match` | Decoded text message contains `keyword` (case-insensitive) |
+| `duty_spike` | Aggregate relay duty (ToA estimate) exceeds `duty_threshold_percent` |
+| `storm_quarantine` | Reserved for a future release (PR 12); validates at startup but does not fire yet |
+
+Each rule has a per-rule cooldown (per node for node/battery/keyword events). POST body is JSON with `event`, `rule`, `device_name`, `timestamp`, optional `node_id`, and a `data` object — no PSKs or channel keys.
+
+Webhook fires are appended to `data/admin_audit.jsonl` as `webhook.fire` entries.
+
+**Dashboard:** **Configuration → Advanced → Webhooks** lists configured rules, last-fired timestamps, and a **Test** button that sends a dummy POST (`event: test`) to verify each URL from the Pi.
+
 ---
 
 ## Dashboard
@@ -489,6 +688,57 @@ dashboard:
 ```
 
 Access at `http://<pi-ip>:8080`. Bind to `127.0.0.1` to restrict to local access only.
+
+### RF Environment tab
+
+Open **RF Environment** in the sidebar for a full-page noise-floor sparkline, calibration state, and the latest SX1302 spectral-scan histogram. Data comes from `GET /api/rf/status` (same sources as the sidebar telemetry rail).
+
+- **Live scan** — hardware spectral scan on the tuned channel (`radio.spectral_scan_interval_seconds` > 0 and SX1261/HAL support present)
+- **Packet fallback** — rolling minimum of `RSSI − SNR` when scan is disabled or unavailable
+- Set `radio.spectral_scan_interval_seconds: 0` in **Configuration → Advanced** to disable hardware scan; the tab shows a clear message and uses packet fallback only
+
+### Unknown RF tab
+
+Open **Unknown RF** in the sidebar to browse undecodable frames logged by `stray_frames` (see Storage). Filter by time window and minimum RSSI; use **Export CSV** to download the current filter via `/api/stray_frames?format=csv`. Disable logging with `stray_frames.enabled: false` in `local.yaml`.
+
+### Coverage View (map)
+
+On the **Dashboard → Node Map**, open the Leaflet layer control (top-right) and enable **Coverage View**. Plotted nodes with GPS show RSSI-colored circles (green/cyan/yellow/red by average signal). Circle size reflects recent packet volume (confidence). Nodes without coordinates appear in the **unplotted** count beside the map title. Click any marker or coverage circle to open the node drawer. **Topology Links** remains a separate overlay and can be used together with coverage.
+
+### Browser notifications
+
+**Settings → System → Browser notifications** enables LAN push alerts while any authenticated dashboard tab is open. Preferences are stored in the browser (`localStorage`), not on the device.
+
+Supported alert types:
+
+- **Node offline** — not heard for 2+ hours (matches the node-card online dot)
+- **Node back online** — heard again after being offline
+- **Low battery** — telemetry reports ≤20% (one alert per node per hour)
+- **Storm guard** — reserved for a future release; toggle is present but inactive until storm-guard quarantine ships
+
+Grant notification permission when prompted. Use **Suppress when this tab is focused** to avoid duplicate toasts while you are actively watching the dashboard.
+
+---
+
+## LAN Automation API
+
+Optional REST endpoints for Home Assistant, Node-RED, and other LAN scripts. **Off by default** — enabling does not change dashboard behaviour.
+
+```yaml
+automation:
+  enabled: false
+  token: ""   # required when enabled; use 32+ random characters
+```
+
+Generate a token:
+
+```bash
+openssl rand -hex 32
+```
+
+Add the `automation` block to `config/local.yaml`, set `enabled: true`, paste the token, and restart Meshpoint. Scripts authenticate with `X-Meshpoint-Token: <token>` or `Authorization: Bearer <token>`.
+
+**Security:** use only on a trusted LAN. Do not port-forward the dashboard port. See [API-AUTOMATION.md](API-AUTOMATION.md) for endpoint reference and copy-paste Home Assistant examples.
 
 ---
 
@@ -602,7 +852,7 @@ Control how much location detail leaves the device via MQTT:
 | Value | Behavior |
 |---|---|
 | `exact` | Full GPS coordinates (default) |
-| `approximate` | Rounded to ~2 decimal places (about 0.7 mi / 1.1 km; Configuration → MQTT and GPS labels follow Settings → Meshpoint distance units) |
+| `approximate` | Rounded to ~1.1km precision (2 decimal places) |
 | `none` | Location stripped entirely from MQTT messages |
 
 Full-precision location data is always available on the [Meshradar](https://meshradar.io) dashboard regardless of this setting.
@@ -693,6 +943,8 @@ location:              # GPS / location source
   source: "static"            # static | gpsd | uart
   gpsd_host: "127.0.0.1"
   gpsd_port: 2947
+  uart_path: "/dev/ttyAMA0"
+  uart_baud: 9600
   update_interval_seconds: 5
   min_fix_quality: 1
 
@@ -704,10 +956,6 @@ transmit:              # native messaging TX (Meshtastic via SX1302, MeshCore vi
   long_name: "Meshpoint"
   short_name: "MPNT"
   hop_limit: 3
-  position:
-    interval_minutes: 15
-    coordinate_source: "static"      # static | live
-    location_precision: "approximate"  # exact | approximate | none (live only)
 
 relay:                 # experimental: re-broadcast captured packets via USB radio
   enabled: false
@@ -717,6 +965,7 @@ relay:                 # experimental: re-broadcast captured packets via USB rad
   burst_size: 5
   min_relay_rssi: -110.0
   max_relay_rssi: -50.0
+  channel_throttle_percent: {}  # per-channel relay ToA budget (est.); omit = 100%
 
 upstream:              # cloud (Meshradar) connection
   enabled: true
@@ -744,10 +993,27 @@ storage:               # local SQLite packet store
   max_packets_retained: 100000
   cleanup_interval_seconds: 3600
 
+stray_frames:          # undecodable RF metadata (Unknown RF tab)
+  enabled: true
+  max_retained: 10000
+  retention_hours: 168
+
+metrics:               # Prometheus /metrics scrape (off by default)
+  enabled: false
+  require_auth: true
+
+webhooks:              # outbound HTTP on mesh events (off by default)
+  enabled: false
+  rules: []
+
 dashboard:             # local web UI
   host: "0.0.0.0"
   port: 8080
   static_dir: "frontend"
+
+automation:             # LAN REST API for scripts (off by default)
+  enabled: false
+  token: ""
 ```
 
 You only need to put the keys you want to override into `local.yaml`. Every key omitted from `local.yaml` falls back to the value in `config/default.yaml`.
