@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Optional
 from urllib.parse import urlparse
@@ -37,6 +38,19 @@ VALID_EVENTS = frozenset({
 
 # Reserved for PR 12 — rules validate but do not fire until wired.
 _DEFERRED_EVENTS = frozenset({"storm_quarantine"})
+
+TEST_PAYLOAD_MESSAGE = (
+    "Meshpoint webhook test — dummy payload, not a real mesh event"
+)
+
+
+@dataclass
+class LastFireRecord:
+    fired_at: datetime
+    result: str
+    status_code: int | None = None
+    is_test: bool = False
+    error: str | None = None
 
 
 def build_webhook_payload(
@@ -86,6 +100,7 @@ class WebhookEngine:
         self._last_duty_percent: float | None = None
         self._poll_task: asyncio.Task | None = None
         self._started = False
+        self._last_fired: dict[str, LastFireRecord] = {}
         self._index_rules()
 
     def _index_rules(self) -> None:
@@ -117,6 +132,65 @@ class WebhookEngine:
             except asyncio.CancelledError:
                 pass
             self._poll_task = None
+
+    def get_status(self) -> dict[str, Any]:
+        """Safe status snapshot for the dashboard (no full URLs or secrets)."""
+        rules_out: list[dict[str, Any]] = []
+        for rule in self._config.rules:
+            last = self._last_fired.get(rule.name)
+            entry: dict[str, Any] = {
+                "name": rule.name,
+                "event": rule.event,
+                "enabled": rule.enabled,
+                "active": (
+                    self._config.enabled
+                    and rule.enabled
+                    and rule.event not in _DEFERRED_EVENTS
+                ),
+                "deferred": rule.event in _DEFERRED_EVENTS,
+                "url_host": _url_host(rule.url),
+                "cooldown_seconds": rule.cooldown_seconds,
+                "last_fired_at": last.fired_at.isoformat() if last else None,
+                "last_result": last.result if last else None,
+                "last_status_code": last.status_code if last else None,
+                "last_was_test": last.is_test if last else None,
+                "last_error": last.error if last else None,
+            }
+            if rule.event == "keyword_match" and rule.keyword:
+                entry["keyword"] = rule.keyword
+            if rule.event == "battery_low":
+                entry["battery_threshold_percent"] = rule.battery_threshold_percent
+            if rule.event == "duty_spike":
+                entry["duty_threshold_percent"] = rule.duty_threshold_percent
+            rules_out.append(entry)
+        return {
+            "enabled": self._config.enabled,
+            "engine_running": self._started,
+            "rules": rules_out,
+        }
+
+    async def fire_test(self, rule_name: str) -> dict[str, Any]:
+        """Send a clearly marked dummy POST to verify connectivity."""
+        rule = self._find_rule(rule_name)
+        if rule is None:
+            raise ValueError(f"unknown webhook rule: {rule_name}")
+        body = build_webhook_payload(
+            "test",
+            rule_name=rule.name,
+            device_name=self._device_name,
+            data={
+                "test": True,
+                "message": TEST_PAYLOAD_MESSAGE,
+            },
+        )
+        return await self._post_rule(rule, body, is_test=True)
+
+    def _find_rule(self, name: str) -> WebhookRuleConfig | None:
+        target = (name or "").strip()
+        for rule in self._config.rules:
+            if rule.name == target:
+                return rule
+        return None
 
     def on_packet(self, packet: Packet) -> None:
         """Sync pipeline hook; schedules async evaluation."""
@@ -284,10 +358,15 @@ class WebhookEngine:
             )
 
     async def _post_rule(
-        self, rule: WebhookRuleConfig, body: dict[str, Any]
-    ) -> None:
+        self,
+        rule: WebhookRuleConfig,
+        body: dict[str, Any],
+        *,
+        is_test: bool = False,
+    ) -> dict[str, Any]:
         host = _url_host(rule.url)
         started = datetime.now(timezone.utc)
+        audit_action = "webhook.test" if is_test else "webhook.fire"
         try:
             import httpx
 
@@ -299,19 +378,28 @@ class WebhookEngine:
                 (datetime.now(timezone.utc) - started).total_seconds() * 1000
             )
             ok = 200 <= response.status_code < 300
+            error = None if ok else f"HTTP {response.status_code}"
+            self._record_last_fire(
+                rule.name,
+                result="success" if ok else "error",
+                status_code=response.status_code,
+                is_test=is_test,
+                error=error,
+            )
             self._audit.write(
                 user="system",
-                action="webhook.fire",
+                action=audit_action,
                 params={
                     "rule": rule.name,
                     "event": body.get("event"),
                     "url_host": host,
                     "status_code": response.status_code,
                     "node_id": body.get("node_id", ""),
+                    "test": is_test,
                 },
                 result="success" if ok else "error",
                 duration_ms=duration_ms,
-                error=None if ok else f"HTTP {response.status_code}",
+                error=error,
             )
             if not ok:
                 logger.warning(
@@ -319,24 +407,66 @@ class WebhookEngine:
                     rule.name,
                     response.status_code,
                 )
+            return {
+                "rule": rule.name,
+                "test": is_test,
+                "result": "success" if ok else "error",
+                "status_code": response.status_code,
+                "url_host": host,
+                "error": error,
+            }
         except Exception as exc:
             duration_ms = int(
                 (datetime.now(timezone.utc) - started).total_seconds() * 1000
             )
+            err_text = str(exc) or exc.__class__.__name__
+            self._record_last_fire(
+                rule.name,
+                result="error",
+                status_code=None,
+                is_test=is_test,
+                error=err_text,
+            )
             self._audit.write(
                 user="system",
-                action="webhook.fire",
+                action=audit_action,
                 params={
                     "rule": rule.name,
                     "event": body.get("event"),
                     "url_host": host,
                     "node_id": body.get("node_id", ""),
+                    "test": is_test,
                 },
                 result="error",
                 duration_ms=duration_ms,
-                error=str(exc) or exc.__class__.__name__,
+                error=err_text,
             )
             logger.warning("Webhook %s failed: %s", rule.name, exc)
+            return {
+                "rule": rule.name,
+                "test": is_test,
+                "result": "error",
+                "status_code": None,
+                "url_host": host,
+                "error": err_text,
+            }
+
+    def _record_last_fire(
+        self,
+        rule_name: str,
+        *,
+        result: str,
+        status_code: int | None,
+        is_test: bool,
+        error: str | None,
+    ) -> None:
+        self._last_fired[rule_name] = LastFireRecord(
+            fired_at=datetime.now(timezone.utc),
+            result=result,
+            status_code=status_code,
+            is_test=is_test,
+            error=error,
+        )
 
     def _cooldown_elapsed(self, rule: WebhookRuleConfig, *, key: str) -> bool:
         cooldown_key = f"{rule.name}:{key}"

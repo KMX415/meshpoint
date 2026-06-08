@@ -501,6 +501,8 @@ webhooks:
 
 Each rule has a per-rule cooldown (per node for node/battery/keyword events). POST body is JSON with `event`, `rule`, `device_name`, `timestamp`, optional `node_id`, and `data` — no PSKs or channel keys.
 
+**Dashboard:** **Configuration → Advanced → Webhooks** lists configured rules, last-fired timestamps, and a **Test** button that sends a dummy POST (`event: test`) to verify each URL from the Pi.
+
 ---
 
 ## Dashboard

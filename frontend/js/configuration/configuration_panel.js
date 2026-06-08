@@ -124,10 +124,18 @@ class ConfigurationPanel {
         } else if (section === 'advanced' && window.AdvancedConfigCard) {
             const host = document.getElementById('cfg-advanced-panel');
             if (host) {
-                host.innerHTML = '';
+                host.innerHTML = `
+                    <div data-cfg-advanced></div>
+                    <div data-cfg-webhooks></div>
+                `;
                 const card = new window.AdvancedConfigCard(api);
-                card.mount(host);
+                card.mount(host.querySelector('[data-cfg-advanced]'));
                 this._cards.set('advanced', card);
+                if (window.WebhookStatusCard) {
+                    const whCard = new window.WebhookStatusCard(api);
+                    whCard.mount(host.querySelector('[data-cfg-webhooks]'));
+                    this._cards.set('webhooks', whCard);
+                }
             }
         }
         this._mounted.add(section);

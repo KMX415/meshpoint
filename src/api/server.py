@@ -51,6 +51,7 @@ from src.api.routes import (
     packets,
     public_radar_routes,
     stats_routes,
+    webhooks_routes,
     system_config_routes,
     system_metrics,
     telemetry,
@@ -295,6 +296,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(meshcore_config_routes.router, dependencies=protected)
     app.include_router(config_routes.router, dependencies=protected)
     app.include_router(stats_routes.router, dependencies=protected)
+    app.include_router(webhooks_routes.router, dependencies=protected)
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
@@ -1251,6 +1253,7 @@ def _init_routes(
         node_repo=coord.node_repo,
         packet_repo=coord.packet_repo,
     )
+    webhooks_routes.init_routes(_webhook_engine)
 
     meshcore_tx = None
     if tx_service and hasattr(tx_service, '_meshcore_tx'):
