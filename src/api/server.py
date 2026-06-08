@@ -63,6 +63,7 @@ from src.api.terminal import CommandCatalog, SessionManager
 from src.api.update import ReleaseChannelRegistry, UpdateApplier
 from src.api.update.rollback_state import resolve_rollback_state_path
 from src.api.upstream_client import UpstreamClient
+from src.api.alert_emitter import AlertEmitter
 from src.api.websocket_manager import WebSocketManager
 from src.config import AppConfig, load_config, validate_activation
 from src.coordinator import PipelineCoordinator
@@ -94,6 +95,7 @@ position_broadcaster: PositionBroadcaster | None = None
 noise_floor_tracker = NoiseFloorTracker()
 _noise_floor_emitter_task = None
 _spectral_scan_service: SpectralScanService | None = None
+_alert_emitter: AlertEmitter | None = None
 
 
 def create_app(config: AppConfig | None = None) -> FastAPI:
@@ -209,11 +211,13 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
         _wire_native_relay(pipeline, tx_service)
 
-        global _noise_floor_emitter_task
+        global _noise_floor_emitter_task, _alert_emitter
         import asyncio
         _noise_floor_emitter_task = asyncio.get_running_loop().create_task(
             _noise_floor_emitter_loop(noise_floor_tracker, ws_manager)
         )
+        _alert_emitter = AlertEmitter(pipeline.node_repo, ws_manager)
+        await _alert_emitter.start()
 
         global _spectral_scan_service
         _spectral_scan_service = _build_spectral_scan_service(
@@ -231,6 +235,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         yield
         if _spectral_scan_service is not None:
             await _spectral_scan_service.stop()
+        if _alert_emitter is not None:
+            await _alert_emitter.stop()
         if _noise_floor_emitter_task is not None:
             _noise_floor_emitter_task.cancel()
             try:
@@ -1405,6 +1411,8 @@ def _on_packet_received(packet: Packet) -> None:
             snr_db=packet.signal.snr,
             bandwidth_khz=packet.signal.bandwidth_khz,
         )
+    if _alert_emitter is not None:
+        _alert_emitter.on_packet(packet)
     try:
         loop = asyncio.get_running_loop()
         loop.create_task(ws_manager.broadcast("packet", packet.to_dict()))

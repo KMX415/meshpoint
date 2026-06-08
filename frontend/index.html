@@ -656,6 +656,42 @@
                         </fieldset>
                         <p class="auth-status" data-display-units-status aria-live="polite"></p>
                     </article>
+                    <article class="auth-card push-notifications-card" id="push-notifications-prefs">
+                        <h3 class="auth-card__title">Browser notifications</h3>
+                        <p class="auth-card__hint">LAN push alerts while any dashboard tab is open. Preferences are saved in this browser only. Storm-guard alerts require the storm-guard feature (future release).</p>
+                        <p class="auth-card__hint" data-push-permission-hint aria-live="polite"></p>
+                        <label class="cfg-field cfg-field--toggle">
+                            <input type="checkbox" data-push-enabled>
+                            <span class="cfg-field__label">Enable mesh alerts</span>
+                        </label>
+                        <div class="auth-card__actions">
+                            <button class="auth-button auth-button--primary" type="button" data-push-enable-btn>Enable notifications</button>
+                        </div>
+                        <fieldset class="cfg-fieldset">
+                            <legend class="cfg-fieldset__legend">Alert types</legend>
+                            <label class="cfg-field cfg-field--toggle">
+                                <input type="checkbox" data-push-kind="node_offline" checked>
+                                <span class="cfg-field__label">Node offline (2+ hours)</span>
+                            </label>
+                            <label class="cfg-field cfg-field--toggle">
+                                <input type="checkbox" data-push-kind="node_online" checked>
+                                <span class="cfg-field__label">Node back online</span>
+                            </label>
+                            <label class="cfg-field cfg-field--toggle">
+                                <input type="checkbox" data-push-kind="battery_low" checked>
+                                <span class="cfg-field__label">Low battery (&le;20%)</span>
+                            </label>
+                            <label class="cfg-field cfg-field--toggle">
+                                <input type="checkbox" data-push-kind="storm_guard" checked disabled>
+                                <span class="cfg-field__label">Storm guard (when available)</span>
+                            </label>
+                        </fieldset>
+                        <label class="cfg-field cfg-field--toggle">
+                            <input type="checkbox" data-push-suppress-focused checked>
+                            <span class="cfg-field__label">Suppress when this tab is focused</span>
+                        </label>
+                        <p class="auth-status" data-push-notifications-status aria-live="polite"></p>
+                    </article>
                     <header class="dangerous-panel__head dangerous-panel__head--secondary">
                         <h3 class="dangerous-panel__title">Service actions</h3>
                         <p class="dangerous-panel__subtitle">Each requires confirmation and is recorded in the audit log.</p>
@@ -753,6 +789,8 @@
     <script src="js/command_palette.js"></script>
     <script src="js/keymap_overlay.js"></script>
     <script src="js/sound_engine.js"></script>
+    <script src="js/push_notifications.js"></script>
+    <script src="js/settings/push_notifications_form.js"></script>
     <script src="js/theme_controller.js"></script>
     <script src="js/app.js"></script>
 </body>

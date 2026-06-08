@@ -119,6 +119,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (window.themeController) window.themeController.init();
     _bootCommandPaletteAndKeymap(router);
     _wireSoundEvents();
+    _wirePushNotifications();
 
     new SignOutController('signout-btn').bind();
 
@@ -197,6 +198,10 @@ function _bootDangerousPanel(router) {
     const prefsRoot = document.getElementById('meshpoint-display-prefs');
     if (prefsRoot && window.MeshpointDisplayForm) {
         new window.MeshpointDisplayForm(prefsRoot);
+    }
+    const pushRoot = document.getElementById('push-notifications-prefs');
+    if (pushRoot && window.PushNotificationsForm) {
+        new window.PushNotificationsForm(pushRoot);
     }
     const controller = new window.DangerousPanelController(root);
     controller.bind();
@@ -573,5 +578,17 @@ function _wireSoundEvents() {
     if (typeof ws.on === 'function') {
         ws.on('connected', () => window.soundEngine.play('connect'));
         ws.on('disconnected', () => window.soundEngine.play('disconnect'));
+    }
+}
+
+function _wirePushNotifications() {
+    if (!window.pushNotifications || !window.concentratorWS) return;
+    const pn = window.pushNotifications;
+    const ws = window.concentratorWS;
+    if (pn.isEnabled() && pn.permissionState() === 'granted') {
+        pn.registerServiceWorker();
+    }
+    if (typeof ws.on === 'function') {
+        ws.on('alert', (data) => pn.handleAlert(data));
     }
 }
