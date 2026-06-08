@@ -13,6 +13,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/dashboard.css" />
+    <link rel="stylesheet" href="css/map_coverage.css" />
     <link rel="stylesheet" href="sidebar/sidebar.css" />
     <link rel="stylesheet" href="topbar/topbar.css" />
     <link rel="stylesheet" href="css/build_stamp.css" />
@@ -321,7 +322,10 @@
                     <div class="dashboard__main">
                         <section class="dashboard__map">
                             <div class="panel">
-                                <div class="panel__header">Node Map</div>
+                                <div class="panel__header panel__header--map">
+                                    <span>Node Map</span>
+                                    <span id="map-unplotted-count" class="map-unplotted" hidden></span>
+                                </div>
                                 <div id="map" class="panel__body map-container"></div>
                             </div>
                         </section>

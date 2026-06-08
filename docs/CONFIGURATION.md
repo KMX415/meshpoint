@@ -490,6 +490,10 @@ dashboard:
 
 Access at `http://<pi-ip>:8080`. Bind to `127.0.0.1` to restrict to local access only.
 
+### Coverage View (map)
+
+On the **Dashboard → Node Map**, open the Leaflet layer control (top-right) and enable **Coverage View**. Plotted nodes with GPS show RSSI-colored circles (green/cyan/yellow/red by average signal). Circle size reflects recent packet volume (confidence). Nodes without coordinates appear in the **unplotted** count beside the map title. Click any marker or coverage circle to open the node drawer. **Topology Links** remains a separate overlay and can be used together with coverage.
+
 ---
 
 ## Device Identity
