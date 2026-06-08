@@ -208,6 +208,10 @@ class MeshcoreUsbCaptureSource(CaptureSource):
             )
             self._connected = False
 
+    async def release_serial_for_flash(self) -> None:
+        """Disconnect so an external tool (esptool) can open the serial port."""
+        await self._disconnect()
+
     async def _disconnect(self) -> None:
         self._connected = False
         if self._meshcore:

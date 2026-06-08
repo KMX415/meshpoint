@@ -160,6 +160,16 @@ The setup wizard configures sources automatically. To add or remove a MeshCore c
 
 When running both Meshtastic concentrator capture and a MeshCore USB companion, pin `meshcore_usb.serial_port` explicitly. Auto-detect can grab the wrong device when multiple Espressif boards are attached.
 
+### Companion firmware flash (dashboard)
+
+**Settings → System → Flash companion firmware** uploads a `.bin` and runs `esptool` against the USB companion. MeshCore USB capture releases the serial port during the flash; the existing auto-reconnect loop restores the connection after the ESP reboots (~5–15 s).
+
+- Admin-only; every attempt is audit-logged (`firmware_flash`).
+- Default port comes from `capture.meshcore_usb.serial_port` (falls back to `/dev/ttyUSB0`).
+- Default partition offset `0x10000` (typical MeshCore/Meshtastic app slot — verify for your board).
+- Requires `esptool>=4.7.0` (installed with Meshpoint dependencies).
+- **Not** OTA over LoRa — local USB only.
+
 ---
 
 ## Location (GPS) source

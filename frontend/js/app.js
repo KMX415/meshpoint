@@ -198,6 +198,11 @@ function _bootDangerousPanel(router) {
     if (prefsRoot && window.MeshpointDisplayForm) {
         new window.MeshpointDisplayForm(prefsRoot);
     }
+    const flashHost = document.getElementById('companion-flash-host');
+    if (flashHost && window.CompanionFlashCard) {
+        const flashCard = new window.CompanionFlashCard(flashHost);
+        flashCard.mount();
+    }
     const controller = new window.DangerousPanelController(root);
     controller.bind();
     let primed = false;
