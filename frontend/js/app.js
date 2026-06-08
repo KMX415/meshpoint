@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const router = new Router({
         defaultRoute: 'dashboard',
         allowedRoutes: [
-            'dashboard', 'stats', 'messages', 'radio', 'terminal',
+            'dashboard', 'stats', 'rf', 'messages', 'radio', 'terminal',
             'configuration/identity', 'configuration/radio',
             'configuration/channels', 'configuration/transmit',
             'configuration/mqtt',

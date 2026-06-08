@@ -490,6 +490,14 @@ dashboard:
 
 Access at `http://<pi-ip>:8080`. Bind to `127.0.0.1` to restrict to local access only.
 
+### RF Environment tab
+
+Open **RF Environment** in the sidebar for a full-page noise-floor sparkline, calibration state, and the latest SX1302 spectral-scan histogram. Data comes from `GET /api/rf/status` (same sources as the sidebar telemetry rail).
+
+- **Live scan** — hardware spectral scan on the tuned channel (`radio.spectral_scan_interval_seconds` > 0 and SX1261/HAL support present)
+- **Packet fallback** — rolling minimum of `RSSI − SNR` when scan is disabled or unavailable
+- Set `radio.spectral_scan_interval_seconds: 0` in **Configuration → Advanced** to disable hardware scan; the tab shows a clear message and uses packet fallback only
+
 ---
 
 ## Device Identity

@@ -13,6 +13,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/dashboard.css" />
+    <link rel="stylesheet" href="css/rf.css" />
     <link rel="stylesheet" href="sidebar/sidebar.css" />
     <link rel="stylesheet" href="topbar/topbar.css" />
     <link rel="stylesheet" href="css/build_stamp.css" />
@@ -100,6 +101,20 @@
                                 </svg>
                             </span>
                             <span class="sidebar__label">Stats</span>
+                        </a>
+                    </li>
+                    <li class="sidebar__item">
+                        <a href="#/rf" class="sidebar__link" data-route="rf">
+                            <span class="sidebar__icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M4 18v-4"/>
+                                    <path d="M8 18V8"/>
+                                    <path d="M12 18v-6"/>
+                                    <path d="M16 18V4"/>
+                                    <path d="M20 18v-9"/>
+                                </svg>
+                            </span>
+                            <span class="sidebar__label">RF Environment</span>
                         </a>
                     </li>
                     <li class="sidebar__item">
@@ -388,6 +403,12 @@
             <section class="section" data-section="stats" style="display:none">
                 <div id="stats-panel" class="stats-panel">
                     <div class="stats-panel__loading">Loading stats...</div>
+                </div>
+            </section>
+
+            <section class="section" data-section="rf" style="display:none">
+                <div id="rf-panel" class="rf-panel">
+                    <div class="stats-panel__loading">Loading RF environment...</div>
                 </div>
             </section>
 
@@ -693,6 +714,7 @@
     <script src="js/radio_companion_card.js"></script>
     <script src="js/radio_settings.js"></script>
     <script src="js/stats_tab.js"></script>
+    <script src="js/rf_tab.js"></script>
     <script src="js/signout_controller.js"></script>
     <script src="js/settings/password_change_form.js"></script>
     <script src="js/settings/sign_out_all_form.js"></script>
