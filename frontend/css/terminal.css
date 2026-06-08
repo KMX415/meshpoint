@@ -637,6 +637,25 @@
     word-break: break-word;
 }
 
+.danger-modal__typed {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: rgba(243, 244, 246, 0.75);
+}
+
+.danger-modal__typed-input {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--term-border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #f3f4f6;
+    font-family: 'JetBrains Mono', Menlo, Consolas, monospace;
+    font-size: 13px;
+}
+
 .danger-modal__field {
     display: flex;
     flex-direction: column;
