@@ -477,3 +477,62 @@ select.cfg-field__input option:checked {
 .cfg-mc-channels {
     margin-bottom: 14px;
 }
+
+.cfg-webhook-table-wrap {
+    overflow-x: auto;
+    margin-top: 12px;
+}
+
+.cfg-webhook-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.cfg-webhook-table th,
+.cfg-webhook-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    text-align: left;
+    vertical-align: middle;
+}
+
+.cfg-webhook-table th {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(243, 244, 246, 0.55);
+}
+
+.cfg-webhook-empty {
+    color: rgba(243, 244, 246, 0.6);
+    font-size: 13px;
+}
+
+.cfg-webhook-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.cfg-webhook-badge--ok {
+    background: rgba(52, 211, 153, 0.15);
+    color: #6ee7b7;
+}
+
+.cfg-webhook-badge--muted {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(243, 244, 246, 0.45);
+}
+
+.cfg-webhook-result--ok {
+    color: #6ee7b7;
+}
+
+.cfg-webhook-result--err {
+    color: #fca5a5;
+}

@@ -51,6 +51,7 @@ from src.api.routes import (
     packets,
     public_radar_routes,
     stats_routes,
+    webhooks_routes,
     system_config_routes,
     system_metrics,
     telemetry,
@@ -94,6 +95,7 @@ position_broadcaster: PositionBroadcaster | None = None
 noise_floor_tracker = NoiseFloorTracker()
 _noise_floor_emitter_task = None
 _spectral_scan_service: SpectralScanService | None = None
+_webhook_engine = None
 
 
 def create_app(config: AppConfig | None = None) -> FastAPI:
@@ -209,11 +211,23 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
 
         _wire_native_relay(pipeline, tx_service)
 
-        global _noise_floor_emitter_task
+        global _noise_floor_emitter_task, _webhook_engine
         import asyncio
         _noise_floor_emitter_task = asyncio.get_running_loop().create_task(
             _noise_floor_emitter_loop(noise_floor_tracker, ws_manager)
         )
+
+        from src.webhook.engine import WebhookEngine
+
+        _webhook_engine = WebhookEngine(
+            config.webhooks,
+            config.device.device_name,
+            pipeline.node_repo,
+            pipeline.relay_manager,
+            audit_writer,
+        )
+        pipeline.on_packet(_webhook_engine.on_packet)
+        await _webhook_engine.start()
 
         global _spectral_scan_service
         _spectral_scan_service = _build_spectral_scan_service(
@@ -231,6 +245,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         yield
         if _spectral_scan_service is not None:
             await _spectral_scan_service.stop()
+        if _webhook_engine is not None:
+            await _webhook_engine.stop()
         if _noise_floor_emitter_task is not None:
             _noise_floor_emitter_task.cancel()
             try:
@@ -280,6 +296,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(meshcore_config_routes.router, dependencies=protected)
     app.include_router(config_routes.router, dependencies=protected)
     app.include_router(stats_routes.router, dependencies=protected)
+    app.include_router(webhooks_routes.router, dependencies=protected)
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
@@ -1236,6 +1253,7 @@ def _init_routes(
         node_repo=coord.node_repo,
         packet_repo=coord.packet_repo,
     )
+    webhooks_routes.init_routes(_webhook_engine)
 
     meshcore_tx = None
     if tx_service and hasattr(tx_service, '_meshcore_tx'):
