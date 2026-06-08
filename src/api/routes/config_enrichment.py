@@ -52,24 +52,40 @@ def enrich_config_payload(cfg: AppConfig, base: dict) -> dict:
         "burst_size": relay.burst_size,
         "min_relay_rssi": relay.min_relay_rssi,
         "max_relay_rssi": relay.max_relay_rssi,
+        "blocklist": list(relay.blocklist or []),
+        "priority_list": list(relay.priority_list or []),
+        "dedup_ttl_seconds": relay.dedup_ttl_seconds,
+        "storm_guard": {
+            "enabled": relay.storm_guard.enabled,
+            "window_seconds": relay.storm_guard.window_seconds,
+            "identical_packet_threshold": relay.storm_guard.identical_packet_threshold,
+            "rate_threshold_per_minute": relay.storm_guard.rate_threshold_per_minute,
+            "quarantine_duration_seconds": relay.storm_guard.quarantine_duration_seconds,
+            "notify_dashboard": relay.storm_guard.notify_dashboard,
+        },
     }
     base["radio_advanced"] = {
         "spectral_scan_interval_seconds": radio.spectral_scan_interval_seconds,
         "sx1261_spi_path": radio.sx1261_spi_path or "",
+        "carrier_type": radio.carrier_type or "",
+        "gps_pps_enabled": radio.gps_pps_enabled,
+        "gps_pps_tty_path": radio.gps_pps_tty_path,
+        "gps_family": radio.gps_family,
+        "gps_pps_target_baud": radio.gps_pps_target_baud,
     }
     base["location"] = {
         "source": location.source,
         "gpsd_host": location.gpsd_host,
         "gpsd_port": location.gpsd_port,
+        "uart_path": location.uart_path,
+        "uart_baud": location.uart_baud,
         "update_interval_seconds": location.update_interval_seconds,
         "min_fix_quality": location.min_fix_quality,
     }
-    pos = cfg.transmit.position
-    if "transmit" in base:
-        base["transmit"]["position"] = {
-            "interval_minutes": pos.interval_minutes,
-            "startup_delay_seconds": pos.startup_delay_seconds,
-            "coordinate_source": pos.coordinate_source,
-            "location_precision": pos.location_precision,
-        }
+    sh = cfg.signal_health
+    base["signal_health"] = {
+        "green_rssi_floor": sh.green_rssi_floor,
+        "yellow_rssi_floor": sh.yellow_rssi_floor,
+        "min_packets_per_hour": sh.min_packets_per_hour,
+    }
     return base

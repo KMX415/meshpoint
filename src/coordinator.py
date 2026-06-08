@@ -17,6 +17,7 @@ from src.models.packet import Packet, Protocol, RawCapture
 from src.relay.meshtastic_transmitter import MeshtasticTransmitter
 from src.relay.mqtt_publisher import MqttPublisher
 from src.relay.relay_manager import RelayManager
+from src.relay.storm_guard import StormGuard
 from src.storage.database import DatabaseManager
 from src.storage.node_repository import NodeRepository
 from src.storage.packet_repository import PacketRepository
@@ -43,12 +44,17 @@ class PipelineCoordinator:
         self._router = PacketRouter(self._crypto)
         self._capture = CaptureCoordinator()
         relay_cfg = config.relay
+        storm_guard = StormGuard(relay_cfg.storm_guard)
         self._relay = RelayManager(
             enabled=relay_cfg.enabled,
             max_relay_per_minute=relay_cfg.max_relay_per_minute,
             burst_size=relay_cfg.burst_size,
             min_relay_rssi=relay_cfg.min_relay_rssi,
             max_relay_rssi=relay_cfg.max_relay_rssi,
+            dedup_ttl_seconds=relay_cfg.dedup_ttl_seconds,
+            blocklist=relay_cfg.blocklist,
+            priority_list=relay_cfg.priority_list,
+            storm_guard=storm_guard,
         )
         self._transmitter: Optional[MeshtasticTransmitter] = None
         self._mqtt: Optional[MqttPublisher] = None
@@ -70,9 +76,6 @@ class PipelineCoordinator:
         self._pipeline_task: Optional[asyncio.Task] = None
         self._cleanup_task: Optional[asyncio.Task] = None
         self._location_refresh_task: Optional[asyncio.Task] = None
-        self._last_live_lat: Optional[float] = None
-        self._last_live_lon: Optional[float] = None
-        self._last_live_alt: Optional[float] = None
 
     @property
     def database(self) -> DatabaseManager:
@@ -121,10 +124,13 @@ class PipelineCoordinator:
         self,
         callback: Callable[[Optional[float], Optional[float], Optional[float]], None],
     ) -> None:
-        """Register a callback fired when a live GPS source publishes a new fix.
+        """Register a callback fired when the live location source publishes
+        a fresh position fix.
 
-        ``device.{latitude,longitude,altitude}`` (the Meshradar pin) is never
-        mutated. Callbacks receive live fix coordinates only.
+        Called with ``(latitude, longitude, altitude_m)``. Fires only when
+        the new fix actually differs from the cached device position, so
+        listeners can rely on it as a real change signal instead of
+        polling.
         """
         self._on_location_callbacks.append(callback)
 
@@ -202,9 +208,16 @@ class PipelineCoordinator:
     async def _location_refresh_loop(self) -> None:
         """Periodically pull the latest fix from the active location source.
 
-        Live sources (gpsd/uart) notify listeners when the fix changes.
-        ``device.{latitude,longitude,altitude}`` stays the registered Meshradar
-        pin and is not overwritten here.
+        When the source publishes a real position fix, write it back into
+        ``self._config.device.latitude/longitude/altitude`` so every
+        downstream consumer (farthest-direct calculation, heartbeat,
+        node-position math, dashboard map placement) sees the live
+        coordinate without further plumbing.
+
+        Static sources also flow through this loop: their ``get_status``
+        returns the same configured coordinates every tick, so it's a
+        cheap no-op. We deliberately do not write back to ``local.yaml``
+        on every tick: in-memory updates suffice.
         """
         interval = max(1, self._config.location.update_interval_seconds)
         try:
@@ -217,33 +230,28 @@ class PipelineCoordinator:
             logger.exception("Location refresh loop error")
 
     def _apply_latest_location_fix(self) -> None:
-        if self._location_source.source_name == "static":
-            return
-
         status = self._location_source.get_status()
         if not status.available or status.fix is None:
             return
         if not status.fix.has_position:
             return
 
-        lat = status.fix.latitude
-        lon = status.fix.longitude
-        alt = status.fix.altitude_m
-
+        device = self._config.device
         if (
-            self._last_live_lat == lat
-            and self._last_live_lon == lon
-            and self._last_live_alt == alt
+            device.latitude == status.fix.latitude
+            and device.longitude == status.fix.longitude
+            and device.altitude == status.fix.altitude_m
         ):
-            return
+            return  # no change
 
-        self._last_live_lat = lat
-        self._last_live_lon = lon
-        self._last_live_alt = alt
+        device.latitude = status.fix.latitude
+        device.longitude = status.fix.longitude
+        if status.fix.altitude_m is not None:
+            device.altitude = status.fix.altitude_m
 
         for cb in self._on_location_callbacks:
             try:
-                cb(lat, lon, alt)
+                cb(device.latitude, device.longitude, device.altitude)
             except Exception:
                 logger.exception("Location update callback failed")
 
@@ -270,10 +278,10 @@ class PipelineCoordinator:
 
         packet.capture_source = raw.capture_source
         await self._store_packet(packet)
-        self._notify_callbacks(packet)
         await self._relay.process_packet(packet)
         self._publish_mqtt(packet)
         self._record_stats(packet)
+        self._notify_callbacks(packet)
 
     @staticmethod
     def _adapt_meshcore_usb(raw: RawCapture) -> Optional[Packet]:
@@ -299,22 +307,6 @@ class PipelineCoordinator:
             await self._node_repo.upsert(node_update)
             self._last_node_update[node_update.node_id] = node_update
             self._stats_reporter.record_node(node_update.to_dict())
-            if node_update.public_key:
-                try:
-                    node_int = int(node_update.node_id, 16)
-                    new_key = bytes.fromhex(node_update.public_key)
-                    prior = self._crypto.lookup_public_key(node_int)
-                    self._crypto.register_public_key(node_int, new_key)
-                    if prior != new_key:
-                        logger.info(
-                            "Updated peer PKI public_key for %s",
-                            node_update.node_id,
-                        )
-                except ValueError:
-                    logger.debug(
-                        "Ignoring invalid public_key for node %s",
-                        node_update.node_id,
-                    )
         elif packet.source_id:
             await self._node_repo.increment_packet_count(packet.source_id)
 
@@ -466,8 +458,9 @@ class PipelineCoordinator:
             detail = f"gpsd @ {host}:{port}"
             color = GREEN
         elif source_name == "uart":
-            detail = "on-board UART (placeholder, falls back to static)"
-            color = DIM
+            path = self._config.location.uart_path
+            detail = f"UART NMEA @ {path}"
+            color = GREEN
         else:
             detail = "static config coordinates"
             color = DIM

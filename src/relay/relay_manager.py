@@ -6,7 +6,9 @@ from typing import Optional
 
 from src.models.packet import Packet, PacketType
 from src.relay.dedup_filter import DeduplicationFilter
+from src.relay.node_id import normalize_node_id, validate_node_ids
 from src.relay.rate_limiter import RateLimiter
+from src.relay.storm_guard import StormGuard
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +40,6 @@ class RelayManager:
     - Hop filtering: don't relay packets with 0 hops remaining
     - Type filtering: only relay useful packet types
     - Signal filtering: don't relay strong signals (nearby nodes)
-    - Destination filtering: never relay unicast packets addressed to us
 
     The actual transmission is handled by an external radio
     (SX1262 via meshtastic-python serial interface).
@@ -51,21 +52,23 @@ class RelayManager:
         min_relay_rssi: float = -110.0,
         max_relay_rssi: float = -50.0,
         enabled: bool = False,
+        dedup_ttl_seconds: float = 300.0,
+        blocklist: list[str] | None = None,
+        priority_list: list[str] | None = None,
+        storm_guard: StormGuard | None = None,
     ):
-        self._dedup = DeduplicationFilter()
+        self._dedup = DeduplicationFilter(ttl_seconds=dedup_ttl_seconds)
+        self._storm_guard = storm_guard
         self._limiter = RateLimiter(max_relay_per_minute, burst_size)
         self._min_rssi = min_relay_rssi
         self._max_rssi = max_relay_rssi
         self._enabled = enabled
-        self._local_node_hex: str | None = None
+        self._blocklist = set(validate_node_ids(blocklist or []))
+        self._priority_list = set(validate_node_ids(priority_list or []))
         self._relay_count = 0
         self._rejected_count = 0
         self._rejection_reasons: dict[str, int] = {}
         self._transmit_fn: Optional[callable] = None
-
-    def set_local_node_id(self, node_hex: str) -> None:
-        """Skip relay for unicast packets addressed to this Meshpoint."""
-        self._local_node_hex = node_hex.lower()
 
     @property
     def enabled(self) -> bool:
@@ -80,24 +83,51 @@ class RelayManager:
         """Register the function used to transmit relay packets."""
         self._transmit_fn = fn
 
+    @property
+    def storm_guard(self) -> StormGuard | None:
+        return self._storm_guard
+
+    def reload_filters(
+        self,
+        *,
+        blocklist: list[str] | None = None,
+        priority_list: list[str] | None = None,
+        dedup_ttl_seconds: float | None = None,
+    ) -> None:
+        """Apply relay filter changes without a full service restart."""
+        if blocklist is not None:
+            self._blocklist = set(validate_node_ids(blocklist))
+        if priority_list is not None:
+            self._priority_list = set(validate_node_ids(priority_list))
+        if dedup_ttl_seconds is not None:
+            self._dedup.set_ttl(dedup_ttl_seconds)
+        logger.info(
+            "Relay filters reloaded (blocklist=%d, priority=%d, dedup_ttl=%.0fs)",
+            len(self._blocklist),
+            len(self._priority_list),
+            self._dedup.ttl_seconds,
+        )
+
     def evaluate(self, packet: Packet) -> RelayDecision:
         """Decide whether a captured packet should be relayed."""
         if not self._enabled:
             return RelayDecision(False, "relay_disabled")
+
+        source_id = normalize_node_id(packet.source_id)
+        if source_id in self._blocklist:
+            return RelayDecision(False, "blocklisted")
+
+        if (
+            self._storm_guard is not None
+            and self._storm_guard.is_quarantined(source_id)
+        ):
+            return RelayDecision(False, "storm_quarantined")
 
         if self._dedup.is_duplicate(packet.source_id, packet.packet_id):
             return RelayDecision(False, "duplicate")
 
         if packet.hop_limit <= 0:
             return RelayDecision(False, "no_hops_remaining")
-
-        dest = (packet.destination_id or "").lower()
-        if (
-            self._local_node_hex
-            and dest == self._local_node_hex
-            and dest not in (BROADCAST_ADDR_MESHTASTIC, BROADCAST_ADDR_MESHCORE)
-        ):
-            return RelayDecision(False, "dest_local")
 
         if packet.packet_type not in RELAY_WORTHY_TYPES:
             return RelayDecision(False, "non_relayable_type")
@@ -108,6 +138,10 @@ class RelayManager:
             if packet.signal.rssi < self._min_rssi:
                 return RelayDecision(False, "signal_too_weak")
 
+        if source_id in self._priority_list:
+            if self._limiter.allow_priority():
+                return RelayDecision(True, "approved_priority")
+
         if not self._limiter.allow():
             return RelayDecision(False, "rate_limited")
 
@@ -115,6 +149,9 @@ class RelayManager:
 
     async def process_packet(self, packet: Packet) -> None:
         """Evaluate and optionally relay a packet."""
+        if self._storm_guard is not None:
+            self._storm_guard.observe(packet)
+
         decision = self.evaluate(packet)
 
         if decision.should_relay:
@@ -165,6 +202,11 @@ class RelayManager:
             logger.exception("Relay transmission failed")
 
     def get_stats(self) -> dict:
+        quarantine = (
+            self._storm_guard.snapshot()
+            if self._storm_guard is not None
+            else []
+        )
         return {
             "enabled": self._enabled,
             "relayed": self._relay_count,
@@ -173,4 +215,8 @@ class RelayManager:
             "dedup_cache_size": self._dedup.size,
             "rate_remaining": self._limiter.remaining_capacity,
             "current_rate": self._limiter.current_rate,
+            "storm_guard": {
+                "enabled": self._storm_guard.enabled if self._storm_guard else False,
+                "active_quarantines": len(quarantine),
+            },
         }

@@ -141,6 +141,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     const nodeCards = new NodeCards('node-list', (node) => nodeDrawer.open(node));
+    window._nodeCards = nodeCards;
 
     const backdrop = document.getElementById('node-backdrop');
     if (backdrop) {
@@ -167,6 +168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     await _loadInitial(nodeMap, nodeCards, packetFeed);
+    await _loadQuarantine(nodeCards);
     await _updateStats();
     _checkForUpdate();
 
@@ -181,6 +183,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     setInterval(() => {
         _refreshData(nodeMap, nodeCards, packetFeed);
+        _loadQuarantine(nodeCards);
         _updateStats();
     }, 15_000);
 
@@ -321,6 +324,18 @@ async function _loadInitial(nodeMap, nodeList, packetFeed) {
         _totalPackets = sorted.length;
     } catch (e) {
         console.error('Initial load failed:', e);
+    }
+}
+
+async function _loadQuarantine(nodeCards) {
+    if (!nodeCards || typeof nodeCards.setQuarantine !== 'function') return;
+    try {
+        const res = await fetch('/api/relay/quarantine');
+        if (!res.ok) return;
+        const data = await res.json();
+        nodeCards.setQuarantine(data.entries || []);
+    } catch (e) {
+        console.error('Quarantine load failed:', e);
     }
 }
 

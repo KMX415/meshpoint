@@ -20,6 +20,14 @@ class NodeCards {
         this._sortBy = this._loadSavedSort();
         this._filter = this._loadSavedFilter();
         this._favoritesOnly = this._loadSavedFavoritesOnly();
+        this._observer = null;
+        this._sparklines = new Map();
+        this._bucketCache = new Map();
+        this._loadingNodes = new Set();
+        this._signalHealth = null;
+        this._configPromise = null;
+        this._quarantine = new Map();
+        this._quarantineTimer = null;
 
         const searchEl = document.getElementById('node-search');
         if (searchEl) {
@@ -49,9 +57,12 @@ class NodeCards {
     }
 
     _loadSavedFilter() {
-        return window.MeshpointNodeCardsSort
-            ? window.MeshpointNodeCardsSort.readSavedFilter()
-            : 'all';
+        try {
+            const v = localStorage.getItem(NodeCards.FILTER_STORAGE_KEY);
+            return NodeCards.FILTER_KEYS.has(v) ? v : 'all';
+        } catch (_e) {
+            return 'all';
+        }
     }
 
     _loadSavedFavoritesOnly() {
@@ -105,9 +116,6 @@ class NodeCards {
                     b.classList.toggle('nc-pill--active', b.dataset.filter === value);
                 });
                 this._render();
-                document.dispatchEvent(new CustomEvent('meshpoint:nodeCardsFilter', {
-                    detail: { filter: value },
-                }));
             });
         });
     }
@@ -137,8 +145,58 @@ class NodeCards {
         this._render();
     }
 
+    setQuarantine(entries) {
+        this._quarantine.clear();
+        (entries || []).forEach((entry) => {
+            if (entry && entry.node_id) {
+                this._quarantine.set(entry.node_id, { ...entry });
+            }
+        });
+        this._syncQuarantineTimer();
+        this._render();
+    }
+
+    _syncQuarantineTimer() {
+        if (this._quarantine.size === 0) {
+            if (this._quarantineTimer) {
+                clearInterval(this._quarantineTimer);
+                this._quarantineTimer = null;
+            }
+            return;
+        }
+        if (this._quarantineTimer) return;
+        this._quarantineTimer = setInterval(() => {
+            let changed = false;
+            for (const [nodeId, entry] of this._quarantine) {
+                const next = Math.max(0, (entry.seconds_remaining ?? 0) - 1);
+                if (next === 0) {
+                    this._quarantine.delete(nodeId);
+                } else {
+                    entry.seconds_remaining = next;
+                }
+                changed = true;
+            }
+            if (changed) this._render();
+            if (this._quarantine.size === 0) this._syncQuarantineTimer();
+        }, 1000);
+    }
+
+    _ensureSignalHealthConfig() {
+        if (this._configPromise) return this._configPromise;
+        this._configPromise = fetch('/api/config', { credentials: 'same-origin' })
+            .then((res) => (res.ok ? res.json() : {}))
+            .then((data) => {
+                this._signalHealth = data.signal_health || null;
+            })
+            .catch(() => {
+                this._signalHealth = null;
+            });
+        return this._configPromise;
+    }
+
     updateFromPacket(packet) {
         if (!packet.source_id) return;
+        this._bucketCache.delete(packet.source_id);
         const idx = this._nodes.findIndex(n => n.node_id === packet.source_id);
         if (idx >= 0) {
             const n = this._nodes[idx];
@@ -202,6 +260,92 @@ class NodeCards {
                 if (node && this._onCardClick) this._onCardClick(node);
             });
         });
+
+        this._observeCards();
+    }
+
+    _observeCards() {
+        if (this._observer) this._observer.disconnect();
+        if (!window.SignalSparkline || typeof IntersectionObserver === 'undefined') {
+            return;
+        }
+
+        this._ensureSignalHealthConfig();
+        this._observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (!entry.isIntersecting) return;
+                const card = entry.target;
+                const nodeId = card.dataset.nodeId;
+                if (nodeId) this._loadSignalData(nodeId, card);
+                this._observer.unobserve(card);
+            });
+        }, { root: null, rootMargin: '48px', threshold: 0.08 });
+
+        this._container.querySelectorAll('.nc-card').forEach((card) => {
+            this._observer.observe(card);
+        });
+    }
+
+    async _loadSignalData(nodeId, cardEl) {
+        if (!nodeId || this._loadingNodes.has(nodeId)) return;
+
+        if (this._bucketCache.has(nodeId)) {
+            this._applySignalHealth(nodeId, cardEl, this._bucketCache.get(nodeId));
+            return;
+        }
+
+        this._loadingNodes.add(nodeId);
+        try {
+            await this._ensureSignalHealthConfig();
+            const url = `/api/nodes/${encodeURIComponent(nodeId)}/metrics_history`
+                + '?hours=24&bucket_minutes=15&limit=100';
+            const res = await fetch(url, { credentials: 'same-origin' });
+            if (!res.ok) return;
+            const data = await res.json();
+            const buckets = data.signal_buckets || [];
+            this._bucketCache.set(nodeId, buckets);
+            this._applySignalHealth(nodeId, cardEl, buckets);
+        } catch (e) {
+            console.error('Signal bucket load failed:', nodeId, e);
+        } finally {
+            this._loadingNodes.delete(nodeId);
+        }
+    }
+
+    _applySignalHealth(nodeId, cardEl, buckets) {
+        const canvas = cardEl.querySelector('[data-sparkline]');
+        if (!canvas || !window.SignalSparkline) return;
+
+        let spark = this._sparklines.get(nodeId);
+        if (!spark) {
+            spark = new window.SignalSparkline(canvas);
+            this._sparklines.set(nodeId, spark);
+        }
+        spark.setBuckets(buckets, { bucketMinutes: 15 });
+
+        const badge = cardEl.querySelector('[data-health-badge]');
+        if (!badge) return;
+
+        const health = window.SignalSparkline.classifyHealth(
+            buckets,
+            this._signalHealth,
+        );
+        if (!health.level) {
+            badge.className = 'nc-health-badge nc-health-badge--hidden';
+            badge.setAttribute('aria-hidden', 'true');
+            badge.textContent = '';
+            badge.removeAttribute('title');
+            return;
+        }
+
+        badge.className = `nc-health-badge nc-health-badge--${health.level}`;
+        badge.setAttribute('aria-hidden', 'false');
+        badge.title = `1h avg ${health.avgRssi.toFixed(0)} dBm (${health.packetCount} pkts)`;
+        badge.textContent = health.level === 'green'
+            ? 'Good'
+            : health.level === 'yellow'
+                ? 'Fair'
+                : 'Poor';
     }
 
     _applyFilter(nodes) {
@@ -231,6 +375,7 @@ class NodeCards {
         const avatarColor = this._hashColor(n.node_id || '');
         const proto = n.protocol || 'meshtastic';
         const protoBadge = proto === 'meshcore' ? 'MC' : 'MT';
+        const quarantineBadge = this._quarantineBadge(n.node_id);
         const heardAt = n.last_heard || n.last_seen;
         const online = this._isOnline(heardAt);
         const onlineDot = online
@@ -242,6 +387,7 @@ class NodeCards {
         const favGlyph = isFav ? '\u2605' : '\u2606';
 
         const signal = this._buildSignal(n);
+        const health = this._buildHealthRow(n);
         const telemetry = this._buildTelemetry(n);
         const meta = this._buildMeta(n);
 
@@ -258,11 +404,35 @@ class NodeCards {
                         aria-label="${favTitle}"
                         aria-pressed="${isFav ? 'true' : 'false'}"
                         title="${favTitle}">${favGlyph}</button>
+                ${quarantineBadge}
                 <span class="nc-proto nc-proto--${proto}">${protoBadge}</span>
             </div>
             ${signal}
+            ${health}
             ${telemetry}
             ${meta}
+        </div>`;
+    }
+
+    _quarantineBadge(nodeId) {
+        const entry = this._quarantine.get(nodeId);
+        if (!entry) return '';
+        const reason = entry.reason === 'rate_storm' ? 'high rate' : 'replay storm';
+        const secs = Math.max(0, entry.seconds_remaining ?? 0);
+        const min = Math.floor(secs / 60);
+        const sec = secs % 60;
+        const countdown = min > 0 ? `${min}m ${sec}s` : `${sec}s`;
+        return `<span class="nc-quarantine-badge" title="Storm guard: relay blocked (${reason})">${countdown}</span>`;
+    }
+
+    _buildHealthRow(n) {
+        const rssi = n.latest_rssi ?? n.rssi;
+        if (rssi == null) return '';
+        return `<div class="nc-card__health">
+            <span class="nc-health-badge nc-health-badge--hidden"
+                  data-health-badge
+                  aria-hidden="true"></span>
+            <canvas class="nc-sparkline" data-sparkline aria-hidden="true"></canvas>
         </div>`;
     }
 

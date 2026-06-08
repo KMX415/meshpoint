@@ -405,6 +405,23 @@ relay:
 
 The relay path is independent from RX: transmission never blocks packet reception. Packets are deduplicated by ID, rate-limited, and filtered by signal strength before relay.
 
+### Storm guard quarantine (memory-only)
+
+Temporary relay blocks for replay storms or excessive per-node packet rates. **Does not write to SQLite** and is separate from the permanent YAML blocklist. Quarantined nodes still appear in the live packet feed; only relay TX is blocked. Auto-releases after `quarantine_duration_seconds`. Operators can release early or promote to blocklist from **Configuration → Advanced**.
+
+```yaml
+relay:
+  storm_guard:
+    enabled: true
+    window_seconds: 60
+    identical_packet_threshold: 5   # same packet_id N times in window
+    rate_threshold_per_minute: 30   # packets from one node in window
+    quarantine_duration_seconds: 300
+    notify_dashboard: true          # WS alert when PR 04 push notifications are present
+```
+
+**Interaction with other filters:** blocklist is checked first (permanent deny). Storm guard runs next (temporary deny). `rate_limited` applies only after a packet passes blocklist and quarantine. Busy legitimate nodes can false-positive if thresholds are too low — tune `rate_threshold_per_minute` for your mesh density.
+
 ---
 
 ## Transmit (Native Messaging)
