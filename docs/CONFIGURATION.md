@@ -477,6 +477,30 @@ storage:
 
 Packets are stored in a local SQLite database. Old packets are pruned automatically based on `max_packets_retained`.
 
+### Webhooks (outbound HTTP)
+
+Fire async HTTP POSTs to LAN services (Home Assistant, Node-RED, Slack-compatible hooks) when mesh events occur. **Off by default.** Failures are logged to the admin audit log and never block packet processing.
+
+```yaml
+webhooks:
+  enabled: false
+  rules:
+    - name: low-battery-ha
+      url: "http://192.168.1.10:8123/api/webhook/mesh_low_battery"
+      event: battery_low
+      cooldown_seconds: 3600
+      battery_threshold_percent: 20
+    - name: sos-keyword
+      url: "https://hooks.example.com/sos"
+      event: keyword_match
+      keyword: "SOS"
+      cooldown_seconds: 300
+```
+
+**Supported events:** `battery_low`, `node_offline`, `node_online`, `keyword_match`, `duty_spike`, and `storm_quarantine` (reserved — validates at startup but does not fire until storm-guard ships).
+
+Each rule has a per-rule cooldown (per node for node/battery/keyword events). POST body is JSON with `event`, `rule`, `device_name`, `timestamp`, optional `node_id`, and `data` — no PSKs or channel keys.
+
 ---
 
 ## Dashboard
@@ -743,6 +767,10 @@ storage:               # local SQLite packet store
   database_path: "data/concentrator.db"
   max_packets_retained: 100000
   cleanup_interval_seconds: 3600
+
+webhooks:              # outbound HTTP on mesh events (off by default)
+  enabled: false
+  rules: []
 
 dashboard:             # local web UI
   host: "0.0.0.0"

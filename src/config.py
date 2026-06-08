@@ -115,6 +115,28 @@ class StorageConfig:
 
 
 @dataclass
+class WebhookRuleConfig:
+    """One outbound HTTP rule for a mesh event (PR 10)."""
+
+    name: str = ""
+    url: str = ""
+    event: str = ""
+    enabled: bool = True
+    cooldown_seconds: float = 300.0
+    keyword: Optional[str] = None
+    battery_threshold_percent: float = 20.0
+    duty_threshold_percent: float = 80.0
+
+
+@dataclass
+class WebhookConfig:
+    """Event-driven outbound webhooks (PR 10)."""
+
+    enabled: bool = False
+    rules: list[WebhookRuleConfig] = field(default_factory=list)
+
+
+@dataclass
 class DashboardConfig:
     host: str = "0.0.0.0"  # nosec B104 -- intentional for local device dashboard
     port: int = 8080
@@ -319,6 +341,7 @@ class AppConfig:
     transmit: TransmitConfig = field(default_factory=TransmitConfig)
     web_auth: WebAuthConfig = field(default_factory=WebAuthConfig)
     location: LocationConfig = field(default_factory=LocationConfig)
+    webhooks: WebhookConfig = field(default_factory=WebhookConfig)
 
 
 def _resolve_radio_frequency(radio: "RadioConfig") -> None:
@@ -401,6 +424,7 @@ def _apply_yaml(cfg: AppConfig, path: Path) -> None:
         "transmit": cfg.transmit,
         "web_auth": cfg.web_auth,
         "location": cfg.location,
+        "webhooks": cfg.webhooks,
     }
 
     unknown_keys: list[str] = []
@@ -449,8 +473,72 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
     local = config_path or os.environ.get("CONCENTRATOR_CONFIG", "config/local.yaml")
     _apply_yaml(cfg, _validated_config_path(local))
     _resolve_radio_frequency(cfg.radio)
+    _normalize_webhook_rules(cfg.webhooks)
+    validate_webhook_config(cfg.webhooks)
 
     return cfg
+
+
+def _normalize_webhook_rules(webhooks: WebhookConfig) -> None:
+    """Convert YAML dict rules into WebhookRuleConfig instances."""
+    normalized: list[WebhookRuleConfig] = []
+    for item in webhooks.rules:
+        if isinstance(item, WebhookRuleConfig):
+            normalized.append(item)
+        elif isinstance(item, dict):
+            normalized.append(WebhookRuleConfig(**item))
+    webhooks.rules = normalized
+
+
+def validate_webhook_config(webhooks: WebhookConfig) -> None:
+    """Reject invalid webhook rules at startup."""
+    if not webhooks.enabled:
+        return
+
+    if not webhooks.rules:
+        raise ValueError(
+            "webhooks.enabled is true but webhooks.rules is empty"
+        )
+
+    seen_names: set[str] = set()
+    for rule in webhooks.rules:
+        name = (rule.name or "").strip()
+        if not name:
+            raise ValueError("each webhooks.rules entry requires a name")
+        if name in seen_names:
+            raise ValueError(f"duplicate webhook rule name: {name!r}")
+        seen_names.add(name)
+
+        event = (rule.event or "").strip().lower()
+        if event not in {
+            "battery_low",
+            "node_offline",
+            "node_online",
+            "keyword_match",
+            "duty_spike",
+            "storm_quarantine",
+        }:
+            raise ValueError(
+                f"webhook rule {name!r} has unknown event {rule.event!r}"
+            )
+
+        url = (rule.url or "").strip()
+        if not url:
+            raise ValueError(f"webhook rule {name!r} requires a url")
+        if not (url.startswith("http://") or url.startswith("https://")):
+            raise ValueError(
+                f"webhook rule {name!r} url must start with http:// or https://"
+            )
+
+        if rule.cooldown_seconds < 0:
+            raise ValueError(
+                f"webhook rule {name!r} cooldown_seconds must be >= 0"
+            )
+
+        if event == "keyword_match" and not (rule.keyword or "").strip():
+            raise ValueError(
+                f"webhook rule {name!r} (keyword_match) requires keyword"
+            )
 
 
 def _get_local_yaml_path() -> Path:
