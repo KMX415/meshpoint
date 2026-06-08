@@ -490,6 +490,19 @@ dashboard:
 
 Access at `http://<pi-ip>:8080`. Bind to `127.0.0.1` to restrict to local access only.
 
+### Browser notifications
+
+**Settings → System → Browser notifications** enables LAN push alerts while any authenticated dashboard tab is open. Preferences are stored in the browser (`localStorage`), not on the device.
+
+Supported alert types:
+
+- **Node offline** — not heard for 2+ hours (matches the node-card online dot)
+- **Node back online** — heard again after being offline
+- **Low battery** — telemetry reports ≤20% (one alert per node per hour)
+- **Storm guard** — reserved for a future release; toggle is present but inactive until storm-guard quarantine ships
+
+Grant notification permission when prompted. Use **Suppress when this tab is focused** to avoid duplicate toasts while you are actively watching the dashboard.
+
 ---
 
 ## Device Identity
