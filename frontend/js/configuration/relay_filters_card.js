@@ -62,12 +62,28 @@ class RelayFiltersCard {
                     <p class="cfg-status" data-relay-filters-status aria-live="polite"></p>
                 </form>
             </article>
+            <article class="cfg-card" data-storm-guard-panel>
+                <header class="cfg-card__head">
+                    <h3 class="cfg-card__title">Storm guard quarantine</h3>
+                    <p class="cfg-card__hint">
+                        Temporary <strong>memory-only</strong> relay blocks for replay/rate storms.
+                        Distinct from the permanent blocklist above. Auto-releases after the configured
+                        duration; operators can release early or promote to blocklist.
+                    </p>
+                </header>
+                <p class="cfg-field__hint" data-storm-guard-config></p>
+                <div class="cfg-quarantine-list" data-quarantine-list></div>
+                <p class="cfg-status" data-quarantine-status aria-live="polite"></p>
+            </article>
         `;
 
         this._blocklistEl = this._root.querySelector('[data-blocklist]');
         this._priorityEl = this._root.querySelector('[data-priority-list]');
         this._form = this._root.querySelector('[data-relay-filters-form]');
         this._statusEl = this._root.querySelector('[data-relay-filters-status]');
+        this._quarantineList = this._root.querySelector('[data-quarantine-list]');
+        this._quarantineStatus = this._root.querySelector('[data-quarantine-status]');
+        this._stormGuardConfig = this._root.querySelector('[data-storm-guard-config]');
 
         this._root.querySelector('[data-blocklist-add]').addEventListener('click', () => {
             this._addId('blocklist');
@@ -86,6 +102,99 @@ class RelayFiltersCard {
         const ttl = relay.dedup_ttl_seconds;
         const ttlEl = this._root.querySelector('[data-dedup-ttl]');
         if (ttlEl) ttlEl.value = ttl != null ? ttl : 300;
+        this._paintStormGuardConfig(relay.storm_guard || {});
+        this._refreshQuarantineList();
+    }
+
+    _paintStormGuardConfig(sg) {
+        if (!this._stormGuardConfig) return;
+        if (!sg.enabled) {
+            this._stormGuardConfig.textContent =
+                'Storm guard is disabled. Enable relay.storm_guard in local.yaml.';
+            return;
+        }
+        this._stormGuardConfig.textContent =
+            `Window ${sg.window_seconds ?? 60}s · `
+            + `replay ≥${sg.identical_packet_threshold ?? 5} · `
+            + `rate ≥${sg.rate_threshold_per_minute ?? 30}/min · `
+            + `quarantine ${sg.quarantine_duration_seconds ?? 300}s`;
+    }
+
+    async _refreshQuarantineList() {
+        if (!this._quarantineList) return;
+        try {
+            const res = await fetch('/api/relay/quarantine', { credentials: 'same-origin' });
+            if (!res.ok) {
+                this._quarantineList.innerHTML = '<p class="cfg-id-empty">Unable to load quarantine status.</p>';
+                return;
+            }
+            const data = await res.json();
+            if (!data.enabled) {
+                this._quarantineList.innerHTML =
+                    '<p class="cfg-id-empty">Storm guard disabled — no active quarantines.</p>';
+                return;
+            }
+            const entries = data.entries || [];
+            if (!entries.length) {
+                this._quarantineList.innerHTML =
+                    '<p class="cfg-id-empty">No nodes quarantined.</p>';
+                return;
+            }
+            this._quarantineList.innerHTML = entries.map((entry) => {
+                const reason = entry.reason === 'rate_storm' ? 'high rate' : 'replay storm';
+                const secs = entry.seconds_remaining ?? 0;
+                return `
+                    <div class="cfg-quarantine-row" data-node-id="${this._api.escape(entry.node_id)}">
+                        <code class="cfg-id-chip">!${this._api.escape(entry.node_id)}</code>
+                        <span class="cfg-quarantine-meta">${reason} · ${secs}s left</span>
+                        <button type="button" class="terminal-button" data-quarantine-release>Release</button>
+                        <button type="button" class="terminal-button" data-quarantine-blocklist>Blocklist</button>
+                    </div>
+                `;
+            }).join('');
+            this._quarantineList.querySelectorAll('[data-quarantine-release]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const row = btn.closest('[data-node-id]');
+                    if (row) this._quarantineAction(row.dataset.nodeId, 'release');
+                });
+            });
+            this._quarantineList.querySelectorAll('[data-quarantine-blocklist]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const row = btn.closest('[data-node-id]');
+                    if (row) this._quarantineAction(row.dataset.nodeId, 'blocklist');
+                });
+            });
+        } catch (_e) {
+            this._quarantineList.innerHTML = '<p class="cfg-id-empty">Unable to load quarantine status.</p>';
+        }
+    }
+
+    async _quarantineAction(nodeId, action) {
+        if (!nodeId) return;
+        const path = action === 'blocklist'
+            ? `/api/relay/quarantine/${nodeId}/blocklist`
+            : `/api/relay/quarantine/${nodeId}/release`;
+        this._setQuarantineStatus('pending', action === 'blocklist' ? 'Adding to blocklist…' : 'Releasing…');
+        try {
+            const res = await fetch(path, { method: 'POST', credentials: 'same-origin' });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                this._setQuarantineStatus('error', body.detail || 'Action failed.');
+                return;
+            }
+            this._setQuarantineStatus('success', action === 'blocklist' ? 'Blocklisted.' : 'Released.');
+            this._api.toast(action === 'blocklist' ? 'Node promoted to blocklist.' : 'Quarantine released.');
+            await this._refreshQuarantineList();
+            this._api.refresh();
+        } catch (_e) {
+            this._setQuarantineStatus('error', 'Action failed.');
+        }
+    }
+
+    _setQuarantineStatus(kind, message) {
+        if (!this._quarantineStatus) return;
+        this._quarantineStatus.dataset.kind = kind;
+        this._quarantineStatus.textContent = message;
     }
 
     _normalizeId(raw) {

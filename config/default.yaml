@@ -68,6 +68,13 @@ relay:
   # blocklist: []         # 8-char hex node IDs — relay only, feed unchanged
   # priority_list: []     # bypass burst gate under congestion
   # dedup_ttl_seconds: 300
+  # storm_guard:                # memory-only quarantine (PR 12)
+  #   enabled: false
+  #   window_seconds: 60
+  #   identical_packet_threshold: 5
+  #   rate_threshold_per_minute: 30
+  #   quarantine_duration_seconds: 300
+  #   notify_dashboard: true
 
 upstream:
   enabled: true

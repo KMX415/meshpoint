@@ -17,6 +17,7 @@ from src.models.packet import Packet, Protocol, RawCapture
 from src.relay.meshtastic_transmitter import MeshtasticTransmitter
 from src.relay.mqtt_publisher import MqttPublisher
 from src.relay.relay_manager import RelayManager
+from src.relay.storm_guard import StormGuard
 from src.storage.database import DatabaseManager
 from src.storage.node_repository import NodeRepository
 from src.storage.packet_repository import PacketRepository
@@ -43,6 +44,7 @@ class PipelineCoordinator:
         self._router = PacketRouter(self._crypto)
         self._capture = CaptureCoordinator()
         relay_cfg = config.relay
+        storm_guard = StormGuard(relay_cfg.storm_guard)
         self._relay = RelayManager(
             enabled=relay_cfg.enabled,
             max_relay_per_minute=relay_cfg.max_relay_per_minute,
@@ -52,6 +54,7 @@ class PipelineCoordinator:
             dedup_ttl_seconds=relay_cfg.dedup_ttl_seconds,
             blocklist=relay_cfg.blocklist,
             priority_list=relay_cfg.priority_list,
+            storm_guard=storm_guard,
         )
         self._transmitter: Optional[MeshtasticTransmitter] = None
         self._mqtt: Optional[MqttPublisher] = None

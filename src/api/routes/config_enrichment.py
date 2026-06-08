@@ -55,6 +55,14 @@ def enrich_config_payload(cfg: AppConfig, base: dict) -> dict:
         "blocklist": list(relay.blocklist or []),
         "priority_list": list(relay.priority_list or []),
         "dedup_ttl_seconds": relay.dedup_ttl_seconds,
+        "storm_guard": {
+            "enabled": relay.storm_guard.enabled,
+            "window_seconds": relay.storm_guard.window_seconds,
+            "identical_packet_threshold": relay.storm_guard.identical_packet_threshold,
+            "rate_threshold_per_minute": relay.storm_guard.rate_threshold_per_minute,
+            "quarantine_duration_seconds": relay.storm_guard.quarantine_duration_seconds,
+            "notify_dashboard": relay.storm_guard.notify_dashboard,
+        },
     }
     base["radio_advanced"] = {
         "spectral_scan_interval_seconds": radio.spectral_scan_interval_seconds,

@@ -151,6 +151,18 @@ class DeviceConfig:
 
 
 @dataclass
+class StormGuardConfig:
+    """Memory-only storm/replay quarantine (PR 12)."""
+
+    enabled: bool = False
+    window_seconds: int = 60
+    identical_packet_threshold: int = 5
+    rate_threshold_per_minute: int = 30
+    quarantine_duration_seconds: int = 300
+    notify_dashboard: bool = True
+
+
+@dataclass
 class RelayConfig:
     enabled: bool = False
     serial_port: Optional[str] = None
@@ -162,6 +174,7 @@ class RelayConfig:
     blocklist: list[str] = field(default_factory=list)
     priority_list: list[str] = field(default_factory=list)
     dedup_ttl_seconds: int = 300
+    storm_guard: StormGuardConfig = field(default_factory=StormGuardConfig)
 
 
 @dataclass
