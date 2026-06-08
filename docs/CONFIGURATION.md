@@ -477,6 +477,37 @@ storage:
 
 Packets are stored in a local SQLite database. Old packets are pruned automatically based on `max_packets_retained`.
 
+### Prometheus metrics (`/metrics`)
+
+Optional Prometheus text scrape endpoint for LAN monitoring. **Off by default** — enabling does not change packet capture, relay, or dashboard behaviour.
+
+```yaml
+metrics:
+  enabled: false
+  require_auth: true    # when false, /metrics is open on the LAN (use firewall rules)
+```
+
+When `metrics.enabled: true`, Prometheus (or any scraper) can poll:
+
+```text
+http://<pi-ip>:8080/metrics
+```
+
+Exposed series include packet counts, node totals, RSSI/SNR averages, noise floor, relay stats, per-channel duty estimates (ToA), SX1302 CRC counters, and process uptime. Labels use protocol/channel/reason only — never PSKs, tokens, or node secrets.
+
+**Example `prometheus.yml` scrape job (auth disabled):**
+
+```yaml
+scrape_configs:
+  - job_name: meshpoint
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["192.168.1.50:8080"]
+    metrics_path: /metrics
+```
+
+When `require_auth: true`, configure your scraper to send the dashboard session cookie or Bearer JWT (same as other protected API routes).
+
 ---
 
 ## Dashboard
@@ -743,6 +774,10 @@ storage:               # local SQLite packet store
   database_path: "data/concentrator.db"
   max_packets_retained: 100000
   cleanup_interval_seconds: 3600
+
+metrics:               # Prometheus /metrics scrape (off by default)
+  enabled: false
+  require_auth: true
 
 dashboard:             # local web UI
   host: "0.0.0.0"

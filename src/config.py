@@ -115,6 +115,14 @@ class StorageConfig:
 
 
 @dataclass
+class MetricsConfig:
+    """Prometheus-compatible /metrics scrape endpoint (PR 09)."""
+
+    enabled: bool = False
+    require_auth: bool = True
+
+
+@dataclass
 class DashboardConfig:
     host: str = "0.0.0.0"  # nosec B104 -- intentional for local device dashboard
     port: int = 8080
@@ -319,6 +327,7 @@ class AppConfig:
     transmit: TransmitConfig = field(default_factory=TransmitConfig)
     web_auth: WebAuthConfig = field(default_factory=WebAuthConfig)
     location: LocationConfig = field(default_factory=LocationConfig)
+    metrics: MetricsConfig = field(default_factory=MetricsConfig)
 
 
 def _resolve_radio_frequency(radio: "RadioConfig") -> None:
@@ -401,6 +410,7 @@ def _apply_yaml(cfg: AppConfig, path: Path) -> None:
         "transmit": cfg.transmit,
         "web_auth": cfg.web_auth,
         "location": cfg.location,
+        "metrics": cfg.metrics,
     }
 
     unknown_keys: list[str] = []

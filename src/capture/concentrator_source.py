@@ -74,6 +74,11 @@ class ConcentratorCaptureSource(CaptureSource):
     def is_running(self) -> bool:
         return self._running
 
+    @property
+    def rx_crc_stats(self) -> tuple[int, int]:
+        """(crc_bad_total, no_crc_total) since concentrator start."""
+        return self._wrapper.crc_bad_count, self._wrapper.no_crc_count
+
     async def start(self) -> None:
         self._wrapper.load()
 
