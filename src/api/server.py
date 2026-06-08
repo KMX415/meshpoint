@@ -27,6 +27,7 @@ from src.api.dangerous.handlers import (
     build_restart_service_action,
     build_wipe_phantoms_action,
 )
+from src.admin.reader import AdminConfigReader
 from src.api.meshcore_contacts import (
     log_meshcore_contact_peers,
     schedule_startup_meshcore_contact_sync,
@@ -34,6 +35,7 @@ from src.api.meshcore_contacts import (
     sync_meshcore_contacts_to_nodes,
 )
 from src.api.routes import (
+    admin_routes,
     analytics,
     auth_config_routes,
     auth_routes,
@@ -279,6 +281,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(system_config_routes.router, dependencies=protected)
     app.include_router(meshcore_config_routes.router, dependencies=protected)
     app.include_router(config_routes.router, dependencies=protected)
+    app.include_router(admin_routes.router, dependencies=protected)
     app.include_router(stats_routes.router, dependencies=protected)
 
     @app.websocket("/ws")
@@ -1267,6 +1270,26 @@ def _init_routes(
     gps_status.init_routes(location_source=coord.location_source)
     system_config_routes.init_routes(config=config)
     meshcore_config_routes.init_routes(config=config, tx_service=tx_service)
+
+    local_node_id = 0
+    if tx_service is not None:
+        local_node_id = tx_service.source_node_id
+    elif config.transmit.node_id:
+        local_node_id = config.transmit.node_id
+
+    admin_reader = AdminConfigReader(
+        tx_service=tx_service,
+        crypto=crypto,
+        admin_key_b64=config.meshtastic.admin_key_b64,
+        admin_channel_name=config.meshtastic.admin_channel_name,
+        local_node_id=local_node_id,
+    )
+    admin_routes.init_routes(reader=admin_reader)
+
+    def _on_admin_config_packet(packet: Packet) -> None:
+        admin_reader.try_consume_packet(packet)
+
+    coord.on_packet(_on_admin_config_packet)
 
 
 def _init_dangerous_registry(coord: PipelineCoordinator) -> None:

@@ -160,6 +160,20 @@ The setup wizard configures sources automatically. To add or remove a MeshCore c
 
 When running both Meshtastic concentrator capture and a MeshCore USB companion, pin `meshcore_usb.serial_port` explicitly. Auto-detect can grab the wrong device when multiple Espressif boards are attached.
 
+### Remote node config read (ADMIN, read-only)
+
+**Node drawer → Remote Configuration** sends a single encrypted ADMIN `get_config_request` (or `get_owner_request`) per click. Responses display read-only in the drawer. Requires native TX (`transmit.enabled: true`) and a shared admin channel PSK on target nodes.
+
+```yaml
+meshtastic:
+  admin_key_b64: "base64PSK=="   # PSK for the shared "admin" channel
+  admin_channel_name: "admin"    # optional; default "admin"
+```
+
+- Admin-only API; audit action `admin.config_request` (target node + section only — no PSK in logs).
+- 30 s response timeout with retry UI; 30 s debounce between requests per node.
+- **Read-only** — no config writes in this release.
+
 ---
 
 ## Location (GPS) source

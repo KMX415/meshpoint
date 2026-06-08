@@ -11,6 +11,10 @@ class NodeDrawer {
         this._sections = {};
         this._metricsChart = null;
         this._metricsHours = 24;
+        this._adminConfigAvailable = false;
+        this._adminDebounceSeconds = 30;
+        this._adminPollTimer = null;
+        this._adminConfigDebounceUntil = 0;
 
         if (window.MeshpointNodeFavorites) {
             window.MeshpointNodeFavorites.onChange(() => this._refreshFavoriteButton());
@@ -23,10 +27,15 @@ class NodeDrawer {
         this._renderSkeleton(node);
         this._drawer.classList.add('nd-drawer--open');
 
-        const [detail, metrics] = await Promise.all([
+        const [detail, metrics, adminStatus] = await Promise.all([
             this._fetchDetail(node.node_id),
             this._fetchMetricsHistory(node.node_id, this._metricsHours),
+            this._fetchAdminConfigStatus(),
         ]);
+        if (adminStatus) {
+            this._adminConfigAvailable = !!adminStatus.available;
+            this._adminDebounceSeconds = adminStatus.debounce_seconds || 30;
+        }
 
         const merged = { ...node, ...detail };
         merged._metricsHistory = metrics;
@@ -38,6 +47,7 @@ class NodeDrawer {
     }
 
     close() {
+        this._stopAdminPoll();
         if (this._metricsChart) {
             this._metricsChart.destroy();
             this._metricsChart = null;
@@ -110,6 +120,7 @@ class NodeDrawer {
 
         body.innerHTML = '';
         body.appendChild(this._buildActions(n));
+        body.appendChild(this._buildRemoteConfigSection(n));
         body.appendChild(this._buildMetricsChartSection(n));
         body.appendChild(this._buildInfoSection(n));
         body.appendChild(this._buildSignalSection(n));
@@ -143,6 +154,227 @@ class NodeDrawer {
         }
 
         return div;
+    }
+
+    _buildRemoteConfigSection(n) {
+        const section = document.createElement('div');
+        section.className = 'nd-section nd-section--remote-config';
+
+        const header = document.createElement('div');
+        header.className = 'nd-section__header';
+        header.innerHTML = `<span class="nd-section__title">Remote Configuration</span>
+            <span class="nd-section__arrow">\u25BC</span>`;
+
+        const content = document.createElement('div');
+        content.className = 'nd-section__content nd-remote-config';
+
+        if (!this._adminConfigAvailable) {
+            content.innerHTML = `<p class="nd-remote-config__hint">Set <code>meshtastic.admin_key_b64</code> in local.yaml to enable ADMIN config read.</p>`;
+        } else {
+            const toolbar = document.createElement('div');
+            toolbar.className = 'nd-remote-config__toolbar';
+
+            const select = document.createElement('select');
+            select.className = 'nd-remote-config__select';
+            select.setAttribute('aria-label', 'Config section');
+            [
+                ['device', 'Device'],
+                ['owner', 'Owner'],
+                ['lora', 'LoRa'],
+                ['position', 'Position'],
+            ].forEach(([value, label]) => {
+                const opt = document.createElement('option');
+                opt.value = value;
+                opt.textContent = label;
+                select.appendChild(opt);
+            });
+            toolbar.appendChild(select);
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'nd-action-btn nd-remote-config__btn';
+            btn.textContent = 'Request Config';
+            btn.addEventListener('click', () => {
+                this._requestRemoteConfig(n.node_id, select.value, btn, statusEl, resultEl);
+            });
+            toolbar.appendChild(btn);
+            content.appendChild(toolbar);
+
+            const statusEl = document.createElement('p');
+            statusEl.className = 'nd-remote-config__status';
+            statusEl.textContent = 'No request yet.';
+            content.appendChild(statusEl);
+
+            const resultEl = document.createElement('div');
+            resultEl.className = 'nd-remote-config__result';
+            content.appendChild(resultEl);
+
+            this._refreshRemoteConfigPanel(n.node_id, btn, statusEl, resultEl);
+        }
+
+        header.addEventListener('click', () => {
+            const visible = content.style.display !== 'none';
+            content.style.display = visible ? 'none' : '';
+            header.querySelector('.nd-section__arrow').textContent = visible ? '\u25B6' : '\u25BC';
+        });
+
+        section.appendChild(header);
+        section.appendChild(content);
+        return section;
+    }
+
+    async _requestRemoteConfig(nodeId, section, btn, statusEl, resultEl) {
+        const now = Date.now();
+        if (now < this._adminConfigDebounceUntil) {
+            const left = Math.ceil((this._adminConfigDebounceUntil - now) / 1000);
+            statusEl.textContent = `Wait ${left}s before another request.`;
+            return;
+        }
+
+        btn.disabled = true;
+        statusEl.textContent = 'Sending ADMIN request…';
+        resultEl.innerHTML = '';
+
+        try {
+            const res = await fetch(
+                `/api/admin/nodes/${encodeURIComponent(nodeId)}/config/request`,
+                {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ section }),
+                },
+            );
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                statusEl.textContent = body.detail || `Request failed (${res.status})`;
+                if (res.status === 429) {
+                    this._adminConfigDebounceUntil = Date.now() + this._adminDebounceSeconds * 1000;
+                }
+                return;
+            }
+            this._adminConfigDebounceUntil = Date.now() + this._adminDebounceSeconds * 1000;
+            statusEl.textContent = 'Waiting for response (up to 30s)…';
+            this._startAdminPoll(nodeId, btn, statusEl, resultEl);
+        } catch (err) {
+            statusEl.textContent = 'Network error requesting config.';
+        } finally {
+            btn.disabled = Date.now() < this._adminConfigDebounceUntil;
+        }
+    }
+
+    _startAdminPoll(nodeId, btn, statusEl, resultEl) {
+        this._stopAdminPoll();
+        const started = Date.now();
+        const poll = async () => {
+            const data = await this._fetchRemoteConfigStatus(nodeId);
+            if (!data) return;
+
+            if (data.status === 'pending') {
+                const elapsed = Math.floor((Date.now() - started) / 1000);
+                statusEl.textContent = `Waiting for response… ${elapsed}s`;
+                return;
+            }
+
+            this._stopAdminPoll();
+            btn.disabled = Date.now() < this._adminConfigDebounceUntil;
+
+            if (data.status === 'complete') {
+                statusEl.textContent = `Received ${data.section || ''} config.`;
+                resultEl.innerHTML = this._formatRemoteConfigResult(data.config);
+            } else if (data.status === 'timeout') {
+                statusEl.innerHTML = 'No response within 30s. '
+                    + '<button type="button" class="nd-remote-config__retry">Retry</button>';
+                const retry = statusEl.querySelector('.nd-remote-config__retry');
+                if (retry) {
+                    retry.addEventListener('click', () => {
+                        const select = this._drawer.querySelector('.nd-remote-config__select');
+                        const section = select ? select.value : 'device';
+                        this._requestRemoteConfig(nodeId, section, btn, statusEl, resultEl);
+                    });
+                }
+            } else {
+                statusEl.textContent = data.error || `Status: ${data.status}`;
+            }
+        };
+        this._adminPollTimer = setInterval(poll, 2000);
+        poll();
+    }
+
+    _stopAdminPoll() {
+        if (this._adminPollTimer) {
+            clearInterval(this._adminPollTimer);
+            this._adminPollTimer = null;
+        }
+    }
+
+    async _refreshRemoteConfigPanel(nodeId, btn, statusEl, resultEl) {
+        const data = await this._fetchRemoteConfigStatus(nodeId);
+        if (!data || data.status === 'idle') return;
+        if (data.status === 'pending') {
+            statusEl.textContent = 'Request in progress…';
+            this._startAdminPoll(nodeId, btn, statusEl, resultEl);
+            return;
+        }
+        if (data.status === 'complete' && data.config) {
+            statusEl.textContent = `Last read: ${data.section || ''}`;
+            resultEl.innerHTML = this._formatRemoteConfigResult(data.config);
+        } else if (data.error) {
+            statusEl.textContent = data.error;
+        }
+    }
+
+    _formatRemoteConfigResult(config) {
+        if (!config) return '';
+        const rows = this._flattenConfigRows(config, '');
+        if (rows.length === 0) {
+            return '<p class="nd-remote-config__hint">Empty response.</p>';
+        }
+        return rows.map(([k, v]) => (
+            `<div class="nd-row"><span class="nd-row__label">${this._esc(k)}</span>`
+            + `<span class="nd-row__value">${this._esc(String(v))}</span></div>`
+        )).join('');
+    }
+
+    _flattenConfigRows(obj, prefix) {
+        const rows = [];
+        if (obj == null || typeof obj !== 'object') {
+            return rows;
+        }
+        Object.entries(obj).forEach(([key, value]) => {
+            const path = prefix ? `${prefix}.${key}` : key;
+            if (value != null && typeof value === 'object' && !Array.isArray(value)) {
+                rows.push(...this._flattenConfigRows(value, path));
+            } else if (Array.isArray(value)) {
+                rows.push([path, value.join(', ')]);
+            } else if (value !== '' && value != null) {
+                rows.push([path, value]);
+            }
+        });
+        return rows;
+    }
+
+    async _fetchAdminConfigStatus() {
+        try {
+            const res = await fetch('/api/admin/remote-config/status', { credentials: 'same-origin' });
+            if (!res.ok) return null;
+            return await res.json();
+        } catch {
+            return null;
+        }
+    }
+
+    async _fetchRemoteConfigStatus(nodeId) {
+        try {
+            const res = await fetch(
+                `/api/admin/nodes/${encodeURIComponent(nodeId)}/config`,
+                { credentials: 'same-origin' },
+            );
+            if (!res.ok) return null;
+            return await res.json();
+        } catch {
+            return null;
+        }
     }
 
     _buildInfoSection(n) {
