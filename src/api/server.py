@@ -51,6 +51,7 @@ from src.api.routes import (
     packets,
     public_radar_routes,
     stats_routes,
+    stray_frames_routes,
     system_config_routes,
     system_metrics,
     telemetry,
@@ -265,6 +266,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     protected = [Depends(require_auth)]
     app.include_router(nodes.router, dependencies=protected)
     app.include_router(packets.router, dependencies=protected)
+    app.include_router(stray_frames_routes.router, dependencies=protected)
     app.include_router(analytics.router, dependencies=protected)
     app.include_router(device.router, dependencies=protected)
     app.include_router(system_metrics.router, dependencies=protected)
@@ -1224,6 +1226,7 @@ def _init_routes(
         telemetry_repo=coord.telemetry_repo,
     )
     packets.init_routes(coord.packet_repo)
+    stray_frames_routes.init_routes(coord.stray_repo)
     analytics.init_routes(signal_analyzer, traffic_monitor, coord.packet_repo)
     device.init_routes(identity, ws_manager, coord.relay_manager)
     telemetry.init_routes(coord.telemetry_repo)

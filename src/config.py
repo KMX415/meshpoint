@@ -115,6 +115,15 @@ class StorageConfig:
 
 
 @dataclass
+class StrayFramesConfig:
+    """Undecodable RF frame logger (PR 08)."""
+
+    enabled: bool = True
+    max_retained: int = 10_000
+    retention_hours: float = 168.0
+
+
+@dataclass
 class DashboardConfig:
     host: str = "0.0.0.0"  # nosec B104 -- intentional for local device dashboard
     port: int = 8080
@@ -319,6 +328,7 @@ class AppConfig:
     transmit: TransmitConfig = field(default_factory=TransmitConfig)
     web_auth: WebAuthConfig = field(default_factory=WebAuthConfig)
     location: LocationConfig = field(default_factory=LocationConfig)
+    stray_frames: StrayFramesConfig = field(default_factory=StrayFramesConfig)
 
 
 def _resolve_radio_frequency(radio: "RadioConfig") -> None:
@@ -401,6 +411,7 @@ def _apply_yaml(cfg: AppConfig, path: Path) -> None:
         "transmit": cfg.transmit,
         "web_auth": cfg.web_auth,
         "location": cfg.location,
+        "stray_frames": cfg.stray_frames,
     }
 
     unknown_keys: list[str] = []

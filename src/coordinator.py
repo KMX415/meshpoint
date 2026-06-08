@@ -20,6 +20,7 @@ from src.relay.relay_manager import RelayManager
 from src.storage.database import DatabaseManager
 from src.storage.node_repository import NodeRepository
 from src.storage.packet_repository import PacketRepository
+from src.storage.stray_frame_repository import StrayFrameRepository
 from src.storage.telemetry_repository import TelemetryRepository
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,7 @@ class PipelineCoordinator:
         self._node_repo: Optional[NodeRepository] = None
         self._packet_repo: Optional[PacketRepository] = None
         self._telemetry_repo: Optional[TelemetryRepository] = None
+        self._stray_repo: Optional[StrayFrameRepository] = None
 
         self._last_node_update: dict[str, Any] = {}
         self._on_packet_callbacks: list[Callable[[Packet], None]] = []
@@ -89,6 +91,12 @@ class PipelineCoordinator:
         if self._packet_repo is None:
             raise RuntimeError("Pipeline not started")
         return self._packet_repo
+
+    @property
+    def stray_repo(self) -> StrayFrameRepository:
+        if self._stray_repo is None:
+            raise RuntimeError("Pipeline not started")
+        return self._stray_repo
 
     @property
     def telemetry_repo(self) -> TelemetryRepository:
@@ -133,6 +141,7 @@ class PipelineCoordinator:
         self._node_repo = NodeRepository(self._db)
         self._packet_repo = PacketRepository(self._db)
         self._telemetry_repo = TelemetryRepository(self._db)
+        self._stray_repo = StrayFrameRepository(self._db)
 
         self._setup_channel_keys()
         self._setup_relay_transmitter()
@@ -194,6 +203,18 @@ class PipelineCoordinator:
                         f"pruned {removed} old packets  "
                         f"{DIM}(max {max_retained}){RESET}"
                     )
+                if self._stray_repo and self._config.stray_frames.enabled:
+                    stray_cfg = self._config.stray_frames
+                    stray_removed = await self._stray_repo.cleanup(
+                        stray_cfg.max_retained,
+                        stray_cfg.retention_hours,
+                    )
+                    if stray_removed:
+                        logger.info(
+                            f" {CYAN}--{RESET} {DIM}CLEANUP{RESET}  "
+                            f"pruned {stray_removed} stray frames  "
+                            f"{DIM}(max {stray_cfg.max_retained}){RESET}"
+                        )
         except asyncio.CancelledError:
             pass
         except Exception:
@@ -266,6 +287,8 @@ class PipelineCoordinator:
                 raw.payload, signal=raw.signal, protocol_hint=raw.protocol_hint
             )
         if packet is None:
+            if raw.capture_source != "meshcore_usb":
+                await self._log_stray_frame(raw)
             return
 
         packet.capture_source = raw.capture_source
@@ -279,6 +302,14 @@ class PipelineCoordinator:
     def _adapt_meshcore_usb(raw: RawCapture) -> Optional[Packet]:
         from src.decode.meshcore_event_adapter import adapt_event
         return adapt_event(raw.payload, signal=raw.signal)
+
+    async def _log_stray_frame(self, raw: RawCapture) -> None:
+        if not self._config.stray_frames.enabled or self._stray_repo is None:
+            return
+        try:
+            await self._stray_repo.insert_from_capture(raw)
+        except Exception:
+            logger.exception("Failed to log stray RF frame")
 
     async def _store_packet(self, packet: Packet) -> None:
         try:
