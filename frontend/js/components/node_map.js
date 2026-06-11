@@ -448,12 +448,14 @@ class NodeMap {
     }
 
     _coverageColor(quality) {
+        const root = getComputedStyle(document.documentElement);
+        const token = (name, fallback) => root.getPropertyValue(name).trim() || fallback;
         const colors = {
-            excellent: '#22c55e',
-            good: '#06b6d4',
-            fair: '#eab308',
-            poor: '#ef4444',
-            unknown: '#64748b',
+            excellent: token('--accent-green', '#00e5a0'),
+            good: token('--accent-cyan', '#06b6d4'),
+            fair: token('--accent-amber', '#f59e0b'),
+            poor: token('--accent-red', '#ef4444'),
+            unknown: token('--text-muted', '#64748b'),
         };
         return colors[quality] || colors.unknown;
     }

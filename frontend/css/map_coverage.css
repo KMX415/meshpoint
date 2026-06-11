@@ -28,8 +28,8 @@
     pointer-events: auto;
 }
 
-.coverage-circle--excellent { stroke: #22c55e; fill: #22c55e; }
-.coverage-circle--good { stroke: #06b6d4; fill: #06b6d4; }
-.coverage-circle--fair { stroke: #eab308; fill: #eab308; }
-.coverage-circle--poor { stroke: #ef4444; fill: #ef4444; }
-.coverage-circle--unknown { stroke: #64748b; fill: #64748b; }
+.coverage-circle--excellent { stroke: var(--accent-green); fill: var(--accent-green); }
+.coverage-circle--good { stroke: var(--accent-cyan); fill: var(--accent-cyan); }
+.coverage-circle--fair { stroke: var(--accent-amber); fill: var(--accent-amber); }
+.coverage-circle--poor { stroke: var(--accent-red); fill: var(--accent-red); }
+.coverage-circle--unknown { stroke: var(--text-muted); fill: var(--text-muted); }
