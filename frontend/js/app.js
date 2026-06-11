@@ -150,6 +150,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    nodeMap.setOnNodeClick(async (node) => {
+        if (backdrop) backdrop.classList.add('nd-backdrop--visible');
+        await nodeDrawer.open(node);
+    });
+
     const origOpen = nodeDrawer.open.bind(nodeDrawer);
     nodeDrawer.open = async (node) => {
         if (backdrop) backdrop.classList.add('nd-backdrop--visible');

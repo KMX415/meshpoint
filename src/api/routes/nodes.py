@@ -52,6 +52,15 @@ async def network_summary():
     return await _network_mapper.get_network_summary()
 
 
+@router.get("/coverage")
+async def coverage_data(
+    limit: int = Query(500, ge=1, le=2000),
+    hours: float = Query(168, ge=1, le=720),
+):
+    """RSSI coverage circles for nodes with GPS (JOIN nodes + packet aggregates)."""
+    return await _node_repo.get_coverage_data(limit=limit, hours=hours)
+
+
 @router.get("/{node_id}/metrics_history")
 async def metrics_history(
     node_id: str,

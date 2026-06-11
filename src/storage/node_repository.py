@@ -1,13 +1,23 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
-
-from datetime import timedelta
 
 from src.models.node import Node
 from src.storage.database import DatabaseManager
+
+
+def _rssi_quality(rssi: float | None) -> str:
+    if rssi is None:
+        return "unknown"
+    if rssi > -80:
+        return "excellent"
+    if rssi > -95:
+        return "good"
+    if rssi > -110:
+        return "fair"
+    return "poor"
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +162,77 @@ class NodeRepository:
         hop_limit = row.get("latest_hop_limit", 0) or 0
         d["latest_hops"] = max(0, hop_start - hop_limit)
         return d
+
+    async def get_coverage_data(
+        self, limit: int = 500, hours: float = 168,
+    ) -> dict:
+        """Nodes with GPS plus packet RSSI aggregates for the coverage map."""
+        since = (
+            datetime.now(timezone.utc) - timedelta(hours=hours)
+        ).isoformat()
+        unplotted_row = await self._db.fetch_one(
+            """
+            SELECT COUNT(*) AS cnt FROM nodes
+            WHERE latitude IS NULL OR longitude IS NULL
+            """,
+        )
+        total_row = await self._db.fetch_one("SELECT COUNT(*) AS cnt FROM nodes")
+        rows = await self._db.fetch_all(
+            """
+            SELECT n.*,
+                   p.rssi AS latest_rssi,
+                   p.snr AS latest_snr,
+                   agg.recent_packet_count,
+                   agg.avg_rssi
+            FROM nodes n
+            LEFT JOIN (
+                SELECT source_id, rssi, snr,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY source_id ORDER BY timestamp DESC
+                       ) AS rn
+                FROM packets
+                WHERE rssi IS NOT NULL
+            ) p ON p.source_id = n.node_id AND p.rn = 1
+            LEFT JOIN (
+                SELECT source_id,
+                       COUNT(*) AS recent_packet_count,
+                       AVG(rssi) AS avg_rssi
+                FROM packets
+                WHERE rssi IS NOT NULL AND timestamp >= ?
+                GROUP BY source_id
+            ) agg ON agg.source_id = n.node_id
+            WHERE n.latitude IS NOT NULL AND n.longitude IS NOT NULL
+            ORDER BY n.last_heard DESC
+            LIMIT ?
+            """,
+            (since, limit),
+        )
+        plotted = []
+        for row in rows:
+            node = self._row_to_node(row)
+            avg_rssi = row.get("avg_rssi")
+            latest_rssi = row.get("latest_rssi")
+            signal_rssi = avg_rssi if avg_rssi is not None else latest_rssi
+            plotted.append({
+                "node_id": node.node_id,
+                "display_name": node.display_name,
+                "latitude": node.latitude,
+                "longitude": node.longitude,
+                "protocol": node.protocol,
+                "packet_count": node.packet_count,
+                "recent_packet_count": int(row.get("recent_packet_count") or 0),
+                "avg_rssi": round(float(avg_rssi), 1) if avg_rssi is not None else None,
+                "latest_rssi": latest_rssi,
+                "rssi_quality": _rssi_quality(signal_rssi),
+                "last_heard": node.last_heard.isoformat(),
+            })
+        return {
+            "plotted": plotted,
+            "plotted_count": len(plotted),
+            "unplotted_count": int(unplotted_row["cnt"]) if unplotted_row else 0,
+            "total_nodes": int(total_row["cnt"]) if total_row else 0,
+            "window_hours": hours,
+        }
 
     async def increment_packet_count(self, node_id: str) -> None:
         await self._db.execute(

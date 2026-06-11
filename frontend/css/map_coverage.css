@@ -1,0 +1,35 @@
+/* RSSI coverage circles on the dashboard Leaflet map (PR 06). */
+
+.map-unplotted {
+    margin-left: auto;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--text-muted, #94a3b8);
+    padding: 0.15rem 0.5rem;
+    border-radius: var(--radius, 6px);
+    border: 1px solid var(--border, #334155);
+    background: var(--bg-elevated, rgba(15, 23, 42, 0.6));
+    white-space: nowrap;
+}
+
+.map-unplotted--visible {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.panel__header--map {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.coverage-circle {
+    pointer-events: auto;
+}
+
+.coverage-circle--excellent { stroke: var(--accent-green); fill: var(--accent-green); }
+.coverage-circle--good { stroke: var(--accent-cyan); fill: var(--accent-cyan); }
+.coverage-circle--fair { stroke: var(--accent-amber); fill: var(--accent-amber); }
+.coverage-circle--poor { stroke: var(--accent-red); fill: var(--accent-red); }
+.coverage-circle--unknown { stroke: var(--text-muted); fill: var(--text-muted); }

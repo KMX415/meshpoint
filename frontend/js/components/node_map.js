@@ -47,7 +47,12 @@ class NodeMap {
 
         this._topologyLayer = L.layerGroup();
         this._topologyVisible = false;
+        this._coverageLayer = L.layerGroup();
+        this._coverageVisible = false;
+        this._coverageNodes = {};
         this._focusLine = null;
+        this._onNodeClick = null;
+        this._unplottedEl = document.getElementById('map-unplotted-count');
 
         this._markerGroup = L.markerClusterGroup({
             maxClusterRadius: 50,
@@ -68,7 +73,10 @@ class NodeMap {
         });
         this._map.addLayer(this._markerGroup);
 
-        const overlays = { 'Topology Links': this._topologyLayer };
+        const overlays = {
+            'Coverage View': this._coverageLayer,
+            'Topology Links': this._topologyLayer,
+        };
         L.control.layers(null, overlays, { position: 'topright', collapsed: true }).addTo(this._map);
 
         this._map.on('overlayadd', (e) => {
@@ -76,10 +84,17 @@ class NodeMap {
                 this._topologyVisible = true;
                 this._loadTopology();
             }
+            if (e.layer === this._coverageLayer) {
+                this._coverageVisible = true;
+                this._loadCoverage();
+            }
         });
         this._map.on('overlayremove', (e) => {
             if (e.layer === this._topologyLayer) {
                 this._topologyVisible = false;
+            }
+            if (e.layer === this._coverageLayer) {
+                this._coverageVisible = false;
             }
         });
 
@@ -181,9 +196,29 @@ class NodeMap {
             this._hasFitBounds = true;
         }
 
+        this._refreshMapMeta();
+
         if (this._topologyVisible) {
             this._loadTopology();
         }
+        if (this._coverageVisible) {
+            this._loadCoverage();
+        }
+    }
+
+    async _refreshMapMeta() {
+        try {
+            const res = await fetch('/api/nodes/coverage?limit=1');
+            if (!res.ok) return;
+            const data = await res.json();
+            this._updateUnplottedCount(data.unplotted_count);
+        } catch (_e) {
+            /* best-effort sidebar count */
+        }
+    }
+
+    setOnNodeClick(callback) {
+        this._onNodeClick = typeof callback === 'function' ? callback : null;
     }
 
     _addDeviceMarker(device) {
@@ -268,8 +303,16 @@ class NodeMap {
             `Last heard: ${lastHeard}`
         );
 
+        marker.on('click', () => this._handleNodeClick(n));
+
         this._markerGroup.addLayer(marker);
         this._markers[n.node_id] = marker;
+    }
+
+    _handleNodeClick(node) {
+        if (!this._onNodeClick) return;
+        const full = (this._lastNodes || []).find((row) => row.node_id === node.node_id) || node;
+        this._onNodeClick(full);
     }
 
     _formatRelativeTime(timestamp) {
@@ -402,6 +445,89 @@ class NodeMap {
                 line.setStyle({ opacity });
             }
         }, 200);
+    }
+
+    _coverageColor(quality) {
+        const root = getComputedStyle(document.documentElement);
+        const token = (name, fallback) => root.getPropertyValue(name).trim() || fallback;
+        const colors = {
+            excellent: token('--accent-green', '#00e5a0'),
+            good: token('--accent-cyan', '#06b6d4'),
+            fair: token('--accent-amber', '#f59e0b'),
+            poor: token('--accent-red', '#ef4444'),
+            unknown: token('--text-muted', '#64748b'),
+        };
+        return colors[quality] || colors.unknown;
+    }
+
+    _coverageRadiusMeters(packetCount) {
+        const min = 250;
+        const max = 4000;
+        const count = Math.max(1, Number(packetCount) || 1);
+        const normalized = Math.min(1, Math.log10(count + 1) / 3);
+        return min + normalized * (max - min);
+    }
+
+    _updateUnplottedCount(count) {
+        if (!this._unplottedEl) return;
+        const n = Number(count) || 0;
+        if (n <= 0) {
+            this._unplottedEl.hidden = true;
+            this._unplottedEl.textContent = '';
+            return;
+        }
+        this._unplottedEl.hidden = false;
+        this._unplottedEl.classList.add('map-unplotted--visible');
+        this._unplottedEl.textContent = `${n} unplotted`;
+        this._unplottedEl.title = `${n} node${n === 1 ? '' : 's'} without GPS`;
+    }
+
+    async _loadCoverage() {
+        try {
+            const res = await fetch('/api/nodes/coverage');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            const plotted = Array.isArray(data.plotted) ? data.plotted : [];
+            this._coverageLayer.clearLayers();
+            this._coverageNodes = {};
+            this._updateUnplottedCount(data.unplotted_count);
+
+            for (const row of plotted) {
+                const lat = row.latitude;
+                const lon = row.longitude;
+                if (lat == null || lon == null) continue;
+
+                const quality = row.rssi_quality || 'unknown';
+                const color = this._coverageColor(quality);
+                const packets = row.recent_packet_count ?? row.packet_count ?? 1;
+                const radius = this._coverageRadiusMeters(packets);
+                const rssi = row.avg_rssi ?? row.latest_rssi;
+                const rssiLabel = rssi != null ? `${Number(rssi).toFixed(0)} dBm` : '--';
+
+                const circle = L.circle([lat, lon], {
+                    radius,
+                    color,
+                    fillColor: color,
+                    fillOpacity: 0.18,
+                    weight: 1.5,
+                    className: `coverage-circle coverage-circle--${quality}`,
+                });
+
+                const name = row.display_name || row.node_id || '--';
+                circle.bindPopup(
+                    `<strong>${this._esc(name)}</strong><br>` +
+                    `Avg RSSI: ${rssiLabel}<br>` +
+                    `Packets (${data.window_hours || 168}h): ${packets}<br>` +
+                    `Coverage radius: ~${Math.round(radius)} m`
+                );
+                circle.on('click', () => this._handleNodeClick(row));
+
+                this._coverageLayer.addLayer(circle);
+                this._coverageNodes[row.node_id] = row;
+            }
+        } catch (e) {
+            console.error('Coverage load failed:', e);
+        }
     }
 
     async _loadTopology() {
