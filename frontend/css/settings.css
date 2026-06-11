@@ -1018,3 +1018,24 @@ select.update-field__input option:checked {
 }
 
 .dangerous-panel__status[data-kind="error"] { color: #ff6b6b; }
+
+.companion-flash-log {
+    margin: 12px 0 0;
+    padding: 10px 12px;
+    max-height: 220px;
+    overflow: auto;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 11px;
+    line-height: 1.45;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.cfg-field--row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}

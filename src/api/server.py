@@ -41,6 +41,7 @@ from src.api.routes import (
     dangerous_routes,
     device,
     device_config_routes,
+    firmware_routes,
     gps_status,
     identity_routes,
     messages,
@@ -259,6 +260,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(auth_config_routes.router)
     app.include_router(public_radar_routes.router)
     app.include_router(terminal_routes.router)
+    app.include_router(firmware_routes.router)
     app.include_router(update_routes.router)
     app.include_router(dangerous_routes.router)
 
@@ -1266,6 +1268,29 @@ def _init_routes(
     device_config_routes.init_routes(config=config, identity=identity)
     gps_status.init_routes(location_source=coord.location_source)
     system_config_routes.init_routes(config=config)
+
+    async def _suspend_meshcore_for_flash(port: str) -> None:
+        src = _find_meshcore_source(coord)
+        if src is None:
+            return
+        resolved = getattr(src, "_resolved_port", None) or port
+        configured = getattr(src, "_configured_port", None)
+        if resolved != port and configured != port:
+            logger.info(
+                "MeshCore USB port %s does not match active source %s — skip release",
+                port,
+                resolved,
+            )
+            return
+        await src.release_serial_for_flash()
+
+    mc_usb = config.capture.meshcore_usb
+    default_mc_port = (mc_usb.serial_port or "/dev/ttyUSB0").strip()
+    firmware_routes.init_routes(
+        jwt_service=auth_subsystem.jwt_service,
+        suspend_meshcore=_suspend_meshcore_for_flash,
+        default_serial_port=default_mc_port,
+    )
     meshcore_config_routes.init_routes(config=config, tx_service=tx_service)
 
 
