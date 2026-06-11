@@ -58,7 +58,7 @@
 .unknown-rf-btn {
     background: rgba(6, 182, 212, 0.15);
     border: 1px solid rgba(6, 182, 212, 0.45);
-    color: #67e8f9;
+    color: var(--accent-cyan);
     border-radius: 6px;
     padding: 0.4rem 0.75rem;
     font-size: 0.75rem;

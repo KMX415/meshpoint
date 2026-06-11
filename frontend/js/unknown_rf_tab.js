@@ -53,7 +53,7 @@ class UnknownRfTab {
                     <div>
                         <h2 class="unknown-rf-panel__title">Unknown RF</h2>
                         <p class="unknown-rf-panel__desc">
-                            Frames that failed both Meshtastic and MeshCore decode. RF metadata only —
+                            Frames that failed both Meshtastic and MeshCore decode. RF metadata only:
                             no payload stored, no relay, no re-encode.
                         </p>
                     </div>
