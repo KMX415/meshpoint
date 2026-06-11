@@ -238,20 +238,20 @@
 }
 
 .nc-health-badge--green {
-    background: rgba(34, 197, 94, 0.18);
-    color: #22c55e;
-    border: 1px solid rgba(34, 197, 94, 0.35);
+    background: rgba(0, 229, 160, 0.18);
+    color: var(--accent-green);
+    border: 1px solid rgba(0, 229, 160, 0.35);
 }
 
 .nc-health-badge--yellow {
     background: rgba(245, 158, 11, 0.18);
-    color: #f59e0b;
+    color: var(--accent-amber);
     border: 1px solid rgba(245, 158, 11, 0.35);
 }
 
 .nc-health-badge--red {
     background: rgba(239, 68, 68, 0.18);
-    color: #ef4444;
+    color: var(--accent-red);
     border: 1px solid rgba(239, 68, 68, 0.35);
 }
 

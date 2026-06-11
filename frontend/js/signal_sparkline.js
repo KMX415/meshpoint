@@ -107,10 +107,12 @@ class SignalSparkline {
         };
 
         const points = valid.map(toPoint);
+        const root = getComputedStyle(document.documentElement);
+        const token = (name, fallback) => root.getPropertyValue(name).trim() || fallback;
         const strokeFor = (rssi) => {
-            if (rssi >= -95) return '#22c55e';
-            if (rssi >= -110) return '#f59e0b';
-            return '#ef4444';
+            if (rssi >= -95) return token('--accent-green', '#00e5a0');
+            if (rssi >= -110) return token('--accent-amber', '#f59e0b');
+            return token('--accent-red', '#ef4444');
         };
 
         const drawSegment = (from, to, dashed) => {
