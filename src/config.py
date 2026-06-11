@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import dataclasses
-import logging
 import os
 import sys
 from dataclasses import dataclass, field
@@ -11,8 +10,6 @@ from typing import Optional
 import yaml
 
 from src.version import __version__
-
-logger = logging.getLogger(__name__)
 
 
 # Band-start frequencies (MHz) for the Meshtastic slot formula
@@ -60,14 +57,26 @@ class RadioConfig:
     # (default; spectral scan stays unavailable, packet-derived
     # noise floor remains in use).
     #
-    # On RAK2287 / RAK5146 / SenseCap M1 this is typically
-    # ``/dev/spidev0.1`` (separate from the SX1302's
-    # ``/dev/spidev0.0``). Some carriers daisy-chain the SX1261
-    # behind the SX1302's SPI router and want this set to the same
-    # path as the SX1302 SPI device. Wrong path = HAL refuses to
-    # ``lgw_start`` after our config attempt, so we ship empty by
-    # default and ask interested users to opt in explicitly.
+    # On RAK2287 / RAK5146 / SenseCap M1 the SX1261 is behind the
+    # concentrator's internal SPI router, not on a Pi chip-select —
+    # leave empty. Only the Semtech reference kit and custom carriers
+    # with a dedicated SX1261 CE line need a path (e.g.
+    # ``/dev/spidev0.1``). Wrong path can brick ``lgw_start`` on
+    # boards without Pi-visible SX1261; ``carrier_type`` guard clears
+    # mistaken values on RAK/SenseCap.
     sx1261_spi_path: str = ""
+    # Carrier board signature from setup wizard I2C probe (``rak``,
+    # ``sensecap_m1``, or empty). Used to block Pi-visible SX1261 SPI
+    # paths that brick ``lgw_start()`` on RAK/SenseCap concentrators.
+    carrier_type: str = ""
+    # HAL GPS/PPS: align concentrator packet timestamps with GPS time via
+    # libloragw ``lgw_gps_*`` + ``sx1302_gps_enable``. Requires a HAL build
+    # that includes loragw_gps.c. Exclusive with ``location.source: uart`` on
+    # the same TTY (only one process may open the GPS serial port).
+    gps_pps_enabled: bool = False
+    gps_pps_tty_path: str = "/dev/ttyAMA0"
+    gps_family: str = "ubx7"
+    gps_pps_target_baud: int = 0
 
 
 @dataclass
@@ -153,29 +162,6 @@ class RelayConfig:
 
 
 @dataclass
-class TelemetryConfig:
-    """Periodic device_metrics telemetry broadcast settings."""
-
-    interval_minutes: int = 30
-    startup_delay_seconds: int = 120
-
-
-@dataclass
-class PositionConfig:
-    """Periodic POSITION broadcast settings."""
-
-    interval_minutes: int = 15
-    startup_delay_seconds: int = 180
-    # Coordinates sent on the public LoRa mesh (Meshtastic POSITION packets).
-    # ``static`` uses ``device.{latitude,longitude,altitude}`` (wizard pin).
-    # ``live`` reads the active ``LocationSource`` (gpsd/uart) when a fix exists.
-    coordinate_source: str = "static"
-    # Privacy when ``coordinate_source`` is ``live``: exact, approximate
-    # (~1.1 km rounding), or none (skip position on mesh). Ignored for static.
-    location_precision: str = "approximate"
-
-
-@dataclass
 class MqttConfig:
     enabled: bool = False
     broker: str = "mqtt.meshtastic.org"
@@ -184,8 +170,6 @@ class MqttConfig:
     password: str = "large4cats"
     topic_root: str = "msh"
     region: str = "US"
-    tls_enabled: bool = False
-    tls_ca_cert: str = ""
     # Optional ``!xxxxxxxx`` override; blank uses MD5 hash of device name.
     gateway_id: Optional[str] = None
     publish_channels: list[str] = field(default_factory=lambda: ["LongFast", "MeshCore"])
@@ -230,8 +214,6 @@ class TransmitConfig:
     short_name: str = "MPNT"
     hop_limit: int = 3
     nodeinfo: NodeInfoConfig = field(default_factory=NodeInfoConfig)
-    telemetry: TelemetryConfig = field(default_factory=TelemetryConfig)
-    position: PositionConfig = field(default_factory=PositionConfig)
 
 
 @dataclass
@@ -241,15 +223,12 @@ class LocationConfig:
     ``source`` values:
         - ``"static"``   : use ``device.latitude/longitude/altitude`` from
                            ``local.yaml``. Backward-compatible default.
-        - ``"gpsd"``     : connect to a local or remote ``gpsd`` daemon for
-                           live fixes (skyplot, optional mesh POSITION).
-                           Does not change ``device.{lat,lon,alt}`` (Meshradar
-                           pin). Auto-installed by ``scripts/install.sh``.
-        - ``"uart"``     : reserved for direct on-board UART NMEA reading
-                           (RAK Pi HAT GPS). Plumbing exists in
-                           ``src.hal.gps_reader`` but is not wired into
-                           the runtime yet; treated as ``static`` until
-                           the source is implemented.
+        - ``"gpsd"``     : connect to a local or remote ``gpsd`` daemon and
+                           overwrite ``device.{lat,lon,alt}`` when fixes
+                           arrive. Auto-installed by ``scripts/install.sh``.
+        - ``"uart"``     : read NMEA GGA from an on-board UART GPS (RAK Pi
+                           HAT on ``/dev/ttyAMA0``). Uses
+                           ``src.hal.gps_reader.GpsReader``.
 
     ``gpsd_host`` / ``gpsd_port`` default to gpsd's well-known
     localhost socket. Override only when running gpsd on a peer
@@ -269,6 +248,8 @@ class LocationConfig:
     source: str = "static"
     gpsd_host: str = "127.0.0.1"
     gpsd_port: int = 2947
+    uart_path: str = "/dev/ttyAMA0"
+    uart_baud: int = 9600
     update_interval_seconds: int = 5
     min_fix_quality: int = 1
 
@@ -305,6 +286,15 @@ class WebAuthConfig:
 
 
 @dataclass
+class SignalHealthConfig:
+    """Thresholds for node-card RSSI health badges and sparklines."""
+
+    green_rssi_floor: float = -100
+    yellow_rssi_floor: float = -115
+    min_packets_per_hour: int = 5
+
+
+@dataclass
 class AppConfig:
     radio: RadioConfig = field(default_factory=RadioConfig)
     meshtastic: MeshtasticConfig = field(default_factory=MeshtasticConfig)
@@ -319,6 +309,7 @@ class AppConfig:
     transmit: TransmitConfig = field(default_factory=TransmitConfig)
     web_auth: WebAuthConfig = field(default_factory=WebAuthConfig)
     location: LocationConfig = field(default_factory=LocationConfig)
+    signal_health: SignalHealthConfig = field(default_factory=SignalHealthConfig)
 
 
 def _resolve_radio_frequency(radio: "RadioConfig") -> None:
@@ -356,25 +347,6 @@ def _merge_dataclass(instance, overrides: dict):
             setattr(instance, key, value)
 
 
-def _collect_unknown_keys(instance, overrides: dict, prefix: str = "") -> list[str]:
-    """Return dotted paths of override keys with no matching dataclass field.
-
-    Mirrors the descent rules in :func:`_merge_dataclass`: it only recurses
-    into a nested dataclass (e.g. ``transmit.nodeinfo``), so user-supplied
-    mapping fields such as ``meshtastic.channel_keys`` are treated as opaque
-    values rather than scanned for "unknown" keys.
-    """
-    unknown: list[str] = []
-    for key, value in overrides.items():
-        if not hasattr(instance, key):
-            unknown.append(f"{prefix}{key}")
-            continue
-        current = getattr(instance, key)
-        if dataclasses.is_dataclass(current) and isinstance(value, dict):
-            unknown.extend(_collect_unknown_keys(current, value, f"{prefix}{key}."))
-    return unknown
-
-
 def _apply_yaml(cfg: AppConfig, path: Path) -> None:
     """Merge a single YAML file into an existing AppConfig."""
     if not path.exists():
@@ -382,10 +354,6 @@ def _apply_yaml(cfg: AppConfig, path: Path) -> None:
 
     with open(path, "r") as fh:
         raw = yaml.safe_load(fh) or {}
-
-    if not isinstance(raw, dict):
-        logger.warning("Ignoring %s: top-level YAML is not a mapping.", path)
-        return
 
     section_map = {
         "radio": cfg.radio,
@@ -401,28 +369,12 @@ def _apply_yaml(cfg: AppConfig, path: Path) -> None:
         "transmit": cfg.transmit,
         "web_auth": cfg.web_auth,
         "location": cfg.location,
+        "signal_health": cfg.signal_health,
     }
 
-    unknown_keys: list[str] = []
-    for section_name, section_value in raw.items():
-        section_instance = section_map.get(section_name)
-        if section_instance is None:
-            unknown_keys.append(section_name)
-            continue
-        _merge_dataclass(section_instance, section_value)
-        if isinstance(section_value, dict):
-            unknown_keys.extend(
-                _collect_unknown_keys(section_instance, section_value, f"{section_name}.")
-            )
-
-    if unknown_keys:
-        logger.warning(
-            "Ignoring %d unknown config key(s) in %s: %s. "
-            "These were not applied -- check for typos against the documented schema.",
-            len(unknown_keys),
-            path,
-            ", ".join(sorted(unknown_keys)),
-        )
+    for section_name, section_instance in section_map.items():
+        if section_name in raw:
+            _merge_dataclass(section_instance, raw[section_name])
 
 
 _VALID_CONFIG_EXTENSIONS = {".yaml", ".yml"}
@@ -449,8 +401,26 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
     local = config_path or os.environ.get("CONCENTRATOR_CONFIG", "config/local.yaml")
     _apply_yaml(cfg, _validated_config_path(local))
     _resolve_radio_frequency(cfg.radio)
+    validate_config_consistency(cfg)
 
     return cfg
+
+
+def validate_config_consistency(config: AppConfig) -> None:
+    """Reject impossible radio/location combinations before hardware starts."""
+    if not config.radio.gps_pps_enabled:
+        return
+    if config.location.source != "uart":
+        return
+    pps_tty = os.path.normpath(config.radio.gps_pps_tty_path)
+    uart_tty = os.path.normpath(config.location.uart_path)
+    if pps_tty == uart_tty:
+        raise ValueError(
+            "radio.gps_pps_enabled and location.source=uart cannot share "
+            f"the same serial device ({pps_tty!r}). Use location.source=gpsd "
+            "or static for dashboard coordinates while PPS owns the HAT UART, "
+            "or disable gps_pps_enabled when using UART for location only."
+        )
 
 
 def _get_local_yaml_path() -> Path:

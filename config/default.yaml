@@ -11,6 +11,11 @@ radio:
   sync_word: 0x2B
   preamble_length: 16
   tx_power_dbm: 22
+  # HAL GPS/PPS (RAK Pi HAT u-blox → concentrator PPS pin). Off by default.
+  # gps_pps_enabled: false
+  # gps_pps_tty_path: "/dev/ttyAMA0"
+  # gps_family: "ubx7"
+  # gps_pps_target_baud: 0   # 0 = HAL default (9600)
 
 meshtastic:
   default_key_b64: "AQ=="
@@ -50,7 +55,7 @@ device:
   longitude: 0.0
   altitude: 25
   hardware_description: "RAK2287 + Raspberry Pi 4"
-  firmware_version: "0.7.6"
+  firmware_version: "0.7.5.1"
 
 relay:
   enabled: false
@@ -80,13 +85,6 @@ transmit:
   nodeinfo:
     interval_minutes: 180      # 5..1440 min, default 180 (3 hr); 0 = disabled
     startup_delay_seconds: 60  # delay before first broadcast on boot
-  position:
-    interval_minutes: 15
-    startup_delay_seconds: 180
-    # LoRa mesh POSITION packets (Meshtastic app map). Meshradar fleet pin
-    # always uses device.latitude/longitude above, not live GPS.
-    coordinate_source: "static"   # static | live (live needs gpsd/uart source)
-    location_precision: "approximate"  # exact | approximate | none (live only)
 
 web_auth:
   # First-run state: hashes are empty -> dashboard forces /setup.
@@ -124,18 +122,23 @@ mqtt:
   homeassistant_discovery: false
 
 location:
-  # Where live GPS fixes come from (skyplot + optional mesh POSITION).
-  # Registered coordinates for Meshradar live in device.latitude/longitude
-  # and are not overwritten by gpsd.
+  # Where the Meshpoint's reported lat/lon/alt comes from.
   #   static : use device.latitude/longitude/altitude (default)
   #   gpsd   : poll a local or remote gpsd daemon for live fixes
-  #   uart   : reserved (RAK Pi HAT GPS, not yet wired)
+  #   uart   : on-board RAK Pi HAT GPS via /dev/ttyAMA0 (NMEA GGA)
   source: "static"
   # gpsd connection. Defaults match the well-known local socket; only
   # change when running gpsd on a peer machine on the LAN.
   gpsd_host: "127.0.0.1"
   gpsd_port: 2947
+  uart_path: "/dev/ttyAMA0"
+  uart_baud: 9600
   # How often the coordinator wakes to read the active source.
   update_interval_seconds: 5
   # Minimum acceptable fix mode: 0=any (incl. no-fix), 1=2D, 2=3D.
   min_fix_quality: 1
+
+# signal_health:
+#   green_rssi_floor: -100    # badge green when 1h avg RSSI is above this
+#   yellow_rssi_floor: -115   # badge yellow above this, red below
+#   min_packets_per_hour: 5   # hide badge when fewer packets in the last hour

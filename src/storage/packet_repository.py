@@ -96,15 +96,6 @@ class PacketRepository:
             for row in rows
         ]
 
-    async def get_source_id_by_packet_id(self, packet_id: str) -> str:
-        if not packet_id:
-            return ""
-        row = await self._db.fetch_one(
-            "SELECT source_id FROM packets WHERE packet_id = ? LIMIT 1",
-            (packet_id,),
-        )
-        return row["source_id"] if row else ""
-
     async def get_by_source(
         self, source_id: str, limit: int = 100
     ) -> list[Packet]:
@@ -136,6 +127,115 @@ class PacketRepository:
             "SELECT packet_type, COUNT(*) as cnt FROM packets GROUP BY packet_type"
         )
         return {r["packet_type"]: r["cnt"] for r in rows}
+
+    async def get_hourly_traffic(
+        self,
+        hours: int = 24,
+        *,
+        default_sf: int = 11,
+        default_bw_khz: float = 250.0,
+    ) -> tuple[list[dict], dict[str, list[dict]]]:
+        """Hourly packet counts and modem buckets for ToA estimation.
+
+        Returns:
+            (count_rows, modem_buckets_by_hour) where count_rows has keys
+            hour_start, meshtastic, meshcore, total; modem buckets are
+            grouped per hour_start with sf, bw, packet_count, avg_payload.
+        """
+        hours = max(1, min(int(hours), 168))
+        since = (
+            datetime.now(timezone.utc) - timedelta(hours=hours)
+        ).isoformat()
+
+        count_rows = await self._db.fetch_all(
+            """
+            SELECT
+              strftime('%Y-%m-%dT%H:00:00Z', timestamp) AS hour_start,
+              SUM(CASE WHEN protocol = 'meshtastic' THEN 1 ELSE 0 END) AS meshtastic,
+              SUM(CASE WHEN protocol = 'meshcore' THEN 1 ELSE 0 END) AS meshcore,
+              COUNT(*) AS total
+            FROM packets
+            WHERE timestamp >= ?
+            GROUP BY hour_start
+            ORDER BY hour_start ASC
+            """,
+            (since,),
+        )
+
+        modem_rows = await self._db.fetch_all(
+            """
+            SELECT
+              strftime('%Y-%m-%dT%H:00:00Z', timestamp) AS hour_start,
+              COALESCE(NULLIF(spreading_factor, 0), ?) AS sf,
+              COALESCE(NULLIF(bandwidth_khz, 0), ?) AS bw,
+              COUNT(*) AS packet_count,
+              AVG(
+                CASE
+                  WHEN LENGTH(COALESCE(decoded_payload, '')) < 20 THEN 20
+                  ELSE LENGTH(COALESCE(decoded_payload, ''))
+                END
+              ) AS avg_payload
+            FROM packets
+            WHERE timestamp >= ?
+            GROUP BY hour_start, sf, bw
+            ORDER BY hour_start ASC
+            """,
+            (default_sf, default_bw_khz, since),
+        )
+
+        modem_by_hour: dict[str, list[dict]] = {}
+        for row in modem_rows:
+            hour = row["hour_start"]
+            modem_by_hour.setdefault(hour, []).append(row)
+
+        return count_rows, modem_by_hour
+
+    async def get_signal_buckets(
+        self,
+        source_id: str,
+        hours: float = 24,
+        bucket_minutes: int = 15,
+    ) -> list[dict]:
+        """15-minute RSSI/SNR buckets for node-card sparklines."""
+        bucket_minutes = max(1, min(int(bucket_minutes), 60))
+        since = (
+            datetime.now(timezone.utc) - timedelta(hours=hours)
+        ).isoformat()
+
+        rows = await self._db.fetch_all(
+            """
+            SELECT
+              strftime('%Y-%m-%dT%H:', timestamp) ||
+                printf('%02d:00Z',
+                  (CAST(strftime('%M', timestamp) AS INTEGER) / ?) * ?)
+                AS bucket_start,
+              AVG(rssi) AS rssi_avg,
+              AVG(snr) AS snr_avg,
+              COUNT(*) AS packet_count
+            FROM packets
+            WHERE source_id = ? AND timestamp >= ? AND rssi IS NOT NULL
+            GROUP BY bucket_start
+            ORDER BY bucket_start ASC
+            """,
+            (bucket_minutes, bucket_minutes, source_id, since),
+        )
+        return [
+            {
+                "bucket": row["bucket_start"].replace("Z", "+00:00"),
+                "rssi_avg": (
+                    round(row["rssi_avg"], 1)
+                    if row["rssi_avg"] is not None
+                    else None
+                ),
+                "snr_avg": (
+                    round(row["snr_avg"], 1)
+                    if row["snr_avg"] is not None
+                    else None
+                ),
+                "packet_count": int(row["packet_count"] or 0),
+            }
+            for row in rows
+        ]
 
     async def cleanup_old(self, max_retained: int) -> int:
         total = await self.get_count()

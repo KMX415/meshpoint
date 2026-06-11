@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from src.analytics.network_mapper import NetworkMapper
 from src.storage.node_repository import NodeRepository
@@ -57,6 +57,7 @@ async def metrics_history(
     node_id: str,
     limit: int = 300,
     hours: float | None = 168,
+    bucket_minutes: int | None = Query(None, ge=1, le=60),
 ):
     """Telemetry rows + RSSI samples for node drawer time-series charts."""
     if _packet_repo is None or _telemetry_repo is None:
@@ -68,11 +69,19 @@ async def metrics_history(
 
     telemetry = await _telemetry_repo.get_history(node_id, limit, hours)
     signal = await _packet_repo.get_signal_history(node_id, limit, hours)
-    return {
+    payload = {
         "node_id": node_id,
         "telemetry": [t.to_dict() for t in telemetry],
         "signal": signal,
     }
+    if bucket_minutes is not None:
+        window_hours = float(hours) if hours is not None else 24.0
+        payload["signal_buckets"] = await _packet_repo.get_signal_buckets(
+            node_id,
+            hours=window_hours,
+            bucket_minutes=bucket_minutes,
+        )
+    return payload
 
 
 @router.get("/{node_id}")
