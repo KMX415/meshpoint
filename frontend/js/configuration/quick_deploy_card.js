@@ -20,7 +20,7 @@ class QuickDeployCard {
                     <h3 class="cfg-card__title">Quick Deploy</h3>
                     <p class="cfg-card__hint">
                         Share public channel settings with field radios.
-                        Uses the standard Meshtastic default key only —
+                        Uses the standard Meshtastic default key only:
                         private channel PSKs are never exported.
                     </p>
                 </header>
@@ -62,7 +62,7 @@ class QuickDeployCard {
         await this._paintQr(data.meshtastic_url);
         this._copyBtn.disabled = !data.meshtastic_url;
         this._downloadBtn.disabled = false;
-        this._setStatus('success', 'Ready — scan with Meshtastic app.');
+        this._setStatus('success', 'Ready: scan with Meshtastic app.');
     }
 
     _paintMeta(data) {
@@ -70,13 +70,13 @@ class QuickDeployCard {
             ['Channel', data.channel_name],
             ['Preset', data.modem_preset_display || data.modem_preset],
             ['Region', data.region],
-            ['Frequency', data.frequency_mhz != null ? `${data.frequency_mhz} MHz` : '—'],
+            ['Frequency', data.frequency_mhz != null ? `${data.frequency_mhz} MHz` : 'n/a'],
             ['Hop limit', data.hop_limit],
         ];
         this._metaEl.innerHTML = rows.map(([k, v]) => `
             <div class="cfg-quick-deploy__row">
                 <span class="cfg-quick-deploy__key">${this._api.escape(k)}</span>
-                <span class="cfg-quick-deploy__val">${this._api.escape(String(v ?? '—'))}</span>
+                <span class="cfg-quick-deploy__val">${this._api.escape(String(v ?? 'n/a'))}</span>
             </div>
         `).join('');
     }
@@ -89,17 +89,21 @@ class QuickDeployCard {
         if (typeof window.QRCode === 'undefined') {
             this._qrHost.innerHTML = `
                 <p class="cfg-quick-deploy__url">${this._api.escape(url)}</p>
-                <p class="cfg-quick-deploy__placeholder">QR library unavailable — use Copy URL.</p>
+                <p class="cfg-quick-deploy__placeholder">QR library unavailable: use Copy URL.</p>
             `;
             return;
         }
         this._qrHost.innerHTML = '<canvas data-qr-canvas></canvas>';
         const canvas = this._qrHost.querySelector('[data-qr-canvas]');
         try {
+            const root = getComputedStyle(document.documentElement);
             await window.QRCode.toCanvas(canvas, url, {
                 width: 220,
                 margin: 1,
-                color: { dark: '#e2e8f0', light: '#0f1218' },
+                color: {
+                    dark: root.getPropertyValue('--text-primary').trim() || '#e2e8f0',
+                    light: root.getPropertyValue('--bg-primary').trim() || '#0a0e17',
+                },
             });
         } catch (e) {
             console.error('QR render failed:', e);
@@ -114,7 +118,7 @@ class QuickDeployCard {
             await navigator.clipboard.writeText(url);
             this._api.toast('Channel URL copied.');
         } catch (e) {
-            this._setStatus('error', 'Copy failed — select URL manually.');
+            this._setStatus('error', 'Copy failed: select URL manually.');
         }
     }
 

@@ -500,16 +500,16 @@ select.cfg-field__input option:checked {
 .cfg-quick-deploy__placeholder {
     margin: 0;
     font-size: 12px;
-    color: rgba(243, 244, 246, 0.55);
+    color: var(--text-muted);
     text-align: center;
 }
 
 .cfg-quick-deploy__url {
     margin: 0 0 0.5rem;
-    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     word-break: break-all;
-    color: #94a3b8;
+    color: var(--text-secondary);
 }
 
 .cfg-quick-deploy__meta {
@@ -526,12 +526,12 @@ select.cfg-field__input option:checked {
 }
 
 .cfg-quick-deploy__key {
-    color: rgba(243, 244, 246, 0.55);
+    color: var(--text-muted);
 }
 
 .cfg-quick-deploy__val {
-    font-family: 'JetBrains Mono', Menlo, monospace;
-    color: #e2e8f0;
+    font-family: var(--font-mono);
+    color: var(--text-primary);
 }
 
 .cfg-card--quick-deploy .cfg-card__actions {
