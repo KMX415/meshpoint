@@ -530,6 +530,15 @@ class StatsTab {
     }
 
     _updateHourly24(buckets, region) {
+        const root = getComputedStyle(document.documentElement);
+        const token = (name, fallback) => root.getPropertyValue(name).trim() || fallback;
+        const accentCyan = token('--accent-cyan', '#06b6d4');
+        const accentPurple = token('--accent-purple', '#a855f7');
+        const accentAmber = token('--accent-amber', '#f59e0b');
+        const accentRed = token('--accent-red', '#ef4444');
+        const textSecondary = token('--text-secondary', '#94a3b8');
+        const textMuted = token('--text-muted', '#64748b');
+
         const labels = buckets.map((b) => this._formatHourLabel(b.hour));
         const meshtastic = buckets.map((b) => b.meshtastic || 0);
         const meshcore = buckets.map((b) => b.meshcore || 0);
@@ -542,7 +551,7 @@ class StatsTab {
                 data: meshtastic,
                 stack: 'traffic',
                 backgroundColor: 'rgba(6, 182, 212, 0.75)',
-                borderColor: '#06b6d4',
+                borderColor: accentCyan,
                 borderWidth: 1,
                 yAxisID: 'y',
             },
@@ -552,7 +561,7 @@ class StatsTab {
                 data: meshcore,
                 stack: 'traffic',
                 backgroundColor: 'rgba(168, 85, 247, 0.75)',
-                borderColor: '#a855f7',
+                borderColor: accentPurple,
                 borderWidth: 1,
                 yAxisID: 'y',
             },
@@ -560,7 +569,7 @@ class StatsTab {
                 type: 'line',
                 label: 'Duty cycle (est.)',
                 data: duty,
-                borderColor: '#f59e0b',
+                borderColor: accentAmber,
                 backgroundColor: 'rgba(245, 158, 11, 0.15)',
                 borderWidth: 2,
                 pointRadius: 0,
@@ -574,7 +583,7 @@ class StatsTab {
                 type: 'line',
                 label: 'EU limit (1%)',
                 data: labels.map(() => 1),
-                borderColor: '#ef4444',
+                borderColor: accentRed,
                 borderDash: [6, 4],
                 borderWidth: 1.5,
                 pointRadius: 0,
@@ -591,7 +600,7 @@ class StatsTab {
                 legend: {
                     position: 'bottom',
                     labels: {
-                        color: '#94a3b8',
+                        color: textSecondary,
                         font: { size: 10 },
                         usePointStyle: true,
                         pointStyleWidth: 8,
@@ -601,20 +610,20 @@ class StatsTab {
             scales: {
                 x: {
                     stacked: true,
-                    ticks: { color: '#64748b', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 },
+                    ticks: { color: textMuted, font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 },
                     grid: { color: 'rgba(30,41,59,0.5)' },
                 },
                 y: {
                     stacked: true,
                     position: 'left',
-                    title: { display: true, text: 'Packets', color: '#64748b', font: { size: 10 } },
-                    ticks: { color: '#64748b' },
+                    title: { display: true, text: 'Packets', color: textMuted, font: { size: 10 } },
+                    ticks: { color: textMuted },
                     grid: { color: 'rgba(30,41,59,0.5)' },
                 },
                 y1: {
                     position: 'right',
-                    title: { display: true, text: 'Duty % (est.)', color: '#64748b', font: { size: 10 } },
-                    ticks: { color: '#f59e0b' },
+                    title: { display: true, text: 'Duty % (est.)', color: textMuted, font: { size: 10 } },
+                    ticks: { color: accentAmber },
                     grid: { drawOnChartArea: false },
                     min: 0,
                 },
