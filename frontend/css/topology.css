@@ -105,11 +105,19 @@
     vertical-align: middle;
 }
 
-.topology-swatch--mt { background: #06b6d4; }
-.topology-swatch--mc { background: #a855f7; }
+.topology-swatch--mt { background: var(--accent-cyan); }
+.topology-swatch--mc { background: var(--accent-purple); }
+.topology-swatch--ni { background: var(--accent-cyan); }
+.topology-swatch--tr {
+    background: transparent;
+    border: 1px dashed var(--accent-amber);
+    border-radius: 2px;
+    width: 14px;
+    height: 0;
+}
 .topology-swatch--weak {
     background: transparent;
-    border: 1px dashed #64748b;
+    border: 1px dashed var(--text-muted);
     border-radius: 2px;
     width: 14px;
     height: 0;

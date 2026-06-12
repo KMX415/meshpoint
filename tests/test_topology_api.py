@@ -47,6 +47,31 @@ class TestTopologyGraph(unittest.IsolatedAsyncioTestCase):
             ),
         )
 
+    async def _insert_routing(
+        self,
+        packet_id: str,
+        source_id: str,
+        route_reply: list[str],
+    ) -> None:
+        payload = json.dumps({"route_reply": route_reply})
+        ts = datetime.now(timezone.utc).isoformat()
+        await self.db.execute(
+            """
+            INSERT INTO packets (
+                packet_id, source_id, destination_id, protocol,
+                packet_type, hop_limit, hop_start, channel_hash,
+                want_ack, via_mqtt, relay_node, decoded_payload, decrypted,
+                rssi, snr, frequency_mhz, spreading_factor,
+                bandwidth_khz, capture_source, timestamp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                packet_id, source_id, "ffffffff", "meshtastic", "routing",
+                3, 3, 8, 0, 0, 0, payload, 1,
+                -92.0, 6.0, 906.875, 11, 250, "concentrator", ts,
+            ),
+        )
+
     async def _insert_traceroute(
         self,
         packet_id: str,
@@ -119,6 +144,48 @@ class TestTopologyGraph(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(graph["routes"][0]["route"][1], "bbbb0002")
         node_ids = {n["id"] for n in graph["nodes"]}
         self.assertIn("cccc0003", node_ids)
+
+    async def test_traceroute_hops_become_edges(self):
+        await self._insert_traceroute(
+            "tr", "aaaa0001", ["aaaa0001", "bbbb0002", "cccc0003"],
+        )
+        await self.db.commit()
+
+        graph = await self.repo.get_topology_graph(24)
+        self.assertEqual(len(graph["edges"]), 2)
+        types = {e["edge_type"] for e in graph["edges"]}
+        self.assertEqual(types, {"traceroute"})
+        self.assertIn("traceroute", graph["edge_sources"])
+
+    async def test_routing_route_reply_becomes_edges(self):
+        await self._insert_routing(
+            "rt", "dddd0005",
+            ["dddd0005", "eeee0006", "ffff0007"],
+        )
+        await self.db.commit()
+
+        graph = await self.repo.get_topology_graph(24)
+        self.assertEqual(len(graph["edges"]), 2)
+        self.assertTrue(all(e["edge_type"] == "routing" for e in graph["edges"]))
+        self.assertIn("routing", graph["edge_sources"])
+
+    async def test_neighborinfo_wins_over_traceroute_for_same_link(self):
+        await self._insert_traceroute(
+            "tr", "aaaa0001", ["aaaa0001", "bbbb0002"],
+        )
+        await self._insert_neighborinfo(
+            "ni", "aaaa0001", [{"node_id": "bbbb0002", "snr": 4.0}],
+        )
+        await self.db.commit()
+
+        graph = await self.repo.get_topology_graph(24)
+        self.assertEqual(len(graph["edges"]), 1)
+        self.assertEqual(graph["edges"][0]["edge_type"], "neighborinfo")
+        self.assertEqual(graph["edges"][0]["confidence"], "high")
+
+    async def test_normalize_node_id_formats(self):
+        self.assertEqual(PacketRepository._normalize_node_id("!AABB0001"), "aabb0001")
+        self.assertEqual(PacketRepository._normalize_node_id("aa1"), "00000aa1")
 
 
 if __name__ == "__main__":

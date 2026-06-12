@@ -411,30 +411,45 @@ class NodeMap {
             const links = Array.isArray(data) ? data : (data.edges || []);
             this._topologyLayer.clearLayers();
 
+            const root = getComputedStyle(document.documentElement);
+            const token = (name, fallback) => root.getPropertyValue(name).trim() || fallback;
+            const accentCyan = token('--accent-cyan', '#06b6d4');
+            const accentAmber = token('--accent-amber', '#f59e0b');
+            const textMuted = token('--text-muted', '#64748b');
+
+            let drawn = 0;
             for (const link of links) {
                 const srcMarker = this._markers[link.source];
                 const tgtMarker = this._markers[link.target];
                 if (!srcMarker || !tgtMarker) continue;
 
+                const isNeighbor = link.edge_type === 'neighborinfo';
                 const line = L.polyline(
                     [srcMarker.getLatLng(), tgtMarker.getLatLng()],
                     {
-                        color: '#f59e0b',
-                        weight: 1.5,
-                        opacity: 0.6,
-                        dashArray: '4, 4',
+                        color: link.weak ? textMuted : (isNeighbor ? accentCyan : accentAmber),
+                        weight: isNeighbor ? 2 : 1.5,
+                        opacity: link.weak ? 0.45 : 0.7,
+                        dashArray: isNeighbor ? null : '6, 4',
                     },
                 );
 
                 const rssiLabel = link.rssi != null ? `RSSI: ${link.rssi} dBm` : '';
                 const snrLabel = link.snr != null ? `SNR: ${link.snr} dB` : '';
+                const typeLabel = link.edge_type ? `Type: ${link.edge_type}` : '';
                 const tooltip = [
                     `${link.source} ↔ ${link.target}`,
-                    rssiLabel, snrLabel,
+                    typeLabel, rssiLabel, snrLabel,
                 ].filter(Boolean).join('<br>');
                 line.bindTooltip(tooltip);
 
                 this._topologyLayer.addLayer(line);
+                drawn += 1;
+            }
+            if (links.length > 0 && drawn === 0) {
+                console.info(
+                    'Topology links exist but none have GPS on both endpoints. Use the Topology tab for the logical graph.',
+                );
             }
         } catch (e) {
             console.error('Topology load failed:', e);

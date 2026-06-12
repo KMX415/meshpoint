@@ -1,5 +1,5 @@
 /**
- * Topology tab — D3 force-directed graph from NEIGHBORINFO + TRACEROUTE.
+ * Topology tab: D3 force-directed graph from NEIGHBORINFO, ROUTING, and TRACEROUTE.
  */
 class TopologyTab {
     constructor(containerId) {
@@ -35,7 +35,8 @@ class TopologyTab {
                     <div>
                         <h2 class="topology-panel__title">Mesh topology</h2>
                         <p class="topology-panel__desc">
-                            Force-directed graph from NEIGHBORINFO links. Click a node to highlight TRACEROUTE paths.
+                            Force-directed graph from NEIGHBORINFO, traceroute replies, and routing paths.
+                            Click a node to highlight traced routes.
                         </p>
                     </div>
                     <div class="topology-panel__controls">
@@ -55,7 +56,9 @@ class TopologyTab {
                 <div id="topo-legend" class="topology-legend">
                     <span><i class="topology-swatch topology-swatch--mt"></i> Meshtastic</span>
                     <span><i class="topology-swatch topology-swatch--mc"></i> MeshCore</span>
-                    <span><i class="topology-swatch topology-swatch--weak"></i> Weak link (&lt; -110 dBm)</span>
+                    <span><i class="topology-swatch topology-swatch--ni"></i> Neighbor link</span>
+                    <span><i class="topology-swatch topology-swatch--tr"></i> Traced link</span>
+                    <span><i class="topology-swatch topology-swatch--weak"></i> Weak (&lt; -110 dBm)</span>
                 </div>
             </div>
         `;
@@ -77,22 +80,66 @@ class TopologyTab {
         });
     }
 
+    _cssToken(name, fallback) {
+        return getComputedStyle(document.documentElement)
+            .getPropertyValue(name).trim() || fallback;
+    }
+
+    _ensureGraphNodes(nodes, edges) {
+        const byId = new Map(nodes.map((n) => [n.id, n]));
+        for (const edge of edges) {
+            for (const id of [edge.source, edge.target]) {
+                if (!id || byId.has(id)) continue;
+                const stub = {
+                    id,
+                    label: `!${String(id).slice(-4)}`,
+                    protocol: 'meshtastic',
+                    packet_count: 0,
+                    latest_rssi: null,
+                };
+                nodes.push(stub);
+                byId.set(id, stub);
+            }
+        }
+        return nodes;
+    }
+
     _renderGraph() {
         const wrap = this._container.querySelector('.topology-panel__canvas-wrap');
         const width = wrap.clientWidth || 800;
         const height = Math.max(420, Math.min(560, width * 0.55));
 
-        const nodes = (this._graph.nodes || []).map((n) => ({ ...n }));
-        const edges = (this._graph.edges || []).map((e) => ({ ...e }));
+        const accentCyan = this._cssToken('--accent-cyan', '#06b6d4');
+        const accentPurple = this._cssToken('--accent-purple', '#a855f7');
+        const accentAmber = this._cssToken('--accent-amber', '#f59e0b');
+        const accentGreen = this._cssToken('--accent-green', '#00e5a0');
+        const textMuted = this._cssToken('--text-muted', '#64748b');
+        const textPrimary = this._cssToken('--text-primary', '#e2e8f0');
 
+        let nodes = (this._graph.nodes || []).map((n) => ({ ...n }));
+        const edges = (this._graph.edges || []).map((e) => ({ ...e }));
+        nodes = this._ensureGraphNodes(nodes, edges);
+
+        const sources = (this._graph.edge_sources || []).join(', ') || 'none';
+        const generated = this._graph.generated_at
+            ? new Date(this._graph.generated_at).toLocaleTimeString()
+            : 'now';
         document.getElementById('topo-node-count').textContent =
             `${nodes.length} node${nodes.length === 1 ? '' : 's'}`;
         document.getElementById('topo-edge-count').textContent =
-            `${edges.length} link${edges.length === 1 ? '' : 's'}`;
+            `${edges.length} link${edges.length === 1 ? '' : 's'} · ${sources} · ${generated}`;
 
-        if (!nodes.length) {
+        if (!nodes.length && !edges.length) {
             this._svg.selectAll('*').remove();
             this._emptyEl.hidden = false;
+            const st = this._graph.stats || {};
+            const ni = st.neighborinfo_packets ?? 0;
+            const tr = st.traceroute_packets ?? 0;
+            const rt = st.routing_packets ?? 0;
+            this._emptyEl.textContent =
+                `No links in the last ${this._hours}h. Packets seen: `
+                + `${ni} neighborinfo, ${tr} traceroute, ${rt} routing. `
+                + 'Run a traceroute from the Meshtastic app or wait for the next neighbor broadcast.';
             return;
         }
         this._emptyEl.hidden = true;
@@ -115,25 +162,31 @@ class TopologyTab {
             .data(edges)
             .join('line')
             .attr('stroke', (d) => {
-                if (routeEdgeKeys.has(this._edgeKey(d))) return '#22d3ee';
-                return d.weak ? '#64748b' : '#f59e0b';
+                if (routeEdgeKeys.has(this._edgeKey(d))) return accentGreen;
+                if (d.weak) return textMuted;
+                if (d.edge_type === 'neighborinfo') return accentCyan;
+                return accentAmber;
             })
             .attr('stroke-width', (d) => (routeEdgeKeys.has(this._edgeKey(d)) ? 2.5 : d.weak ? 1 : 1.75))
-            .attr('stroke-dasharray', (d) => (d.weak ? '4 3' : null));
+            .attr('stroke-dasharray', (d) => {
+                if (d.weak) return '4 3';
+                if (d.edge_type && d.edge_type !== 'neighborinfo') return '6 4';
+                return null;
+            });
 
         const node = svg.append('g')
             .selectAll('circle')
             .data(nodes)
             .join('circle')
             .attr('r', (d) => radius(d.packet_count || 0))
-            .attr('fill', (d) => (d.protocol === 'meshcore' ? '#a855f7' : '#06b6d4'))
-            .attr('stroke', (d) => (d.id === this._selectedNode ? '#f8fafc' : 'rgba(15,23,42,0.8)'))
+            .attr('fill', (d) => (d.protocol === 'meshcore' ? accentPurple : accentCyan))
+            .attr('stroke', (d) => (d.id === this._selectedNode ? textPrimary : 'rgba(15,23,42,0.8)'))
             .attr('stroke-width', (d) => (d.id === this._selectedNode ? 2 : 1))
             .style('cursor', 'pointer')
             .call(this._drag(svg));
 
         node.append('title').text((d) => {
-            const rssi = d.latest_rssi != null ? `${d.latest_rssi} dBm` : '—';
+            const rssi = d.latest_rssi != null ? `${d.latest_rssi} dBm` : 'n/a';
             return `${d.label} (!${d.id})\n${d.packet_count || 0} pkts · ${rssi}`;
         });
 
