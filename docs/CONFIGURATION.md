@@ -477,6 +477,19 @@ storage:
 
 Packets are stored in a local SQLite database. Old packets are pruned automatically based on `max_packets_retained`.
 
+### Stray frames (Unknown RF)
+
+When a LoRa frame fails **both** Meshtastic and MeshCore decode, Meshpoint can log RF metadata only (no relay, no re-encode). View results in the dashboard **Unknown RF** tab or export via `GET /api/stray_frames?format=csv`.
+
+```yaml
+stray_frames:
+  enabled: true
+  max_retained: 10000      # hard cap on SQLite rows
+  retention_hours: 168       # drop rows older than this (7 days)
+```
+
+Pruning runs in the background during the normal storage cleanup loop and does not block the receive path.
+
 ---
 
 ## Dashboard
@@ -489,6 +502,10 @@ dashboard:
 ```
 
 Access at `http://<pi-ip>:8080`. Bind to `127.0.0.1` to restrict to local access only.
+
+### Unknown RF tab
+
+Open **Unknown RF** in the sidebar to browse undecodable frames logged by `stray_frames` (see Storage). Filter by time window and minimum RSSI; use **Export CSV** to download the current filter via `/api/stray_frames?format=csv`. Disable logging with `stray_frames.enabled: false` in `local.yaml`.
 
 ---
 
@@ -743,6 +760,11 @@ storage:               # local SQLite packet store
   database_path: "data/concentrator.db"
   max_packets_retained: 100000
   cleanup_interval_seconds: 3600
+
+stray_frames:          # undecodable RF metadata (Unknown RF tab)
+  enabled: true
+  max_retained: 10000
+  retention_hours: 168
 
 dashboard:             # local web UI
   host: "0.0.0.0"

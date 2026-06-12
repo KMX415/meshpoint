@@ -21,6 +21,7 @@
     <link rel="stylesheet" href="css/init_checklist.css" />
     <link rel="stylesheet" href="css/route_motion.css" />
     <link rel="stylesheet" href="css/since_line.css" />
+    <link rel="stylesheet" href="css/status_strip.css" />
     <link rel="stylesheet" href="css/command_palette.css" />
     <link rel="stylesheet" href="css/keymap_overlay.css" />
     <link rel="stylesheet" href="css/theme_high_contrast.css" />
@@ -33,6 +34,7 @@
     <link rel="stylesheet" href="css/radio_channels.css" />
     <link rel="stylesheet" href="css/radio_readout.css" />
     <link rel="stylesheet" href="css/stats.css" />
+    <link rel="stylesheet" href="css/unknown_rf.css" />
     <link rel="stylesheet" href="css/settings.css" />
     <link rel="stylesheet" href="css/configuration.css" />
     <link rel="stylesheet" href="css/gps.css" />
@@ -100,6 +102,24 @@
                                 </svg>
                             </span>
                             <span class="sidebar__label">Stats</span>
+                        </a>
+                    </li>
+                    <li class="sidebar__item">
+                        <a href="#/unknown-rf" class="sidebar__link" data-route="unknown-rf">
+                            <span class="sidebar__icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M12 2v4"/>
+                                    <path d="M12 18v4"/>
+                                    <path d="M4.93 4.93l2.83 2.83"/>
+                                    <path d="M16.24 16.24l2.83 2.83"/>
+                                    <path d="M2 12h4"/>
+                                    <path d="M18 12h4"/>
+                                    <path d="M4.93 19.07l2.83-2.83"/>
+                                    <path d="M16.24 7.76l2.83-2.83"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                </svg>
+                            </span>
+                            <span class="sidebar__label">Unknown RF</span>
                         </a>
                     </li>
                     <li class="sidebar__item">
@@ -388,6 +408,12 @@
             <section class="section" data-section="stats" style="display:none">
                 <div id="stats-panel" class="stats-panel">
                     <div class="stats-panel__loading">Loading stats...</div>
+                </div>
+            </section>
+
+            <section class="section" data-section="unknown-rf" style="display:none">
+                <div id="unknown-rf-panel" class="unknown-rf-panel">
+                    <div class="stats-panel__loading">Loading unknown RF frames...</div>
                 </div>
             </section>
 
@@ -693,6 +719,7 @@
     <script src="js/radio_companion_card.js"></script>
     <script src="js/radio_settings.js"></script>
     <script src="js/stats_tab.js"></script>
+    <script src="js/unknown_rf_tab.js"></script>
     <script src="js/signout_controller.js"></script>
     <script src="js/settings/password_change_form.js"></script>
     <script src="js/settings/sign_out_all_form.js"></script>
@@ -747,6 +774,7 @@
     <script src="topbar/topbar_controller.js"></script>
     <script src="js/build_stamp.js"></script>
     <script src="js/last_visit_tracker.js"></script>
+    <script src="js/status_strip.js"></script>
     <script src="js/since_line.js"></script>
     <script src="js/since_line_controller.js"></script>
     <script src="js/init_checklist.js"></script>

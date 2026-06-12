@@ -89,6 +89,21 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_messages_node ON messages(node_id);
 CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
 CREATE INDEX IF NOT EXISTS idx_messages_direction ON messages(direction);
+
+CREATE TABLE IF NOT EXISTS stray_frames (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    frame_size       INTEGER NOT NULL,
+    channel_hash     INTEGER,
+    frequency_mhz    REAL,
+    spreading_factor INTEGER,
+    bandwidth_khz    REAL,
+    rssi             REAL,
+    snr              REAL,
+    capture_source   TEXT,
+    timestamp        TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_stray_frames_timestamp ON stray_frames(timestamp);
 """
 
 
