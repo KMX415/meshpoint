@@ -404,39 +404,73 @@ class NodeMap {
         }, 200);
     }
 
+    _showTopologyMapHint(show) {
+        let el = document.getElementById('map-topology-hint');
+        if (!el && this._map) {
+            el = document.createElement('div');
+            el.id = 'map-topology-hint';
+            el.className = 'map-topology-hint';
+            el.hidden = true;
+            this._map.getContainer().appendChild(el);
+        }
+        if (!el) return;
+        if (show) {
+            el.textContent =
+                'Links need GPS on both endpoints. Open the Topology tab for the logical graph.';
+            el.hidden = false;
+        } else {
+            el.hidden = true;
+        }
+    }
+
     async _loadTopology() {
         try {
-            const res = await fetch('/api/analytics/topology');
-            const links = await res.json();
+            const res = await fetch('/api/analytics/topology?hours=24');
+            const data = await res.json();
+            const links = Array.isArray(data) ? data : (data.edges || []);
             this._topologyLayer.clearLayers();
 
+            const root = getComputedStyle(document.documentElement);
+            const token = (name, fallback) => root.getPropertyValue(name).trim() || fallback;
+            const accentCyan = token('--accent-cyan', '#06b6d4');
+            const accentAmber = token('--accent-amber', '#f59e0b');
+            const textMuted = token('--text-muted', '#64748b');
+
+            let drawn = 0;
             for (const link of links) {
                 const srcMarker = this._markers[link.source];
                 const tgtMarker = this._markers[link.target];
                 if (!srcMarker || !tgtMarker) continue;
 
+                const isNeighbor = link.edge_type === 'neighborinfo';
                 const line = L.polyline(
                     [srcMarker.getLatLng(), tgtMarker.getLatLng()],
                     {
-                        color: '#f59e0b',
-                        weight: 1.5,
-                        opacity: 0.6,
-                        dashArray: '4, 4',
+                        color: link.weak ? textMuted : (isNeighbor ? accentCyan : accentAmber),
+                        weight: isNeighbor ? 2 : 1.5,
+                        opacity: link.weak ? 0.45 : 0.7,
+                        dashArray: isNeighbor ? null : '6, 4',
                     },
                 );
 
                 const rssiLabel = link.rssi != null ? `RSSI: ${link.rssi} dBm` : '';
                 const snrLabel = link.snr != null ? `SNR: ${link.snr} dB` : '';
+                const typeLabel = link.edge_type ? `Type: ${link.edge_type}` : '';
                 const tooltip = [
                     `${link.source} ↔ ${link.target}`,
-                    rssiLabel, snrLabel,
+                    typeLabel, rssiLabel, snrLabel,
                 ].filter(Boolean).join('<br>');
                 line.bindTooltip(tooltip);
 
                 this._topologyLayer.addLayer(line);
+                drawn += 1;
             }
+            this._showTopologyMapHint(
+                this._topologyVisible && links.length > 0 && drawn === 0,
+            );
         } catch (e) {
             console.error('Topology load failed:', e);
+            this._showTopologyMapHint(false);
         }
     }
 

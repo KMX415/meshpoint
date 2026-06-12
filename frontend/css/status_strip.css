@@ -1,0 +1,105 @@
+/* Operator status footer — console-style telemetry in panel chrome. */
+
+.status-strip {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 1.25rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    background: rgba(6, 182, 212, 0.03);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}
+
+.status-strip__label {
+    color: var(--text-secondary);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    font-size: 0.62rem;
+}
+
+.status-strip__sep {
+    opacity: 0.35;
+}
+
+.status-strip__items {
+    color: var(--accent-cyan);
+    text-shadow: 0 0 6px rgba(6, 182, 212, 0.12);
+}
+
+.status-strip__updated {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.status-strip--quiet .status-strip__items {
+    color: var(--text-muted);
+    text-shadow: none;
+    font-style: italic;
+}
+
+.map-topology-hint {
+    position: absolute;
+    left: 50%;
+    bottom: 2.75rem;
+    transform: translateX(-50%);
+    z-index: 800;
+    max-width: min(92%, 28rem);
+    padding: 0.45rem 0.75rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    background: rgba(15, 23, 42, 0.92);
+    color: var(--accent-amber);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.03em;
+    text-align: center;
+    pointer-events: none;
+    box-shadow: var(--glow-amber);
+}
+
+.mqtt-runtime {
+    margin: 0 0 1rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(0, 229, 160, 0.04);
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+}
+
+.mqtt-runtime--offline {
+    background: rgba(239, 68, 68, 0.06);
+    border-color: rgba(239, 68, 68, 0.25);
+}
+
+.mqtt-runtime--disabled {
+    background: rgba(100, 116, 139, 0.08);
+}
+
+.mqtt-runtime__label {
+    color: var(--text-secondary);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    font-size: 0.62rem;
+    margin-right: 0.35rem;
+}
+
+.mqtt-runtime__state {
+    color: var(--accent-green);
+}
+
+.mqtt-runtime--offline .mqtt-runtime__state {
+    color: var(--accent-red);
+}
+
+.mqtt-runtime--disabled .mqtt-runtime__state {
+    color: var(--text-muted);
+}

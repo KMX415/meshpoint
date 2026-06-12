@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
-
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from src.analytics.signal_analyzer import SignalAnalyzer
 from src.analytics.traffic_monitor import TrafficMonitor
@@ -52,43 +50,9 @@ async def signal_summary():
 
 
 @router.get("/topology")
-async def network_topology():
-    """Extract node-to-node links from NEIGHBORINFO packets."""
+async def network_topology(hours: float = Query(24, ge=1, le=168)):
+    """Mesh graph data from NEIGHBORINFO edges and TRACEROUTE paths."""
     if not _packet_repo:
-        return []
+        return {"hours": hours, "nodes": [], "edges": [], "routes": []}
 
-    rows = await _packet_repo._db.fetch_all(
-        """
-        SELECT source_id, decoded_payload, rssi, snr, timestamp
-        FROM packets
-        WHERE packet_type = 'neighborinfo' AND decoded_payload IS NOT NULL
-        ORDER BY timestamp DESC
-        """,
-    )
-
-    seen_links: dict[str, dict] = {}
-    for row in rows:
-        source = row["source_id"]
-        try:
-            payload = json.loads(row["decoded_payload"])
-        except (json.JSONDecodeError, TypeError):
-            continue
-
-        neighbors = payload.get("neighbors", [])
-        if isinstance(neighbors, list):
-            for neighbor in neighbors:
-                nid = neighbor.get("node_id") or neighbor.get("id")
-                if not nid:
-                    continue
-                nid = str(nid)
-                link_key = f"{min(source, nid)}_{max(source, nid)}"
-                if link_key not in seen_links:
-                    seen_links[link_key] = {
-                        "source": source,
-                        "target": nid,
-                        "rssi": row.get("rssi"),
-                        "snr": row.get("snr"),
-                        "last_seen": row["timestamp"],
-                    }
-
-    return list(seen_links.values())
+    return await _packet_repo.get_topology_graph(hours)
