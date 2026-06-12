@@ -8,6 +8,8 @@ class UnknownRfTab {
         this._hours = 24;
         this._minRssi = '';
         this._refreshInterval = null;
+        this._statusStrip = null;
+        this._fetchedAt = null;
     }
 
     async refresh() {
@@ -28,6 +30,7 @@ class UnknownRfTab {
             const res = await fetch(`/api/stray_frames?${params}`);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
+            this._fetchedAt = Date.now();
             this._renderTable(data);
         } catch (e) {
             console.error('Unknown RF refresh failed:', e);
@@ -95,8 +98,15 @@ class UnknownRfTab {
                     </table>
                     <div id="urf-empty" class="unknown-rf-empty" hidden>No stray frames in this window.</div>
                 </div>
+                <div id="urf-status-strip-host"></div>
             </div>
         `;
+
+        const stripHost = document.getElementById('urf-status-strip-host');
+        if (stripHost && window.StatusStrip) {
+            this._statusStrip = new window.StatusStrip(stripHost, 'UNKNOWN RF');
+            this._statusStrip.mount();
+        }
 
         document.getElementById('urf-hours').addEventListener('change', (e) => {
             this._hours = Number(e.target.value);
@@ -126,9 +136,21 @@ class UnknownRfTab {
         if (!tbody) return;
 
         const frames = data.frames || [];
+        const totalStored = data.total_stored ?? frames.length;
+        const windowH = data.window_hours ?? this._hours;
         meta.textContent =
-            `Showing ${frames.length} of ${data.total_stored ?? frames.length} stored `
-            + `(last ${data.window_hours ?? this._hours}h)`;
+            `Showing ${frames.length} of ${totalStored} stored (last ${windowH}h)`;
+
+        const sfSet = new Set(frames.map((f) => f.spreading_factor).filter((v) => v != null));
+        this._statusStrip?.update(
+            [
+                `${frames.length} shown`,
+                `${totalStored} stored`,
+                `${windowH}h window`,
+                `${sfSet.size} SF buckets`,
+            ],
+            this._fetchedAt,
+        );
 
         if (!frames.length) {
             tbody.innerHTML = '';
