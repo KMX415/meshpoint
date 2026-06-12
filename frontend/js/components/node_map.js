@@ -404,6 +404,25 @@ class NodeMap {
         }, 200);
     }
 
+    _showTopologyMapHint(show) {
+        let el = document.getElementById('map-topology-hint');
+        if (!el && this._map) {
+            el = document.createElement('div');
+            el.id = 'map-topology-hint';
+            el.className = 'map-topology-hint';
+            el.hidden = true;
+            this._map.getContainer().appendChild(el);
+        }
+        if (!el) return;
+        if (show) {
+            el.textContent =
+                'Links need GPS on both endpoints. Open the Topology tab for the logical graph.';
+            el.hidden = false;
+        } else {
+            el.hidden = true;
+        }
+    }
+
     async _loadTopology() {
         try {
             const res = await fetch('/api/analytics/topology?hours=24');
@@ -446,13 +465,12 @@ class NodeMap {
                 this._topologyLayer.addLayer(line);
                 drawn += 1;
             }
-            if (links.length > 0 && drawn === 0) {
-                console.info(
-                    'Topology links exist but none have GPS on both endpoints. Use the Topology tab for the logical graph.',
-                );
-            }
+            this._showTopologyMapHint(
+                this._topologyVisible && links.length > 0 && drawn === 0,
+            );
         } catch (e) {
             console.error('Topology load failed:', e);
+            this._showTopologyMapHint(false);
         }
     }
 

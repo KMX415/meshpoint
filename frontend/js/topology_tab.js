@@ -9,6 +9,8 @@ class TopologyTab {
         this._simulation = null;
         this._graph = { nodes: [], edges: [], routes: [] };
         this._selectedNode = null;
+        this._statusStrip = null;
+        this._fetchedAt = null;
     }
 
     async refresh() {
@@ -18,6 +20,7 @@ class TopologyTab {
             const res = await fetch(`/api/analytics/topology?hours=${this._hours}`);
             if (!res.ok) return;
             this._graph = await res.json();
+            this._fetchedAt = Date.now();
             if (!this._rendered) {
                 this._buildLayout();
                 this._rendered = true;
@@ -60,8 +63,15 @@ class TopologyTab {
                     <span><i class="topology-swatch topology-swatch--tr"></i> Traced link</span>
                     <span><i class="topology-swatch topology-swatch--weak"></i> Weak (&lt; -110 dBm)</span>
                 </div>
+                <div id="topo-status-strip-host"></div>
             </div>
         `;
+
+        const stripHost = document.getElementById('topo-status-strip-host');
+        if (stripHost && window.StatusStrip) {
+            this._statusStrip = new window.StatusStrip(stripHost, 'TOPOLOGY');
+            this._statusStrip.mount();
+        }
 
         this._svg = d3.select('#topo-svg');
         this._emptyEl = document.getElementById('topo-empty');
@@ -129,13 +139,24 @@ class TopologyTab {
         document.getElementById('topo-edge-count').textContent =
             `${edges.length} link${edges.length === 1 ? '' : 's'} · ${sources} · ${generated}`;
 
+        const st = this._graph.stats || {};
+        const ni = st.neighborinfo_packets ?? 0;
+        const tr = st.traceroute_packets ?? 0;
+        const rt = st.routing_packets ?? 0;
+        this._statusStrip?.update(
+            [
+                `${nodes.length} nodes`,
+                `${edges.length} links`,
+                sources !== 'none' ? sources : 'awaiting edge data',
+                `${this._hours}h window`,
+                `pkts ${ni} NI / ${tr} trace / ${rt} route`,
+            ],
+            this._fetchedAt,
+        );
+
         if (!nodes.length && !edges.length) {
             this._svg.selectAll('*').remove();
             this._emptyEl.hidden = false;
-            const st = this._graph.stats || {};
-            const ni = st.neighborinfo_packets ?? 0;
-            const tr = st.traceroute_packets ?? 0;
-            const rt = st.routing_packets ?? 0;
             this._emptyEl.textContent =
                 `No links in the last ${this._hours}h. Packets seen: `
                 + `${ni} neighborinfo, ${tr} traceroute, ${rt} routing. `
