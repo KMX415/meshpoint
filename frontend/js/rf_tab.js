@@ -10,6 +10,8 @@ class RfTab {
         this._histogramChart = null;
         this._sparkline = null;
         this._wsBound = false;
+        this._statusStrip = null;
+        this._fetchedAt = null;
     }
 
     async refresh() {
@@ -19,6 +21,7 @@ class RfTab {
             const res = await fetch('/api/rf/status');
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
+            this._fetchedAt = Date.now();
             if (!this._rendered) {
                 this._buildLayout();
                 this._rendered = true;
@@ -85,8 +88,15 @@ class RfTab {
                         </div>
                     </article>
                 </div>
+                <div id="rf-status-strip-host"></div>
             </div>
         `;
+
+        const stripHost = document.getElementById('rf-status-strip-host');
+        if (stripHost && window.StatusStrip) {
+            this._statusStrip = new window.StatusStrip(stripHost, 'RF ENV');
+            this._statusStrip.mount();
+        }
 
         const canvas = document.getElementById('rf-noise-sparkline');
         if (canvas && window.NoiseFloorSparkline) {
@@ -107,6 +117,20 @@ class RfTab {
     _update(data) {
         this._updateNoiseFloor(data.noise_floor || {});
         this._updateSpectralScan(data.spectral_scan || {});
+        this._updateStatusStrip(data.noise_floor || {}, data.spectral_scan || {});
+    }
+
+    _updateStatusStrip(nf, scan) {
+        if (!this._statusStrip) return;
+        const source = nf.source === 'spectral_scan' ? 'live scan' : 'packet fallback';
+        const noise = nf.value_dbm != null ? `${Number(nf.value_dbm).toFixed(1)} dBm` : 'calibrating';
+        const samples = nf.samples_count ?? 0;
+        const scanState = scan.running ? 'scan on' : 'scan off';
+        const scans = scan.scans_run != null ? `${scan.scans_run} scans` : 'no scans';
+        this._statusStrip.update(
+            [noise, source, `${samples} samples`, scanState, scans],
+            this._fetchedAt,
+        );
     }
 
     _updateNoiseFloor(nf) {
