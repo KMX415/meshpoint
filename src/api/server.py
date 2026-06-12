@@ -1261,7 +1261,10 @@ def _init_routes(
         tx_service=tx_service,
         identity=identity,
     )
-    mqtt_config_routes.init_routes(config=config)
+    mqtt_config_routes.init_routes(
+        config=config,
+        mqtt_publisher=coord.mqtt_publisher,
+    )
     upstream_config_routes.init_routes(config=config)
     device_config_routes.init_routes(config=config, identity=identity)
     gps_status.init_routes(location_source=coord.location_source)

@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import json
 import logging
+import time
+from datetime import datetime, timezone
 from typing import Optional
 
 from src.config import MqttConfig
@@ -54,6 +56,11 @@ class MqttPublisher:
         self._client: Optional[paho_mqtt.Client] = None
         self._connected = False
         self._publish_count = 0
+        self._disconnect_count = 0
+        self._last_connect_rc: int | None = None
+        self._last_disconnect_rc: int | None = None
+        self._last_publish_monotonic: float | None = None
+        self._connected_since_monotonic: float | None = None
 
         self._allowed_channels = set(
             ch.lower() for ch in config.publish_channels
@@ -88,6 +95,22 @@ class MqttPublisher:
     @property
     def publish_count(self) -> int:
         return self._publish_count
+
+    def get_runtime_status(self) -> dict:
+        """Live broker connection stats for the Configuration dashboard."""
+        return {
+            "connected": self._connected,
+            "publish_count": self._publish_count,
+            "disconnect_count": self._disconnect_count,
+            "last_connect_rc": self._last_connect_rc,
+            "last_disconnect_rc": self._last_disconnect_rc,
+            "last_publish_at": _iso_from_monotonic(self._last_publish_monotonic),
+            "connected_since": _iso_from_monotonic(self._connected_since_monotonic),
+            "topic_prefix": self._topic_prefix,
+            "gateway_id": self._gateway_id,
+            "broker_host": self._config.broker,
+            "broker_port": self._config.port,
+        }
 
     def connect(self) -> bool:
         if not PAHO_AVAILABLE:
@@ -162,6 +185,7 @@ class MqttPublisher:
 
         if published:
             self._publish_count += 1
+            self._last_publish_monotonic = time.monotonic()
             logger.debug("MQTT published %s (%s)", packet.packet_id, packet.packet_type.value)
             if self._ha_discovery:
                 self._ha_discovery.announce_node(packet)
@@ -210,8 +234,10 @@ class MqttPublisher:
         return messages
 
     def _on_connect(self, client, userdata, flags, rc) -> None:
+        self._last_connect_rc = rc
         if rc == 0:
             self._connected = True
+            self._connected_since_monotonic = time.monotonic()
             logger.info("MQTT publisher started as %s", self._gateway_id)
             logger.debug("MQTT connected to broker=%s", self._config.broker)
             if self._config.homeassistant_discovery and self._client:
@@ -222,7 +248,10 @@ class MqttPublisher:
 
     def _on_disconnect(self, client, userdata, rc) -> None:
         self._connected = False
+        self._last_disconnect_rc = rc
+        self._connected_since_monotonic = None
         if rc != 0:
+            self._disconnect_count += 1
             logger.warning("MQTT unexpected disconnect (rc=%d), auto-reconnecting", rc)
 
     def _resolve_topic_prefix(self) -> str:
@@ -374,6 +403,15 @@ class HomeAssistantDiscovery:
             "source_type": "gps",
         }
         return topic, json.dumps(config)
+
+
+def _iso_from_monotonic(monotonic_at: float | None) -> str | None:
+    if monotonic_at is None:
+        return None
+    elapsed = time.monotonic() - monotonic_at
+    return datetime.fromtimestamp(
+        time.time() - elapsed, tz=timezone.utc
+    ).isoformat()
 
 
 def _resolve_gateway_id(override: Optional[str], device_name: str) -> str:

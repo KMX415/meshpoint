@@ -113,6 +113,10 @@ class PipelineCoordinator:
         """Live GPS source. Always present (defaults to ``StaticSource``)."""
         return self._location_source
 
+    @property
+    def mqtt_publisher(self) -> Optional[MqttPublisher]:
+        return self._mqtt
+
     def on_packet(self, callback: Callable[[Packet], None]) -> None:
         """Register a callback invoked for each decoded packet."""
         self._on_packet_callbacks.append(callback)

@@ -136,6 +136,49 @@ class TestUpdateMqttRoute(unittest.TestCase):
         self.assertEqual(resp.status_code, 422)
 
 
+class TestMqttRuntimeRoute(unittest.TestCase):
+    def tearDown(self) -> None:
+        mqtt_module.reset_routes()
+
+    def test_runtime_disabled_when_mqtt_off(self) -> None:
+        mqtt_module.init_routes(_fake_app_config())
+        client = TestClient(_build_app())
+        resp = client.get("/api/config/mqtt/runtime")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertFalse(body["config_enabled"])
+        self.assertFalse(body["publisher_active"])
+        self.assertFalse(body["connected"])
+
+    def test_runtime_reflects_live_publisher(self) -> None:
+        publisher = MagicMock()
+        publisher.get_runtime_status.return_value = {
+            "connected": True,
+            "publish_count": 42,
+            "disconnect_count": 1,
+            "last_connect_rc": 0,
+            "last_disconnect_rc": None,
+            "last_publish_at": "2026-06-11T12:00:00+00:00",
+            "connected_since": "2026-06-11T11:00:00+00:00",
+            "topic_prefix": "msh/US",
+            "gateway_id": "!aabbccdd",
+            "broker_host": "broker.example.com",
+            "broker_port": 1883,
+        }
+        cfg = _fake_app_config()
+        cfg.mqtt.enabled = True
+        mqtt_module.init_routes(cfg, mqtt_publisher=publisher)
+        client = TestClient(_build_app())
+        resp = client.get("/api/config/mqtt/runtime")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body["config_enabled"])
+        self.assertTrue(body["publisher_active"])
+        self.assertTrue(body["connected"])
+        self.assertEqual(body["publish_count"], 42)
+        self.assertEqual(body["topic_prefix"], "msh/US")
+
+
 class TestResolveGatewayId(unittest.TestCase):
     def test_override_wins_over_device_name(self) -> None:
         self.assertEqual(

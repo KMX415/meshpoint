@@ -70,6 +70,8 @@ class StatsTab {
         this._charts = {};
         this._refreshInterval = null;
         this._rendered = false;
+        this._statusStrip = null;
+        this._fetchedAt = null;
     }
 
     async refresh() {
@@ -80,6 +82,7 @@ class StatsTab {
                 this._buildLayout();
                 this._rendered = true;
             }
+            this._fetchedAt = Date.now();
             this._update(data);
         } catch (e) {
             console.error('Stats refresh failed:', e);
@@ -268,7 +271,15 @@ class StatsTab {
                 </div>
             </section>
 
+            <div id="stats-status-strip-host"></div>
+
         </div>`;
+
+        const host = document.getElementById('stats-status-strip-host');
+        if (host && window.StatusStrip) {
+            this._statusStrip = new window.StatusStrip(host, 'TRAFFIC');
+            this._statusStrip.mount();
+        }
     }
 
     _update(data) {
@@ -303,6 +314,29 @@ class StatsTab {
         this._updateTimeline(data.traffic_timeline || {});
         this._updateRelay(data.relay || {});
         this._updateRejectReasons(data.relay || {});
+        this._updateStatusStrip(traffic, network, device, data.relay || {});
+    }
+
+    _updateStatusStrip(traffic, network, device, relay) {
+        if (!this._statusStrip) return;
+        const total = traffic.total_packets || 0;
+        const nodes = network.total_nodes || 0;
+        const region = device.region || 'region n/a';
+        const relayed = relay.relayed ?? relay.relayed_count ?? 0;
+        const rejected = relay.rejected ?? relay.rejected_count ?? 0;
+        const relayLine = relay.enabled
+            ? `relay ${relayed} ok / ${rejected} blocked`
+            : 'relay off';
+        this._statusStrip.update(
+            [
+                'concentrator',
+                `${total.toLocaleString()} pkts`,
+                `${nodes} nodes`,
+                region,
+                relayLine,
+            ],
+            this._fetchedAt,
+        );
     }
 
     _setText(id, value) {

@@ -19,26 +19,60 @@ from src.api.audit.dependencies import get_audit_writer
 from src.api.auth.dependencies import require_admin
 from src.api.auth.jwt_session import SessionClaims
 from src.config import AppConfig, MqttConfig, save_section_to_yaml
-from src.relay.mqtt_publisher import _resolve_gateway_id
+from src.relay.mqtt_publisher import MqttPublisher, _resolve_gateway_id
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
 _config: AppConfig | None = None
+_mqtt_publisher: MqttPublisher | None = None
 
 _GATEWAY_RE = re.compile(r"^!?[0-9a-fA-F]{8}$")
 _LOCATION_PRECISION = frozenset({"exact", "approximate", "none"})
 
 
-def init_routes(config: AppConfig) -> None:
-    global _config
+def init_routes(
+    config: AppConfig,
+    mqtt_publisher: MqttPublisher | None = None,
+) -> None:
+    global _config, _mqtt_publisher
     _config = config
+    _mqtt_publisher = mqtt_publisher
 
 
 def reset_routes() -> None:
-    global _config
+    global _config, _mqtt_publisher
     _config = None
+    _mqtt_publisher = None
+
+
+def build_mqtt_runtime_status(
+    mqtt: MqttConfig,
+    publisher: MqttPublisher | None,
+) -> dict:
+    """Live broker health for the Configuration MQTT card."""
+    base = {
+        "config_enabled": mqtt.enabled,
+        "publisher_active": publisher is not None,
+        "connected": False,
+        "publish_count": 0,
+        "disconnect_count": 0,
+        "last_connect_rc": None,
+        "last_disconnect_rc": None,
+        "last_publish_at": None,
+        "connected_since": None,
+        "topic_prefix": None,
+        "gateway_id": _resolve_gateway_id(mqtt.gateway_id, "meshpoint"),
+        "broker_host": mqtt.broker,
+        "broker_port": mqtt.port,
+    }
+    if publisher is None:
+        return base
+    runtime = publisher.get_runtime_status()
+    base.update(runtime)
+    base["publisher_active"] = True
+    return base
 
 
 def build_mqtt_status(mqtt: MqttConfig, device_name: str) -> dict:
@@ -122,6 +156,19 @@ class MqttUpdate(BaseModel):
                 f"location_precision must be one of: {', '.join(sorted(_LOCATION_PRECISION))}"
             )
         return value
+
+
+@router.get("/mqtt/runtime")
+async def get_mqtt_runtime():
+    """Read-only MQTT broker connection health (any authenticated user)."""
+    if _config is None:
+        raise HTTPException(503, "Config not loaded")
+    device_name = _config.device.device_name or "meshpoint"
+    payload = build_mqtt_runtime_status(_config.mqtt, _mqtt_publisher)
+    payload["gateway_id"] = _resolve_gateway_id(
+        _config.mqtt.gateway_id, device_name
+    )
+    return payload
 
 
 @router.put("/mqtt")
