@@ -289,6 +289,15 @@ meshtastic:
 
 The default is `LongFast` (Meshtastic's standard public channel). Change it only if your mesh uses a custom primary channel name. You can also edit this from the dashboard: open the **Radio** tab, edit **Channel 0**, and save. The Radio and Messages tabs reflect the same value.
 
+### Quick Deploy (QR export)
+
+**Configuration → Channels → Quick Deploy** exports public channel parameters for field radios:
+
+- QR code and `https://meshtastic.org/e/#…` URL (Meshtastic app compatible)
+- Downloadable JSON via `GET /api/config/export`
+
+**Private channel keys are never exported.** The QR uses the standard Meshtastic default PSK only (`AQ==`), matching a public primary channel deployment. Scan with the Meshtastic mobile app (Android in-app scanner; iOS camera).
+
 ---
 
 ## Private Channel Monitoring

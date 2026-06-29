@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from src.api.routes import config_enrichment, mqtt_config_routes, nodeinfo_routes
 from src.config import AppConfig, save_section_to_yaml
+from src.config_export import build_quick_deploy_export
 from src.models.device_identity import DeviceIdentity
 from src.radio.presets import (
     REGION_DEFAULTS,
@@ -166,6 +167,17 @@ async def get_config():
         ],
     }
     return config_enrichment.enrich_config_payload(_config, payload)
+
+
+@router.get("/export")
+async def export_quick_deploy():
+    """Public channel parameters + Meshtastic QR URL (no private PSKs)."""
+    if _config is None:
+        raise HTTPException(503, "Config not loaded")
+    try:
+        return build_quick_deploy_export(_config)
+    except ValueError as exc:
+        raise HTTPException(500, str(exc)) from exc
 
 
 class RelaySettingsUpdate(BaseModel):

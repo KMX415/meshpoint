@@ -81,13 +81,21 @@ class ConfigurationPanel {
                     this._cards.set('nodeinfo-status', status);
                 }
             }
-        } else if (section === 'channels' && window.ChannelsConfigCard) {
+        } else if (section === 'channels') {
             const host = document.getElementById('cfg-channels-panel');
             if (host) {
-                host.innerHTML = '';
-                const card = new window.ChannelsConfigCard(api);
-                card.mount(host);
-                this._cards.set('channels', card);
+                host.innerHTML = '<div class="cfg-section" data-channels-mount></div>';
+                const mount = host.querySelector('[data-channels-mount]');
+                if (window.QuickDeployCard) {
+                    const quick = new window.QuickDeployCard(api);
+                    quick.mount(mount);
+                    this._cards.set('quick-deploy', quick);
+                }
+                if (window.ChannelsConfigCard) {
+                    const card = new window.ChannelsConfigCard(api);
+                    card.mount(mount);
+                    this._cards.set('channels', card);
+                }
             }
         } else if (section === 'meshcore' && window.MeshcoreConfigCard) {
             const host = document.getElementById('cfg-meshcore-panel');

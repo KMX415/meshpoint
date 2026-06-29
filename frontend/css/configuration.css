@@ -477,3 +477,69 @@ select.cfg-field__input option:checked {
 .cfg-mc-channels {
     margin-bottom: 14px;
 }
+
+.cfg-quick-deploy {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 1.25rem;
+    align-items: start;
+}
+
+.cfg-quick-deploy__qr {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 0.75rem;
+    min-width: 236px;
+    min-height: 236px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cfg-quick-deploy__placeholder {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.cfg-quick-deploy__url {
+    margin: 0 0 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    word-break: break-all;
+    color: var(--text-secondary);
+}
+
+.cfg-quick-deploy__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.cfg-quick-deploy__row {
+    display: grid;
+    grid-template-columns: 6rem 1fr;
+    gap: 0.5rem;
+    font-size: 13px;
+}
+
+.cfg-quick-deploy__key {
+    color: var(--text-muted);
+}
+
+.cfg-quick-deploy__val {
+    font-family: var(--font-mono);
+    color: var(--text-primary);
+}
+
+.cfg-card--quick-deploy .cfg-card__actions {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+    .cfg-quick-deploy {
+        grid-template-columns: 1fr;
+    }
+}
