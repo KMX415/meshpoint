@@ -361,7 +361,7 @@ class RfTab {
         if (scan.fleet_expected_fallback) {
             return (
                 'Hardware histogram not available on this carrier. '
-                'Expected on RAK V2 and SenseCap M1; use the noise-floor card above (packet fallback).'
+                + 'Expected on RAK V2 and SenseCap M1; use the noise-floor card above (packet fallback).'
             );
         }
         if (!scan.enabled) {
