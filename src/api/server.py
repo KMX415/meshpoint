@@ -51,6 +51,7 @@ from src.api.routes import (
     packets,
     public_radar_routes,
     metrics_routes,
+    rf_routes,
     stats_routes,
     system_config_routes,
     system_metrics,
@@ -288,6 +289,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(meshcore_config_routes.router, dependencies=protected)
     app.include_router(config_routes.router, dependencies=protected)
     app.include_router(stats_routes.router, dependencies=protected)
+    app.include_router(rf_routes.router, dependencies=protected)
 
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
@@ -1250,6 +1252,12 @@ def _init_routes(
         noise_floor_tracker=noise_floor_tracker,
         capture_coordinator=coord.capture_coordinator,
         region=config.radio.region or "US",
+    )
+    global _spectral_scan_service
+    rf_routes.init_routes(
+        noise_floor_tracker,
+        _spectral_scan_service,
+        config,
     )
 
     meshcore_tx = None

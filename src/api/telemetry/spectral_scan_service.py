@@ -86,6 +86,7 @@ class SpectralScanService:
         self._stopped = asyncio.Event()
         self._scans_run = 0
         self._scans_failed = 0
+        self._last_result: Optional[SpectralScanResult] = None
 
     @property
     def scans_run(self) -> int:
@@ -94,6 +95,29 @@ class SpectralScanService:
     @property
     def scans_failed(self) -> int:
         return self._scans_failed
+
+    @property
+    def is_running(self) -> bool:
+        return self._task is not None and not self._task.done()
+
+    @property
+    def hardware_supported(self) -> bool:
+        return self._wrapper.spectral_scan_supported
+
+    def histogram_payload(self) -> dict | None:
+        """Serialise the most recent scan histogram for the RF dashboard."""
+        result = self._last_result
+        if result is None:
+            return None
+        return {
+            "levels_dbm": list(result.levels_dbm),
+            "counts": list(result.counts),
+            "total_samples": result.total_samples,
+            "floor_dbm": result.floor_dbm,
+            "median_dbm": result.median_dbm,
+            "frequency_hz": result.frequency_hz,
+            "timestamp": result.timestamp,
+        }
 
     async def start(self) -> None:
         """Begin the periodic-scan loop.
@@ -163,6 +187,7 @@ class SpectralScanService:
         self._publish(result)
 
     def _publish(self, result: SpectralScanResult) -> None:
+        self._last_result = result
         floor = result.floor_dbm
         median = result.median_dbm
         if floor is None or median is None:
