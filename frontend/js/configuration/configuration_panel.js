@@ -84,16 +84,22 @@ class ConfigurationPanel {
         } else if (section === 'channels') {
             const host = document.getElementById('cfg-channels-panel');
             if (host) {
-                host.innerHTML = '<div class="cfg-section" data-channels-mount></div>';
-                const mount = host.querySelector('[data-channels-mount]');
+                host.innerHTML = `
+                    <div class="cfg-section">
+                        <div data-quick-deploy-mount></div>
+                        <div data-channels-mount></div>
+                    </div>
+                `;
                 if (window.QuickDeployCard) {
+                    const quickMount = host.querySelector('[data-quick-deploy-mount]');
                     const quick = new window.QuickDeployCard(api);
-                    quick.mount(mount);
+                    quick.mount(quickMount);
                     this._cards.set('quick-deploy', quick);
                 }
                 if (window.ChannelsConfigCard) {
+                    const channelsMount = host.querySelector('[data-channels-mount]');
                     const card = new window.ChannelsConfigCard(api);
-                    card.mount(mount);
+                    card.mount(channelsMount);
                     this._cards.set('channels', card);
                 }
             }
