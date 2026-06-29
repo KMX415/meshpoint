@@ -50,6 +50,7 @@ from src.api.routes import (
     nodes,
     packets,
     public_radar_routes,
+    metrics_routes,
     stats_routes,
     system_config_routes,
     system_metrics,
@@ -255,6 +256,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     )
 
     app.include_router(auth_routes.router)
+    app.include_router(metrics_routes.router)
     app.include_router(identity_routes.router)
     app.include_router(auth_config_routes.router)
     app.include_router(public_radar_routes.router)
@@ -1235,6 +1237,17 @@ def _init_routes(
         relay_manager=coord.relay_manager,
         node_repo=coord.node_repo,
         packet_repo=coord.packet_repo,
+    )
+    metrics_routes.init_routes(
+        metrics_config=config.metrics,
+        stats_reporter=coord.stats_reporter,
+        signal_analyzer=signal_analyzer,
+        traffic_monitor=traffic_monitor,
+        relay_manager=coord.relay_manager,
+        node_repo=coord.node_repo,
+        noise_floor_tracker=noise_floor_tracker,
+        capture_coordinator=coord.capture_coordinator,
+        region=config.radio.region or "US",
     )
 
     meshcore_tx = None

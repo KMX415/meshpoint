@@ -51,6 +51,15 @@ class CaptureCoordinator:
         self._tasks.clear()
         logger.info("CaptureCoordinator stopped")
 
+    def concentrator_rx_stats(self) -> dict[str, int]:
+        """SX1302 CRC counters when a concentrator source is registered."""
+        for source in self._sources:
+            stats = getattr(source, "rx_crc_stats", None)
+            if stats is not None:
+                bad, no_crc = stats
+                return {"crc_bad_total": bad, "no_crc_total": no_crc}
+        return {"crc_bad_total": 0, "no_crc_total": 0}
+
     async def packets(self) -> AsyncIterator[RawCapture]:
         """Yield packets from all sources via the shared queue."""
         while self._running:
