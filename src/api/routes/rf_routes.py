@@ -13,6 +13,12 @@ if TYPE_CHECKING:
 
 router = APIRouter(prefix="/api/rf", tags=["rf"])
 
+# Shown when interval > 0 but the SX1261 is not on a Pi-visible SPI bus
+# (RAK2287, RAK5146, SenseCap M1, and most fleet carriers).
+_FLEET_SPECTRAL_SCAN_NOTE = (
+    "Expected on RAK V2 and SenseCap M1; packet fallback is normal."
+)
+
 _tracker: NoiseFloorTracker | None = None
 _scan_service: SpectralScanService | None = None
 _config: AppConfig | None = None
@@ -72,9 +78,11 @@ def _spectral_status() -> dict:
             "scans_run": 0,
             "scans_failed": 0,
             "histogram": None,
+            "fleet_expected_fallback": True,
             "message": (
                 "Spectral scan not available on this hardware or HAL build. "
-                "Noise floor uses packet-derived fallback."
+                "Noise floor uses packet-derived fallback. "
+                f"{_FLEET_SPECTRAL_SCAN_NOTE}"
             ),
         }
 

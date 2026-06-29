@@ -230,7 +230,12 @@ class RfTab {
         const hasHist = hist && Array.isArray(hist.levels_dbm) && hist.levels_dbm.length > 0
             && (hist.total_samples > 0 || (hist.counts || []).some((c) => c > 0));
 
-        if (emptyEl) emptyEl.hidden = !!hasHist;
+        if (emptyEl) {
+            emptyEl.hidden = !!hasHist;
+            if (!hasHist) {
+                emptyEl.textContent = RfTab._histogramEmptyText(scan);
+            }
+        }
         if (canvas) canvas.hidden = !hasHist;
 
         if (!hasHist || typeof Chart === 'undefined') {
@@ -311,6 +316,19 @@ class RfTab {
             return 'Direct ambient channel power from the SX1302 spectral scan on the tuned frequency.';
         }
         return 'Upper bound from rolling minimum of (RSSI − SNR) on decoded packets. True floor is at or below this value.';
+    }
+
+    static _histogramEmptyText(scan) {
+        if (scan.fleet_expected_fallback) {
+            return (
+                'Hardware histogram not available on this carrier. '
+                'Expected on RAK V2 and SenseCap M1; use the noise-floor card above (packet fallback).'
+            );
+        }
+        if (!scan.enabled) {
+            return 'Hardware scan disabled. Set spectral scan interval under Configuration → Advanced.';
+        }
+        return 'No hardware scan yet. Wait for the first scheduled scan or check Configuration → Advanced.';
     }
 }
 

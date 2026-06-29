@@ -69,6 +69,13 @@ class TestRfRoutes(unittest.TestCase):
         body = client.get("/api/rf/status").json()
         self.assertIn("interval_seconds is 0", body["spectral_scan"]["message"])
 
+    def test_fleet_fallback_note_when_scan_unavailable(self) -> None:
+        client = self._client(interval=60.0, scan_service=None)
+        scan = client.get("/api/rf/status").json()["spectral_scan"]
+        self.assertTrue(scan["fleet_expected_fallback"])
+        self.assertIn("RAK V2", scan["message"])
+        self.assertIn("packet fallback", scan["message"])
+
     def test_histogram_exposed_after_scan(self) -> None:
         wrapper = _FakeWrapper()
         wrapper.run_spectral_scan = lambda *_a, **_k: _histogram_result()  # type: ignore[method-assign]

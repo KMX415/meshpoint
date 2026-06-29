@@ -60,13 +60,12 @@ class RadioConfig:
     # (default; spectral scan stays unavailable, packet-derived
     # noise floor remains in use).
     #
-    # On RAK2287 / RAK5146 / SenseCap M1 this is typically
-    # ``/dev/spidev0.1`` (separate from the SX1302's
-    # ``/dev/spidev0.0``). Some carriers daisy-chain the SX1261
-    # behind the SX1302's SPI router and want this set to the same
-    # path as the SX1302 SPI device. Wrong path = HAL refuses to
-    # ``lgw_start`` after our config attempt, so we ship empty by
-    # default and ask interested users to opt in explicitly.
+    # On RAK2287 / RAK5146 / SenseCap M1 the SX1261 sits behind the
+    # SX1302 SPI router, not on a Pi-visible bus. Setting
+    # ``/dev/spidev0.1`` there usually fails ``lgw_sx1261_setconf``
+    # and can block ``lgw_start``. Leave empty on fleet hardware;
+    # only set on carriers that expose SX1261 on a dedicated CE line
+    # (Semtech reference kit, custom boards). See CONFIGURATION.md.
     sx1261_spi_path: str = ""
 
 
