@@ -170,7 +170,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                 asyncio.get_running_loop().create_task(
                     _send_meshcore_advert(meshcore_tx_ref, mc_source)
                 )
-        _setup_message_interception(
+        channel_hash_resolver = _setup_message_interception(
             pipeline, message_repo, config, meshcore_tx_ref, tx_service
         )
         _setup_inbound_responder(pipeline, tx_service, config)
@@ -224,7 +224,13 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             await _spectral_scan_service.start()
 
         _init_routes(
-            pipeline, config, identity, auth_subsystem, tx_service, message_repo
+            pipeline,
+            config,
+            identity,
+            auth_subsystem,
+            tx_service,
+            message_repo,
+            channel_hash_resolver=channel_hash_resolver,
         )
         _init_dangerous_registry(pipeline)
         print_banner(config)
@@ -948,21 +954,15 @@ def _setup_message_interception(
     mc_name_cache: dict[str, str] = {}
     mc_pubkey_canon: dict[str, str] = {}
 
-    channel_hash_map: dict[int, int] = {}
+    from src.api.channel_hash_resolver import ChannelHashResolver
+
+    channel_hash_resolver = ChannelHashResolver()
     try:
-        crypto = coord._crypto
-        all_keys = crypto.get_all_keys()
-        primary_name = config.meshtastic.primary_channel_name
-        if all_keys:
-            h = crypto.compute_channel_hash(primary_name, all_keys[0])
-            channel_hash_map[h] = 0
-        for i, (ch_name, _) in enumerate(
-            config.meshtastic.channel_keys.items(), start=1
-        ):
-            if i < len(all_keys):
-                h = crypto.compute_channel_hash(ch_name, all_keys[i])
-                channel_hash_map[h] = i
-        logger.info("Channel hash map: %s", channel_hash_map)
+        channel_hash_resolver.rebuild(
+            coord._crypto,
+            config.meshtastic.primary_channel_name,
+            config.meshtastic.channel_keys,
+        )
     except Exception:
         logger.debug("Failed to build channel hash map", exc_info=True)
 
@@ -1040,7 +1040,7 @@ def _setup_message_interception(
             if packet.protocol == Protocol.MESHCORE:
                 ch_idx = packet.channel_hash or 0
             else:
-                ch_idx = channel_hash_map.get(packet.channel_hash, 0)
+                ch_idx = channel_hash_resolver.lookup(packet.channel_hash)
             node_id = f"broadcast:{packet.protocol.value}:{ch_idx}"
             direction = "received"
         elif is_for_us:
@@ -1204,6 +1204,7 @@ def _setup_message_interception(
             pass
 
     coord.on_packet(on_text_packet)
+    return channel_hash_resolver
 
 
 def _init_routes(
@@ -1213,6 +1214,7 @@ def _init_routes(
     auth_subsystem: AuthSubsystem,
     tx_service: TxService | None = None,
     message_repo: MessageRepository | None = None,
+    channel_hash_resolver=None,
 ) -> None:
     identity_routes.init_routes(identity, auth_subsystem.service)
     network_mapper = NetworkMapper(coord.node_repo)
@@ -1273,6 +1275,7 @@ def _init_routes(
         crypto=crypto,
         tx_service=tx_service,
         identity=identity,
+        channel_hash_resolver=channel_hash_resolver,
     )
     mqtt_config_routes.init_routes(config=config)
     upstream_config_routes.init_routes(config=config)

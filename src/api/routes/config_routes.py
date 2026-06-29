@@ -37,6 +37,7 @@ _config: AppConfig | None = None
 _crypto = None
 _tx_service = None
 _identity: DeviceIdentity | None = None
+_channel_hash_resolver = None
 
 
 def init_routes(
@@ -44,12 +45,25 @@ def init_routes(
     crypto=None,
     tx_service=None,
     identity: DeviceIdentity | None = None,
+    channel_hash_resolver=None,
 ) -> None:
-    global _config, _crypto, _tx_service, _identity
+    global _config, _crypto, _tx_service, _identity, _channel_hash_resolver
     _config = config
     _crypto = crypto
     _tx_service = tx_service
     _identity = identity
+    _channel_hash_resolver = channel_hash_resolver
+
+
+def _refresh_channel_hash_map() -> None:
+    """Rebuild inbound broadcast routing after live channel key changes."""
+    if _channel_hash_resolver is None or _crypto is None or _config is None:
+        return
+    _channel_hash_resolver.rebuild(
+        _crypto,
+        _config.meshtastic.primary_channel_name,
+        _config.meshtastic.channel_keys,
+    )
 
 
 @router.get("")
@@ -424,6 +438,8 @@ async def update_channels(req: ChannelsUpdate):
         for name, key_b64 in channel_keys.items():
             _crypto.add_channel_key(name, key_b64)
 
+    _refresh_channel_hash_map()
+
     return {
         "saved": True,
         "restart_required": False,
@@ -527,6 +543,8 @@ async def update_meshcore_channels(req: McChannelsUpdate):
         for name, key_hex in channel_keys.items():
             key_b64 = base64.b64encode(binascii.unhexlify(key_hex)).decode()
             _crypto.add_channel_key(name, key_b64)
+
+    _refresh_channel_hash_map()
 
     return {
         "saved": True,
