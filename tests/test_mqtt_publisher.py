@@ -78,6 +78,18 @@ class TestMqttPublisherLogging(unittest.TestCase):
             logs.output,
         )
 
+    def test_runtime_status_tracks_connect_and_disconnect(self) -> None:
+        pub = MqttPublisher(MqttConfig(enabled=True), device_name="meshpoint-alpha")
+        pub._on_connect(client=None, userdata=None, flags=None, rc=0)
+        status = pub.get_runtime_status()
+        self.assertTrue(status["connected"])
+        self.assertIsNotNone(status["connected_since"])
+        pub._on_disconnect(client=None, userdata=None, rc=7)
+        status = pub.get_runtime_status()
+        self.assertFalse(status["connected"])
+        self.assertEqual(status["disconnect_count"], 1)
+        self.assertEqual(status["last_disconnect_rc"], 7)
+
 
 if __name__ == "__main__":
     unittest.main()

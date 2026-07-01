@@ -11,6 +11,7 @@ class MqttConfigCard {
         this._root = null;
         this._passwordDirty = false;
         this._unsubDisplayUnits = null;
+        this._runtimeInterval = null;
     }
 
     mount(root) {
@@ -25,6 +26,10 @@ class MqttConfigCard {
                         are published. Undecrypted packets never leave the device.
                     </p>
                 </header>
+                <div class="mqtt-runtime mqtt-runtime--disabled" data-mqtt-runtime hidden>
+                    <span class="mqtt-runtime__label">BROKER</span>
+                    <span class="mqtt-runtime__state" data-mqtt-runtime-text>Loading…</span>
+                </div>
                 <form class="cfg-form" data-mqtt-form>
                     <label class="cfg-field cfg-field--toggle">
                         <input type="checkbox" data-mqtt-enabled>
@@ -144,6 +149,8 @@ class MqttConfigCard {
         this._previewMc = this._root.querySelector('[data-mqtt-preview-mc]');
         this._previewJson = this._root.querySelector('[data-mqtt-preview-json]');
         this._statusEl = this._root.querySelector('[data-mqtt-status]');
+        this._runtimeEl = this._root.querySelector('[data-mqtt-runtime]');
+        this._runtimeText = this._root.querySelector('[data-mqtt-runtime-text]');
 
         this._pass.addEventListener('input', () => { this._passwordDirty = true; });
         this._json.addEventListener('change', () => this._renderPreviews());
@@ -196,6 +203,79 @@ class MqttConfigCard {
         if (this._ha) this._ha.checked = !!mqtt.homeassistant_discovery;
         if (this._tls) this._tls.checked = !!mqtt.tls_enabled;
         this._renderPreviews(mqtt);
+        this._refreshRuntime();
+        this._startRuntimePolling();
+    }
+
+    _startRuntimePolling() {
+        if (this._runtimeInterval) return;
+        this._runtimeInterval = setInterval(() => {
+            const section = document.querySelector('[data-section="configuration/mqtt"]');
+            if (section && section.classList.contains('section--active')) {
+                this._refreshRuntime();
+            } else {
+                clearInterval(this._runtimeInterval);
+                this._runtimeInterval = null;
+            }
+        }, 10000);
+    }
+
+    async _refreshRuntime() {
+        if (!this._runtimeEl) return;
+        try {
+            const res = await fetch('/api/config/mqtt/runtime');
+            if (!res.ok) return;
+            const data = await res.json();
+            this._renderRuntime(data);
+        } catch (_) {
+            /* non-fatal */
+        }
+    }
+
+    _renderRuntime(data) {
+        if (!this._runtimeEl || !this._runtimeText) return;
+        this._runtimeEl.hidden = false;
+        this._runtimeEl.classList.remove(
+            'mqtt-runtime--offline',
+            'mqtt-runtime--disabled',
+        );
+
+        if (!data.config_enabled) {
+            this._runtimeEl.classList.add('mqtt-runtime--disabled');
+            this._runtimeText.textContent = 'MQTT disabled in config';
+            return;
+        }
+
+        if (!data.publisher_active) {
+            this._runtimeEl.classList.add('mqtt-runtime--offline');
+            this._runtimeText.textContent =
+                'Enabled but publisher not running (restart Meshpoint after save)';
+            return;
+        }
+
+        const host = data.broker_host || 'broker';
+        const port = data.broker_port ?? 1883;
+        const prefix = data.topic_prefix || 'msh';
+        const pub = data.publish_count ?? 0;
+        const disc = data.disconnect_count ?? 0;
+
+        if (!data.connected) {
+            this._runtimeEl.classList.add('mqtt-runtime--offline');
+            const rc = data.last_disconnect_rc ?? data.last_connect_rc;
+            const rcLabel = rc != null ? ` · rc ${rc}` : '';
+            this._runtimeText.textContent =
+                `${host}:${port} · disconnected${rcLabel} · ${disc} drops · ${pub} published`;
+            return;
+        }
+
+        const since = data.connected_since
+            ? `since ${new Date(data.connected_since).toLocaleTimeString()}`
+            : 'connected';
+        const lastPub = data.last_publish_at
+            ? ` · last pub ${new Date(data.last_publish_at).toLocaleTimeString()}`
+            : '';
+        this._runtimeText.textContent =
+            `${host}:${port} · ${since} · ${prefix} · ${pub} published · ${disc} drops${lastPub}`;
     }
 
     _renderPreviews(cached) {
