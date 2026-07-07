@@ -16,6 +16,7 @@ from pathlib import Path, PurePosixPath
 from src.backup.manifest import FORMAT_VERSION, BackupManifest
 from src.backup.paths import (
     MAX_UPLOAD_BYTES,
+    launch_restore_finish_script,
     restore_finish_script,
     restore_incoming_dir,
 )
@@ -146,12 +147,15 @@ class BackupRestoreService:
         return dest
 
     def launch_restore(self, archive_path: Path) -> RestoreLaunchResult:
+        launcher = launch_restore_finish_script(self._meshpoint_root)
+        if not launcher.is_file():
+            raise FileNotFoundError(f"restore launcher not found: {launcher}")
         script = self._finish_script or restore_finish_script(self._meshpoint_root)
         if not script.is_file():
             raise FileNotFoundError(f"restore script not found: {script}")
 
         proc = subprocess.Popen(  # noqa: S603
-            ["sudo", "/bin/bash", str(script), str(archive_path)],
+            ["sudo", "/bin/bash", str(launcher), str(archive_path)],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             start_new_session=True,

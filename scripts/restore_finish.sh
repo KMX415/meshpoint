@@ -30,6 +30,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
+_on_error() {
+    log "failed near line ${1:-?}; attempting ${SERVICE} restart"
+    /usr/bin/systemctl start "${SERVICE}" || true
+}
+trap '_on_error ${LINENO}' ERR
+
 log "Stopping ${SERVICE}"
 /usr/bin/systemctl stop "${SERVICE}" || true
 
@@ -81,4 +87,5 @@ fi
 
 log "Starting ${SERVICE}"
 /usr/bin/systemctl start "${SERVICE}"
+trap - ERR
 log "Done; stash at ${STASH_DIR}"

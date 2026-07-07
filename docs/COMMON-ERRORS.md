@@ -688,19 +688,35 @@ If you also lost SSH access, the only path forward is to re-image the
 SD card and re-run `meshpoint setup`. There is no way to recover an
 admin password without host-level access by design.
 
-### Restore backup says success but data did not come back (`command not allowed`)
+### Restore backup stopped the service and it never came back
 
-**Cause:** Settings → System → **Restore backup** validates the archive,
-then launches `scripts/restore_finish.sh` with `sudo`. The sudoers rule
-must allow the archive path as a trailing argument (wildcard `*`). If
-`/etc/sudoers.d/meshpoint` is stale, `journalctl` shows:
+**Cause:** Two different failures look similar in `journalctl`:
 
-```text
-meshpoint : command not allowed ; COMMAND=/bin/bash /opt/meshpoint/scripts/restore_finish.sh /opt/meshpoint/data/restore-incoming/...
+1. **Sudoers (fixed in 21819a6+):** `command not allowed` when launching
+   `restore_finish.sh` with the archive path.
+2. **Cgroup kill (fixed after 21819a6):** `restore_finish` was spawned from
+   the meshpoint service, then called `systemctl stop meshpoint`. Systemd
+   stopped the unit cgroup and killed the restore script before it could
+   extract the backup and run `systemctl start`. Logs show stop succeeding
+   but no `[restore_finish] Stashing` or `Starting meshpoint` lines.
+
+**Fix (get the Pi online again):**
+
+```bash
+sudo systemctl start meshpoint
 ```
 
-**Fix:** Pull the latest `feat/v0.7.7` (or whatever release ships backup)
-and refresh sudoers:
+**Finish the restore from SSH** (safe outside the service cgroup):
+
+```bash
+sudo bash /opt/meshpoint/scripts/restore_finish.sh \
+  /opt/meshpoint/data/restore-incoming/meshpoint-restore-*.tar.gz
+```
+
+Use the exact archive name from `data/restore-incoming/` if you have several.
+
+**Fix (dashboard path):** Pull the latest `feat/v0.7.7` and restart so sudoers
+and `launch_restore_finish.sh` (uses `systemd-run`) are in place:
 
 ```bash
 cd /opt/meshpoint
@@ -708,11 +724,9 @@ sudo git pull
 sudo systemctl restart meshpoint
 ```
 
-`ExecStartPre` copies `config/sudoers-meshpoint` into place on every
-restart. You can also run `sudo bash scripts/install.sh` if you prefer.
-Then upload the backup again. Your prior state may still be in
-`data/pre-restore-stash-<timestamp>/` if the script ran far enough to
-stash before failing.
+Then upload the backup again from **Settings → System → Restore backup**.
+Your prior state may still be in `data/pre-restore-stash-<timestamp>/` if
+the script stashed before failing.
 
 ### Setup wizard says "Existing config/local.yaml found" on a fresh SD
 

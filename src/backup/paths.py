@@ -43,5 +43,10 @@ def restore_finish_script(meshpoint_root: Path | None = None) -> Path:
     return root / "scripts" / "restore_finish.sh"
 
 
+def launch_restore_finish_script(meshpoint_root: Path | None = None) -> Path:
+    root = meshpoint_root or resolve_meshpoint_root()
+    return root / "scripts" / "launch_restore_finish.sh"
+
+
 def restore_incoming_dir(data_dir: Path) -> Path:
     return data_dir / "restore-incoming"
