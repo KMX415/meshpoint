@@ -688,6 +688,32 @@ If you also lost SSH access, the only path forward is to re-image the
 SD card and re-run `meshpoint setup`. There is no way to recover an
 admin password without host-level access by design.
 
+### Restore backup says success but data did not come back (`command not allowed`)
+
+**Cause:** Settings → System → **Restore backup** validates the archive,
+then launches `scripts/restore_finish.sh` with `sudo`. The sudoers rule
+must allow the archive path as a trailing argument (wildcard `*`). If
+`/etc/sudoers.d/meshpoint` is stale, `journalctl` shows:
+
+```text
+meshpoint : command not allowed ; COMMAND=/bin/bash /opt/meshpoint/scripts/restore_finish.sh /opt/meshpoint/data/restore-incoming/...
+```
+
+**Fix:** Pull the latest `feat/v0.7.7` (or whatever release ships backup)
+and refresh sudoers:
+
+```bash
+cd /opt/meshpoint
+sudo git pull
+sudo systemctl restart meshpoint
+```
+
+`ExecStartPre` copies `config/sudoers-meshpoint` into place on every
+restart. You can also run `sudo bash scripts/install.sh` if you prefer.
+Then upload the backup again. Your prior state may still be in
+`data/pre-restore-stash-<timestamp>/` if the script ran far enough to
+stash before failing.
+
 ### Setup wizard says "Existing config/local.yaml found" on a fresh SD
 
 **Cause:** Pre-v0.7.3 RC builds eagerly persisted the auto-generated

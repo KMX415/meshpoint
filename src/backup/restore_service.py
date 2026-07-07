@@ -8,6 +8,7 @@ import re
 import subprocess
 import tarfile
 import tempfile
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -155,6 +156,7 @@ class BackupRestoreService:
             stderr=subprocess.PIPE,
             start_new_session=True,
         )
+        self._raise_if_restore_launch_failed(proc)
         logger.info(
             "restore_finish launched pid=%s archive=%s",
             proc.pid,
@@ -166,6 +168,24 @@ class BackupRestoreService:
             stash_hint=f"data/pre-restore-stash-{stamp}",
             message="restore initiated; service will restart shortly",
         )
+
+    @staticmethod
+    def _raise_if_restore_launch_failed(proc: subprocess.Popen) -> None:
+        """Sudo rejects unknown argv instantly; surface that before claiming success."""
+        for _ in range(20):
+            rc = proc.poll()
+            if rc is None:
+                return
+            time.sleep(0.05)
+
+        if proc.returncode == 0:
+            return
+
+        detail = ""
+        if proc.stderr is not None:
+            detail = proc.stderr.read().decode("utf-8", errors="replace").strip()
+        message = detail or f"restore_finish exited with code {proc.returncode}"
+        raise RestoreValidationError(message)
 
     @staticmethod
     def _validate_manifest_header(manifest: BackupManifest) -> None:
