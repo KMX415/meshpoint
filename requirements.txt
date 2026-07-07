@@ -1,5 +1,4 @@
 fastapi>=0.110.0
-python-multipart>=0.0.9
 uvicorn[standard]>=0.29.0
 aiosqlite>=0.20.0
 meshtastic>=2.3.0

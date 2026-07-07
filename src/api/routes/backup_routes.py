@@ -7,7 +7,7 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
@@ -141,16 +141,41 @@ async def download_backup(
 
 @router.post("/restore")
 async def restore_backup(
-    upload: UploadFile = File(...),
+    request: Request,
     claims: SessionClaims = Depends(require_admin),
     audit: AuditLogWriter = Depends(get_audit_writer),
 ) -> dict:
     config = _require_config()
-    payload = await upload.read()
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            declared = int(content_length)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="invalid_content_length",
+            ) from exc
+        if declared > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="archive_too_large",
+            )
+        if declared == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="empty_upload",
+            )
+
+    payload = await request.body()
     if not payload:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="empty_upload",
+        )
+    if len(payload) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="archive_too_large",
         )
 
     data_dir = resolve_data_dir(config.storage.database_path)

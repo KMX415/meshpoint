@@ -117,13 +117,14 @@ class BackupRestoreCard {
     async _restore(file) {
         if (this.restoreBtn) this.restoreBtn.disabled = true;
         this._setStatus('pending', 'Uploading backup and starting restore…');
-        const form = new FormData();
-        form.append('upload', file, file.name);
         try {
             const response = await fetch('/api/system/backup/restore', {
                 method: 'POST',
                 credentials: 'same-origin',
-                body: form,
+                headers: {
+                    'Content-Type': 'application/gzip',
+                },
+                body: file,
             });
             const body = await response.json().catch(() => ({}));
             if (!response.ok) {

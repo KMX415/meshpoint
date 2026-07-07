@@ -154,13 +154,8 @@ class TestBackupRoutes(unittest.TestCase):
             )
             response = self.client.post(
                 "/api/system/backup/restore",
-                files={
-                    "upload": (
-                        "meshpoint-backup.tar.gz",
-                        buffer.getvalue(),
-                        "application/gzip",
-                    ),
-                },
+                content=buffer.getvalue(),
+                headers={"Content-Type": "application/gzip"},
             )
 
         self.assertEqual(response.status_code, 200)
