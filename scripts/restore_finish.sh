@@ -16,6 +16,30 @@ log() {
     logger -t meshpoint-restore-finish "$*" 2>/dev/null || true
 }
 
+# restore-incoming holds the upload; stash dirs are recovery copies.
+_should_skip_data_entry() {
+    case "$1" in
+        restore-incoming|backup-staging|pre-restore-stash-*)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+_clear_live_data_tree() {
+    if [[ ! -d "${MESHPOINT_DIR}/data" ]]; then
+        return 0
+    fi
+    for entry in "${MESHPOINT_DIR}/data"/*; do
+        [[ -e "$entry" ]] || continue
+        base="$(basename "$entry")"
+        if _should_skip_data_entry "$base"; then
+            continue
+        fi
+        rm -rf "$entry"
+    done
+}
+
 if [[ -z "$ARCHIVE_PATH" || ! -f "$ARCHIVE_PATH" ]]; then
     log "missing archive path"
     exit 1
@@ -47,11 +71,9 @@ fi
 if [[ -d "${MESHPOINT_DIR}/data" ]]; then
     for entry in "${MESHPOINT_DIR}/data"/*; do
         base="$(basename "$entry")"
-        case "$base" in
-            restore-incoming|pre-restore-stash-*|backup-staging)
-                continue
-                ;;
-        esac
+        if _should_skip_data_entry "$base"; then
+            continue
+        fi
         cp -a "$entry" "${STASH_DIR}/data/"
     done
 fi
@@ -70,19 +92,17 @@ mkdir -p "${MESHPOINT_DIR}/config" "${MESHPOINT_DIR}/data"
 if [[ -f "${BUNDLE_DIR}/config/local.yaml" ]]; then
     cp -a "${BUNDLE_DIR}/config/local.yaml" "${CONFIG_PATH}"
 fi
+log "Clearing live data tree before restore"
+_clear_live_data_tree
 if [[ -d "${BUNDLE_DIR}/data" ]]; then
     for entry in "${BUNDLE_DIR}/data"/*; do
         [[ -e "$entry" ]] || continue
         base="$(basename "$entry")"
-        target="${MESHPOINT_DIR}/data/${base}"
+        cp -a "$entry" "${MESHPOINT_DIR}/data/${base}"
         if [[ "$base" == *.db ]]; then
-            rm -f "${target}" "${target}-wal" "${target}-shm" "${target}-journal"
-        else
-            rm -rf "${target}"
-        fi
-        cp -a "$entry" "${target}"
-        if [[ "$base" == *.db ]]; then
-            rm -f "${target}-wal" "${target}-shm" "${target}-journal"
+            rm -f "${MESHPOINT_DIR}/data/${base}-wal" \
+                "${MESHPOINT_DIR}/data/${base}-shm" \
+                "${MESHPOINT_DIR}/data/${base}-journal"
         fi
     done
 fi

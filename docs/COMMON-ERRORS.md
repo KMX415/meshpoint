@@ -728,33 +728,21 @@ Then upload the backup again from **Settings → System → Restore backup**.
 Your prior state may still be in `data/pre-restore-stash-<timestamp>/` if
 the script stashed before failing.
 
-**Restore after Clear database still shows empty nodes.** The backup file
-can be correct (same `.tar.gz` from before the wipe) while the Pi still
-looks empty. **Clear database** runs against the live SQLite file; restore
-replaces `concentrator.db` but, until a recent fix, left stale
-`concentrator.db-wal` / `-shm` / `-journal` sidecars on disk. SQLite can
-re-apply the wipe from those files on the next start.
+**Restore after Clear database still shows empty nodes.** Restore must return you to the backup snapshot no matter what happened on the Pi since that backup (including **Clear database**). Older builds only overwrote files listed in the archive and left SQLite `-wal` / `-shm` sidecars on disk, so a wiped database could reappear after restore.
 
-**Check on the Pi:**
+**Fix:** Pull the latest `feat/v0.7.7` and restart. Restore now clears the live `data/` tree (except upload and stash folders) before copying the archive.
+
+**Verify after restore:**
 
 ```bash
-ls -la /opt/meshpoint/data/concentrator.db*
-sqlite3 /opt/meshpoint/data/concentrator.db "SELECT COUNT(*) FROM nodes;"
+sudo /opt/meshpoint/venv/bin/python -c "
+import sqlite3
+c=sqlite3.connect('/opt/meshpoint/data/concentrator.db')
+print('nodes', c.execute('SELECT COUNT(*) FROM nodes').fetchone()[0])
+"
 ```
 
-If `concentrator.db` is large but `nodes` is `0` and `-wal` exists, pull
-the latest `feat/v0.7.7` and restore again, or manually:
-
-```bash
-sudo systemctl stop meshpoint
-sudo rm -f /opt/meshpoint/data/concentrator.db-wal \
-  /opt/meshpoint/data/concentrator.db-shm \
-  /opt/meshpoint/data/concentrator.db-journal
-sudo bash /opt/meshpoint/scripts/restore_finish.sh \
-  /opt/meshpoint/data/restore-incoming/meshpoint-restore-*.tar.gz
-```
-
-Use the newest archive in `restore-incoming/` if several are present.
+Compare to node count inside your saved `.tar.gz` on a PC (see earlier diagnostic commands).
 
 ### Setup wizard says "Existing config/local.yaml found" on a fresh SD
 

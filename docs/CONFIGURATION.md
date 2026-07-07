@@ -14,6 +14,8 @@ Restart after any config change: `sudo systemctl restart meshpoint`
 
 **Settings → System** downloads a timestamped archive of `config/local.yaml` and the full `data/` directory (SQLite snapshot, PKI keys, rollback state). Use it before SD card trouble or before major changes. The file is not encrypted and contains all secrets: store offline and keep it private.
 
+**Restore** replaces `config/local.yaml` and resets the live `data/` tree to match the archive (clearing anything that happened since backup, including a **Clear database** action). Upload archives in `data/restore-incoming/` and prior stash folders are left untouched.
+
 To recover on a fresh SD card, install Meshpoint, complete web auth setup, then **Settings → System → Restore backup** and upload your saved `.tar.gz`. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#recovering-from-a-corrupted-install).
 
 ---
