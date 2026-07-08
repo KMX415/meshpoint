@@ -8,11 +8,11 @@ and for config syntax see [Configuration](CONFIGURATION.md).
 
 ## What is a Meshpoint?
 
-A Raspberry Pi 4 plus an SX1302/SX1303 LoRa concentrator that listens to
-**eight Meshtastic channels at once** and natively transmits Meshtastic
-messages from a browser. Optionally adds MeshCore monitoring and TX through
-a USB companion radio. Optionally syncs with [Meshradar](https://meshradar.io)
-for multi-site mesh intelligence.
+A Raspberry Pi 4 plus an SX1302/SX1303 LoRa concentrator that listens for
+**SF7 through SF12 in parallel on one tuned frequency** (eight demod chains)
+and natively transmits Meshtastic messages from a browser. Optionally adds
+MeshCore monitoring and TX through a USB companion radio. Optionally syncs
+with [Meshradar](https://meshradar.io) for multi-site mesh intelligence.
 
 If you have a phone with the Meshtastic app, you already have a single-channel
 node. A Meshpoint is the same network from the perspective of an observer
@@ -107,6 +107,21 @@ Two options:
 If the old device is still running and connected, the Remove will be
 short-lived: it will reappear on the next connection. Stop the service on
 the old SD card first if you want it gone for good.
+
+---
+
+## Can I listen to multiple modem presets (LongFast, MediumFast, etc.) at once?
+
+**No, not today.** Pick **one** modem preset in **Configuration → Radio**
+(region, frequency, bandwidth, spreading factor). The SX1302 runs eight
+demod chains on **that** channel plan so you still hear nodes using
+different spreading factors (SF7-SF12) on the same frequency and bandwidth.
+
+A Meshtastic **preset** is not just SF: it is frequency plus bandwidth plus
+spreading factor (LongFast, MediumFast, ShortFast, and so on). You cannot
+monitor multiple presets or multiple frequencies on one concentrator at the
+same time. Multi-preset / multi-frequency capture is on the roadmap and is
+limited by concentrator hardware, not missing UI.
 
 ---
 

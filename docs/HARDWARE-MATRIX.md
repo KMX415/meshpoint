@@ -19,8 +19,8 @@ validated. Application code is plain Python (v0.7.0+); **aarch64** is required.
 | **Host** | Pi 4 (SD) | Pi 4 (SD) | CM4 (eMMC) | Pi 4 (SD) |
 | **Concentrator** | RAK2287 (SX1302) | WM1303 (SX1303) | SX1302 (onboard) | RAK2287 (SX1302) |
 | **TX support** | Yes (native, with HAL patch) | Yes (native, with HAL patch) | Yes (native, with HAL patch) | Yes (native, with HAL patch) |
-| **RX channels** | 8 simultaneous | 8 simultaneous | 8 simultaneous | 8 simultaneous |
-| **Spreading factors** | SF7-SF12 simultaneous | SF7-SF12 simultaneous | SF7-SF12 simultaneous | SF7-SF12 simultaneous |
+| **RX demod chains** | 8 (SF7-SF12 on one RF plan) | 8 (SF7-SF12 on one RF plan) | 8 (SF7-SF12 on one RF plan) | 8 (SF7-SF12 on one RF plan) |
+| **Spreading factors** | SF7-SF12 parallel on one tuned frequency | SF7-SF12 parallel on one tuned frequency | SF7-SF12 parallel on one tuned frequency | SF7-SF12 parallel on one tuned frequency |
 | **Form factor** | Pre-assembled metal case | Pre-assembled metal case | Pre-assembled (PoE-capable) | Bare or 3D-printed enclosure |
 | **Carrier crypto chip** | None | ATECC608 (auto-detected) | None (wizard shows generic SX1302/Pi) | None |
 | **Boot storage** | microSD (usually 32 GB) | microSD (sometimes 64 GB) | Onboard eMMC (~8-32 GB) | Buy microSD separately |

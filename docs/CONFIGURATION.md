@@ -111,6 +111,13 @@ To match a Meshtastic preset, set `spreading_factor` and `bandwidth_khz` togethe
 | LongModerate | 11 | 125 |
 | LongSlow | 12 | 125 |
 
+**One preset per Meshpoint.** The dashboard preset (LongFast, MediumFast, etc.)
+sets a single frequency, bandwidth, and default spreading factor for TX. The
+concentrator still demodulates **SF7-SF12 in parallel on that frequency**, so
+you can hear nodes using different spreading factors on the same channel plan.
+You cannot listen to multiple modem presets or multiple frequencies at once on
+one concentrator (multi-preset IF chains are backlog).
+
 ### Custom presets (Configuration → Radio)
 
 The dashboard's **Configuration → Radio** card includes a **Custom**

@@ -165,6 +165,12 @@ presets. The cloud and most apps assume these:
 Set both `spreading_factor` and `bandwidth_khz` to match a preset. If you
 omit them, the service uses the region's LongFast defaults.
 
+**One preset per device.** Choose LongFast, MediumFast, or another named
+preset in Configuration → Radio. That sets one frequency and bandwidth for
+the concentrator. The hardware still receives SF7-SF12 in parallel on that
+tuned channel, which is different from monitoring multiple presets or
+frequencies at the same time.
+
 ---
 
 ## Custom Frequency Slots
