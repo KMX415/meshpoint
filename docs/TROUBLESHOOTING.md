@@ -129,9 +129,60 @@ The SX1250's digital SPI interface can recover while the RF receive path remains
 
 If `meshpoint logs` shows `SyntaxError: source code string cannot contain null bytes` or `git pull` fails with `error: inflate` / `fatal: loose object is corrupt`, the SD card took a bad write (usually from a hard power cut).
 
-**Preferred (dashboard):** If you saved a backup while the Pi was healthy, flash a fresh SD card, install Meshpoint (`scripts/install.sh`), complete web auth setup, then **Settings → System → Restore backup** and upload your `.tar.gz`. The service restarts with your prior `device_id`, channel keys, PKI keys, and local database.
+#### Disaster recovery with a saved backup (recommended)
 
-**SSH fallback** when the dashboard is unavailable or you have no backup file:
+Use this when you have a **Settings → System → Download backup** `.tar.gz` saved on your PC or NAS (not only on the Pi).
+
+**Before you start**
+
+1. Keep the backup file **off the Pi**. A dead SD card takes the on-device copy with it.
+2. Do **not** delete or rotate the Meshradar API key in the backup until upstream reconnects after restore, or be ready to paste a new key for the same `device_id` (see [COMMON-ERRORS.md](COMMON-ERRORS.md#upstream-http-403-after-restore)).
+
+**Steps (dashboard user path)**
+
+1. Flash a fresh SD card (or wipe and reinstall on the same card):
+   ```bash
+   sudo git clone https://github.com/KMX415/meshpoint.git /opt/meshpoint
+   cd /opt/meshpoint
+   sudo bash scripts/install.sh
+   ```
+2. **Bootstrap activation (SSH, required on a blank install).** The dashboard will not load until `config/local.yaml` has a valid Meshradar API key. The service exits with `Meshpoint is not activated` until then. Run the setup wizard once:
+   ```bash
+   sudo meshpoint setup
+   ```
+   Paste **any** valid API key from [meshradar.io](https://meshradar.io). Accept defaults for the rest if you are about to restore: restore overwrites this throwaway config.
+3. Start the service:
+   ```bash
+   sudo systemctl restart meshpoint
+   ```
+4. Open the dashboard. Complete **`/setup`** with any admin password (also replaced by restore).
+5. **Settings → System → Restore backup** and upload your saved `.tar.gz`. Wait for the service to restart.
+6. Sign in with the **password from before the disaster** (restore puts back `web_auth` from the archive).
+7. Confirm local data: nodes and packets should match the backup snapshot. Check upstream:
+   ```bash
+   meshpoint logs | grep -i upstream
+   ```
+   You should see `connected to wss://api.meshradar.io`. If you see `HTTP 403`, the API key in the backup was revoked on Meshradar: generate a new key for the restored `device_id`, then run `sudo meshpoint setup` and paste it (or edit `upstream.auth_token` in `config/local.yaml`), and restart.
+
+**What restore brings back:** `device_id`, channel keys, PKI keys, SQLite database (nodes, packets, messages), dashboard password, and the API key that was in the archive at backup time.
+
+**What restore does not fix:** A Meshradar API key you deleted in the cloud after taking the backup. Local restore can succeed while upstream stays on `HTTP 403` until you update the key.
+
+#### SSH restore when the dashboard will not load
+
+If the service will not stay up long enough for the upload UI, copy the archive to the Pi and finish from SSH:
+
+```bash
+scp meshpoint-backup-*.tar.gz pi@<pi-ip>:/tmp/meshpoint-restore.tar.gz
+ssh pi@<pi-ip>
+sudo bash /opt/meshpoint/scripts/restore_finish.sh /tmp/meshpoint-restore.tar.gz
+```
+
+See [COMMON-ERRORS.md](COMMON-ERRORS.md#restore-backup-stopped-the-service-and-it-never-came-back) if restore stops the service and does not restart it.
+
+#### Manual re-clone without a backup file
+
+**SSH fallback** when you have no `.tar.gz` backup:
 
 ```bash
 cd /opt/meshpoint
@@ -153,7 +204,17 @@ This preserves your packet database and device config. The venv must be recreate
 
 ### Backup before SD card trouble
 
-On a healthy Meshpoint, open **Settings → System → Download backup** and save the file to your PC or NAS. The archive contains API keys, channel PSKs, and PKI private material. It is not encrypted. If root disk use climbs above 90%, the System page suggests downloading a backup.
+On a healthy Meshpoint, open **Settings → System → Download backup** and save the file to your PC or NAS.
+
+The archive contains `config/local.yaml` (API key, `device_id`, web auth hashes, radio and MQTT settings) and the full `data/` tree (SQLite database, PKI private keys, rollback state). It is **not encrypted**. Treat it like a password vault: offline storage only.
+
+Download a fresh backup:
+
+- Before flashing or replacing the SD card
+- Before **Clear database** or other destructive actions (restore can still roll back, but an off-Pi copy is safer)
+- When root disk use climbs above 90% (the System page also suggests it at that threshold)
+
+Restore always returns the Pi to the **backup snapshot**, even if you cleared the database or changed config after that backup was taken.
 
 ### Using pip on Raspberry Pi OS
 

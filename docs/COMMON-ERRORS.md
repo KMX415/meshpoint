@@ -363,6 +363,28 @@ sudo chmod 666 /opt/meshpoint/data/*.db
 sudo systemctl restart meshpoint
 ```
 
+### `Meshpoint is not activated` (service exits, dashboard unreachable)
+
+**Cause:** On a fresh install there is no `config/local.yaml` with a Meshradar
+API key. Startup calls `validate_activation()` and exits with
+`SystemExit: 1` before the dashboard can serve `/setup` or **Restore backup**.
+
+**Fix (disaster recovery with a saved backup):** Run the setup wizard once over
+SSH, then use the dashboard restore UI:
+
+```bash
+sudo meshpoint setup
+```
+
+Paste any valid API key from [meshradar.io](https://meshradar.io). Defaults
+for the rest are fine if you will restore immediately. Restart the service,
+complete `/setup` in the browser, then **Settings → System → Restore backup**.
+
+Full steps: [TROUBLESHOOTING.md](TROUBLESHOOTING.md#disaster-recovery-with-a-saved-backup-recommended).
+
+**Fix (no backup, new Meshpoint):** Complete `sudo meshpoint setup` with your
+permanent API key and settings. There is nothing to restore.
+
 ---
 
 ## Concentrator and radio
@@ -743,6 +765,13 @@ print('nodes', c.execute('SELECT COUNT(*) FROM nodes').fetchone()[0])
 ```
 
 Compare to node count inside your saved `.tar.gz` on a PC (see earlier diagnostic commands).
+
+**Do not delete the old Meshradar API key during recovery.** Restore puts back
+the `upstream.auth_token` from the backup. If you ran `meshpoint setup` with a
+new key and then deleted the **old** key on [meshradar.io](https://meshradar.io),
+local nodes and packets will still come back but upstream will fail with
+`HTTP 403` until you issue a new key for the restored `device_id`. See
+[Upstream HTTP 403 after restore](#upstream-http-403-after-restore).
 
 **Restore says success but the service never stops (no `meshpoint-restore-finish` log lines).**
 Older builds reused one systemd unit name (`meshpoint-restore-finish`) with
@@ -1196,13 +1225,52 @@ of the resolved channel name.
    meshpoint logs | grep -i upstream
    ```
 
-### `Upstream 401`
+### `Upstream 401` or `HTTP 403` on WebSocket connect
 
-**Cause:** Invalid API key.
+**Cause:** Invalid or revoked Meshradar API key. Logs show
+`server rejected WebSocket connection: HTTP 403` (authorizer deny) or a 401
+class failure. `auth=present` only means a token is in `local.yaml`, not that
+the cloud still accepts it.
 
 **Fix:** Generate a new key at [meshradar.io](https://meshradar.io) under
-**Account > API Keys** (the key is only shown once: copy it immediately).
-Then re-run `sudo meshpoint setup` and paste the new key.
+**Account → API Keys** (shown once: copy immediately). Assign it to the
+`device_id` in your config, then either:
+
+- Re-run `sudo meshpoint setup` and paste the new key at the API key prompt, or
+- Edit `upstream.auth_token` in `config/local.yaml`, then restart:
+
+```bash
+sudo nano /opt/meshpoint/config/local.yaml
+sudo systemctl restart meshpoint
+meshpoint logs | grep -i upstream
+```
+
+There is no dashboard editor for the API key today (the Meshradar configuration
+card is not wired into the Configuration tab yet).
+
+### Upstream HTTP 403 after restore
+
+**Cause:** Restore succeeded locally (nodes, packets, `device_id` back) but the
+API key inside the backup was **deleted or rotated on Meshradar** after the
+backup was taken. Common during disaster-recovery testing: run `meshpoint setup`
+with a new key, delete the old key in the account panel, then restore the
+archive that still contains the old token.
+
+**Fix:**
+
+1. Confirm restore identity:
+   ```bash
+   sudo grep device_id /opt/meshpoint/config/local.yaml
+   ```
+2. On [meshradar.io](https://meshradar.io), create a new API key for that
+   `device_id` (or re-claim the device if it shows orphaned).
+3. Run `sudo meshpoint setup` and paste the new key, or set `upstream.auth_token`
+   in `config/local.yaml`, then restart.
+4. Confirm `connected to wss://api.meshradar.io` in logs.
+
+**Prevention:** Keep the backup file off the Pi. After restore, wait for upstream
+to connect before deleting any API keys. If you must rotate keys, update upstream
+on the Pi first, take a **new** backup, then retire the old key.
 
 ### Map dot turns red when the Pi is online
 

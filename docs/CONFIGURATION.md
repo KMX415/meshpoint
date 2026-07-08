@@ -12,11 +12,21 @@ Restart after any config change: `sudo systemctl restart meshpoint`
 
 ### Backup and restore
 
-**Settings → System** downloads a timestamped archive of `config/local.yaml` and the full `data/` directory (SQLite snapshot, PKI keys, rollback state). Use it before SD card trouble or before major changes. The file is not encrypted and contains all secrets: store offline and keep it private.
+**Download backup (healthy Pi):** **Settings → System → Download backup** writes a timestamped `.tar.gz` to your browser. Save it on your PC or NAS, not only on the Pi. The archive is not encrypted and contains API keys, channel PSKs, PKI private material, and your full local database.
 
-**Restore** replaces `config/local.yaml` and resets the live `data/` tree to match the archive (clearing anything that happened since backup, including a **Clear database** action). Upload archives in `data/restore-incoming/` and prior stash folders are left untouched.
+**Restore** replaces `config/local.yaml` and resets the live `data/` tree to match the archive. Anything that happened on the Pi after that backup (including **Clear database**) is discarded. Upload staging folders (`data/restore-incoming/`) and prior `data/pre-restore-stash-*` folders are left untouched.
 
-To recover on a fresh SD card, install Meshpoint, complete web auth setup, then **Settings → System → Restore backup** and upload your saved `.tar.gz`. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#recovering-from-a-corrupted-install).
+**Fresh SD or wiped install (typical user flow):**
+
+1. Install Meshpoint (`git clone` + `scripts/install.sh` on the new card).
+2. Run **`sudo meshpoint setup`** once and paste a valid Meshradar API key so the service can start (the dashboard does not load on a blank install without this step).
+3. Open the dashboard, complete **`/setup`** for the admin password.
+4. **Settings → System → Restore backup** and upload your saved `.tar.gz`.
+5. After restart, sign in with your **pre-disaster** dashboard password. Confirm nodes and packets, then check upstream logs for `connected to wss://api.meshradar.io`.
+
+**Important:** Restore puts back the API key from the backup. If you deleted that key on [meshradar.io](https://meshradar.io) after taking the backup, local data will still restore but upstream will log `HTTP 403` until you generate a new key for the same `device_id` and update it via `sudo meshpoint setup` or `upstream.auth_token` in `config/local.yaml` (there is no dashboard field for the API key yet).
+
+Full walkthrough: [TROUBLESHOOTING.md](TROUBLESHOOTING.md#disaster-recovery-with-a-saved-backup-recommended). SSH-only restore: `sudo bash /opt/meshpoint/scripts/restore_finish.sh /path/to/backup.tar.gz`.
 
 ---
 

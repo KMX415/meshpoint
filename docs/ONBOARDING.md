@@ -408,6 +408,10 @@ Wait for the green LED to stop blinking, then unplug for 10+ seconds and plug ba
 
 **Important:** Always shut down gracefully with `sudo poweroff` before unplugging. Hard power cuts (yanked cable, power outage) can corrupt the SD card and latch the RAK2287's SPI bus. Repeated hard power loss can permanently damage the SX1250 radio.
 
+### Back up your Meshpoint
+
+On a healthy install, use **Settings → System → Download backup** and store the `.tar.gz` on your PC or NAS (not only on the SD card). If the card fails, reinstall Meshpoint, run `sudo meshpoint setup` once so the dashboard loads, then **Restore backup** from the System page. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md#backup-before-sd-card-trouble).
+
 For troubleshooting, corrupted install recovery, and pip issues, see [Troubleshooting](TROUBLESHOOTING.md).
 
 ---
