@@ -9,9 +9,10 @@ For build-from-parts assembly see [Onboarding > Step 2](ONBOARDING.md#step-2-ass
 ## Concentrator Boards
 
 The host is a **Raspberry Pi 4** or **Compute Module 4 (CM4)** (1 GB minimum,
-2 GB recommended) running **64-bit** Raspberry Pi OS or Raspbian Lite.
-Pi 3 and Pi 5 are not currently supported. Pi 5 may work but is not validated.
-Application code is plain Python (v0.7.0+); **aarch64** is required.
+2 GB recommended) running **64-bit** Raspberry Pi OS or Raspbian Lite, **or**
+a **Bobcat Miner 300** on community **Armbian** (Rockchip RK3566, manual SPI
+setup). Pi 3 and Pi 5 are not currently supported. Pi 5 may work but is not
+validated. Application code is plain Python (v0.7.0+); **aarch64** is required.
 
 | | RAK Hotspot V2 (RAK7248) | SenseCap M1 | Syncrobit Chameleon | DIY (Pi + RAK2287 + HAT) |
 |---|---|---|---|---|
@@ -63,6 +64,7 @@ in the service. Also see the "RAK Hotspot V2 specific issues" section in
 | You want easiest reflash (back panel access) | RAK Hotspot V2 (4 bottom screws) |
 | You want PoE and a sealed outdoor-style enclosure | Syncrobit Chameleon (after eMMC reflash) |
 | You already have a Chameleon and a CM4 USB carrier | Repurpose with [Syncrobit Chameleon guide](SYNCROBIT-CHAMELEON.md) |
+| You want a very cheap used SX1302 miner (non-Pi host) | Bobcat Miner 300 with [Bobcat guide](BOBCAT-300.md) (manual config) |
 | You have a RAK WisMesh Pi Node HAT (RAK6421) | [WisMesh Node (experimental)](#wismesh-node-rak6421-hat-experimental) on branch `feat/wismesh-hat` |
 
 ### Syncrobit Chameleon notes
@@ -82,6 +84,29 @@ to restore vendor software.
 supply enough current for CM4 + concentrator (plan for up to ~2-3 A at 5 V
 equivalent). Prefer `sudo poweroff` before removing PoE to avoid SPI latch
 (see below).
+
+### Bobcat Miner 300 notes
+
+The Bobcat is **not** a Raspberry Pi: it uses **Rockchip RK3566**, onboard
+**eMMC**, and an SX1302-class concentrator on SPI bus **`spidev5.0`** after the
+`spi5-m1` Armbian overlay. Meshpoint does **not** auto-detect this layout;
+follow **[Bobcat Miner 300 guide](BOBCAT-300.md)** for kernel holds, `local.yaml`,
+and systemd `ExecStartPre` hooks (GPIO **149** reset, **147** PA enable, SPI
+symlinks to `/dev/spidev0.0`).
+
+| | Bobcat Miner 300 (G295 validated) |
+|---|---|
+| **Host** | Rockchip RK3566 (Armbian) |
+| **Concentrator** | SX1302 (onboard) |
+| **RAM / storage** | 2 GB / 64 GB eMMC typical |
+| **TX support** | Yes (with GPIO/systemd prep) |
+| **Plug-and-play `install.sh`** | No (skip `apt-get upgrade`, manual SPI) |
+| **MeshCore USB** | Powered hub reported; OTG unconfirmed |
+| **Typical price (used)** | ~$15-40 |
+
+Models **G290** (SX1302) are expected to match; **G285** is untested in this
+guide. Do not confuse with **Nebra Indoor Rock Pi 4** units that ship **SX1301**
+concentrators (not supported).
 
 ---
 
@@ -123,6 +148,7 @@ Full runbook: **[WisMesh Node guide](WISMESH-NODE.md)**. See also [Onboarding](O
 | x86 / x86_64 host | Not supported | aarch64 Raspberry Pi family only |
 | RAK7268 / RAK7268V2 (commercial gateway) | Not supported | These are LoRaWAN gateways with different firmware path; SX1302 is similar but the platform stack does not match |
 | Helium WHIP / Linxdot Indoor | Not validated | Same chip family as RAK V2 but the carrier varies; community testing welcome |
+| Bobcat Miner 300 (G285) | Not validated | G290/G295 community path documented; G285 untested |
 | Nebra Indoor (Rock Pi 4 + SX1301) | Not supported | Daughter board uses SX1301, not SX1302/SX1303; different HAL |
 | Single-channel SX1276/SX1262 boards | Not for concentrator role | These are single-channel radios. They can run as a [MeshCore USB companion](#meshcore-usb-companion-radios), not as the main concentrator. |
 
