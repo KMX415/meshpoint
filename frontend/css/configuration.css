@@ -41,19 +41,6 @@
     line-height: 1.5;
 }
 
-.cfg-card__hint--nested {
-    margin: -4px 0 4px;
-}
-
-.cfg-inline-link {
-    color: var(--accent-cyan, #22d3ee);
-    text-decoration: none;
-}
-
-.cfg-inline-link:hover {
-    text-decoration: underline;
-}
-
 .cfg-form {
     display: flex;
     flex-direction: column;
@@ -240,6 +227,92 @@ select.cfg-field__input option:checked {
 .cfg-toast--visible {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
+}
+
+.cfg-id-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 0.5rem;
+}
+
+.cfg-id-empty {
+    margin: 0;
+    font-size: 12px;
+    color: rgba(243, 244, 246, 0.45);
+    font-style: italic;
+}
+
+.cfg-id-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.cfg-id-chip {
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 12px;
+    padding: 0.15rem 0.45rem;
+    background: rgba(6, 182, 212, 0.1);
+    border: 1px solid rgba(6, 182, 212, 0.25);
+    border-radius: 6px;
+    color: #e2e8f0;
+}
+
+.cfg-id-remove {
+    background: transparent;
+    border: none;
+    color: rgba(243, 244, 246, 0.5);
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.25rem;
+}
+
+.cfg-id-remove:hover {
+    color: #ef4444;
+}
+
+.cfg-id-add {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.cfg-id-add .cfg-field__input {
+    flex: 1;
+}
+
+.cfg-throttle-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.5rem 1rem;
+    margin-top: 0.5rem;
+}
+
+.cfg-throttle-row {
+    display: grid;
+    grid-template-columns: 2.5rem 1fr 3rem;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 12px;
+}
+
+.cfg-throttle-label {
+    color: rgba(243, 244, 246, 0.65);
+    font-family: 'JetBrains Mono', Menlo, monospace;
+}
+
+.cfg-throttle-range {
+    width: 100%;
+    accent-color: var(--brand-cyan, #06b6d4);
+}
+
+.cfg-throttle-value {
+    text-align: right;
+    color: var(--brand-amber, #ffb84d);
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 11px;
 }
 
 @keyframes cfgFadeIn {

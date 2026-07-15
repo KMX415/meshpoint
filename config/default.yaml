@@ -60,6 +60,8 @@ relay:
   burst_size: 5
   min_relay_rssi: -110.0
   max_relay_rssi: -50.0
+  # channel_throttle_percent:   # per-channel relay duty budget (est. ToA)
+  #   "0": 100                  # omit = 100% all channels; EU capped at 1%
 
 upstream:
   enabled: true

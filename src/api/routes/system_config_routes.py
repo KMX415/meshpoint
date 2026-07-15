@@ -13,22 +13,30 @@ from src.api.audit.dependencies import get_audit_writer
 from src.api.auth.dependencies import require_admin
 from src.api.auth.jwt_session import SessionClaims
 from src.config import AppConfig, save_section_to_yaml
+from src.relay.channel_budget import normalize_channel_throttle
+from src.relay.relay_manager import RelayManager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
 _config: AppConfig | None = None
+_relay_manager: RelayManager | None = None
 
 
-def init_routes(config: AppConfig) -> None:
-    global _config
+def init_routes(
+    config: AppConfig,
+    relay_manager: RelayManager | None = None,
+) -> None:
+    global _config, _relay_manager
     _config = config
+    _relay_manager = relay_manager
 
 
 def reset_routes() -> None:
-    global _config
+    global _config, _relay_manager
     _config = None
+    _relay_manager = None
 
 
 class StorageUpdate(BaseModel):
@@ -51,6 +59,7 @@ class RelayUpdate(BaseModel):
     burst_size: Optional[int] = Field(None, ge=1, le=50)
     min_relay_rssi: Optional[float] = Field(None, ge=-150, le=0)
     max_relay_rssi: Optional[float] = Field(None, ge=-150, le=0)
+    channel_throttle_percent: Optional[dict[str, float]] = None
 
 
 class RadioAdvancedUpdate(BaseModel):
@@ -194,6 +203,16 @@ async def update_relay(
             raise HTTPException(400, "max_relay_rssi must be greater than min_relay_rssi")
         relay.max_relay_rssi = req.max_relay_rssi
         updates["max_relay_rssi"] = req.max_relay_rssi
+    throttle_reload = False
+    if req.channel_throttle_percent is not None:
+        try:
+            relay.channel_throttle_percent = normalize_channel_throttle(
+                req.channel_throttle_percent
+            )
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        updates["channel_throttle_percent"] = relay.channel_throttle_percent
+        throttle_reload = True
 
     if not updates:
         return {"saved": False, "restart_required": False}
@@ -205,6 +224,13 @@ async def update_relay(
             save_section_to_yaml("relay", updates)
         except PermissionError as exc:
             raise HTTPException(403, str(exc)) from exc
+
+    if throttle_reload and _relay_manager is not None:
+        region = _config.radio.region if _config else None
+        _relay_manager.reload_channel_budget(
+            channel_throttle_percent=relay.channel_throttle_percent,
+            region=region,
+        )
 
     return {"saved": True, "restart_required": restart_needed, "updates": updates}
 

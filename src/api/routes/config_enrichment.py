@@ -52,6 +52,7 @@ def enrich_config_payload(cfg: AppConfig, base: dict) -> dict:
         "burst_size": relay.burst_size,
         "min_relay_rssi": relay.min_relay_rssi,
         "max_relay_rssi": relay.max_relay_rssi,
+        "channel_throttle_percent": dict(relay.channel_throttle_percent or {}),
     }
     base["radio_advanced"] = {
         "spectral_scan_interval_seconds": radio.spectral_scan_interval_seconds,

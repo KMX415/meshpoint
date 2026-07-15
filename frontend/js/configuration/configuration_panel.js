@@ -173,13 +173,21 @@ class ConfigurationPanel {
                     this._cards.set('position-status', posStatus);
                 }
             }
-        } else if (section === 'advanced' && window.AdvancedConfigCard) {
+        } else if (section === 'advanced') {
             const host = document.getElementById('cfg-advanced-panel');
             if (host) {
-                host.innerHTML = '';
-                const card = new window.AdvancedConfigCard(api);
-                card.mount(host);
-                this._cards.set('advanced', card);
+                host.innerHTML = '<div class="cfg-section" data-adv-mount></div>';
+                const mount = host.querySelector('[data-adv-mount]');
+                if (window.AdvancedConfigCard) {
+                    const card = new window.AdvancedConfigCard(api);
+                    card.mount(mount);
+                    this._cards.set('advanced', card);
+                }
+                if (window.RelayThrottleCard) {
+                    const throttle = new window.RelayThrottleCard(api);
+                    throttle.mount(mount);
+                    this._cards.set('relay-throttle', throttle);
+                }
             }
         }
         this._mounted.add(section);

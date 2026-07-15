@@ -43,12 +43,18 @@ class PipelineCoordinator:
         self._router = PacketRouter(self._crypto)
         self._capture = CaptureCoordinator()
         relay_cfg = config.relay
+        radio = config.radio
         self._relay = RelayManager(
             enabled=relay_cfg.enabled,
             max_relay_per_minute=relay_cfg.max_relay_per_minute,
             burst_size=relay_cfg.burst_size,
             min_relay_rssi=relay_cfg.min_relay_rssi,
             max_relay_rssi=relay_cfg.max_relay_rssi,
+            channel_throttle_percent=relay_cfg.channel_throttle_percent,
+            region=radio.region,
+            default_sf=radio.spreading_factor,
+            default_bw_khz=radio.bandwidth_khz,
+            default_preamble=radio.preamble_length,
         )
         self._transmitter: Optional[MeshtasticTransmitter] = None
         self._mqtt: Optional[MqttPublisher] = None

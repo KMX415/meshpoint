@@ -1326,7 +1326,10 @@ def _init_routes(
     upstream_config_routes.init_routes(config=config)
     device_config_routes.init_routes(config=config, identity=identity)
     gps_status.init_routes(location_source=coord.location_source)
-    system_config_routes.init_routes(config=config)
+    system_config_routes.init_routes(
+        config=config,
+        relay_manager=coord.relay_manager,
+    )
     meshcore_config_routes.init_routes(config=config, tx_service=tx_service)
 
 
