@@ -206,9 +206,13 @@ class SerialConfigCard {
 
         const devices = [];
         this._devicesEl.querySelectorAll('.cfg-companion').forEach((div) => {
+            const serialPort = (div.querySelector('[data-device-port]')?.value || '').trim();
+            if (!serialPort) {
+                return;
+            }
             devices.push({
                 label: (div.querySelector('[data-device-label]')?.value || '').trim(),
-                serial_port: (div.querySelector('[data-device-port]')?.value || '').trim() || null,
+                serial_port: serialPort,
                 serial_baud: Number(div.querySelector('[data-device-baud]')?.value) || 115200,
             });
         });

@@ -67,13 +67,24 @@ class SerialDevicesRouteTest(unittest.TestCase):
         save_mock.assert_called_once()
 
     @patch("src.api.routes.system_config_routes.save_section_to_yaml")
-    def test_blank_port_becomes_none(self, save_mock):
+    def test_blank_rows_are_dropped(self, save_mock):
         resp = self.client.put(
             "/api/config/capture/serial-devices",
-            json={"devices": [{"label": "auto", "serial_port": "  "}]},
+            json={
+                "enable_source": True,
+                "devices": [
+                    {"label": "Heltec", "serial_port": "/dev/ttyACM1"},
+                    {"label": "", "serial_port": None},
+                    {"label": "auto", "serial_port": "  "},
+                ],
+            },
         )
         self.assertEqual(resp.status_code, 200)
-        self.assertIsNone(self.config.capture.serial[0].serial_port)
+        self.assertEqual(len(self.config.capture.serial), 1)
+        self.assertEqual(self.config.capture.serial[0].label, "Heltec")
+        self.assertEqual(self.config.capture.serial_port, "/dev/ttyACM1")
+        payload = save_mock.call_args[0][1]
+        self.assertEqual(len(payload["serial"]), 1)
 
     @patch("src.api.routes.system_config_routes.save_section_to_yaml")
     def test_disable_removes_serial_source(self, save_mock):

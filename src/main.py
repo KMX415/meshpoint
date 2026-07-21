@@ -30,6 +30,12 @@ def _add_serial_source(coordinator: PipelineCoordinator, config) -> None:
         )
     ]
     for dev in devices:
+        if not (dev.serial_port or "").strip():
+            logger.warning(
+                "Skipping serial device with empty port (label=%r)",
+                dev.label,
+            )
+            continue
         coordinator.capture_coordinator.add_source(
             SerialCaptureSource(
                 port=dev.serial_port,
