@@ -426,6 +426,15 @@
     text-overflow: ellipsis;
 }
 
+.msg-chat__name--clickable {
+    cursor: pointer;
+}
+
+.msg-chat__name--clickable:hover {
+    text-decoration: underline;
+    color: var(--accent-cyan);
+}
+
 .msg-chat__subtitle {
     font-size: 11px;
     color: var(--msg-text-faint);
@@ -607,6 +616,15 @@
     margin-bottom: 2px;
     color: var(--msg-mt);
     opacity: 0.9;
+}
+
+.msg-bubble__sender--clickable {
+    cursor: pointer;
+}
+
+.msg-bubble__sender--clickable:hover {
+    text-decoration: underline;
+    opacity: 1;
 }
 
 .msg-bubble__text { white-space: pre-wrap; }

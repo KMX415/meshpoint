@@ -21,6 +21,7 @@ class MessagingChat {
         this._allLoaded = false;
         this._renderEmptyState();
         this._headerName.textContent = '';
+        this._headerName.classList.remove('msg-chat__name--clickable');
         this._headerSubtitle.textContent = '';
         this._headerBadge.textContent = '';
         this._headerAvatar.textContent = '';
@@ -40,6 +41,7 @@ class MessagingChat {
         const proto = convo.protocol === 'meshcore' ? 'MC' : 'MT';
 
         this._headerName.textContent = name;
+        this._headerName.classList.toggle('msg-chat__name--clickable', !isChannel);
         this._headerSubtitle.textContent = isChannel
             ? 'Public channel · all listeners on this PSK'
             : 'Direct message';
@@ -203,12 +205,7 @@ class MessagingChat {
         const statusText = msg.status && msg.status !== 'delivered' && msg.status !== 'read'
             ? ` · ${msg.status}` : '';
 
-        let senderHtml = '';
-        if (msg.direction === 'received') {
-            const name = this._receivedSenderLabel(msg);
-            if (name) senderHtml = `<div class="msg-bubble__sender">${this._esc(name)}</div>`;
-        }
-
+        const senderHtml = this._buildSenderHtml(msg);
         const signalHtml = this._buildSignalHtml(msg);
 
         bubble.innerHTML = `
@@ -218,6 +215,23 @@ class MessagingChat {
         `;
 
         this._messagesEl.appendChild(bubble);
+    }
+
+    _buildSenderHtml(msg) {
+        if (msg.direction !== 'received') return '';
+        const name = this._receivedSenderLabel(msg);
+        if (!name) return '';
+        const nid = this._senderNodeId(msg);
+        const attr = nid ? ` data-node-id="${this._esc(nid)}"` : '';
+        const cls = nid ? ' msg-bubble__sender--clickable' : '';
+        return `<div class="msg-bubble__sender${cls}"${attr}>${this._esc(name)}</div>`;
+    }
+
+    /** Real node id for click-through. Channel rows use source_id. */
+    _senderNodeId(msg) {
+        const nid = msg.node_id || '';
+        if (nid.startsWith('broadcast:')) return msg.source_id || null;
+        return nid || null;
     }
 
     _scrollToBottom() {
@@ -277,6 +291,19 @@ class MessagingChat {
             if (this._messagesEl.scrollTop === 0 && !this._allLoaded) {
                 this._loadOlderMessages();
             }
+        });
+
+        this._headerName.addEventListener('click', () => {
+            if (!this._conversation || !window.nodeDrawer) return;
+            const isChannel = (this._conversation.node_id || '').startsWith('broadcast:');
+            if (isChannel) return;
+            window.nodeDrawer.open({ node_id: this._conversation.node_id });
+        });
+
+        this._messagesEl.addEventListener('click', (e) => {
+            const el = e.target.closest('.msg-bubble__sender[data-node-id]');
+            if (!el || !window.nodeDrawer) return;
+            window.nodeDrawer.open({ node_id: el.dataset.nodeId });
         });
     }
 
@@ -338,12 +365,7 @@ class MessagingChat {
             ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             : '';
         const signalHtml = this._buildSignalHtml(msg);
-
-        let senderHtml = '';
-        if (msg.direction === 'received') {
-            const name = this._receivedSenderLabel(msg);
-            if (name) senderHtml = `<div class="msg-bubble__sender">${this._esc(name)}</div>`;
-        }
+        const senderHtml = this._buildSenderHtml(msg);
 
         bubble.innerHTML = `
             ${senderHtml}

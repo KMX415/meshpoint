@@ -116,6 +116,49 @@ class TestMessageNameResolver(unittest.TestCase):
         enriched = _run(self.resolver.apply_to_message_dict(raw))
         self.assertEqual(enriched["node_name"], "TestNode")
 
+    def test_broadcast_with_stored_name_still_sets_source_id(self):
+        # Common case: node_name already stored; must still look up
+        # packet source so the Messages UI can make the sender clickable.
+        _run(self.node_repo.upsert(
+            Node(
+                node_id="a1b2c3d4",
+                long_name="TestNode",
+                protocol="meshtastic",
+            )
+        ))
+
+        async def _seed_packet() -> None:
+            await self.packet_repo.insert(Packet(
+                packet_id="pkt-named-1",
+                source_id="a1b2c3d4",
+                destination_id="ffffffff",
+                protocol=Protocol.MESHTASTIC,
+                packet_type=PacketType.TEXT,
+                signal=SignalMetrics(
+                    rssi=-50.0,
+                    snr=8.0,
+                    frequency_mhz=906.875,
+                    spreading_factor=11,
+                    bandwidth_khz=250,
+                ),
+            ))
+            await self.db.commit()
+
+        _run(_seed_packet())
+        _run(self.message_repo.save_received(
+            text="Hey",
+            node_id="broadcast:meshtastic:0",
+            node_name="TestNode",
+            protocol="meshtastic",
+            packet_id="pkt-named-1",
+        ))
+
+        messages = _run(self.message_repo.get_conversation("broadcast:meshtastic:0"))
+        raw = messages[0].to_dict()
+        enriched = _run(self.resolver.apply_to_message_dict(raw))
+        self.assertEqual(enriched["node_name"], "TestNode")
+        self.assertEqual(enriched["source_id"], "a1b2c3d4")
+
     def test_resolve_sender_by_source_id_for_broadcast_lookup(self):
         _run(self.node_repo.upsert(
             Node(
