@@ -99,10 +99,14 @@ class MessageNameResolver:
         node_id = out.get("node_id", "")
         stored = (out.get("node_name") or "").strip()
         if node_id.startswith("broadcast:"):
+            # Always resolve the real sender ID (sets source_id on out for
+            # clickable channel names). Do this even when stored name is
+            # already good; skipping left source_id unset (javastraat 35416ee).
+            resolved_name = await self._resolve_broadcast_sender(out)
             if stored and stored.lower() != "broadcast":
                 out["node_name"] = stored
             else:
-                out["node_name"] = await self._resolve_broadcast_sender(out)
+                out["node_name"] = resolved_name
             return out
         out["node_name"] = await self.resolve(
             node_id,
@@ -116,6 +120,7 @@ class MessageNameResolver:
         if pkt_id and self._packet_repo:
             src = await self._packet_repo.get_source_id_by_packet_id(pkt_id)
             if src:
+                message["source_id"] = src
                 return await self.resolve(
                     src,
                     message.get("protocol", ""),
