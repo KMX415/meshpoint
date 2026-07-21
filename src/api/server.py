@@ -1064,9 +1064,17 @@ def _setup_message_interception(
                 return
             if packet.protocol == Protocol.MESHCORE:
                 ch_idx = packet.channel_hash or 0
+                node_id = f"broadcast:{packet.protocol.value}:{ch_idx}"
             else:
                 ch_idx = channel_hash_resolver.lookup(packet.channel_hash)
-            node_id = f"broadcast:{packet.protocol.value}:{ch_idx}"
+                if ch_idx is None:
+                    # Distinct bucket per unmapped hash (not LongFast).
+                    node_id = (
+                        f"broadcast:{packet.protocol.value}:"
+                        f"unmapped:0x{packet.channel_hash:02x}"
+                    )
+                else:
+                    node_id = f"broadcast:{packet.protocol.value}:{ch_idx}"
             direction = "received"
         elif is_for_us:
             node_id = packet.source_id or "unknown"

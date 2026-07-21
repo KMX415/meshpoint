@@ -51,11 +51,40 @@ class TestChannelHashResolver(unittest.TestCase):
         self.assertEqual(self.resolver.lookup(primary_hash), 0)
         self.assertEqual(self.resolver.lookup(private_hash), 1)
 
-    def test_unknown_hash_defaults_to_zero_and_warns_once(self) -> None:
+    def test_rebuild_is_immune_to_crypto_keys_ordering_drift(self) -> None:
+        self.crypto.add_channel_key("Zulu", PRIVATE_PSK_B64)
+        self.crypto.add_channel_key("Alpha", "AQ==")
+
+        self.resolver.rebuild(
+            self.crypto, "LongFast", {"Alpha": "AQ==", "Zulu": PRIVATE_PSK_B64},
+        )
+
+        alpha_hash = self.crypto.compute_channel_hash(
+            "Alpha", self.crypto.get_channel_key("Alpha"),
+        )
+        zulu_hash = self.crypto.compute_channel_hash(
+            "Zulu", self.crypto.get_channel_key("Zulu"),
+        )
+        self.assertEqual(self.resolver.lookup(alpha_hash), 1)
+        self.assertEqual(self.resolver.lookup(zulu_hash), 2)
+
+    def test_rebuild_excludes_keys_not_in_meshtastic_channel_list(self) -> None:
+        self.crypto.add_channel_key("BayMesh", PRIVATE_PSK_B64)
+        self.crypto.add_channel_key("McPublic", PRIVATE_PSK_B64)
+
+        self.resolver.rebuild(self.crypto, "LongFast", {"BayMesh": PRIVATE_PSK_B64})
+
+        self.assertEqual(len(self.resolver.mapping), 2)
+        mc_hash = self.crypto.compute_channel_hash(
+            "McPublic", self.crypto.get_channel_key("McPublic"),
+        )
+        self.assertIsNone(self.resolver.lookup(mc_hash))
+
+    def test_unknown_hash_returns_none_and_warns_once(self) -> None:
         self.resolver.rebuild(self.crypto, "LongFast", {})
         with patch.object(resolver_module.logger, "warning") as warn:
-            self.assertEqual(self.resolver.lookup(0xAB), 0)
-            self.assertEqual(self.resolver.lookup(0xAB), 0)
+            self.assertIsNone(self.resolver.lookup(0xAB))
+            self.assertIsNone(self.resolver.lookup(0xAB))
             warn.assert_called_once()
 
     def test_rebuild_after_crypto_refresh_updates_private_index(self) -> None:
@@ -70,7 +99,7 @@ class TestChannelHashResolver(unittest.TestCase):
             "BayMesh", self.crypto.get_all_keys()[1]
         )
         self.assertEqual(self.resolver.lookup(private_hash), 1)
-        self.assertEqual(self.resolver.lookup(private_hash_before), 0)
+        self.assertIsNone(self.resolver.lookup(private_hash_before))
 
 
 class TestChannelHashResolverPutChannels(unittest.TestCase):
@@ -99,7 +128,7 @@ class TestChannelHashResolverPutChannels(unittest.TestCase):
         private_hash = self.crypto.compute_channel_hash(
             "BayMesh", self.crypto.get_all_keys()[0]
         )
-        self.assertEqual(self.resolver.lookup(private_hash), 0)
+        self.assertIsNone(self.resolver.lookup(private_hash))
 
         response = self.client.put(
             "/api/config/channels",

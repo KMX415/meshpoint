@@ -47,6 +47,10 @@ class CryptoService:
         """Drop all non-default channel keys."""
         self._keys.clear()
 
+    def get_channel_key(self, channel_name: str) -> bytes | None:
+        """Return the expanded key for a named channel, if loaded."""
+        return self._keys.get(channel_name)
+
     def set_keypair(self, private_key: bytes, public_key: bytes) -> None:
         """Install the Meshpoint Meshtastic PKI keypair."""
         self._private_key = private_key
