@@ -128,6 +128,14 @@ class ConfigurationPanel {
                 card.mount(host);
                 this._cards.set('meshcore', card);
             }
+        } else if (section === 'serial' && window.SerialConfigCard) {
+            const host = document.getElementById('cfg-serial-panel');
+            if (host) {
+                host.innerHTML = '';
+                const card = new window.SerialConfigCard(api);
+                card.mount(host);
+                this._cards.set('serial', card);
+            }
         } else if (section === 'transmit' && window.TransmitConfigCard) {
             const host = document.getElementById('cfg-transmit-panel');
             if (host) {

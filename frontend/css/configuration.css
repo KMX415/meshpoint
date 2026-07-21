@@ -97,6 +97,18 @@
     letter-spacing: 0;
 }
 
+.cfg-field__resolved {
+    display: block;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    color: var(--accent-cyan, #22d3ee);
+    margin-top: 4px;
+}
+
+.cfg-field__resolved[hidden] {
+    display: none;
+}
+
 .cfg-field__hint--block {
     display: block;
     margin: 0 0 10px;

@@ -81,9 +81,11 @@ class SerialCaptureSource(CaptureSource):
         self,
         port: Optional[str] = None,
         baud: int = 115200,
+        label: str = "",
     ):
         self._port = port
         self._baud = baud
+        self._label = (label or "").strip()
         self._interface = None
         self._running = False
         self._self_origin = SerialSelfOriginFilter()
@@ -92,7 +94,7 @@ class SerialCaptureSource(CaptureSource):
 
     @property
     def name(self) -> str:
-        return "serial"
+        return f"serial_{self._label}" if self._label else "serial"
 
     @property
     def is_running(self) -> bool:
@@ -125,6 +127,7 @@ class SerialCaptureSource(CaptureSource):
             own_node = SerialSelfOriginFilter.read_own_node_num(self._interface)
             self._self_origin.set_own_node_num(own_node)
             self._radio_info = SerialRadioHandshake.read(self._interface)
+            self._radio_info["own_node_num"] = own_node
             try:
                 modem_preset = self._radio_info.get("modem_preset")
                 if modem_preset == "CUSTOM":
@@ -273,8 +276,12 @@ class SerialCaptureSource(CaptureSource):
                 continue
 
     def _on_receive(self, packet, interface) -> None:
-        """Callback invoked by meshtastic-python on packet reception."""
-        if not self._running:
+        """Callback invoked by meshtastic-python on packet reception.
+
+        meshtastic-python publishes every open interface on one process-wide
+        topic, so multi-stick setups must ignore foreign interfaces.
+        """
+        if not self._running or interface is not self._interface:
             return
 
         try:

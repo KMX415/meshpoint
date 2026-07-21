@@ -28,6 +28,13 @@ capture:
   sources: []
   serial_port: null
   serial_baud: 115200
+  # Opt-in multi-stick list (label becomes capture_source "serial_<label>"):
+  # serial:
+  #   - serial_port: "/dev/ttyUSB0"
+  #     label: "433"
+  #   - serial_port: "/dev/ttyUSB1"
+  #     label: "868"
+  serial: []
   concentrator_spi_device: "/dev/spidev0.0"
   meshcore_usb:
     serial_port: null

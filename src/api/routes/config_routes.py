@@ -44,6 +44,7 @@ _crypto = None
 _tx_service = None
 _identity: DeviceIdentity | None = None
 _channel_hash_resolver = None
+_serial_sources: list = []
 
 
 def init_routes(
@@ -52,13 +53,42 @@ def init_routes(
     tx_service=None,
     identity: DeviceIdentity | None = None,
     channel_hash_resolver=None,
+    serial_sources: list | None = None,
 ) -> None:
     global _config, _crypto, _tx_service, _identity, _channel_hash_resolver
+    global _serial_sources
     _config = config
     _crypto = crypto
     _tx_service = tx_service
     _identity = identity
     _channel_hash_resolver = channel_hash_resolver
+    _serial_sources = serial_sources or []
+
+
+def _serial_status_entry(src) -> dict:
+    """Topbar / config status for one Meshtastic USB serial source."""
+    from src.radio.channel_frequency import resolve_frequency_mhz
+
+    info = src.get_radio_info() if hasattr(src, "get_radio_info") else {}
+    own_node_num = info.get("own_node_num")
+    return {
+        "name": src.name,
+        "connected": bool(getattr(src, "connected", False)),
+        "frequency_mhz": resolve_frequency_mhz(
+            region=info.get("region"),
+            channel_num=info.get("channel_num"),
+            bandwidth_khz=info.get("bandwidth_khz") or 250.0,
+            channel_name=info.get("channel_name"),
+            modem_preset=info.get("modem_preset"),
+            use_preset=info.get("use_preset", True),
+            frequency_offset=info.get("frequency_offset") or 0.0,
+            override_frequency=info.get("override_frequency") or 0.0,
+        ),
+        **info,
+        "own_node_id_hex": (
+            f"{own_node_num:08x}" if own_node_num is not None else None
+        ),
+    }
 
 
 def _refresh_channel_hash_map() -> None:
@@ -185,6 +215,7 @@ async def get_config():
         ),
         "channels": channels,
         "meshcore": mc_status,
+        "serial": [_serial_status_entry(src) for src in _serial_sources],
         "duty_cycle": duty_info,
         "presets": all_presets_list(),
         "regions": [

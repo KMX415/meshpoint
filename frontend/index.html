@@ -168,6 +168,7 @@
                             <li class="sidebar__subitem"><a href="#/configuration/radio" class="sidebar__link" data-route="configuration/radio"><span class="sidebar__label">Radio</span></a></li>
                             <li class="sidebar__subitem"><a href="#/configuration/channels" class="sidebar__link" data-route="configuration/channels"><span class="sidebar__label">Channels</span></a></li>
                             <li class="sidebar__subitem"><a href="#/configuration/meshcore" class="sidebar__link" data-route="configuration/meshcore"><span class="sidebar__label">MeshCore</span></a></li>
+                            <li class="sidebar__subitem"><a href="#/configuration/serial" class="sidebar__link" data-route="configuration/serial"><span class="sidebar__label">Serial</span></a></li>
                             <li class="sidebar__subitem"><a href="#/configuration/transmit" class="sidebar__link" data-route="configuration/transmit"><span class="sidebar__label">Transmit</span></a></li>
                             <li class="sidebar__subitem"><a href="#/configuration/mqtt" class="sidebar__link" data-route="configuration/mqtt"><span class="sidebar__label">MQTT</span></a></li>
                             <li class="sidebar__subitem"><a href="#/configuration/gps" class="sidebar__link" data-route="configuration/gps"><span class="sidebar__label">GPS</span></a></li>
@@ -280,6 +281,7 @@
                         <span class="topbar-meshcore__channel">--</span>
                     </span>
                 </div>
+                <div class="topbar__group topbar__group--serial" id="topbar-serial-group" hidden></div>
                 <div class="topbar__spacer" aria-hidden="true"></div>
                 <div class="topbar-actions" role="toolbar" aria-label="Quick actions"></div>
             </header>
@@ -486,6 +488,7 @@
             <section class="section" data-section="configuration/radio" style="display:none"><div id="cfg-radio-panel" class="section__placeholder"><h2>Configuration · Radio</h2><p>Skeleton; controls migrate from the Radio tab.</p></div></section>
             <section class="section" data-section="configuration/channels" style="display:none"><div id="cfg-channels-panel" class="section__placeholder"><h2>Configuration · Channels</h2><p>Skeleton; PSK list + add/remove.</p></div></section>
             <section class="section" data-section="configuration/meshcore" style="display:none"><div id="cfg-meshcore-panel" class="section__placeholder"><h2>Configuration · MeshCore</h2><p>Skeleton; companion channel keys + Send Advert.</p></div></section>
+            <section class="section" data-section="configuration/serial" style="display:none"><div id="cfg-serial-panel" class="section__placeholder"><h2>Configuration · Serial</h2><p>Loading…</p></div></section>
             <section class="section" data-section="configuration/transmit" style="display:none"><div id="cfg-transmit-panel" class="section__placeholder"><h2>Configuration · Transmit</h2><p>Skeleton; TX power + duty cycle + relay.</p></div></section>
             <section class="section" data-section="configuration/mqtt" style="display:none"><div id="cfg-mqtt-panel" class="section__placeholder"><h2>Configuration · MQTT</h2><p>Loading…</p></div></section>
             <section class="section" data-section="configuration/gps" style="display:none"><div id="cfg-gps-panel" class="section__placeholder"><h2>Configuration · GPS</h2><p>Loading…</p></div></section>
@@ -758,6 +761,7 @@
     <script src="js/configuration/quick_deploy_card.js"></script>
     <script src="js/configuration/channels_card.js"></script>
     <script src="js/configuration/meshcore_card.js"></script>
+    <script src="js/configuration/serial_card.js"></script>
     <script src="js/configuration/transmit_card.js"></script>
     <script src="js/configuration/mqtt_card.js"></script>
     <script src="js/configuration/gps_skyplot.js"></script>
@@ -789,6 +793,7 @@
     <script src="js/tab_title_telemetry.js"></script>
     <script src="topbar/topbar_meshtastic_chip.js"></script>
     <script src="topbar/topbar_meshcore_chip.js"></script>
+    <script src="topbar/topbar_serial_chip.js"></script>
     <script src="topbar/topbar_actions.js"></script>
     <script src="topbar/topbar_controller.js"></script>
     <script src="js/build_stamp.js"></script>
