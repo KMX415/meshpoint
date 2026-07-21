@@ -132,5 +132,61 @@ class SerialCaptureSourceDropTest(unittest.TestCase):
         self.assertIsNotNone(result)
 
 
+class BuildPreDecodedEarlyExitTest(unittest.TestCase):
+    """Early exits that must not require the meshtastic package."""
+
+    def test_no_decoded_key_returns_none(self):
+        self.assertIsNone(
+            SerialCaptureSource._build_pre_decoded({"raw": "aa"})
+        )
+
+    def test_decoded_not_a_dict_returns_none(self):
+        self.assertIsNone(
+            SerialCaptureSource._build_pre_decoded({"decoded": "not-a-dict"})
+        )
+
+    def test_decoded_missing_portnum_returns_none(self):
+        self.assertIsNone(
+            SerialCaptureSource._build_pre_decoded(
+                {"decoded": {"payload": "AQI="}}
+            )
+        )
+
+
+class ReconstructRawTest(unittest.TestCase):
+    """MeshPacket raw is a protobuf object; encrypted is base64."""
+
+    def test_protobuf_raw_object_triggers_reconstruction(self):
+        source = SerialCaptureSource(port="/dev/ttyUSB0")
+        result = source._packet_to_raw_capture(
+            {
+                "from": 0xAABBCCDD,
+                "to": 0xFFFFFFFF,
+                "id": 1,
+                "raw": object(),  # MeshPacket stand-in
+                "encrypted": "",
+            }
+        )
+        self.assertIsNotNone(result)
+        self.assertGreaterEqual(len(result.payload), 16)
+
+    def test_encrypted_base64_appended_to_header(self):
+        import base64
+
+        source = SerialCaptureSource(port="/dev/ttyUSB0")
+        body = base64.b64encode(b"\x01\x02\x03").decode()
+        result = source._packet_to_raw_capture(
+            {
+                "from": 0xAABBCCDD,
+                "to": 0xFFFFFFFF,
+                "id": 1,
+                "raw": object(),
+                "encrypted": body,
+            }
+        )
+        self.assertIsNotNone(result)
+        self.assertEqual(result.payload[16:], b"\x01\x02\x03")
+
+
 if __name__ == "__main__":
     unittest.main()

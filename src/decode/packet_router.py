@@ -40,9 +40,12 @@ class PacketRouter:
         raw_bytes: bytes,
         signal: Optional[SignalMetrics] = None,
         protocol_hint: Optional[Protocol] = None,
+        pre_decoded: Optional[dict] = None,
     ) -> Optional[Packet]:
         if protocol_hint == Protocol.MESHTASTIC:
-            packet = self._meshtastic.decode(raw_bytes, signal)
+            packet = self._meshtastic.decode(
+                raw_bytes, signal, pre_decoded=pre_decoded
+            )
             if packet:
                 logger.info(
                     "Meshtastic packet (hint) type=%s src=%s decrypted=%s",
@@ -59,7 +62,9 @@ class PacketRouter:
                 )
             return packet
 
-        packet = self._meshtastic.decode(raw_bytes, signal)
+        packet = self._meshtastic.decode(
+            raw_bytes, signal, pre_decoded=pre_decoded
+        )
         if packet and packet.decrypted:
             logger.info(
                 "Decoded %s packet (type=%s, src=%s)",
