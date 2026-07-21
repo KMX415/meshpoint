@@ -108,6 +108,7 @@ class NodeRepository:
                    p.snr AS latest_snr,
                    p.hop_limit AS latest_hop_limit,
                    p.hop_start AS latest_hop_start,
+                   p.capture_source AS latest_capture_source,
                    t.battery_level AS latest_battery,
                    t.voltage AS latest_voltage,
                    t.temperature AS latest_temperature,
@@ -117,7 +118,7 @@ class NodeRepository:
             FROM nodes n
             LEFT JOIN (
                 SELECT source_id,
-                       rssi, snr, hop_limit, hop_start,
+                       rssi, snr, hop_limit, hop_start, capture_source,
                        ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY timestamp DESC) AS rn
                 FROM packets
             ) p ON p.source_id = n.node_id AND p.rn = 1
@@ -142,6 +143,7 @@ class NodeRepository:
         d = node.to_dict()
         d["latest_rssi"] = row.get("latest_rssi")
         d["latest_snr"] = row.get("latest_snr")
+        d["latest_capture_source"] = row.get("latest_capture_source")
         d["latest_battery"] = row.get("latest_battery")
         d["latest_voltage"] = row.get("latest_voltage")
         d["latest_temperature"] = row.get("latest_temperature")

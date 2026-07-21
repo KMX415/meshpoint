@@ -150,6 +150,8 @@ class NodeDrawer {
         if (n.hardware_model) rows.push(['Hardware', n.hardware_model]);
         if (n.role != null) rows.push(['Role', this._roleName(n.role)]);
         rows.push(['Protocol', (n.protocol || 'meshtastic').toUpperCase()]);
+        const band = this._bandLabel(n.latest_capture_source);
+        if (band) rows.push(['Band', band]);
         if (n.firmware_version) rows.push(['Firmware', n.firmware_version]);
         rows.push(['Node ID', `!${n.node_id}`]);
         rows.push(['First Seen', this._formatDate(n.first_seen)]);
@@ -426,6 +428,14 @@ class NodeDrawer {
         };
         if (typeof role === 'number') return names[role] || `ROLE_${role}`;
         return String(role).toUpperCase();
+    }
+
+    /** Band from labelled capture_source (serial_433, meshcore_usb_868). */
+    _bandLabel(captureSource) {
+        if (!captureSource) return null;
+        if (captureSource.endsWith('_433')) return '433 MHz';
+        if (captureSource.endsWith('_868')) return '868 MHz';
+        return null;
     }
 
     /** @param {number} tempC stored Meshtastic environment temperature (Celsius). */

@@ -345,9 +345,24 @@ class NodeCards {
         if (n.role != null) {
             parts.push(`<span class="nc-chip nc-chip--meta">${this._roleName(n.role)}</span>`);
         }
+        const band = this._bandLabel(n.latest_capture_source);
+        if (band) {
+            parts.push(`<span class="nc-chip nc-chip--band">${band}</span>`);
+        }
         parts.push(`<span class="nc-chip nc-chip--id">!${this._esc(n.node_id)}</span>`);
 
         return `<div class="nc-card__row nc-card__row--meta">${parts.join('')}</div>`;
+    }
+
+    /**
+     * Band from a labelled capture_source (serial_433, meshcore_usb_868).
+     * Not from frequency_mhz: serial stamps a placeholder frequency today.
+     */
+    _bandLabel(captureSource) {
+        if (!captureSource) return null;
+        if (captureSource.endsWith('_433')) return '433 MHz';
+        if (captureSource.endsWith('_868')) return '868 MHz';
+        return null;
     }
 
     _signalBars(rssi) {

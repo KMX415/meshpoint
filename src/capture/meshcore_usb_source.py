@@ -409,7 +409,7 @@ class MeshcoreUsbCaptureSource(CaptureSource):
         return RawCapture(
             payload=json.dumps(envelope).encode("utf-8"),
             signal=signal,
-            capture_source="meshcore_usb",
+            capture_source=self.name,
             protocol_hint=Protocol.MESHCORE,
         )
 
