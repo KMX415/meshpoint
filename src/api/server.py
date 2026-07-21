@@ -1005,12 +1005,13 @@ def _setup_message_interception(
                 name = c.get("name", "")
                 if not pk:
                     continue
+                # Canonical 12-hex only. Indexing 8/10/16-char prefixes let
+                # contacts that share a short prefix overwrite each other
+                # (javastraat/meshpoint 52e1f56).
                 canonical = pk[:12].lower() if len(pk) >= 12 else pk.lower()
-                for prefix_len in (8, 10, 12, 16, len(pk)):
-                    prefix = pk[:prefix_len].lower()
-                    mc_pubkey_canon[prefix] = canonical
-                    if name:
-                        mc_name_cache[prefix] = name
+                mc_pubkey_canon[canonical] = canonical
+                if name:
+                    mc_name_cache[canonical] = name
             logger.debug(
                 "MC contact cache refreshed: %d name, %d pubkey entries",
                 len(mc_name_cache), len(mc_pubkey_canon),
@@ -1026,24 +1027,20 @@ def _setup_message_interception(
             return False
 
     def _resolve_mc_display_name(source: str, payload: dict) -> str:
+        # Canonical 12-char only; see _refresh_mc_contacts.
         src_lower = source.lower()
-        for length in (len(src_lower), 12, 8, 16):
-            cached = mc_name_cache.get(src_lower[:length], "")
-            if cached and not _is_hex_only(cached):
-                return cached
+        cached = mc_name_cache.get(src_lower[:12], "")
+        if cached and not _is_hex_only(cached):
+            return cached
         name = payload.get("long_name", "")
         if name and not _is_hex_only(name):
             return name
         return ""
 
     def _normalize_mc_node_id(source: str) -> str:
-        """Map any pubkey prefix to the canonical 12-char lowercase form."""
+        """Map a pubkey to the canonical 12-char lowercase form."""
         src_lower = source.lower()
-        for length in (len(src_lower), 12, 8, 16):
-            canon = mc_pubkey_canon.get(src_lower[:length], "")
-            if canon:
-                return canon
-        return src_lower
+        return mc_pubkey_canon.get(src_lower[:12], "") or src_lower
 
     def on_text_packet(packet: Packet) -> None:
         if packet.packet_type != PacketType.TEXT:
@@ -1137,10 +1134,11 @@ def _setup_message_interception(
             ):
                 src = (packet.source_id or "").lower()
                 if src and src != node_name.lower():
+                    # Exact node_id match only (not an 8-char LIKE prefix).
                     await coord.node_repo._db.execute(
                         "UPDATE nodes SET long_name = ? "
-                        "WHERE LOWER(node_id) LIKE ? AND protocol = 'meshcore'",
-                        (node_name, src[:8] + "%"),
+                        "WHERE LOWER(node_id) = ? AND protocol = 'meshcore'",
+                        (node_name, src),
                     )
                     await coord.node_repo._db.commit()
 
@@ -1148,35 +1146,19 @@ def _setup_message_interception(
                 packet.protocol == Protocol.MESHCORE
                 and (not node_name or _is_hex_only(node_name))
             ):
+                # Exact match only. Removed unscoped mc:% fetch_one that
+                # borrowed an arbitrary companion contact's name.
                 row = await coord.node_repo._db.fetch_one(
                     "SELECT long_name FROM nodes "
-                    "WHERE LOWER(node_id) LIKE ? AND protocol = 'meshcore' "
+                    "WHERE LOWER(node_id) = ? AND protocol = 'meshcore' "
                     "AND long_name IS NOT NULL AND long_name != ''",
-                    (node_id[:8] + "%",),
+                    (node_id.lower(),),
                 )
                 if row:
                     rn = row["long_name"] or ""
                     if rn and not _is_hex_only(rn):
                         node_name = rn
 
-            if (
-                packet.protocol == Protocol.MESHCORE
-                and (not node_name or _is_hex_only(node_name))
-            ):
-                mc_row = await coord.node_repo._db.fetch_one(
-                    "SELECT node_id, long_name FROM nodes "
-                    "WHERE node_id LIKE 'mc:%' AND protocol = 'meshcore' "
-                    "AND node_id NOT IN ('mc:channel')",
-                )
-                if mc_row:
-                    rn = mc_row["long_name"] or mc_row["node_id"][3:]
-                    if rn and not _is_hex_only(rn):
-                        node_name = rn
-                        await coord.node_repo._db.execute(
-                            "UPDATE nodes SET long_name = ? WHERE node_id = ?",
-                            (rn, node_id),
-                        )
-                        await coord.node_repo._db.commit()
             row_id, is_dup = await message_repo.save_received(
                 text=text,
                 node_id=node_id,

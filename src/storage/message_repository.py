@@ -173,8 +173,15 @@ class MessageRepository:
         Set include_overheard=True for monitor mode.
         """
         where_clause = "" if include_overheard else "WHERE direction != 'overheard'"
+        # Prefer latest non-blank node_name so a sent reply (empty name)
+        # does not blank the conversation title (javastraat/meshpoint cda45e5).
         rows = await self._db.fetch_all(
-            f"""SELECT node_id, node_name, protocol, text, timestamp,
+            f"""SELECT node_id,
+                      (SELECT m2.node_name FROM messages m2
+                        WHERE m2.node_id = messages.node_id
+                          AND m2.node_name != ''
+                        ORDER BY m2.timestamp DESC LIMIT 1) as node_name,
+                      protocol, text, timestamp,
                       SUM(CASE WHEN direction = 'received'
                                AND status != 'read' THEN 1 ELSE 0 END) as unread
                FROM messages

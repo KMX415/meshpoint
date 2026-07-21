@@ -155,28 +155,29 @@ async def sync_meshcore_contacts_to_nodes(
         name = str(contact.get("name", "")).strip()
         if not pk or not name or _is_hex_identifier(name):
             continue
-        prefixes = _meshcore_pubkey_prefixes(pk)
+        # Exact 12-char node_id only (same truncation as meshcore_event_adapter).
+        # Short-prefix LIKE matches used to overwrite unrelated nodes that
+        # shared an 8/10-char prefix (javastraat/meshpoint 52e1f56).
+        node_id_prefix = pk[:12] if len(pk) >= 12 else pk
         short_name = name[:4]
-        for prefix in prefixes:
-            cursor = await coord.node_repo._db.execute(
-                """
-                UPDATE nodes
-                SET long_name = ?,
-                    short_name = CASE
-                        WHEN short_name IS NULL
-                          OR short_name = ''
-                          OR LOWER(LTRIM(short_name, '!')) = LOWER(SUBSTR(LTRIM(node_id, '!'), 1, 4))
-                            THEN ?
-                        ELSE short_name
-                    END
-                WHERE protocol = 'meshcore'
-                  AND LOWER(LTRIM(node_id, '!')) LIKE ?
-                """,
-                (name, short_name, prefix + "%"),
-            )
-            if cursor.rowcount and cursor.rowcount > 0:
-                updated += cursor.rowcount
-                break
+        cursor = await coord.node_repo._db.execute(
+            """
+            UPDATE nodes
+            SET long_name = ?,
+                short_name = CASE
+                    WHEN short_name IS NULL
+                      OR short_name = ''
+                      OR LOWER(LTRIM(short_name, '!')) = LOWER(SUBSTR(LTRIM(node_id, '!'), 1, 4))
+                        THEN ?
+                    ELSE short_name
+                END
+            WHERE protocol = 'meshcore'
+              AND LOWER(LTRIM(node_id, '!')) = ?
+            """,
+            (name, short_name, node_id_prefix),
+        )
+        if cursor.rowcount:
+            updated += cursor.rowcount
 
     if updated:
         await coord.node_repo._db.commit()
@@ -184,14 +185,6 @@ async def sync_meshcore_contacts_to_nodes(
             "MeshCore contact names applied to %d node row(s)", updated,
         )
     return updated
-
-
-def _meshcore_pubkey_prefixes(pubkey: str) -> tuple[str, ...]:
-    """Yield candidate prefixes (longest first) for a node-id LIKE match."""
-    lengths = (16, 12, 10, 8, len(pubkey))
-    return tuple(
-        dict.fromkeys(pubkey[:n] for n in lengths if len(pubkey) >= n)
-    )
 
 
 def _is_hex_identifier(value: str) -> bool:
