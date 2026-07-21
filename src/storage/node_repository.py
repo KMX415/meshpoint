@@ -99,6 +99,19 @@ class NodeRepository:
         )
         return [self._row_to_node(r) for r in rows]
 
+    async def get_latest_capture_source(self, source_id: str) -> Optional[str]:
+        """Capture source that most recently heard a packet from *source_id*.
+
+        Used to route outbound replies through the same radio that can
+        reach the contact. Credit: javastraat/meshpoint ``f6b2bcd``.
+        """
+        row = await self._db.fetch_one(
+            "SELECT capture_source FROM packets WHERE source_id = ? "
+            "ORDER BY timestamp DESC LIMIT 1",
+            (source_id,),
+        )
+        return row["capture_source"] if row else None
+
     async def get_all_with_signal(self, limit: int = 500) -> list[dict]:
         """Return nodes with latest signal and telemetry from joined tables."""
         rows = await self._db.fetch_all(

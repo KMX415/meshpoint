@@ -295,6 +295,72 @@ class TestEchoHashOverride(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["channel_key"], b"the-real-channel-key")
 
 
+class TestSerialSendChannelTranslation(unittest.IsolatedAsyncioTestCase):
+    """Reply via USB stick: translate Meshpoint channel index by name."""
+
+    def _build_tx_service(self, primary_name="LongFast", channel_keys=None):
+        tx = TxService(persist_derived_node_id=False)
+        tx._config = Mock(enabled=True)
+        tx._primary_channel_name = primary_name
+        crypto = Mock()
+        crypto._keys = dict(channel_keys or {})
+        tx._crypto = crypto
+        return tx
+
+    async def test_translates_name_and_sends_on_sticks_own_index(self):
+        tx = self._build_tx_service(channel_keys={"BayMesh": b"key"})
+        serial_source = Mock()
+        serial_source.name = "serial"
+        serial_source.resolve_channel_index = Mock(return_value=5)
+        serial_source.send_text = Mock(
+            return_value={"success": True, "error": "", "packet_id": "abc"}
+        )
+        tx._resolve_serial_send_source = AsyncMock(return_value=serial_source)
+
+        result = await tx._send_meshtastic(
+            "hi", 0x11223344, channel=1, want_ack=False, echo_hash=None,
+        )
+
+        serial_source.resolve_channel_index.assert_called_once_with("BayMesh")
+        serial_source.send_text.assert_called_once_with(
+            "hi", 0x11223344, channel_index=5, want_ack=False,
+        )
+        self.assertTrue(result.success)
+
+    async def test_refuses_to_send_when_stick_lacks_the_channel(self):
+        tx = self._build_tx_service(channel_keys={"BayMesh": b"key"})
+        serial_source = Mock()
+        serial_source.name = "serial"
+        serial_source.resolve_channel_index = Mock(return_value=None)
+        serial_source.send_text = Mock()
+        tx._resolve_serial_send_source = AsyncMock(return_value=serial_source)
+
+        result = await tx._send_meshtastic(
+            "hi", 0x11223344, channel=1, want_ack=False, echo_hash=None,
+        )
+
+        serial_source.send_text.assert_not_called()
+        self.assertFalse(result.success)
+        self.assertIn("BayMesh", result.error)
+        self.assertIn("serial", result.error)
+
+    async def test_primary_channel_translates_via_primary_name(self):
+        tx = self._build_tx_service(primary_name="Home")
+        serial_source = Mock()
+        serial_source.name = "serial"
+        serial_source.resolve_channel_index = Mock(return_value=0)
+        serial_source.send_text = Mock(
+            return_value={"success": True, "error": "", "packet_id": ""}
+        )
+        tx._resolve_serial_send_source = AsyncMock(return_value=serial_source)
+
+        await tx._send_meshtastic(
+            "hi", 0x11223344, channel=0, want_ack=False, echo_hash=None,
+        )
+
+        serial_source.resolve_channel_index.assert_called_once_with("Home")
+
+
 if __name__ == "__main__":
     unittest.main()
 
