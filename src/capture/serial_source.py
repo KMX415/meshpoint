@@ -12,6 +12,60 @@ from src.models.signal import SignalMetrics
 logger = logging.getLogger(__name__)
 
 
+class SerialSelfOriginFilter:
+    """Drops a USB stick's self-telemetry/nodeinfo; keeps its own text.
+
+    meshtastic-python publishes the stick's locally originated beacons on
+    the same ``meshtastic.receive`` topic as over-the-air packets. Those
+    beacons have no real RF signal (firmware leaves rxRssi/rxSnr at 0),
+    so the pipeline would otherwise store spammy −100 dBm readings.
+
+    Text from a BLE/WiFi client on the same stick is exempt: it is real
+    chat content and must reach Messages even though ``from`` is the
+    stick's own node id.
+
+    Credit: javastraat/meshpoint ``db4de9f`` + ``c190b3e``.
+    """
+
+    _TEXT_PORTNUMS = frozenset({"TEXT_MESSAGE_APP", 1})
+
+    def __init__(self, own_node_num: Optional[int] = None) -> None:
+        self._own_node_num = own_node_num
+
+    @property
+    def own_node_num(self) -> Optional[int]:
+        return self._own_node_num
+
+    def set_own_node_num(self, node_num: Optional[int]) -> None:
+        self._own_node_num = node_num
+
+    @staticmethod
+    def read_own_node_num(interface) -> Optional[int]:
+        """Best-effort read of ``interface.myInfo.my_node_num``."""
+        try:
+            return int(interface.myInfo.my_node_num)
+        except Exception:
+            logger.debug(
+                "Could not read own node number from serial interface",
+                exc_info=True,
+            )
+            return None
+
+    def should_drop(self, packet: dict) -> bool:
+        if self._own_node_num is None:
+            return False
+        if packet.get("from") != self._own_node_num:
+            return False
+        return not self._is_text_message(packet)
+
+    @classmethod
+    def _is_text_message(cls, packet: dict) -> bool:
+        decoded = packet.get("decoded")
+        if not isinstance(decoded, dict):
+            return False
+        return decoded.get("portnum") in cls._TEXT_PORTNUMS
+
+
 class SerialCaptureSource(CaptureSource):
     """Captures packets from a Meshtastic radio connected via USB serial.
 
@@ -29,6 +83,7 @@ class SerialCaptureSource(CaptureSource):
         self._baud = baud
         self._interface = None
         self._running = False
+        self._self_origin = SerialSelfOriginFilter()
         self._queue: asyncio.Queue[RawCapture] = asyncio.Queue(maxsize=500)
 
     @property
@@ -51,12 +106,22 @@ class SerialCaptureSource(CaptureSource):
             else:
                 self._interface = meshtastic.serial_interface.SerialInterface()
 
+            own_node = SerialSelfOriginFilter.read_own_node_num(self._interface)
+            self._self_origin.set_own_node_num(own_node)
+
             pub.subscribe(self._on_receive, "meshtastic.receive")
             self._running = True
-            logger.info(
-                "Serial capture started on %s",
-                self._port or "auto-detect",
-            )
+            if own_node is not None:
+                logger.info(
+                    "Serial capture started on %s (own_node=%08x)",
+                    self._port or "auto-detect",
+                    own_node,
+                )
+            else:
+                logger.info(
+                    "Serial capture started on %s",
+                    self._port or "auto-detect",
+                )
         except ImportError:
             logger.error(
                 "meshtastic package not installed. "
@@ -69,6 +134,7 @@ class SerialCaptureSource(CaptureSource):
 
     async def stop(self) -> None:
         self._running = False
+        self._self_origin.set_own_node_num(None)
         if self._interface:
             try:
                 self._interface.close()
@@ -104,6 +170,13 @@ class SerialCaptureSource(CaptureSource):
 
     def _packet_to_raw_capture(self, packet: dict) -> Optional[RawCapture]:
         """Convert a meshtastic-python packet dict to a RawCapture."""
+        if self._self_origin.should_drop(packet):
+            logger.debug(
+                "Dropping self-originated non-text packet from own node %08x",
+                self._self_origin.own_node_num,
+            )
+            return None
+
         raw_bytes = packet.get("raw", b"")
         if isinstance(raw_bytes, str):
             raw_bytes = bytes.fromhex(raw_bytes)
