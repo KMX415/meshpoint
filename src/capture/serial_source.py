@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 from datetime import datetime, timezone
 from typing import AsyncIterator, Optional
@@ -180,8 +181,14 @@ class SerialCaptureSource(CaptureSource):
         raw_bytes = packet.get("raw", b"")
         if isinstance(raw_bytes, str):
             raw_bytes = bytes.fromhex(raw_bytes)
+        elif not isinstance(raw_bytes, (bytes, bytearray)):
+            # meshtastic-python sets packet["raw"] to the MeshPacket
+            # protobuf object, not bytes. Treat as absent so reconstruct runs.
+            raw_bytes = b""
 
-        if not raw_bytes and "decoded" in packet:
+        if not raw_bytes:
+            # Reconstruct even without "decoded": encrypted/decoded share a
+            # oneof, so undecryptable-by-stick traffic has no "decoded" key.
             raw_bytes = self._reconstruct_raw(packet)
 
         if not raw_bytes:
@@ -200,7 +207,41 @@ class SerialCaptureSource(CaptureSource):
             signal=signal,
             capture_source=self.name,
             timestamp=datetime.now(timezone.utc),
+            pre_decoded=self._build_pre_decoded(packet),
         )
+
+    @staticmethod
+    def _build_pre_decoded(packet: dict) -> Optional[dict]:
+        """Portnum + payload when the stick already decrypted locally."""
+        decoded = packet.get("decoded")
+        if not isinstance(decoded, dict):
+            return None
+        portnum_name = decoded.get("portnum")
+        if portnum_name is None:
+            return None
+        try:
+            if isinstance(portnum_name, int):
+                portnum = portnum_name
+            else:
+                from meshtastic.protobuf import portnums_pb2
+
+                portnum = portnums_pb2.PortNum.Value(portnum_name)
+        except (ImportError, ValueError):
+            logger.debug("Unrecognized portnum name %r", portnum_name)
+            return None
+
+        payload_b64 = decoded.get("payload", "")
+        try:
+            payload = base64.b64decode(payload_b64) if payload_b64 else b""
+        except Exception:
+            logger.debug("Could not base64-decode decoded.payload", exc_info=True)
+            payload = b""
+
+        return {
+            "portnum": portnum,
+            "payload": payload,
+            "request_id": decoded.get("requestId", 0),
+        }
 
     @staticmethod
     def _reconstruct_raw(packet: dict) -> bytes:
@@ -230,8 +271,9 @@ class SerialCaptureSource(CaptureSource):
         header = struct.pack("<III", dest, source, pkt_id)
         header += bytes([flags, channel, 0, 0])
 
-        encoded = packet.get("encoded", b"")
+        # MessageToDict base64-encodes the MeshPacket "encrypted" field.
+        encoded = packet.get("encrypted", b"")
         if isinstance(encoded, str):
-            encoded = bytes.fromhex(encoded)
+            encoded = base64.b64decode(encoded)
 
         return header + encoded

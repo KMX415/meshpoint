@@ -269,7 +269,10 @@ class PipelineCoordinator:
             packet = self._adapt_meshcore_usb(raw)
         else:
             packet = self._router.decode(
-                raw.payload, signal=raw.signal, protocol_hint=raw.protocol_hint
+                raw.payload,
+                signal=raw.signal,
+                protocol_hint=raw.protocol_hint,
+                pre_decoded=raw.pre_decoded,
             )
         if packet is None:
             return

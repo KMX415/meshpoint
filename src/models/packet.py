@@ -42,6 +42,10 @@ class RawCapture:
     capture_source: str
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     protocol_hint: Optional[Protocol] = None
+    # Set when an upstream library already decrypted (meshtastic-python
+    # serial): portnum (int) + inner payload (bytes). Header-only
+    # ``payload`` has no ciphertext left to decrypt.
+    pre_decoded: Optional[dict] = None
 
 
 @dataclass
