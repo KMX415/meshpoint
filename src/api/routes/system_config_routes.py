@@ -232,18 +232,28 @@ async def update_serial_devices(
     if _config is None:
         raise HTTPException(503, "Config not loaded")
 
+    # Drop empty UI rows. A missing port would auto-open the first USB
+    # serial device and collide with a sibling stick (exclusive lock).
     new_devices = [
         SerialDeviceConfig(
             label=d.label.strip(),
-            serial_port=(d.serial_port or "").strip() or None,
+            serial_port=port,
             serial_baud=d.serial_baud,
         )
         for d in req.devices
+        for port in [(d.serial_port or "").strip() or None]
+        if port
     ]
     _config.capture.serial = new_devices
+    if new_devices:
+        _config.capture.serial_port = new_devices[0].serial_port
+        _config.capture.serial_baud = new_devices[0].serial_baud
 
     devices_list = [_serial_device_dict(d) for d in new_devices]
     yaml_updates: dict = {"serial": devices_list}
+    if new_devices:
+        yaml_updates["serial_port"] = new_devices[0].serial_port
+        yaml_updates["serial_baud"] = new_devices[0].serial_baud
     capture_updates: dict = {}
 
     sources = list(_config.capture.sources or [])
