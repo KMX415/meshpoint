@@ -7,8 +7,10 @@ from datetime import datetime, timezone
 from typing import AsyncIterator, Optional
 
 from src.capture.base import CaptureSource
+from src.capture.serial_radio_handshake import SerialRadioHandshake
 from src.models.packet import RawCapture
 from src.models.signal import SignalMetrics
+from src.radio.channel_frequency import resolve_frequency_mhz
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +98,10 @@ class SerialCaptureSource(CaptureSource):
     def is_running(self) -> bool:
         return self._running
 
+    def get_radio_info(self) -> dict:
+        """Connect-time LoRa/identity snapshot (copy)."""
+        return dict(self._radio_info)
+
     def resolve_channel_index(self, name: str) -> Optional[int]:
         """This stick's channel-table index for ``name``, or None."""
         table = self._radio_info.get("channel_table") or {}
@@ -118,8 +124,11 @@ class SerialCaptureSource(CaptureSource):
 
             own_node = SerialSelfOriginFilter.read_own_node_num(self._interface)
             self._self_origin.set_own_node_num(own_node)
+            self._radio_info = SerialRadioHandshake.read(self._interface)
             try:
-                modem_preset = self._read_modem_preset_name(self._interface)
+                modem_preset = self._radio_info.get("modem_preset")
+                if modem_preset == "CUSTOM":
+                    modem_preset = None
                 self._radio_info["channel_table"] = self._read_channel_table(
                     self._interface, modem_preset
                 )
@@ -132,16 +141,35 @@ class SerialCaptureSource(CaptureSource):
 
             pub.subscribe(self._on_receive, "meshtastic.receive")
             self._running = True
+            region = self._radio_info.get("region")
+            freq = resolve_frequency_mhz(
+                region=region,
+                channel_num=self._radio_info.get("channel_num"),
+                bandwidth_khz=self._radio_info.get("bandwidth_khz") or 250.0,
+                channel_name=self._radio_info.get("channel_name"),
+                modem_preset=self._radio_info.get("modem_preset"),
+                use_preset=self._radio_info.get("use_preset", True),
+                frequency_offset=self._radio_info.get("frequency_offset") or 0.0,
+                override_frequency=self._radio_info.get("override_frequency")
+                or 0.0,
+            )
             if own_node is not None:
                 logger.info(
-                    "Serial capture started on %s (own_node=%08x)",
+                    "Serial capture started on %s (own_node=%08x region=%s "
+                    "freq=%.3f SF%s BW%s)",
                     self._port or "auto-detect",
                     own_node,
+                    region or "?",
+                    freq,
+                    self._radio_info.get("spreading_factor") or "?",
+                    self._radio_info.get("bandwidth_khz") or "?",
                 )
             else:
                 logger.info(
-                    "Serial capture started on %s",
+                    "Serial capture started on %s (region=%s freq=%.3f)",
                     self._port or "auto-detect",
+                    region or "?",
+                    freq,
                 )
         except ImportError:
             logger.error(
@@ -152,18 +180,6 @@ class SerialCaptureSource(CaptureSource):
         except Exception:
             logger.exception("Failed to open serial interface")
             raise
-
-    @staticmethod
-    def _read_modem_preset_name(interface) -> Optional[str]:
-        try:
-            from meshtastic.protobuf import config_pb2
-
-            lora = interface.localNode.localConfig.lora
-            if not lora.use_preset:
-                return None
-            return config_pb2.Config.LoRaConfig.ModemPreset.Name(lora.modem_preset)
-        except Exception:
-            return None
 
     @staticmethod
     def _read_channel_table(
@@ -245,12 +261,24 @@ class SerialCaptureSource(CaptureSource):
         if not raw_bytes:
             return None
 
+        radio = self._radio_info
+        # Fall back to LongFast SF/BW only when handshake left them unset.
+        bandwidth_khz = radio.get("bandwidth_khz") or 250.0
         signal = SignalMetrics(
             rssi=float(packet.get("rxRssi", packet.get("rssi", -100))),
             snr=float(packet.get("rxSnr", packet.get("snr", 0))),
-            frequency_mhz=906.875,
-            spreading_factor=11,
-            bandwidth_khz=250.0,
+            frequency_mhz=resolve_frequency_mhz(
+                region=radio.get("region"),
+                channel_num=radio.get("channel_num"),
+                bandwidth_khz=bandwidth_khz,
+                channel_name=radio.get("channel_name"),
+                modem_preset=radio.get("modem_preset"),
+                use_preset=radio.get("use_preset", True),
+                frequency_offset=radio.get("frequency_offset") or 0.0,
+                override_frequency=radio.get("override_frequency") or 0.0,
+            ),
+            spreading_factor=radio.get("spreading_factor") or 11,
+            bandwidth_khz=float(bandwidth_khz),
         )
 
         return RawCapture(
