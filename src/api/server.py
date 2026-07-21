@@ -994,6 +994,13 @@ def _setup_message_interception(
     except Exception:
         logger.debug("Failed to build channel hash map", exc_info=True)
 
+    # Stick-local channel name -> Meshpoint index (serial pre_decoded path).
+    name_to_channel_index: dict[str, int] = {}
+    if config.meshtastic.primary_channel_name:
+        name_to_channel_index[config.meshtastic.primary_channel_name] = 0
+    for _i, _name in enumerate(config.meshtastic.channel_keys.keys(), start=1):
+        name_to_channel_index[_name] = _i
+
     async def _refresh_mc_contacts() -> None:
         if not meshcore_tx or not meshcore_tx.connected:
             logger.debug("MC contact refresh skipped: not connected")
@@ -1065,6 +1072,17 @@ def _setup_message_interception(
             if packet.protocol == Protocol.MESHCORE:
                 ch_idx = packet.channel_hash or 0
                 node_id = f"broadcast:{packet.protocol.value}:{ch_idx}"
+            elif packet.remote_channel_name:
+                # Stick reported its local channel by name; hash byte may be
+                # that stick's table index, not a real OTA hash.
+                _idx = name_to_channel_index.get(packet.remote_channel_name)
+                if _idx is not None:
+                    node_id = f"broadcast:{packet.protocol.value}:{_idx}"
+                else:
+                    node_id = (
+                        f"broadcast:{packet.protocol.value}:named:"
+                        f"{packet.remote_channel_name}"
+                    )
             else:
                 ch_idx = channel_hash_resolver.lookup(packet.channel_hash)
                 if ch_idx is None and packet.matched_channel_index is not None:

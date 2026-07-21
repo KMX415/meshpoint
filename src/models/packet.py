@@ -84,6 +84,9 @@ class Packet:
     # packet. Set even when channel_hash does not match a local name+key
     # hash (remote used a different channel name, same PSK).
     matched_channel_index: Optional[int] = None
+    # Stick-local channel name when meshtastic-python decoded with its
+    # own table. packet.channel_hash may hold the stick's index, not OTA hash.
+    remote_channel_name: Optional[str] = None
 
     signal: Optional[SignalMetrics] = None
     capture_source: str = "unknown"

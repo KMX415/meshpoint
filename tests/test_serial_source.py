@@ -135,22 +135,118 @@ class SerialCaptureSourceDropTest(unittest.TestCase):
 class BuildPreDecodedEarlyExitTest(unittest.TestCase):
     """Early exits that must not require the meshtastic package."""
 
+    def setUp(self):
+        self.source = SerialCaptureSource(port="/dev/ttyUSB0")
+
     def test_no_decoded_key_returns_none(self):
-        self.assertIsNone(
-            SerialCaptureSource._build_pre_decoded({"raw": "aa"})
-        )
+        self.assertIsNone(self.source._build_pre_decoded({"raw": "aa"}))
 
     def test_decoded_not_a_dict_returns_none(self):
         self.assertIsNone(
-            SerialCaptureSource._build_pre_decoded({"decoded": "not-a-dict"})
+            self.source._build_pre_decoded({"decoded": "not-a-dict"})
         )
 
     def test_decoded_missing_portnum_returns_none(self):
         self.assertIsNone(
-            SerialCaptureSource._build_pre_decoded(
-                {"decoded": {"payload": "AQI="}}
-            )
+            self.source._build_pre_decoded({"decoded": {"payload": "AQI="}})
         )
+
+    def test_resolves_channel_index_to_name_via_channel_table(self):
+        self.source._radio_info["channel_table"] = {0: "LongFast", 2: "PD2EMC"}
+        pre = self.source._build_pre_decoded(
+            {
+                "decoded": {"portnum": 1, "payload": ""},
+                "channel": 2,
+            }
+        )
+        self.assertEqual(pre["channel_name"], "PD2EMC")
+
+    def test_unresolvable_channel_index_omits_channel_name(self):
+        self.source._radio_info["channel_table"] = {0: "LongFast"}
+        pre = self.source._build_pre_decoded(
+            {
+                "decoded": {"portnum": 1, "payload": ""},
+                "channel": 5,
+            }
+        )
+        self.assertIsNotNone(pre)
+        self.assertNotIn("channel_name", pre)
+
+
+class ReadChannelTableTest(unittest.TestCase):
+    def _channel(self, index, role, name):
+        from unittest.mock import MagicMock
+
+        ch = MagicMock()
+        ch.index = index
+        ch.role = role
+        ch.settings.name = name
+        return ch
+
+    def test_builds_index_to_name_map_skipping_disabled(self):
+        from meshtastic.protobuf import channel_pb2
+        from unittest.mock import MagicMock
+
+        R = channel_pb2.Channel.Role
+        channels = [
+            self._channel(0, R.PRIMARY, "Home"),
+            self._channel(1, R.SECONDARY, "BayMesh"),
+            self._channel(2, R.DISABLED, "Unused"),
+        ]
+        iface = MagicMock()
+        iface.localNode.channels = channels
+
+        table = SerialCaptureSource._read_channel_table(
+            iface, modem_preset_name="LongFast"
+        )
+        self.assertEqual(table, {0: "Home", 1: "BayMesh"})
+
+    def test_blank_primary_name_falls_back_to_modem_preset(self):
+        from meshtastic.protobuf import channel_pb2
+        from unittest.mock import MagicMock
+
+        R = channel_pb2.Channel.Role
+        channels = [self._channel(0, R.PRIMARY, "")]
+        iface = MagicMock()
+        iface.localNode.channels = channels
+
+        table = SerialCaptureSource._read_channel_table(
+            iface, modem_preset_name="LongFast"
+        )
+        self.assertEqual(table, {0: "LongFast"})
+
+    def test_blank_secondary_name_is_skipped_not_guessed(self):
+        from meshtastic.protobuf import channel_pb2
+        from unittest.mock import MagicMock
+
+        R = channel_pb2.Channel.Role
+        channels = [
+            self._channel(0, R.PRIMARY, "Home"),
+            self._channel(1, R.SECONDARY, ""),
+        ]
+        iface = MagicMock()
+        iface.localNode.channels = channels
+
+        table = SerialCaptureSource._read_channel_table(
+            iface, modem_preset_name="LongFast"
+        )
+        self.assertEqual(table, {0: "Home"})
+
+
+class ResolveChannelIndexTest(unittest.TestCase):
+    def test_finds_index_for_known_name(self):
+        source = SerialCaptureSource(port="/dev/ttyUSB1")
+        source._radio_info["channel_table"] = {0: "LongFast", 2: "PD2EMC"}
+        self.assertEqual(source.resolve_channel_index("PD2EMC"), 2)
+
+    def test_returns_none_for_unknown_name(self):
+        source = SerialCaptureSource(port="/dev/ttyUSB1")
+        source._radio_info["channel_table"] = {0: "LongFast"}
+        self.assertIsNone(source.resolve_channel_index("SomeOtherChannel"))
+
+    def test_returns_none_when_channel_table_never_populated(self):
+        source = SerialCaptureSource(port="/dev/ttyUSB1")
+        self.assertIsNone(source.resolve_channel_index("LongFast"))
 
 
 class ReconstructRawTest(unittest.TestCase):
