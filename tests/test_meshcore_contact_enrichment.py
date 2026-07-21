@@ -92,6 +92,33 @@ class TestMeshCoreContactEnrichment(unittest.TestCase):
         self.assertEqual(ridge.long_name, "Ridge Repeater")
         self.assertEqual(valley.long_name, "Valley Node")
 
+    def test_short_prefix_collision_does_not_contaminate(self):
+        # Two nodes share the first 8 hex chars; only the exact 12-char
+        # match may receive the contact name.
+        _run(self.repo.upsert(Node(
+            node_id="e34ef4172778",
+            protocol="meshcore",
+        )))
+        _run(self.repo.upsert(Node(
+            node_id="e34ef4179999",
+            protocol="meshcore",
+            long_name="Keep Me",
+        )))
+
+        updated = _run(sync_meshcore_contacts_to_nodes(
+            self.coord,
+            _MeshCoreTx([{
+                "public_key": "e34ef4172778aaaabbbbcccc",
+                "name": "Ridge Repeater",
+            }]),
+        ))
+
+        self.assertEqual(updated, 1)
+        matched = _run(self.repo.get_by_id("e34ef4172778"))
+        other = _run(self.repo.get_by_id("e34ef4179999"))
+        self.assertEqual(matched.long_name, "Ridge Repeater")
+        self.assertEqual(other.long_name, "Keep Me")
+
 
 if __name__ == "__main__":
     unittest.main()
