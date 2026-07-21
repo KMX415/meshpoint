@@ -128,18 +128,26 @@ class MessagingPanel {
         const isBroadcast = convo.is_broadcast || (convo.node_id || '').startsWith('broadcast:');
         const destination = isBroadcast ? 'broadcast' : convo.node_id;
 
+        // Keyed conversations (same PSK, different remote channel name)
+        // encode key index + remote hash in node_id; echo that hash on TX.
+        const keyedMatch = (convo.node_id || '').match(/:keyed:(\d+):0x([0-9a-f]+)$/i);
+        const channel = keyedMatch ? parseInt(keyedMatch[1], 10) : (convo.channel || 0);
+
         const tempMsg = this._chat.addOptimisticMessage(text, convo.protocol);
 
         try {
+            const body = {
+                text: text,
+                destination: destination,
+                protocol: convo.protocol || 'meshtastic',
+                channel: channel,
+            };
+            if (keyedMatch) body.echo_hash = parseInt(keyedMatch[2], 16);
+
             const res = await fetch('/api/messages/send', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    text: text,
-                    destination: destination,
-                    protocol: convo.protocol || 'meshtastic',
-                    channel: convo.channel || 0,
-                }),
+                body: JSON.stringify(body),
             });
 
             if (!res.ok) {

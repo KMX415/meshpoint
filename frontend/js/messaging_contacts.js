@@ -91,13 +91,29 @@ class MessagingContacts {
         }
 
         // Stored broadcast rows not in /api/messages/channels (e.g.
-        // broadcast:meshtastic:unmapped:0xHH). Without this section they
-        // vanish from the sidebar despite being correctly stored.
+        // broadcast:meshtastic:unmapped:0xHH or :keyed:N:0xHH).
         const knownChannelIds = new Set(this._channels.map(ch => ch.node_id));
-        const unmappedConvos = (this._filter === 'all'
+        const otherBroadcastConvos = (this._filter === 'all'
             ? this._conversations
             : this._conversations.filter(c => c.protocol === this._filter)
         ).filter(c => c.is_broadcast && !knownChannelIds.has(c.node_id));
+
+        const isKeyed = (nodeId) => /:keyed:\d+:0x[0-9a-f]+$/i.test(nodeId || '');
+        const keyedConvos = otherBroadcastConvos.filter(c => isKeyed(c.node_id));
+        const unmappedConvos = otherBroadcastConvos.filter(c => !isKeyed(c.node_id));
+
+        if (keyedConvos.length > 0) {
+            const label = document.createElement('div');
+            label.className = 'msg-sidebar__section-label';
+            label.textContent = 'Different Channel Name';
+            label.title = 'Same PSK as a configured channel, but the sender named it differently. Replies encrypt with the matching key and echo their hash.';
+            this._listEl.appendChild(label);
+
+            keyedConvos.forEach(convo => {
+                const el = this._buildConvoEl(convo);
+                this._listEl.appendChild(el);
+            });
+        }
 
         if (unmappedConvos.length > 0) {
             const label = document.createElement('div');
@@ -129,7 +145,7 @@ class MessagingContacts {
             });
         }
 
-        if (filteredChannels.length === 0 && unmappedConvos.length === 0 && dmConvos.length === 0) {
+        if (filteredChannels.length === 0 && keyedConvos.length === 0 && unmappedConvos.length === 0 && dmConvos.length === 0) {
             this._listEl.innerHTML = '<div class="msg-chat__empty">No conversations yet</div>';
         }
     }
