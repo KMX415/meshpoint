@@ -85,6 +85,7 @@ class SerialCaptureSource(CaptureSource):
         self._interface = None
         self._running = False
         self._self_origin = SerialSelfOriginFilter()
+        self._radio_info: dict = {"channel_table": {}}
         self._queue: asyncio.Queue[RawCapture] = asyncio.Queue(maxsize=500)
 
     @property
@@ -94,6 +95,14 @@ class SerialCaptureSource(CaptureSource):
     @property
     def is_running(self) -> bool:
         return self._running
+
+    def resolve_channel_index(self, name: str) -> Optional[int]:
+        """This stick's channel-table index for ``name``, or None."""
+        table = self._radio_info.get("channel_table") or {}
+        for idx, ch_name in table.items():
+            if ch_name == name:
+                return idx
+        return None
 
     async def start(self) -> None:
         try:
@@ -109,6 +118,17 @@ class SerialCaptureSource(CaptureSource):
 
             own_node = SerialSelfOriginFilter.read_own_node_num(self._interface)
             self._self_origin.set_own_node_num(own_node)
+            try:
+                modem_preset = self._read_modem_preset_name(self._interface)
+                self._radio_info["channel_table"] = self._read_channel_table(
+                    self._interface, modem_preset
+                )
+            except Exception:
+                logger.debug(
+                    "Could not read channel table from serial interface",
+                    exc_info=True,
+                )
+                self._radio_info["channel_table"] = {}
 
             pub.subscribe(self._on_receive, "meshtastic.receive")
             self._running = True
@@ -132,6 +152,37 @@ class SerialCaptureSource(CaptureSource):
         except Exception:
             logger.exception("Failed to open serial interface")
             raise
+
+    @staticmethod
+    def _read_modem_preset_name(interface) -> Optional[str]:
+        try:
+            from meshtastic.protobuf import config_pb2
+
+            lora = interface.localNode.localConfig.lora
+            if not lora.use_preset:
+                return None
+            return config_pb2.Config.LoRaConfig.ModemPreset.Name(lora.modem_preset)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _read_channel_table(
+        interface, modem_preset_name: Optional[str] = None
+    ) -> dict:
+        """Stick channel-table index -> name (for locally decoded packets)."""
+        from meshtastic.protobuf import channel_pb2
+
+        table: dict[int, str] = {}
+        channels = getattr(interface.localNode, "channels", None) or []
+        for ch in channels:
+            if ch.role == channel_pb2.Channel.Role.DISABLED:
+                continue
+            name = ch.settings.name
+            if not name and ch.role == channel_pb2.Channel.Role.PRIMARY:
+                name = modem_preset_name
+            if name:
+                table[ch.index] = name
+        return table
 
     async def stop(self) -> None:
         self._running = False
@@ -210,8 +261,7 @@ class SerialCaptureSource(CaptureSource):
             pre_decoded=self._build_pre_decoded(packet),
         )
 
-    @staticmethod
-    def _build_pre_decoded(packet: dict) -> Optional[dict]:
+    def _build_pre_decoded(self, packet: dict) -> Optional[dict]:
         """Portnum + payload when the stick already decrypted locally."""
         decoded = packet.get("decoded")
         if not isinstance(decoded, dict):
@@ -237,11 +287,19 @@ class SerialCaptureSource(CaptureSource):
             logger.debug("Could not base64-decode decoded.payload", exc_info=True)
             payload = b""
 
-        return {
+        result = {
             "portnum": portnum,
             "payload": payload,
             "request_id": decoded.get("requestId", 0),
         }
+        channel_idx = packet.get("channel")
+        if channel_idx is not None:
+            channel_name = self._radio_info.get("channel_table", {}).get(
+                channel_idx
+            )
+            if channel_name:
+                result["channel_name"] = channel_name
+        return result
 
     @staticmethod
     def _reconstruct_raw(packet: dict) -> bytes:
