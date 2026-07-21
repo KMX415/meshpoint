@@ -283,6 +283,13 @@
     font-size: 0.55rem;
 }
 
+.nc-chip--band {
+    color: var(--accent-purple);
+    background: rgba(168, 85, 247, 0.1);
+    font-size: 0.55rem;
+    font-weight: 600;
+}
+
 .nc-chip--id {
     color: var(--text-muted);
     font-size: 0.55rem;

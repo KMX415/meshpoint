@@ -198,7 +198,7 @@ class SerialCaptureSource(CaptureSource):
         return RawCapture(
             payload=raw_bytes,
             signal=signal,
-            capture_source="serial",
+            capture_source=self.name,
             timestamp=datetime.now(timezone.utc),
         )
 

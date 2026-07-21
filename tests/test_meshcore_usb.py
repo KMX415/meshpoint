@@ -672,6 +672,35 @@ class TestMeshcoreUsbSignalStitching(unittest.TestCase):
             "NodeOne's signal",
         )
 
+    def test_wrap_event_tags_capture_source_with_source_name(self):
+        # javastraat d32d121: never hardcode "meshcore_usb" so labelled
+        # multi-companion names (meshcore_usb_868) flow into packets.
+        source = self._make_source()
+        envelope, _ = self._wrap_payload(source, "advertisement", {
+            "public_key": "aaaaaaaaaaaaaaaaaaaa",
+            "adv_name": "Named",
+        })
+        self.assertEqual(envelope.capture_source, source.name)
+        self.assertEqual(envelope.capture_source, "meshcore_usb")
+
+
+class TestMeshcoreUsbCaptureRouting(unittest.TestCase):
+    def test_labelled_meshcore_usb_sources_use_event_adapter(self):
+        from src.coordinator import PipelineCoordinator
+
+        self.assertTrue(
+            PipelineCoordinator._is_meshcore_usb_capture("meshcore_usb")
+        )
+        self.assertTrue(
+            PipelineCoordinator._is_meshcore_usb_capture("meshcore_usb_868")
+        )
+        self.assertFalse(
+            PipelineCoordinator._is_meshcore_usb_capture("serial")
+        )
+        self.assertFalse(
+            PipelineCoordinator._is_meshcore_usb_capture("concentrator")
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

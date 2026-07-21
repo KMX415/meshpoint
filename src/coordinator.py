@@ -263,7 +263,9 @@ class PipelineCoordinator:
             logger.exception("Pipeline error")
 
     async def _process_capture(self, raw: RawCapture) -> None:
-        if raw.capture_source == "meshcore_usb":
+        # Match bare "meshcore_usb" and labelled forms (meshcore_usb_868, …)
+        # so Wave B multi-companion tags still hit the event adapter.
+        if self._is_meshcore_usb_capture(raw.capture_source):
             packet = self._adapt_meshcore_usb(raw)
         else:
             packet = self._router.decode(
@@ -278,6 +280,10 @@ class PipelineCoordinator:
         await self._relay.process_packet(packet)
         self._publish_mqtt(packet)
         self._record_stats(packet)
+
+    @staticmethod
+    def _is_meshcore_usb_capture(source: str) -> bool:
+        return source == "meshcore_usb" or source.startswith("meshcore_usb_")
 
     @staticmethod
     def _adapt_meshcore_usb(raw: RawCapture) -> Optional[Packet]:

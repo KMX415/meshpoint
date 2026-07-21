@@ -152,6 +152,27 @@ class TestNodeRepository(unittest.TestCase):
         _run(self.db.commit())
         self.assertEqual(_run(self.repo.count_phantom_rows()), 1)
 
+    def test_get_all_with_signal_reports_latest_capture_source(self):
+        # Band UI keys off capture_source labels (e.g. serial_433), not
+        # frequency_mhz placeholders on the serial USB path.
+        node_id = "7d8b98a9"
+        _run(self.repo.upsert(
+            Node(node_id=node_id, long_name="433 Relay", protocol="meshtastic")
+        ))
+        _run(self.db.execute(
+            "INSERT INTO packets "
+            "(packet_id, source_id, destination_id, protocol, packet_type, "
+            " capture_source, timestamp) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("p1", node_id, "ffffffff", "meshtastic", "data",
+             "serial_433", "2026-07-09T12:00:00+00:00"),
+        ))
+        _run(self.db.commit())
+
+        rows = _run(self.repo.get_all_with_signal())
+        row = next(r for r in rows if r["node_id"] == node_id)
+        self.assertEqual(row["latest_capture_source"], "serial_433")
+
     def test_meshcore_display_name_ignores_id_placeholder(self):
         node = Node(
             node_id="abcdef123456",
