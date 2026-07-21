@@ -37,7 +37,17 @@ def enrich_config_payload(cfg: AppConfig, base: dict) -> dict:
     }
     base["capture"] = {
         "sources": list(capture.sources or []),
+        "serial_port": capture.serial_port,
+        "serial_baud": capture.serial_baud,
         "concentrator_spi_device": capture.concentrator_spi_device,
+        "serial": [
+            {
+                "serial_port": d.serial_port,
+                "serial_baud": d.serial_baud,
+                "label": d.label,
+            }
+            for d in capture.serial
+        ],
         "meshcore_usb": {
             "serial_port": mc_usb.serial_port,
             "baud_rate": mc_usb.baud_rate,

@@ -24,11 +24,16 @@ MeshCore handshake probe is the right disambiguator there.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+_BY_ID_DIR = Path("/dev/serial/by-id")
+_BY_PATH_DIR = Path("/dev/serial/by-path")
 
 
 class PortClass(str, Enum):
@@ -105,6 +110,66 @@ class UsbPortClassifier:
             for info in self.list_ports()
             if info.port_class is PortClass.GPS_KNOWN
         ]
+
+
+def _resolve_symlinks(directory: Path) -> dict[str, str]:
+    """Map real device path -> first symlink name pointing at it."""
+    result: dict[str, str] = {}
+    if not directory.is_dir():
+        return result
+    for entry in sorted(directory.iterdir()):
+        try:
+            target = os.path.realpath(entry)
+        except OSError:
+            continue
+        result.setdefault(target, str(entry))
+    return result
+
+
+@dataclass(frozen=True)
+class StablePortInfo:
+    """One USB-serial device with a recommended stable pin path."""
+
+    device: str
+    stable_path: str
+    by_id: Optional[str]
+    by_path: Optional[str]
+    description: str
+    vid: Optional[int]
+    pid: Optional[int]
+
+
+def list_serial_ports_with_stable_paths() -> list[StablePortInfo]:
+    """Enumerate ports for the dashboard picker (by-path > by-id > device)."""
+    classifier = UsbPortClassifier()
+    by_id = _resolve_symlinks(_BY_ID_DIR)
+    by_path = _resolve_symlinks(_BY_PATH_DIR)
+
+    ports: list[StablePortInfo] = []
+    for info in classifier.list_ports():
+        try:
+            real = os.path.realpath(info.device)
+        except OSError:
+            real = info.device
+        id_path = by_id.get(real)
+        path_path = by_path.get(real)
+        stable = path_path or id_path or info.device
+        description = (
+            " ".join(p for p in (info.manufacturer, info.product) if p)
+            or info.device
+        )
+        ports.append(
+            StablePortInfo(
+                device=info.device,
+                stable_path=stable,
+                by_id=id_path,
+                by_path=path_path,
+                description=description,
+                vid=info.vid,
+                pid=info.pid,
+            )
+        )
+    return ports
 
 
 def should_skip_for_meshcore_probe(port: str) -> bool:

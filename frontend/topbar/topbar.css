@@ -360,4 +360,112 @@
     .topbar-meshtastic__preset { display: none; }
     .topbar-meshcore__name { max-width: 5rem; }
     .topbar-meshtastic__call { font-size: 0.78rem; }
+    .topbar-serial__preset { display: none; }
+}
+
+/* --- Serial Meshtastic USB device chip(s) --- */
+
+.topbar__group--serial {
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.topbar-serial {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(6, 182, 212, 0.3);
+    background: rgba(6, 182, 212, 0.05);
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    color: var(--text-secondary);
+}
+
+.topbar-serial--offline,
+.topbar-serial--reconnecting {
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.topbar-serial__brand {
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent-cyan);
+    opacity: 0.85;
+}
+
+.topbar-serial__lamp {
+    display: inline-flex;
+    align-items: center;
+}
+
+.topbar-serial__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+}
+
+.topbar-serial__lamp--online .topbar-serial__dot {
+    background: var(--accent-green, #00e5a0);
+    box-shadow: 0 0 6px rgba(0, 229, 160, 0.65);
+}
+
+.topbar-serial__lamp--offline .topbar-serial__dot,
+.topbar-serial__lamp--reconnecting .topbar-serial__dot {
+    background: var(--accent-red, #ef4444);
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+}
+
+.topbar-serial__lamp--reconnecting .topbar-serial__dot {
+    animation: topbar-meshtastic-blink 0.9s steps(2, end) infinite;
+}
+
+.topbar-serial__call {
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--text-primary);
+    min-width: 3ch;
+}
+
+.topbar-serial__preset {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    border-left: 1px solid rgba(6, 182, 212, 0.22);
+    padding-left: 0.4rem;
+    margin-left: 0.05rem;
+}
+
+.topbar-serial__sep {
+    color: var(--text-muted);
+    opacity: 0.5;
+}
+
+.topbar-serial__sep--bar {
+    opacity: 0.35;
+    margin: 0 0.05rem;
+}
+
+.topbar-serial__region {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.topbar-serial__freq {
+    color: var(--accent-cyan);
+}
+
+.topbar-serial--offline .topbar-serial__region,
+.topbar-serial--offline .topbar-serial__freq,
+.topbar-serial--offline .topbar-serial__preset,
+.topbar-serial--reconnecting .topbar-serial__region,
+.topbar-serial--reconnecting .topbar-serial__freq,
+.topbar-serial--reconnecting .topbar-serial__preset {
+    opacity: 0.55;
 }

@@ -16,15 +16,26 @@ logger = logging.getLogger("concentrator")
 def _add_serial_source(coordinator: PipelineCoordinator, config) -> None:
     try:
         from src.capture.serial_source import SerialCaptureSource
-        coordinator.capture_coordinator.add_source(
-            SerialCaptureSource(
-                port=config.capture.serial_port,
-                baud=config.capture.serial_baud,
-            )
-        )
+        from src.config import SerialDeviceConfig
     except ImportError:
         logger.warning(
             "Serial capture unavailable -- meshtastic package not installed"
+        )
+        return
+
+    devices = config.capture.serial or [
+        SerialDeviceConfig(
+            serial_port=config.capture.serial_port,
+            serial_baud=config.capture.serial_baud,
+        )
+    ]
+    for dev in devices:
+        coordinator.capture_coordinator.add_source(
+            SerialCaptureSource(
+                port=dev.serial_port,
+                baud=dev.serial_baud,
+                label=dev.label,
+            )
         )
 
 

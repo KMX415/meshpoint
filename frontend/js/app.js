@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             'configuration/mqtt',
             'configuration/gps', 'configuration/advanced',
             'configuration/meshcore',
+            'configuration/serial',
             'settings/updates', 'settings/auth', 'settings/dangerous',
         ],
     });
@@ -516,6 +517,7 @@ function _bootCommandPaletteAndKeymap(router) {
         ['configuration/radio', 'Go to Configuration · Radio', 'Configuration'],
         ['configuration/channels', 'Go to Configuration · Channels', 'Configuration'],
         ['configuration/meshcore', 'Go to Configuration · MeshCore', 'Configuration'],
+        ['configuration/serial', 'Go to Configuration · Serial', 'Configuration'],
         ['settings/auth', 'Go to Settings · Auth', 'Settings'],
         ['settings/updates', 'Go to Settings · Updates', 'Settings'],
         ['settings/dangerous', 'Go to Settings · System', 'Settings'],

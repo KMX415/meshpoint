@@ -249,6 +249,39 @@ class ResolveChannelIndexTest(unittest.TestCase):
         self.assertIsNone(source.resolve_channel_index("LongFast"))
 
 
+class SerialSourceNameTest(unittest.TestCase):
+    def test_unlabelled_name_is_serial(self):
+        self.assertEqual(SerialCaptureSource(port="/dev/ttyUSB0").name, "serial")
+
+    def test_labelled_name_is_serial_label(self):
+        self.assertEqual(
+            SerialCaptureSource(port="/dev/ttyUSB0", label="433").name,
+            "serial_433",
+        )
+
+
+class PubsubInterfaceGuardTest(unittest.TestCase):
+    def test_ignores_packets_from_foreign_interface(self):
+        source = SerialCaptureSource(port="/dev/ttyUSB0")
+        source._running = True
+        source._interface = object()
+        source._queue = __import__("asyncio").Queue()
+        source._on_receive({"from": 1, "raw": b"\x00" * 16}, interface=object())
+        self.assertTrue(source._queue.empty())
+
+    def test_accepts_packets_from_own_interface(self):
+        source = SerialCaptureSource(port="/dev/ttyUSB0")
+        source._running = True
+        iface = object()
+        source._interface = iface
+        source._queue = __import__("asyncio").Queue()
+        source._on_receive(
+            {"from": 1, "raw": b"\x00" * 16, "rxRssi": -80, "rxSnr": 5},
+            interface=iface,
+        )
+        self.assertFalse(source._queue.empty())
+
+
 class ReconstructRawTest(unittest.TestCase):
     """MeshPacket raw is a protobuf object; encrypted is base64."""
 
