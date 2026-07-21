@@ -42,9 +42,12 @@ class MessagingChat {
 
         this._headerName.textContent = name;
         this._headerName.classList.toggle('msg-chat__name--clickable', !isChannel);
-        this._headerSubtitle.textContent = isChannel
-            ? 'Public channel · all listeners on this PSK'
-            : 'Direct message';
+        const isUnmapped = (convo.node_id || '').includes(':unmapped:');
+        this._headerSubtitle.textContent = isUnmapped
+            ? "Unmapped channel hash: no local channel matches, can't reply"
+            : isChannel
+                ? 'Public channel · all listeners on this PSK'
+                : 'Direct message';
         this._headerBadge.textContent = proto;
         this._headerBadge.className = 'msg-chat__protocol-badge ' +
             (convo.protocol === 'meshcore' ? 'msg-chat__protocol-badge--mc' : 'msg-chat__protocol-badge--mt');
@@ -59,9 +62,12 @@ class MessagingChat {
         this._messagesEl.innerHTML = '';
         this._lastDayKey = null;
         this._container.classList.remove('msg-chat--empty');
-        this._input.disabled = false;
-        this._sendBtn.disabled = false;
-        this._input.focus();
+        this._input.disabled = isUnmapped;
+        this._sendBtn.disabled = isUnmapped;
+        this._input.placeholder = isUnmapped
+            ? "Can't reply: no matching local channel"
+            : 'Type a message…';
+        if (!isUnmapped) this._input.focus();
         this._loadMessages();
     }
 
