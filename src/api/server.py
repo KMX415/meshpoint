@@ -1067,7 +1067,14 @@ def _setup_message_interception(
                 node_id = f"broadcast:{packet.protocol.value}:{ch_idx}"
             else:
                 ch_idx = channel_hash_resolver.lookup(packet.channel_hash)
-                if ch_idx is None:
+                if ch_idx is None and packet.matched_channel_index is not None:
+                    # Same PSK, different remote channel name: keyed bucket.
+                    node_id = (
+                        f"broadcast:{packet.protocol.value}:keyed:"
+                        f"{packet.matched_channel_index}:"
+                        f"0x{packet.channel_hash:02x}"
+                    )
+                elif ch_idx is None:
                     # Distinct bucket per unmapped hash (not LongFast).
                     node_id = (
                         f"broadcast:{packet.protocol.value}:"

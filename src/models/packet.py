@@ -76,6 +76,10 @@ class Packet:
     # legitimate relay rather than a fresh broadcast.
     raw_radio_packet: Optional[bytes] = None
     decrypted: bool = False
+    # Index into crypto.get_all_keys() of the key that decrypted this
+    # packet. Set even when channel_hash does not match a local name+key
+    # hash (remote used a different channel name, same PSK).
+    matched_channel_index: Optional[int] = None
 
     signal: Optional[SignalMetrics] = None
     capture_source: str = "unknown"

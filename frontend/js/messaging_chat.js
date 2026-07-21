@@ -38,16 +38,20 @@ class MessagingChat {
 
         const name = convo.node_name || convo.node_id || '';
         const isChannel = (convo.node_id || '').startsWith('broadcast:');
+        // Keyed: same PSK, different remote name (repliable). Unmapped: no key.
+        const isKeyed = /:keyed:\d+:0x[0-9a-f]+$/i.test(convo.node_id || '');
+        const isUnmapped = !isKeyed && (convo.node_id || '').includes(':unmapped:');
         const proto = convo.protocol === 'meshcore' ? 'MC' : 'MT';
 
         this._headerName.textContent = name;
         this._headerName.classList.toggle('msg-chat__name--clickable', !isChannel);
-        const isUnmapped = (convo.node_id || '').includes(':unmapped:');
         this._headerSubtitle.textContent = isUnmapped
             ? "Unmapped channel hash: no local channel matches, can't reply"
-            : isChannel
-                ? 'Public channel · all listeners on this PSK'
-                : 'Direct message';
+            : isKeyed
+                ? 'Same key, different channel name on their side: replies still work'
+                : isChannel
+                    ? 'Public channel · all listeners on this PSK'
+                    : 'Direct message';
         this._headerBadge.textContent = proto;
         this._headerBadge.className = 'msg-chat__protocol-badge ' +
             (convo.protocol === 'meshcore' ? 'msg-chat__protocol-badge--mc' : 'msg-chat__protocol-badge--mt');

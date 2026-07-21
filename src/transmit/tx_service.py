@@ -148,11 +148,16 @@ class TxService:
         protocol: str = "meshtastic",
         channel: int = 0,
         want_ack: bool = False,
+        echo_hash: int | None = None,
     ) -> SendResult:
-        """Send a text message over the specified protocol."""
+        """Send a text message over the specified protocol.
+
+        ``echo_hash`` stamps the on-air hash byte without changing which
+        channel key encrypts the payload (keyed / name-mismatch replies).
+        """
         if protocol.lower() in ("meshtastic", "mt"):
             return await self._send_meshtastic(
-                text, destination, channel, want_ack
+                text, destination, channel, want_ack, echo_hash
             )
         elif protocol.lower() in ("meshcore", "mc"):
             return await self._send_meshcore(text, destination, channel)
@@ -267,6 +272,7 @@ class TxService:
         destination: int | str,
         channel: int,
         want_ack: bool,
+        echo_hash: int | None = None,
     ) -> SendResult:
         """Build and transmit a Meshtastic packet via the SX1261."""
         if not self.meshtastic_enabled:
@@ -287,6 +293,8 @@ class TxService:
         dest_int = self._resolve_destination(destination, Protocol.MESHTASTIC)
         packet_id = self._next_packet_id()
         channel_hash, channel_key = self._resolve_channel(channel)
+        if echo_hash is not None:
+            channel_hash = echo_hash
         recipient_pubkey = None
         if dest_int != BROADCAST_ADDR_MT and self._crypto is not None:
             recipient_pubkey = self._crypto.lookup_public_key(dest_int)
