@@ -211,7 +211,7 @@ class ReadChannelTableTest(unittest.TestCase):
         iface.localNode.channels = channels
 
         table = SerialCaptureSource._read_channel_table(
-            iface, modem_preset_name="LongFast"
+            iface, modem_preset_name="LONG_FAST"
         )
         self.assertEqual(table, {0: "LongFast"})
 

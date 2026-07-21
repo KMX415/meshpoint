@@ -72,6 +72,8 @@ class TxService:
         primary_channel_name: str = "",
         device_id: Optional[str] = None,
         persist_derived_node_id: bool = True,
+        node_repo=None,
+        serial_sources: Optional[list] = None,
     ):
         self._wrapper = wrapper
         self._crypto = crypto
@@ -90,6 +92,10 @@ class TxService:
             self._persist_derived_node_id_if_needed()
         self._device_metrics_provider = None
         self._local_stats_provider = None
+        # Optional: route Meshtastic DMs via the USB stick that last
+        # heard the contact (fork f6b2bcd / 55950c8).
+        self._node_repo = node_repo
+        self._serial_sources = serial_sources or []
 
     @property
     def meshtastic_enabled(self) -> bool:
@@ -274,7 +280,44 @@ class TxService:
         want_ack: bool,
         echo_hash: int | None = None,
     ) -> SendResult:
-        """Build and transmit a Meshtastic packet via the SX1261."""
+        """Transmit via USB stick when that stick last heard the dest, else SX1261."""
+        dest_int = self._resolve_destination(destination, Protocol.MESHTASTIC)
+
+        if (
+            self._config is not None
+            and self._config.enabled
+            and dest_int != BROADCAST_ADDR_MT
+        ):
+            serial_source = await self._resolve_serial_send_source(dest_int)
+            if serial_source is not None:
+                channel_name = self._channel_name_for_index(channel)
+                stick_channel_index = serial_source.resolve_channel_index(
+                    channel_name
+                )
+                if stick_channel_index is None:
+                    return SendResult(
+                        success=False,
+                        protocol="meshtastic",
+                        error=(
+                            f"{serial_source.name} has no channel named "
+                            f"'{channel_name}' -- refusing to send on a "
+                            "possibly-wrong channel"
+                        ),
+                    )
+                result = serial_source.send_text(
+                    text,
+                    dest_int,
+                    channel_index=stick_channel_index,
+                    want_ack=want_ack,
+                )
+                return SendResult(
+                    success=result["success"],
+                    protocol="meshtastic",
+                    packet_id=result["packet_id"],
+                    timestamp=time.time(),
+                    error=result["error"],
+                )
+
         if not self.meshtastic_enabled:
             return SendResult(
                 success=False,
@@ -290,7 +333,6 @@ class TxService:
                 error="Packet builder unavailable",
             )
 
-        dest_int = self._resolve_destination(destination, Protocol.MESHTASTIC)
         packet_id = self._next_packet_id()
         channel_hash, channel_key = self._resolve_channel(channel)
         if echo_hash is not None:
@@ -960,6 +1002,40 @@ class TxService:
             value = secrets.randbits(32)
             if value not in RESERVED_NODE_IDS:
                 return value
+
+    async def _resolve_serial_send_source(self, dest_int: int):
+        """USB stick that last heard *dest_int*, if any and still connected.
+
+        Credit: javastraat/meshpoint ``f6b2bcd``.
+        """
+        if not self._node_repo or not self._serial_sources:
+            return None
+        try:
+            lookup_id = f"{dest_int:08x}"
+            source_name = await self._node_repo.get_latest_capture_source(
+                lookup_id
+            )
+        except Exception:
+            logger.debug("Serial send-source lookup failed", exc_info=True)
+            return None
+        if not source_name:
+            return None
+        for src in self._serial_sources:
+            if src.name == source_name and getattr(src, "connected", False):
+                return src
+        return None
+
+    def _channel_name_for_index(self, channel: int) -> str:
+        """Meshpoint channel name for a dashboard channel index.
+
+        Used to map to a USB stick's independently numbered channel table.
+        Credit: javastraat/meshpoint ``55950c8``.
+        """
+        if channel != 0 and self._crypto is not None:
+            channel_keys = list(self._crypto._keys.items())
+            if channel - 1 < len(channel_keys):
+                return channel_keys[channel - 1][0]
+        return self._primary_channel_name or self._get_preset_name()
 
     def _resolve_channel(self, channel: int) -> tuple[int, bytes | None]:
         """Resolve channel index to (hash, encryption_key).

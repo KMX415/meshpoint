@@ -680,6 +680,8 @@ def _build_tx_service(
         radio_config=config.radio,
         primary_channel_name=config.meshtastic.primary_channel_name,
         device_id=config.device.device_id,
+        node_repo=coord.node_repo,
+        serial_sources=_find_serial_sources(coord),
     )
     logger.info(
         "Transmit service ready: MT=%s MC=%s",
@@ -833,6 +835,17 @@ def _find_meshcore_source(coord: PipelineCoordinator):
         if src.name == "meshcore_usb":
             return src
     return None
+
+
+def _find_serial_sources(coord: PipelineCoordinator) -> list:
+    """Meshtastic USB serial capture sources (for reply routing)."""
+    from src.capture.serial_source import SerialCaptureSource
+
+    return [
+        src
+        for src in coord.capture_coordinator._sources
+        if isinstance(src, SerialCaptureSource)
+    ]
 
 
 async def _reapply_companion_name(meshcore_tx, config: AppConfig) -> None:

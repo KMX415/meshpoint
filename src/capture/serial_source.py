@@ -181,12 +181,24 @@ class SerialCaptureSource(CaptureSource):
             logger.exception("Failed to open serial interface")
             raise
 
+    @property
+    def connected(self) -> bool:
+        """True while the serial interface is open and capture is running."""
+        return self._running and self._interface is not None
+
     @staticmethod
     def _read_channel_table(
         interface, modem_preset_name: Optional[str] = None
     ) -> dict:
-        """Stick channel-table index -> name (for locally decoded packets)."""
+        """Stick channel-table index -> name (for locally decoded packets).
+
+        Blank primary names fall back to the modem preset *display* name
+        (e.g. ``LongFast``), matching Meshpoint's primary-channel naming
+        and firmware ``Channels::getName()`` so TX can translate by name.
+        """
         from meshtastic.protobuf import channel_pb2
+
+        from src.radio.presets import get_preset
 
         table: dict[int, str] = {}
         channels = getattr(interface.localNode, "channels", None) or []
@@ -195,10 +207,49 @@ class SerialCaptureSource(CaptureSource):
                 continue
             name = ch.settings.name
             if not name and ch.role == channel_pb2.Channel.Role.PRIMARY:
-                name = modem_preset_name
+                preset = get_preset(modem_preset_name) if modem_preset_name else None
+                name = preset.display_name if preset else modem_preset_name
             if name:
                 table[ch.index] = name
         return table
+
+    def send_text(
+        self,
+        text: str,
+        destination: int | str,
+        channel_index: int = 0,
+        want_ack: bool = False,
+    ) -> dict:
+        """Send text via this stick's meshtastic-python interface.
+
+        Returns a plain dict (not ``SendResult``) so capture stays free of
+        transmit-layer types. Credit: javastraat/meshpoint ``f6b2bcd``.
+        """
+        iface = self._interface
+        if iface is None or not self.connected:
+            return {"success": False, "error": "Not connected", "packet_id": ""}
+        try:
+            sent = iface.sendText(
+                text,
+                destinationId=destination,
+                wantAck=want_ack,
+                channelIndex=channel_index,
+            )
+            packet_id = (
+                f"{sent.id:08x}"
+                if sent is not None and hasattr(sent, "id")
+                else ""
+            )
+            logger.info(
+                "%s: text message sent (dest=%s, id=%s)",
+                self.name,
+                destination,
+                packet_id or "unknown",
+            )
+            return {"success": True, "error": "", "packet_id": packet_id}
+        except Exception as exc:
+            logger.exception("%s: send_text failed", self.name)
+            return {"success": False, "error": str(exc), "packet_id": ""}
 
     async def stop(self) -> None:
         self._running = False
