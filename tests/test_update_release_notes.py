@@ -13,7 +13,9 @@ from src.api.update.release_notes import (
     ChangelogParser,
     ChangelogSection,
     format_section_for_preview,
+    format_section_full,
     sanitize_detail_for_preview,
+    sanitize_detail_full,
     select_preview_section,
 )
 
@@ -304,6 +306,31 @@ class TestPreviewFormatting(unittest.TestCase):
         payload = format_section_for_preview(section)
         self.assertEqual(payload["bullets"][0]["detail"], "Brief note.")
         self.assertTrue(payload["bullets"][1]["detail"].endswith("…"))
+
+
+class TestFullFormatting(unittest.TestCase):
+    def test_sanitize_detail_full_keeps_long_text(self) -> None:
+        long = "A" * 300
+        self.assertEqual(sanitize_detail_full(long), long)
+
+    def test_format_section_full_does_not_truncate(self) -> None:
+        from src.api.update.release_notes import ChangelogBullet
+
+        detail = "See [docs](https://example.com) and `code` path. " + ("B" * 200)
+        section = ChangelogSection(
+            header="v0.7.3.1",
+            version="0.7.3.1",
+            date=None,
+            is_unreleased=False,
+            bullets=[ChangelogBullet(headline="Long", detail=detail)],
+        )
+        payload = format_section_full(section)
+        out = payload["bullets"][0]["detail"]
+        self.assertNotIn("…", out)
+        self.assertIn("docs", out)
+        self.assertNotIn("https://", out)
+        self.assertNotIn("`", out)
+        self.assertGreater(len(out), 200)
 
 
 if __name__ == "__main__":

@@ -39,6 +39,7 @@ from src.api.update.rollback_state import clear_rollback_state, write_rollback_s
 from src.api.update.release_notes import (
     ChangelogParser,
     format_section_for_preview,
+    format_section_full,
     select_preview_section,
 )
 from src.version import __version__ as INSTALLED_VERSION
@@ -166,6 +167,9 @@ async def release_notes(
         "current_installed_version": INSTALLED_VERSION,
         "preview_section": (
             format_section_for_preview(preview) if preview is not None else None
+        ),
+        "full_section": (
+            format_section_full(preview) if preview is not None else None
         ),
     }
 
