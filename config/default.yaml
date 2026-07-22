@@ -44,6 +44,7 @@ capture:
 storage:
   database_path: "data/concentrator.db"
   max_packets_retained: 100000
+  max_telemetry_retained: 100000
   cleanup_interval_seconds: 3600
 
 dashboard:

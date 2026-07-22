@@ -33,6 +33,7 @@ def reset_routes() -> None:
 
 class StorageUpdate(BaseModel):
     max_packets_retained: Optional[int] = Field(None, ge=1000, le=10_000_000)
+    max_telemetry_retained: Optional[int] = Field(None, ge=1000, le=10_000_000)
     cleanup_interval_seconds: Optional[int] = Field(None, ge=60, le=86400)
 
 
@@ -85,6 +86,9 @@ async def update_storage(
     if req.max_packets_retained is not None:
         storage.max_packets_retained = req.max_packets_retained
         updates["max_packets_retained"] = req.max_packets_retained
+    if req.max_telemetry_retained is not None:
+        storage.max_telemetry_retained = req.max_telemetry_retained
+        updates["max_telemetry_retained"] = req.max_telemetry_retained
     if req.cleanup_interval_seconds is not None:
         storage.cleanup_interval_seconds = req.cleanup_interval_seconds
         updates["cleanup_interval_seconds"] = req.cleanup_interval_seconds

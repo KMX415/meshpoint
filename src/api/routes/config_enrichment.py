@@ -33,6 +33,7 @@ def enrich_config_payload(cfg: AppConfig, base: dict) -> dict:
     base["storage"] = {
         "database_path": storage.database_path,
         "max_packets_retained": storage.max_packets_retained,
+        "max_telemetry_retained": storage.max_telemetry_retained,
         "cleanup_interval_seconds": storage.cleanup_interval_seconds,
     }
     base["capture"] = {

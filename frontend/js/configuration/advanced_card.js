@@ -27,6 +27,11 @@ class AdvancedConfigCard {
                                    max="10000000" data-storage-max>
                         </label>
                         <label class="cfg-field">
+                            <span class="cfg-field__label">Max telemetry rows retained</span>
+                            <input class="cfg-field__input" type="number" min="1000"
+                                   max="10000000" data-storage-telemetry-max>
+                        </label>
+                        <label class="cfg-field">
                             <span class="cfg-field__label">Cleanup interval (seconds)</span>
                             <input class="cfg-field__input" type="number" min="60" max="86400"
                                    data-storage-cleanup>
@@ -75,6 +80,7 @@ class AdvancedConfigCard {
         const radioAdv = config.radio_advanced || {};
 
         this._setVal('[data-storage-max]', storage.max_packets_retained);
+        this._setVal('[data-storage-telemetry-max]', storage.max_telemetry_retained);
         this._setVal('[data-storage-cleanup]', storage.cleanup_interval_seconds);
         this._setVal('[data-radio-scan-interval]', radioAdv.spectral_scan_interval_seconds);
         this._setVal('[data-radio-sx1261]', radioAdv.sx1261_spi_path || '');
@@ -93,6 +99,9 @@ class AdvancedConfigCard {
         const result = await this._api.put('/api/config/storage', {
             max_packets_retained: Number(
                 this._root.querySelector('[data-storage-max]').value,
+            ),
+            max_telemetry_retained: Number(
+                this._root.querySelector('[data-storage-telemetry-max]').value,
             ),
             cleanup_interval_seconds: Number(
                 this._root.querySelector('[data-storage-cleanup]').value,

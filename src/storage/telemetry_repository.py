@@ -73,6 +73,25 @@ class TelemetryRepository:
             )
         return [self._row_to_telemetry(r) for r in rows]
 
+    async def get_count(self) -> int:
+        row = await self._db.fetch_one("SELECT COUNT(*) AS cnt FROM telemetry")
+        return int(row["cnt"]) if row else 0
+
+    async def cleanup_old(self, max_retained: int) -> int:
+        """Prune oldest telemetry rows once the table exceeds max_retained."""
+        total = await self.get_count()
+        if total <= max_retained:
+            return 0
+        excess = total - max_retained
+        await self._db.execute(
+            "DELETE FROM telemetry WHERE id IN "
+            "(SELECT id FROM telemetry ORDER BY timestamp ASC LIMIT ?)",
+            (excess,),
+        )
+        await self._db.commit()
+        logger.info("Cleaned up %d old telemetry rows", excess)
+        return excess
+
     @staticmethod
     def _row_to_telemetry(row: dict) -> Telemetry:
         return Telemetry(
