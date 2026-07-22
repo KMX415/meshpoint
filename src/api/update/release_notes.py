@@ -154,11 +154,29 @@ def sanitize_detail_for_preview(detail: str, *, max_len: int = _PREVIEW_DETAIL_M
     return cut.rstrip(".,;") + "…"
 
 
+def sanitize_detail_full(detail: str) -> str:
+    """De-markdown detail text for the full-notes modal (no truncation)."""
+    if not detail:
+        return ""
+    text = _LINK_RE.sub(r"\1", detail)
+    text = text.replace("`", "")
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def format_bullet_for_preview(bullet: ChangelogBullet) -> dict:
     """Serialize one bullet for the dashboard (truncated detail)."""
     return {
         "headline": bullet.headline,
         "detail": sanitize_detail_for_preview(bullet.detail),
+        "category": bullet.category,
+    }
+
+
+def format_bullet_full(bullet: ChangelogBullet) -> dict:
+    """Serialize one bullet with its full (un-truncated) detail."""
+    return {
+        "headline": bullet.headline,
+        "detail": sanitize_detail_full(bullet.detail),
         "category": bullet.category,
     }
 
@@ -171,6 +189,17 @@ def format_section_for_preview(section: ChangelogSection) -> dict:
         "date": section.date,
         "is_unreleased": section.is_unreleased,
         "bullets": [format_bullet_for_preview(b) for b in section.bullets],
+    }
+
+
+def format_section_full(section: ChangelogSection) -> dict:
+    """Serialize a section with full-text bullets for the modal."""
+    return {
+        "header": section.header,
+        "version": section.version,
+        "date": section.date,
+        "is_unreleased": section.is_unreleased,
+        "bullets": [format_bullet_full(b) for b in section.bullets],
     }
 
 
