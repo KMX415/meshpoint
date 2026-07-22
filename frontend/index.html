@@ -532,6 +532,10 @@
                             <button class="terminal-button terminal-button--ghost" type="button" data-update-rollback disabled>Roll back last apply</button>
                         </div>
                         <p class="update-rollback-hint" data-update-rollback-hint></p>
+                        <div class="update-history" data-update-commits hidden>
+                            <p class="update-history__title">Latest commits</p>
+                            <ul class="update-history__list" data-update-commits-list></ul>
+                        </div>
                         <p class="update-status" data-update-status aria-live="polite"></p>
                     </article>
                     <section class="update-progress" data-update-progress hidden aria-live="polite"></section>
@@ -748,6 +752,7 @@
     <script src="js/settings/update_stream_client.js"></script>
     <script src="js/settings/release_notes_view.js"></script>
     <script src="js/settings/update_incoming_view.js"></script>
+    <script src="js/settings/update_remote_commits_view.js"></script>
     <script src="js/settings/update_panel_controller.js"></script>
     <script src="js/settings/meshpoint_display_form.js"></script>
     <script src="js/settings/backup_restore_card.js"></script>

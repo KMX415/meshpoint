@@ -340,6 +340,50 @@ def list_incoming_commits(
     return commits
 
 
+def list_branch_commits(
+    repo_path: str,
+    ref: str,
+    *,
+    runner: GitRunner = default_git_runner,
+    use_sudo: bool = True,
+    limit: int = 5,
+    timeout_seconds: float = 15.0,
+) -> list[dict]:
+    """Most recent commits at ``ref`` (e.g. ``origin/main``), newest first.
+
+    Empty list on any failure.
+    """
+    git = ["sudo", "git"] if use_sudo else ["git"]
+    rc, out, _ = runner(
+        [*git, "log", "-n", str(limit), "--format=%h%x09%ct%x09%s", ref],
+        repo_path,
+        timeout_seconds,
+    )
+    if rc != 0:
+        return []
+    commits: list[dict] = []
+    for line in out.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        sha, _, rest = line.partition("\t")
+        ts_raw, _, subject = rest.partition("\t")
+        try:
+            committed_at = datetime.fromtimestamp(
+                int(ts_raw), tz=timezone.utc,
+            ).isoformat()
+        except (ValueError, OSError, OverflowError):
+            committed_at = None
+        commits.append({
+            "sha": sha,
+            "subject": subject.strip(),
+            "committed_at": committed_at,
+        })
+        if len(commits) >= limit:
+            break
+    return commits
+
+
 def build_install_status_payload(
     *,
     registry: ReleaseChannelRegistry,
@@ -421,6 +465,15 @@ def build_install_status_payload(
     rollback = read_rollback_state(path=rb_path)
     rollback_pre_sha = rollback["pre_update_sha"] if rollback else None
 
+    remote_commits: list[dict] = []
+    if version_branch:
+        remote_commits = list_branch_commits(
+            repo_path,
+            f"origin/{version_branch}",
+            runner=runner,
+            use_sudo=use_sudo,
+        )
+
     return {
         "local_version": __version__,
         "install_branch": branch,
@@ -434,6 +487,7 @@ def build_install_status_payload(
         "sync_error": sync_error,
         "checked_at": checked_at,
         "incoming_commits": incoming_commits,
+        "remote_commits": remote_commits,
         "update_available": update_available,
         "rollback_pre_sha": rollback_pre_sha,
         **channel_info,

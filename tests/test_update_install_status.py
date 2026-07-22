@@ -10,6 +10,7 @@ from src.api.update.channels import ReleaseChannelRegistry
 from src.api.update.install_status import (
     build_install_status_payload,
     count_commits_behind_ahead,
+    list_branch_commits,
     list_incoming_commits,
     match_channel_for_branch,
     read_install_git_ref,
@@ -60,6 +61,13 @@ class _FakeGitRunner:
                 return 0, ("\n".join(lines) + "\n"), ""
             if spec.startswith("origin/") and spec.endswith("..HEAD"):
                 return 0, ("cd\n" * self.ahead), ""
+        if "log" in args and any(a.startswith("--format=") for a in args):
+            # list_branch_commits: sha\tts\tsubject
+            lines = [
+                f"bbb{i:04d}\t{1700000000 + i}\tRemote tip commit {i}"
+                for i in range(5)
+            ]
+            return 0, ("\n".join(lines) + "\n"), ""
         return 1, "", "err"
 
 
@@ -184,6 +192,11 @@ class TestBuildInstallStatusPayload(unittest.TestCase):
             payload["incoming_commits"][0]["subject"],
             "Incoming commit subject 0",
         )
+        self.assertEqual(len(payload["remote_commits"]), 5)
+        self.assertEqual(
+            payload["remote_commits"][0]["subject"],
+            "Remote tip commit 0",
+        )
         self.assertTrue(
             any(len(c) >= 3 and c[:3] == ["git", "fetch", "origin"] for c in runner.calls),
         )
@@ -223,6 +236,25 @@ class TestListIncomingCommits(unittest.TestCase):
         self.assertEqual(len(commits), 3)
         self.assertEqual(commits[0]["sha"], "aaa0000")
         self.assertEqual(commits[2]["subject"], "Incoming commit subject 2")
+
+
+class TestListBranchCommits(unittest.TestCase):
+    def test_parses_tab_format_with_timestamp(self) -> None:
+        runner = _FakeGitRunner()
+        commits = list_branch_commits(
+            "/opt/meshpoint",
+            "origin/feat/v0.7.8",
+            runner=runner,
+            use_sudo=False,
+            limit=3,
+        )
+        self.assertEqual(len(commits), 3)
+        self.assertEqual(commits[0]["sha"], "bbb0000")
+        self.assertEqual(commits[0]["subject"], "Remote tip commit 0")
+        self.assertTrue(commits[0]["committed_at"].startswith("20"))
+
+
+class TestRevisionCountFallback(unittest.TestCase):
     def test_rev_list_denied_uses_git_log(self) -> None:
         runner = _FakeGitRunner(behind=3, ahead=1)
         behind, ahead, _ = count_commits_behind_ahead(

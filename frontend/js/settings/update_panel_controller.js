@@ -37,6 +37,10 @@ class UpdatePanelController {
         this.incomingView = new window.UpdateIncomingView(
             rootEl.querySelector('[data-update-incoming]')
         );
+        this.remoteCommitsView = new window.UpdateRemoteCommitsView(
+            rootEl.querySelector('[data-update-commits]'),
+            rootEl.querySelector('[data-update-commits-list]')
+        );
         this.statusEl = rootEl.querySelector('[data-update-status]');
         this.descriptionEl = rootEl.querySelector('[data-update-description]');
         this.localVersionEl = rootEl.querySelector('[data-update-local-version]');
@@ -96,6 +100,9 @@ class UpdatePanelController {
             if (!response.ok) return;
             this._installStatus = await response.json();
             this._renderVersionCards(this._installStatus);
+            if (this.remoteCommitsView) {
+                this.remoteCommitsView.render(this._installStatus);
+            }
             if (!this._installStatus.checked_at) {
                 this._renderSyncHint(null);
             }
@@ -132,6 +139,9 @@ class UpdatePanelController {
             }
             this._installStatus = await response.json();
             this._renderVersionCards(this._installStatus);
+            if (this.remoteCommitsView) {
+                this.remoteCommitsView.render(this._installStatus);
+            }
             this._renderSyncHint(this._installStatus);
             const behind = this._installStatus.commits_behind;
             if (this._installStatus.sync_error) {
