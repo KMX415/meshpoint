@@ -55,9 +55,7 @@ class ReleaseNotesView {
             : "What's new";
         const title = section.header || section.version || 'Release notes';
         const date = section.date ? this._escape(section.date) : '';
-        const bullets = (section.bullets || [])
-            .map((bullet) => this._renderBullet(bullet))
-            .join('');
+        const bullets = this._renderBullets(section.bullets || []);
         const installed = body.current_installed_version
             ? `<p class="update-release-notes__date">Installed: v${this._escape(body.current_installed_version)}</p>`
             : '';
@@ -73,6 +71,22 @@ class ReleaseNotesView {
                 ${bullets || '<li class="update-release-notes__empty">No bullets in this section.</li>'}
             </ul>
         `;
+    }
+
+    _renderBullets(bullets) {
+        const parts = [];
+        let lastCategory = null;
+        for (const bullet of bullets) {
+            const category = (bullet.category || '').trim();
+            if (category && category !== lastCategory) {
+                parts.push(
+                    `<li class="update-release-notes__category">${this._escape(category)}</li>`
+                );
+                lastCategory = category;
+            }
+            parts.push(this._renderBullet(bullet));
+        }
+        return parts.join('');
     }
 
     _renderBullet(bullet) {
