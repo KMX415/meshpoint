@@ -21,9 +21,11 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from src.api.auth.dependencies import require_admin
+from src.api.auth.jwt_session import SessionClaims
 from src.config import AppConfig, save_section_to_yaml
 
 logger = logging.getLogger(__name__)
@@ -76,7 +78,10 @@ class NodeInfoUpdate(BaseModel):
 
 
 @router.put("")
-async def update_nodeinfo(req: NodeInfoUpdate):
+async def update_nodeinfo(
+    req: NodeInfoUpdate,
+    _claims: SessionClaims = Depends(require_admin),
+):
     """Update NodeInfo broadcast settings.
 
     ``interval_minutes`` hot-reloads the running broadcaster: the new
@@ -155,7 +160,9 @@ async def update_nodeinfo(req: NodeInfoUpdate):
 
 
 @router.post("/send")
-async def send_nodeinfo_now():
+async def send_nodeinfo_now(
+    _claims: SessionClaims = Depends(require_admin),
+):
     """Trigger an immediate NodeInfo broadcast (the 'Send Now' button).
 
     Returns 503 when the broadcaster isn't running, which can happen

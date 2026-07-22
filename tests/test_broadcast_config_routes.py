@@ -21,6 +21,8 @@ def _build_app() -> FastAPI:
     app = FastAPI()
     app.include_router(pos_module.router)
     app.include_router(telem_module.router)
+    from tests.auth_test_helpers import override_as_admin
+    override_as_admin(app)
     return app
 
 

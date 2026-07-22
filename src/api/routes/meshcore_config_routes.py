@@ -16,9 +16,11 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from src.api.auth.dependencies import require_admin
+from src.api.auth.jwt_session import SessionClaims
 from src.config import AppConfig, save_section_to_yaml
 
 logger = logging.getLogger(__name__)
@@ -59,7 +61,10 @@ class CompanionNameUpdate(BaseModel):
 
 
 @router.put("/companion-name")
-async def update_companion_name(req: CompanionNameUpdate) -> dict:
+async def update_companion_name(
+    req: CompanionNameUpdate,
+    _claims: SessionClaims = Depends(require_admin),
+) -> dict:
     """Rename the USB companion (CMD_SET_ADVERT_NAME).
 
     Validation lives in :meth:`MeshCoreTxClient.set_companion_name`

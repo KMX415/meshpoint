@@ -22,6 +22,8 @@ PRIVATE_PSK_B64 = "wLvS00jm+SlCkdkZ6DRZXvLoqoSgPT+3vh8zX+MJoyQ="
 def _build_config_app() -> FastAPI:
     app = FastAPI()
     app.include_router(config_module.router)
+    from tests.auth_test_helpers import override_as_admin
+    override_as_admin(app)
     return app
 
 

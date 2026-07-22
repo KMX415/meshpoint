@@ -14,6 +14,8 @@ from src.api.routes import config_routes as config_module
 def _build_app() -> FastAPI:
     app = FastAPI()
     app.include_router(config_module.router)
+    from tests.auth_test_helpers import override_as_admin
+    override_as_admin(app)
     return app
 
 

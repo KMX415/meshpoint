@@ -13,9 +13,11 @@ import logging
 import subprocess
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from src.api.auth.dependencies import require_admin, require_auth
+from src.api.auth.jwt_session import ROLE_ADMIN, SessionClaims
 from src.api.routes import (
     config_enrichment,
     mqtt_config_routes,
@@ -103,8 +105,12 @@ def _refresh_channel_hash_map() -> None:
 
 
 @router.get("")
-async def get_config():
-    """Full configuration summary for the Radio tab."""
+async def get_config(claims: SessionClaims = Depends(require_auth)):
+    """Full configuration summary for the Radio / Configuration tabs.
+
+    Channel secrets (Meshtastic PSKs, MeshCore keys) are only included
+    for admins; viewer sessions get the same shape with blanked keys.
+    """
     if _config is None:
         raise HTTPException(503, "Config not loaded")
 
@@ -223,7 +229,18 @@ async def get_config():
             for r, d in REGION_DEFAULTS.items()
         ],
     }
-    return config_enrichment.enrich_config_payload(_config, payload)
+    enriched = config_enrichment.enrich_config_payload(_config, payload)
+    if claims.role != ROLE_ADMIN:
+        _redact_channel_secrets(enriched)
+    return enriched
+
+
+def _redact_channel_secrets(payload: dict) -> None:
+    """Blank channel keys in-place for non-admin callers."""
+    for ch in payload.get("channels") or []:
+        ch["psk_b64"] = ""
+    for ck in (payload.get("meshcore") or {}).get("channel_keys") or []:
+        ck["key_hex"] = ""
 
 
 @router.get("/export")
@@ -251,7 +268,10 @@ class TransmitUpdate(BaseModel):
 
 
 @router.put("/transmit")
-async def update_transmit(req: TransmitUpdate):
+async def update_transmit(
+    req: TransmitUpdate,
+    _claims: SessionClaims = Depends(require_admin),
+):
     """Update TX settings. Some changes require a restart."""
     if _config is None:
         raise HTTPException(503, "Config not loaded")
@@ -323,7 +343,10 @@ class IdentityUpdate(BaseModel):
 
 
 @router.put("/identity")
-async def update_identity(req: IdentityUpdate):
+async def update_identity(
+    req: IdentityUpdate,
+    _claims: SessionClaims = Depends(require_admin),
+):
     """Update node identity. node_id changes need restart."""
     if _config is None:
         raise HTTPException(503, "Config not loaded")
@@ -370,7 +393,10 @@ class RadioUpdate(BaseModel):
 
 
 @router.put("/radio")
-async def update_radio(req: RadioUpdate):
+async def update_radio(
+    req: RadioUpdate,
+    _claims: SessionClaims = Depends(require_admin),
+):
     """Update radio settings. Flags restart_required for RX changes."""
     if _config is None:
         raise HTTPException(503, "Config not loaded")
@@ -450,7 +476,10 @@ class ChannelsUpdate(BaseModel):
 
 
 @router.put("/channels")
-async def update_channels(req: ChannelsUpdate):
+async def update_channels(
+    req: ChannelsUpdate,
+    _claims: SessionClaims = Depends(require_admin),
+):
     """Update channel keys. Applies to crypto at runtime (no restart)."""
     if _config is None:
         raise HTTPException(503, "Config not loaded")
@@ -549,7 +578,10 @@ def _normalize_meshcore_channel_entry(name: str, key_hex: str) -> tuple[str, str
 
 
 @router.put("/meshcore/channels")
-async def update_meshcore_channels(req: McChannelsUpdate):
+async def update_meshcore_channels(
+    req: McChannelsUpdate,
+    _claims: SessionClaims = Depends(require_admin),
+):
     """Update MeshCore channel keys (stored as hex). No restart required."""
     if _config is None:
         raise HTTPException(503, "Config not loaded")
@@ -597,7 +629,9 @@ async def update_meshcore_channels(req: McChannelsUpdate):
 
 
 @router.post("/restart")
-async def restart_service():
+async def restart_service(
+    _claims: SessionClaims = Depends(require_admin),
+):
     """Trigger a service restart via systemctl."""
     try:
         subprocess.Popen(  # nosec B603 B607
