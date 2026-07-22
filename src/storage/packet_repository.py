@@ -81,12 +81,15 @@ class PacketRepository:
             bucket_secs = bucket_seconds(span_row, limit, hours)
             rows = await self._db.fetch_all(
                 """
-                SELECT MIN(timestamp) AS timestamp, AVG(rssi) AS rssi, AVG(snr) AS snr
-                FROM packets
-                WHERE source_id = ? AND rssi IS NOT NULL AND timestamp >= ?
-                GROUP BY CAST(strftime('%s', timestamp) AS INTEGER) / ?
+                SELECT * FROM (
+                    SELECT MIN(timestamp) AS timestamp, AVG(rssi) AS rssi, AVG(snr) AS snr
+                    FROM packets
+                    WHERE source_id = ? AND rssi IS NOT NULL AND timestamp >= ?
+                    GROUP BY CAST(strftime('%s', timestamp) AS INTEGER) / ?
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                )
                 ORDER BY timestamp ASC
-                LIMIT ?
                 """,
                 (source_id, since, bucket_secs, limit),
             )

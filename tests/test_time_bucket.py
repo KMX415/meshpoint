@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest import mock
 
 from src.models.telemetry import Telemetry
 from src.storage.database import DatabaseManager
@@ -51,6 +52,8 @@ class TelemetryHistoryBucketTest(unittest.IsolatedAsyncioTestCase):
         await self.db.disconnect()
 
     async def test_hours_path_keeps_newest_when_over_limit(self):
+        # Patch bucket width so 20 one-minute samples become 20 groups;
+        # LIMIT 5 must keep the newest five, not the oldest.
         now = datetime.now(timezone.utc)
         for i in range(20):
             await self.repo.insert(
@@ -60,9 +63,14 @@ class TelemetryHistoryBucketTest(unittest.IsolatedAsyncioTestCase):
                     timestamp=now - timedelta(minutes=19 - i),
                 )
             )
-        rows = await self.repo.get_history("n1", limit=5, hours=24)
-        self.assertLessEqual(len(rows), 5)
-        self.assertGreaterEqual(rows[-1].temperature, 15.0)
+        with mock.patch(
+            "src.storage.telemetry_repository.bucket_seconds",
+            return_value=60,
+        ):
+            rows = await self.repo.get_history("n1", limit=5, hours=24)
+        self.assertEqual(len(rows), 5)
+        self.assertGreaterEqual(min(r.temperature for r in rows), 15.0)
+        self.assertGreaterEqual(rows[-1].temperature, rows[0].temperature)
 
 
 if __name__ == "__main__":
