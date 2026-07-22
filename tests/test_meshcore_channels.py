@@ -26,12 +26,16 @@ from src.api.routes import messages as messages_module
 def _build_messages_app() -> FastAPI:
     app = FastAPI()
     app.include_router(messages_module.router)
+    from tests.auth_test_helpers import override_as_admin
+    override_as_admin(app)
     return app
 
 
 def _build_config_app() -> FastAPI:
     app = FastAPI()
     app.include_router(config_module.router)
+    from tests.auth_test_helpers import override_as_admin
+    override_as_admin(app)
     return app
 
 

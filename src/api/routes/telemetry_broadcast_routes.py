@@ -5,9 +5,11 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from src.api.auth.dependencies import require_admin
+from src.api.auth.jwt_session import SessionClaims
 from src.api.routes.broadcast_status import build_broadcast_status
 from src.config import AppConfig, save_section_to_yaml
 
@@ -38,7 +40,10 @@ class TelemetryBroadcastUpdate(BaseModel):
 
 
 @router.put("")
-async def update_telemetry_broadcast(req: TelemetryBroadcastUpdate):
+async def update_telemetry_broadcast(
+    req: TelemetryBroadcastUpdate,
+    _claims: SessionClaims = Depends(require_admin),
+):
     if _config is None:
         raise HTTPException(503, "Config not loaded")
 

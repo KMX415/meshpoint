@@ -35,6 +35,8 @@ class _RenameResult:
 def _build_app() -> FastAPI:
     app = FastAPI()
     app.include_router(mc_routes.router)
+    from tests.auth_test_helpers import override_as_admin
+    override_as_admin(app)
     return app
 
 
