@@ -185,18 +185,28 @@ class PipelineCoordinator:
         )
 
     async def _cleanup_loop(self) -> None:
-        """Periodically prune old packets to keep the DB from growing unbounded."""
+        """Periodically prune old packets and telemetry to bound DB growth."""
         interval = self._config.storage.cleanup_interval_seconds
-        max_retained = self._config.storage.max_packets_retained
+        max_packets = self._config.storage.max_packets_retained
+        max_telemetry = self._config.storage.max_telemetry_retained
         try:
             while self._running:
                 await asyncio.sleep(interval)
-                removed = await self._packet_repo.cleanup_old(max_retained)
+                removed = await self._packet_repo.cleanup_old(max_packets)
                 if removed:
                     logger.info(
                         f" {CYAN}--{RESET} {DIM}CLEANUP{RESET}  "
                         f"pruned {removed} old packets  "
-                        f"{DIM}(max {max_retained}){RESET}"
+                        f"{DIM}(max {max_packets}){RESET}"
+                    )
+                removed_telemetry = await self._telemetry_repo.cleanup_old(
+                    max_telemetry
+                )
+                if removed_telemetry:
+                    logger.info(
+                        f" {CYAN}--{RESET} {DIM}CLEANUP{RESET}  "
+                        f"pruned {removed_telemetry} old telemetry rows  "
+                        f"{DIM}(max {max_telemetry}){RESET}"
                     )
         except asyncio.CancelledError:
             pass
