@@ -68,22 +68,25 @@ class TelemetryRepository:
             bucket_secs = bucket_seconds(span_row, limit, hours)
             rows = await self._db.fetch_all(
                 """
-                SELECT
-                    node_id,
-                    AVG(battery_level) AS battery_level,
-                    AVG(voltage) AS voltage,
-                    AVG(temperature) AS temperature,
-                    AVG(humidity) AS humidity,
-                    AVG(barometric_pressure) AS barometric_pressure,
-                    AVG(channel_utilization) AS channel_utilization,
-                    AVG(air_util_tx) AS air_util_tx,
-                    AVG(uptime_seconds) AS uptime_seconds,
-                    MIN(timestamp) AS timestamp
-                FROM telemetry
-                WHERE node_id = ? AND timestamp >= ?
-                GROUP BY CAST(strftime('%s', timestamp) AS INTEGER) / ?
+                SELECT * FROM (
+                    SELECT
+                        node_id,
+                        AVG(battery_level) AS battery_level,
+                        AVG(voltage) AS voltage,
+                        AVG(temperature) AS temperature,
+                        AVG(humidity) AS humidity,
+                        AVG(barometric_pressure) AS barometric_pressure,
+                        AVG(channel_utilization) AS channel_utilization,
+                        AVG(air_util_tx) AS air_util_tx,
+                        AVG(uptime_seconds) AS uptime_seconds,
+                        MIN(timestamp) AS timestamp
+                    FROM telemetry
+                    WHERE node_id = ? AND timestamp >= ?
+                    GROUP BY CAST(strftime('%s', timestamp) AS INTEGER) / ?
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                )
                 ORDER BY timestamp ASC
-                LIMIT ?
                 """,
                 (node_id, since, bucket_secs, limit),
             )
