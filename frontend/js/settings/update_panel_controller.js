@@ -34,6 +34,9 @@ class UpdatePanelController {
         this.rollbackBtn = rootEl.querySelector('[data-update-rollback]');
         this.rollbackHintEl = rootEl.querySelector('[data-update-rollback-hint]');
         this.syncHintEl = rootEl.querySelector('[data-update-sync-hint]');
+        this.incomingView = new window.UpdateIncomingView(
+            rootEl.querySelector('[data-update-incoming]')
+        );
         this.statusEl = rootEl.querySelector('[data-update-status]');
         this.descriptionEl = rootEl.querySelector('[data-update-description]');
         this.localVersionEl = rootEl.querySelector('[data-update-local-version]');
@@ -177,10 +180,12 @@ class UpdatePanelController {
 
     _renderSyncHint(status) {
         if (!this.syncHintEl) return;
+        if (this.incomingView) this.incomingView.render(status);
         if (!status) {
             this.syncHintEl.dataset.kind = '';
             this.syncHintEl.textContent =
                 'Select a channel, then check how far behind GitHub you are.';
+            if (this.incomingView) this.incomingView.clear();
             return;
         }
         if (status.sync_error) {

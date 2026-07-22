@@ -10,6 +10,7 @@ from src.api.update.channels import ReleaseChannelRegistry
 from src.api.update.install_status import (
     build_install_status_payload,
     count_commits_behind_ahead,
+    list_incoming_commits,
     match_channel_for_branch,
     read_install_git_ref,
     resolve_compare_branch,
@@ -52,7 +53,11 @@ class _FakeGitRunner:
         if "log" in args and "--oneline" in args:
             spec = args[-1]
             if spec.startswith("HEAD.."):
-                return 0, ("ab\n" * self.behind), ""
+                lines = [
+                    f"aaa{i:04d} Incoming commit subject {i}"
+                    for i in range(self.behind)
+                ]
+                return 0, ("\n".join(lines) + "\n"), ""
             if spec.startswith("origin/") and spec.endswith("..HEAD"):
                 return 0, ("cd\n" * self.ahead), ""
         return 1, "", "err"
@@ -174,12 +179,50 @@ class TestBuildInstallStatusPayload(unittest.TestCase):
         self.assertEqual(payload["compare_branch"], "feat/v0.7.8")
         self.assertTrue(payload["update_available"])
         self.assertIsNotNone(payload["checked_at"])
+        self.assertEqual(len(payload["incoming_commits"]), 10)
+        self.assertEqual(
+            payload["incoming_commits"][0]["subject"],
+            "Incoming commit subject 0",
+        )
         self.assertTrue(
             any(len(c) >= 3 and c[:3] == ["git", "fetch", "origin"] for c in runner.calls),
         )
 
+    def test_sync_omits_incoming_when_not_behind(self) -> None:
+        runner = _FakeGitRunner(behind=0)
+        with mock.patch(
+            "src.api.update.install_status.fetch_remote_version_sync",
+            return_value="0.7.4.0",
+        ):
+            with mock.patch(
+                "src.api.update.install_status.__version__",
+                "0.7.4.0",
+            ):
+                payload = build_install_status_payload(
+                    registry=ReleaseChannelRegistry(),
+                    repo_path="/opt/meshpoint",
+                    runner=runner,
+                    use_sudo=False,
+                    sync_remote=True,
+                    channel_id="rc-078",
+                )
+        self.assertEqual(payload["commits_behind"], 0)
+        self.assertEqual(payload["incoming_commits"], [])
 
-class TestRevisionCountFallback(unittest.TestCase):
+
+class TestListIncomingCommits(unittest.TestCase):
+    def test_parses_oneline_subjects_and_respects_limit(self) -> None:
+        runner = _FakeGitRunner(behind=5)
+        commits = list_incoming_commits(
+            "/opt/meshpoint",
+            "feat/v0.7.8",
+            runner=runner,
+            use_sudo=False,
+            limit=3,
+        )
+        self.assertEqual(len(commits), 3)
+        self.assertEqual(commits[0]["sha"], "aaa0000")
+        self.assertEqual(commits[2]["subject"], "Incoming commit subject 2")
     def test_rev_list_denied_uses_git_log(self) -> None:
         runner = _FakeGitRunner(behind=3, ahead=1)
         behind, ahead, _ = count_commits_behind_ahead(

@@ -307,6 +307,39 @@ def count_commits_behind_ahead(
     return behind, ahead, remote_sha
 
 
+def list_incoming_commits(
+    repo_path: str,
+    branch: str,
+    *,
+    runner: GitRunner = default_git_runner,
+    use_sudo: bool = True,
+    limit: int = 10,
+    timeout_seconds: float = 15.0,
+) -> list[dict]:
+    """Subjects of commits on ``origin/<branch>`` not yet applied locally.
+
+    Newest first. Empty list on any failure.
+    """
+    git = ["sudo", "git"] if use_sudo else ["git"]
+    rc, out, _ = runner(
+        [*git, "log", "--oneline", f"HEAD..origin/{branch}"],
+        repo_path,
+        timeout_seconds,
+    )
+    if rc != 0:
+        return []
+    commits: list[dict] = []
+    for line in out.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        sha, _, subject = line.partition(" ")
+        commits.append({"sha": sha, "subject": subject.strip()})
+        if len(commits) >= limit:
+            break
+    return commits
+
+
 def build_install_status_payload(
     *,
     registry: ReleaseChannelRegistry,
@@ -345,6 +378,7 @@ def build_install_status_payload(
     remote_sha_short: Optional[str] = None
     sync_error: Optional[str] = None
     checked_at: Optional[str] = None
+    incoming_commits: list[dict] = []
 
     if sync_remote and compare_branch:
         ok, err = git_fetch_origin_branch(
@@ -358,6 +392,13 @@ def build_install_status_payload(
             commits_ahead = ahead
             remote_sha_short = remote_sha
             checked_at = datetime.now(timezone.utc).isoformat()
+            if behind:
+                incoming_commits = list_incoming_commits(
+                    repo_path,
+                    compare_branch,
+                    runner=runner,
+                    use_sudo=use_sudo,
+                )
         else:
             sync_error = err
 
@@ -392,6 +433,7 @@ def build_install_status_payload(
         "remote_sha_short": remote_sha_short,
         "sync_error": sync_error,
         "checked_at": checked_at,
+        "incoming_commits": incoming_commits,
         "update_available": update_available,
         "rollback_pre_sha": rollback_pre_sha,
         **channel_info,
