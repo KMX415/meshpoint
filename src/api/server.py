@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from src._so_compat_check import warn_if_stale_so_files
@@ -330,8 +330,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         ):
             target = "/login" if auth_subsystem.service.is_setup_complete() else "/setup"
             return RedirectResponse(url=target, status_code=302)
-        return FileResponse(
-            str(static_dir / "index.html"), media_type="text/html"
+        return HTMLResponse(
+            _read_busted_html(static_dir / "index.html"),
+            headers={"Cache-Control": "no-cache"},
         )
 
     if static_dir.exists():
@@ -1495,13 +1496,23 @@ def _request_has_valid_session(
     return jwt_service.verify(token) is not None
 
 
-def _serve_auth_page(static_dir: Path, filename: str) -> FileResponse:
+def _serve_auth_page(static_dir: Path, filename: str) -> HTMLResponse:
     """Return one of the two pre-auth HTML pages from frontend/auth/."""
     page = static_dir / "auth" / filename
     if not page.exists():
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="auth page not found")
-    return FileResponse(str(page), media_type="text/html")
+    return HTMLResponse(
+        _read_busted_html(page),
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+def _read_busted_html(path: Path) -> str:
+    """Load HTML and append ``?v=`` cache-bust tokens to local JS/CSS."""
+    from src.api.html_assets import bust_asset_urls
+
+    return bust_asset_urls(path.read_text(encoding="utf-8"))
 
 
 def _on_packet_received(packet: Packet) -> None:
