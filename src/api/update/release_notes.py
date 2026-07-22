@@ -25,6 +25,7 @@ from pathlib import Path
 from src.api.update.channels import normalize_channel_id
 
 _HEADER_RE = re.compile(r"^###\s+(?P<body>.+?)\s*$")
+_CATEGORY_RE = re.compile(r"^####\s+(?P<body>.+?)\s*$")
 _VERSION_RE = re.compile(
     r"^v(?P<version>\d+(?:\.\d+){1,3})(?:\s+\((?P<date>[^)]+)\))?$"
 )
@@ -45,10 +46,15 @@ _RC_CHANNEL_VERSION: dict[str, str] = {
 
 @dataclass(frozen=True)
 class ChangelogBullet:
-    """One ``- **headline.** detail`` line in a changelog section."""
+    """One ``- **headline.** detail`` line in a changelog section.
+
+    ``category`` is the nearest preceding ``#### Category`` heading
+    inside the section (None for bullets above the first one).
+    """
 
     headline: str
     detail: str
+    category: str | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -81,22 +87,30 @@ class ChangelogParser:
     def parse_text(text: str) -> list[ChangelogSection]:
         sections: list[ChangelogSection] = []
         current: ChangelogSection | None = None
+        category: str | None = None
         for raw_line in text.splitlines():
             line = raw_line.rstrip("\r")
             header_match = _HEADER_RE.match(line)
             if header_match:
                 current = _section_from_header(header_match.group("body"))
+                category = None
                 if current is not None:
                     sections.append(current)
                 continue
             if current is None:
+                continue
+            category_match = _CATEGORY_RE.match(line)
+            if category_match:
+                category = category_match.group("body").strip()
                 continue
             bullet_match = _BULLET_RE.match(line)
             if bullet_match:
                 headline = bullet_match.group("headline").strip().rstrip(".")
                 detail = bullet_match.group("detail").strip()
                 current.bullets.append(
-                    ChangelogBullet(headline=headline, detail=detail)
+                    ChangelogBullet(
+                        headline=headline, detail=detail, category=category
+                    )
                 )
         return sections
 
@@ -145,6 +159,7 @@ def format_bullet_for_preview(bullet: ChangelogBullet) -> dict:
     return {
         "headline": bullet.headline,
         "detail": sanitize_detail_for_preview(bullet.detail),
+        "category": bullet.category,
     }
 
 

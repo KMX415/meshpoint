@@ -849,6 +849,21 @@ select.update-field__input option:checked {
     gap: 6px;
 }
 
+.update-release-notes__category {
+    margin-top: 10px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent-cyan);
+    font-weight: 600;
+    border-bottom: 1px solid color-mix(in srgb, var(--accent-cyan) 20%, transparent);
+    padding-bottom: 3px;
+}
+
+.update-release-notes__list > .update-release-notes__category:first-child {
+    margin-top: 0;
+}
+
 .update-release-notes__bullet {
     display: flex;
     flex-direction: column;
