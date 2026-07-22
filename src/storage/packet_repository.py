@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from src.models.packet import Packet, PacketType, Protocol
 from src.models.signal import SignalMetrics
 from src.storage.database import DatabaseManager
+from src.storage.time_bucket import bucket_seconds
 
 logger = logging.getLogger(__name__)
 
@@ -63,19 +64,31 @@ class PacketRepository:
         limit: int = 500,
         hours: float | None = 24,
     ) -> list[dict]:
-        """RSSI/SNR samples from any packet by this node, oldest-first."""
+        """RSSI/SNR samples from any packet by this node, oldest-first.
+
+        When ``hours`` is set, samples are averaged into at most ``limit``
+        time buckets so newest points are not dropped by a plain LIMIT.
+        """
         if hours is not None and hours > 0:
             since = (
                 datetime.now(timezone.utc) - timedelta(hours=hours)
             ).isoformat()
+            span_row = await self._db.fetch_one(
+                "SELECT MIN(timestamp) AS lo, MAX(timestamp) AS hi FROM packets "
+                "WHERE source_id = ? AND rssi IS NOT NULL AND timestamp >= ?",
+                (source_id, since),
+            )
+            bucket_secs = bucket_seconds(span_row, limit, hours)
             rows = await self._db.fetch_all(
                 """
-                SELECT timestamp, rssi, snr FROM packets
+                SELECT MIN(timestamp) AS timestamp, AVG(rssi) AS rssi, AVG(snr) AS snr
+                FROM packets
                 WHERE source_id = ? AND rssi IS NOT NULL AND timestamp >= ?
+                GROUP BY CAST(strftime('%s', timestamp) AS INTEGER) / ?
                 ORDER BY timestamp ASC
                 LIMIT ?
                 """,
-                (source_id, since, limit),
+                (source_id, since, bucket_secs, limit),
             )
         else:
             rows = await self._db.fetch_all(
