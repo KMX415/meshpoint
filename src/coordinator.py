@@ -264,9 +264,10 @@ class PipelineCoordinator:
                 logger.exception("Location update callback failed")
 
     async def _map_report_loop(self) -> None:
-        """Publish immediately when connected, then at most once per hour."""
+        """Publish immediately when connected, then at most once per configured interval (min 3600s)."""
         configured = int(self._config.mqtt.map_report_interval_seconds or 3600)
         interval = max(3600, configured)
+        retry = min(300, interval)
         if configured < 3600:
             logger.warning(
                 "mqtt.map_report_interval_seconds=%d is below the "
@@ -278,7 +279,7 @@ class PipelineCoordinator:
             while self._running:
                 if self._mqtt and self._mqtt.connected:
                     published = await self._publish_map_report()
-                    await asyncio.sleep(interval if published else 30)
+                    await asyncio.sleep(interval if published else retry)
                 else:
                     await asyncio.sleep(5)
         except asyncio.CancelledError:
