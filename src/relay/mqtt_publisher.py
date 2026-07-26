@@ -19,6 +19,7 @@ from typing import Optional
 from src.config import MqttConfig
 from src.models.packet import Packet, PacketType, Protocol
 from src.relay.channel_resolver import ChannelResolver
+from src.relay.map_report import MapReportData, build_map_report_message
 from src.relay.mqtt_formatter import (
     MeshCoreMqttFormatter,
     MeshtasticMqttFormatter,
@@ -60,6 +61,7 @@ class MqttPublisher:
         self._last_connect_rc: int | None = None
         self._last_disconnect_rc: int | None = None
         self._last_publish_monotonic: float | None = None
+        self._last_map_report_monotonic: float | None = None
         self._connected_since_monotonic: float | None = None
 
         self._allowed_channels = set(
@@ -105,6 +107,9 @@ class MqttPublisher:
             "last_connect_rc": self._last_connect_rc,
             "last_disconnect_rc": self._last_disconnect_rc,
             "last_publish_at": _iso_from_monotonic(self._last_publish_monotonic),
+            "last_map_report_at": _iso_from_monotonic(
+                self._last_map_report_monotonic
+            ),
             "connected_since": _iso_from_monotonic(self._connected_since_monotonic),
             "topic_prefix": self._topic_prefix,
             "gateway_id": self._gateway_id,
@@ -192,6 +197,38 @@ class MqttPublisher:
                 self._ha_discovery.publish_state(packet)
 
         return published
+
+    def publish_map_report(self, report: MapReportData) -> bool:
+        """Publish this Meshpoint's opt-in, MQTT-only map report."""
+        if not self._connected or not self._client:
+            return False
+
+        try:
+            message = build_map_report_message(
+                report,
+                topic_root=self._config.topic_root,
+                mqtt_region=self._config.region,
+            )
+            result = self._client.publish(
+                message.topic, message.payload, qos=1
+            )
+        except Exception:
+            logger.exception("MQTT map report build/publish failed")
+            return False
+
+        if result.rc != paho_mqtt.MQTT_ERR_SUCCESS:
+            logger.warning("MQTT map report publish failed rc=%d", result.rc)
+            return False
+
+        self._publish_count += 1
+        self._last_publish_monotonic = time.monotonic()
+        self._last_map_report_monotonic = self._last_publish_monotonic
+        logger.info(
+            "MQTT map report published for !%08x to %s",
+            report.node_id & 0xFFFFFFFF,
+            message.topic,
+        )
+        return True
 
     def _passes_safety_gates(self, packet: Packet) -> bool:
         if packet.packet_type == PacketType.ENCRYPTED:

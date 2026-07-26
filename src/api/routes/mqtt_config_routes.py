@@ -61,6 +61,7 @@ def build_mqtt_runtime_status(
         "last_connect_rc": None,
         "last_disconnect_rc": None,
         "last_publish_at": None,
+        "last_map_report_at": None,
         "connected_since": None,
         "topic_prefix": None,
         "gateway_id": _resolve_gateway_id(mqtt.gateway_id, "meshpoint"),
@@ -91,6 +92,9 @@ def build_mqtt_status(mqtt: MqttConfig, device_name: str) -> dict:
         "publish_json": mqtt.publish_json,
         "location_precision": mqtt.location_precision,
         "homeassistant_discovery": mqtt.homeassistant_discovery,
+        "map_reporting_enabled": mqtt.map_reporting_enabled,
+        "map_report_interval_seconds": mqtt.map_report_interval_seconds,
+        "map_report_position_precision": mqtt.map_report_position_precision,
         "tls_enabled": mqtt.tls_enabled,
         "tls_ca_cert": mqtt.tls_ca_cert or "",
         "topic_preview_meshtastic": _topic_example(
@@ -127,6 +131,9 @@ class MqttUpdate(BaseModel):
     publish_json: bool = False
     location_precision: Literal["exact", "approximate", "none"] = "exact"
     homeassistant_discovery: bool = False
+    map_reporting_enabled: bool = False
+    map_report_interval_seconds: int = Field(3600, ge=3600, le=604800)
+    map_report_position_precision: int = Field(14, ge=12, le=15)
     tls_enabled: bool = False
     tls_ca_cert: str = ""
 
@@ -204,6 +211,9 @@ async def update_mqtt(
         "publish_json": req.publish_json,
         "location_precision": req.location_precision,
         "homeassistant_discovery": req.homeassistant_discovery,
+        "map_reporting_enabled": req.map_reporting_enabled,
+        "map_report_interval_seconds": req.map_report_interval_seconds,
+        "map_report_position_precision": req.map_report_position_precision,
         "gateway_id": gateway_override or None,
         "tls_enabled": req.tls_enabled,
         "tls_ca_cert": req.tls_ca_cert.strip(),
@@ -235,6 +245,13 @@ async def update_mqtt(
         mqtt.publish_json = updates["publish_json"]
         mqtt.location_precision = updates["location_precision"]
         mqtt.homeassistant_discovery = updates["homeassistant_discovery"]
+        mqtt.map_reporting_enabled = updates["map_reporting_enabled"]
+        mqtt.map_report_interval_seconds = updates[
+            "map_report_interval_seconds"
+        ]
+        mqtt.map_report_position_precision = updates[
+            "map_report_position_precision"
+        ]
         mqtt.gateway_id = updates["gateway_id"]
         mqtt.tls_enabled = updates["tls_enabled"]
         mqtt.tls_ca_cert = updates["tls_ca_cert"]
@@ -248,13 +265,15 @@ async def update_mqtt(
 
     device_name = _config.device.device_name or "meshpoint"
     logger.info(
-        "MQTT config updated: enabled=%s broker=%s:%s channels=%s json=%s ha=%s",
+        "MQTT config updated: enabled=%s broker=%s:%s channels=%s "
+        "json=%s ha=%s map=%s",
         req.enabled,
         broker,
         req.broker_port,
         len(req.publish_channels),
         req.publish_json,
         req.homeassistant_discovery,
+        req.map_reporting_enabled,
     )
 
     return {

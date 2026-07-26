@@ -116,6 +116,38 @@ class MqttConfigCard {
                             <span class="cfg-field__label">Use TLS (mqtts)</span>
                         </label>
                     </fieldset>
+                    <fieldset class="cfg-fieldset">
+                        <legend class="cfg-fieldset__legend">Official map</legend>
+                        <label class="cfg-field cfg-field--toggle">
+                            <input type="checkbox" data-mqtt-map-report>
+                            <span class="cfg-field__label">
+                                Publish this Meshpoint on the official Meshtastic map
+                            </span>
+                        </label>
+                        <p class="cfg-field__hint">
+                            Opt-in: publishes the node name and approximate location
+                            as a public, unencrypted MQTT MapReport. No LoRa airtime
+                            is used.
+                        </p>
+                        <div class="cfg-row">
+                            <label class="cfg-field">
+                                <span class="cfg-field__label">Interval (seconds)</span>
+                                <input class="cfg-field__input" type="number"
+                                       min="3600" max="604800" step="60"
+                                       data-mqtt-map-interval>
+                            </label>
+                            <label class="cfg-field">
+                                <span class="cfg-field__label">Position precision</span>
+                                <select class="cfg-field__input"
+                                        data-mqtt-map-precision>
+                                    <option value="12">12 bits (most private)</option>
+                                    <option value="13">13 bits</option>
+                                    <option value="14">14 bits (recommended)</option>
+                                    <option value="15">15 bits (most precise)</option>
+                                </select>
+                            </label>
+                        </div>
+                    </fieldset>
                     <div class="cfg-preview" data-mqtt-previews>
                         <span class="cfg-preview__label">Example topics (LongFast gateway)</span>
                         <code class="cfg-preview__value" data-mqtt-preview-mt>--</code>
@@ -145,6 +177,9 @@ class MqttConfigCard {
         this._json = this._root.querySelector('[data-mqtt-json]');
         this._ha = this._root.querySelector('[data-mqtt-ha]');
         this._tls = this._root.querySelector('[data-mqtt-tls]');
+        this._mapReport = this._root.querySelector('[data-mqtt-map-report]');
+        this._mapInterval = this._root.querySelector('[data-mqtt-map-interval]');
+        this._mapPrecision = this._root.querySelector('[data-mqtt-map-precision]');
         this._previewMt = this._root.querySelector('[data-mqtt-preview-mt]');
         this._previewMc = this._root.querySelector('[data-mqtt-preview-mc]');
         this._previewJson = this._root.querySelector('[data-mqtt-preview-json]');
@@ -202,6 +237,15 @@ class MqttConfigCard {
         if (this._json) this._json.checked = !!mqtt.publish_json;
         if (this._ha) this._ha.checked = !!mqtt.homeassistant_discovery;
         if (this._tls) this._tls.checked = !!mqtt.tls_enabled;
+        if (this._mapReport) {
+            this._mapReport.checked = !!mqtt.map_reporting_enabled;
+        }
+        if (this._mapInterval) {
+            this._mapInterval.value = mqtt.map_report_interval_seconds ?? 3600;
+        }
+        if (this._mapPrecision) {
+            this._mapPrecision.value = mqtt.map_report_position_precision ?? 14;
+        }
         this._renderPreviews(mqtt);
         this._refreshRuntime();
         this._startRuntimePolling();
@@ -339,6 +383,15 @@ class MqttConfigCard {
             publish_json: this._json.checked,
             location_precision: this._locPrecision.value,
             homeassistant_discovery: this._ha.checked,
+            map_reporting_enabled: this._mapReport
+                ? this._mapReport.checked
+                : false,
+            map_report_interval_seconds: Number(
+                this._mapInterval?.value || 3600
+            ),
+            map_report_position_precision: Number(
+                this._mapPrecision?.value || 14
+            ),
             tls_enabled: this._tls ? this._tls.checked : false,
             tls_ca_cert: '',
         };

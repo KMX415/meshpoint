@@ -215,6 +215,29 @@ Choose how much GPS detail leaves the device via MQTT:
 Full-precision location is always available on the Meshradar dashboard
 (if upstream is enabled) regardless of this MQTT setting.
 
+### Official Meshtastic map
+
+The normal MQTT gateway publishes packets captured from other nodes under
+`/2/e/`. To publish the Meshpoint's own configured transmit identity on the
+official Meshtastic map, explicitly enable native MapReport publishing:
+
+```yaml
+mqtt:
+  enabled: true
+  map_reporting_enabled: true
+  map_report_interval_seconds: 3600
+  map_report_position_precision: 14
+```
+
+This publishes a public, unencrypted `MAP_REPORT_APP` ServiceEnvelope to
+`<topic_root>/<region>/2/map/`. The envelope uses `transmit.node_id` as both
+the packet source and gateway ID. It is MQTT-only and does not consume LoRa
+airtime.
+
+Reports require configured `device.latitude`, `device.longitude`, and
+`transmit.node_id`. The minimum interval is one hour. Position precision must
+be between 12 and 15 bits; 12 shares the least precise position.
+
 ### Home Assistant
 
 Enable JSON mirror and HA auto-discovery and the broker will receive

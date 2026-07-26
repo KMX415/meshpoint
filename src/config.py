@@ -199,6 +199,11 @@ class MqttConfig:
     publish_json: bool = False
     location_precision: str = "exact"
     homeassistant_discovery: bool = False
+    # Publish this Meshpoint's own identity to the official Meshtastic map.
+    # Map reports are public, unencrypted, MQTT-only packets.
+    map_reporting_enabled: bool = False
+    map_report_interval_seconds: int = 3600
+    map_report_position_precision: int = 14
 
 
 @dataclass

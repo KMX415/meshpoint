@@ -125,6 +125,11 @@ mqtt:
   publish_json: false
   location_precision: "exact"
   homeassistant_discovery: false
+  # Public, unencrypted report for the official Meshtastic map.
+  # Uses the transmit node ID and never sends a packet over LoRa.
+  map_reporting_enabled: false
+  map_report_interval_seconds: 3600
+  map_report_position_precision: 14  # valid range: 12..15
 
 location:
   # Where live GPS fixes come from (skyplot + optional mesh POSITION).

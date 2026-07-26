@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
-
-from datetime import timedelta
 
 from src.models.node import Node
 from src.storage.database import DatabaseManager
@@ -86,11 +84,16 @@ class NodeRepository:
         row = await self._db.fetch_one("SELECT COUNT(*) as cnt FROM nodes")
         return row["cnt"] if row else 0
 
-    async def get_active_count(self, hours: int = 24) -> int:
+    async def get_active_count(
+        self, hours: int = 24, protocol: str | None = None
+    ) -> int:
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
-        row = await self._db.fetch_one(
-            "SELECT COUNT(*) as cnt FROM nodes WHERE last_heard >= ?", (cutoff,)
-        )
+        query = "SELECT COUNT(*) as cnt FROM nodes WHERE last_heard >= ?"
+        params: tuple = (cutoff,)
+        if protocol:
+            query += " AND protocol = ?"
+            params += (protocol,)
+        row = await self._db.fetch_one(query, params)
         return row["cnt"] if row else 0
 
     async def get_with_position(self) -> list[Node]:

@@ -2,6 +2,7 @@
 
 ### Unreleased
 
+- **Native MQTT MapReport.** Optional, public MapReports publish the configured Meshpoint transmit identity to the official Meshtastic map without using LoRa airtime. Includes one-hour minimum cadence, 12-15 bit position privacy, dashboard controls, and `/2/map/` ServiceEnvelope compatibility. Closes [#115](https://github.com/KMX415/meshpoint/issues/115).
 - **MQTT broker TLS.** Transport TLS (`mqtts`, CA bundle, cert validation) is not implemented on `mqtt_publisher.py` (plain TCP only). Until then use plain port 1883 or a LAN broker without TLS.
 
 ### v0.7.7 (July 2026)

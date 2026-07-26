@@ -51,6 +51,9 @@ class TestBuildMqttStatus(unittest.TestCase):
             publish_channels=["LongFast", "MyPrivate"],
             location_precision="approximate",
             homeassistant_discovery=True,
+            map_reporting_enabled=True,
+            map_report_interval_seconds=7200,
+            map_report_position_precision=13,
         )
         status = mqtt_module.build_mqtt_status(mqtt, "My Meshpoint")
         self.assertTrue(status["enabled"])
@@ -61,6 +64,9 @@ class TestBuildMqttStatus(unittest.TestCase):
         self.assertEqual(status["publish_channels"], ["LongFast", "MyPrivate"])
         self.assertEqual(status["location_precision"], "approximate")
         self.assertTrue(status["homeassistant_discovery"])
+        self.assertTrue(status["map_reporting_enabled"])
+        self.assertEqual(status["map_report_interval_seconds"], 7200)
+        self.assertEqual(status["map_report_position_precision"], 13)
         self.assertTrue(status["gateway_id"].startswith("!"))
         self.assertIn("/2/e/", status["topic_preview_meshtastic"])
 
@@ -91,6 +97,9 @@ class TestUpdateMqttRoute(unittest.TestCase):
                     "publish_json": False,
                     "location_precision": "none",
                     "homeassistant_discovery": False,
+                    "map_reporting_enabled": True,
+                    "map_report_interval_seconds": 7200,
+                    "map_report_position_precision": 14,
                 },
             )
         self.assertEqual(resp.status_code, 200)
@@ -104,7 +113,27 @@ class TestUpdateMqttRoute(unittest.TestCase):
         self.assertEqual(saved["broker"], "mqtt.example.com")
         self.assertEqual(saved["region"], "ANZ")
         self.assertFalse(saved["publish_json"])
+        self.assertTrue(saved["map_reporting_enabled"])
+        self.assertEqual(saved["map_report_interval_seconds"], 7200)
+        self.assertEqual(saved["map_report_position_precision"], 14)
         self.assertEqual(saved["password"], "secret")
+
+    def test_map_report_interval_below_one_hour_returns_422(self) -> None:
+        resp = self.client.put(
+            "/api/config/mqtt",
+            json={
+                "enabled": True,
+                "broker_host": "mqtt.example.com",
+                "broker_port": 1883,
+                "topic_root": "msh",
+                "region_segment": "US",
+                "publish_channels": ["LongFast"],
+                "map_reporting_enabled": True,
+                "map_report_interval_seconds": 3599,
+                "map_report_position_precision": 14,
+            },
+        )
+        self.assertEqual(resp.status_code, 422)
 
     def test_invalid_gateway_id_returns_400(self) -> None:
         resp = self.client.put(
