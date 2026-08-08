@@ -108,6 +108,23 @@ async def stats_summary():
     }
 
 
+@router.get("/duty_cycle")
+async def stats_duty_cycle():
+    """Live per-channel relay duty budget (ToA estimates)."""
+    if _relay_manager is None:
+        return {
+            "region": "US",
+            "regulatory_ceiling_percent": None,
+            "window_seconds": 3600,
+            "estimate_note": (
+                "ToA estimates — not spectrum analyser measurements"
+            ),
+            "relay_total_usage_percent": 0.0,
+            "channels": [],
+        }
+    return _relay_manager.get_stats().get("channel_budget", {})
+
+
 def _get_device_context() -> dict:
     try:
         config = load_config()

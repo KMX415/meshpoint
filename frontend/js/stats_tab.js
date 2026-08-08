@@ -69,6 +69,7 @@ class StatsTab {
         this._container = document.getElementById(containerId);
         this._charts = {};
         this._refreshInterval = null;
+        this._dutyInterval = null;
         this._rendered = false;
         this._statusStrip = null;
         this._fetchedAt = null;
@@ -96,8 +97,46 @@ class StatsTab {
                 } else {
                     clearInterval(this._refreshInterval);
                     this._refreshInterval = null;
+                    this._stopDutyRefresh();
                 }
             }, 15000);
+        }
+
+        this._ensureDutyRefresh();
+    }
+
+    async refreshDutyCycle() {
+        try {
+            const res = await fetch('/api/stats/duty_cycle');
+            if (!res.ok) return;
+            const data = await res.json();
+            this._updateDutyMeter(data);
+        } catch (e) {
+            console.error('Duty cycle refresh failed:', e);
+        }
+    }
+
+    _ensureDutyRefresh() {
+        const section = document.querySelector('[data-section="stats"]');
+        if (!section || !section.classList.contains('section--active')) return;
+
+        this.refreshDutyCycle();
+        if (!this._dutyInterval) {
+            this._dutyInterval = setInterval(() => {
+                const active = document.querySelector('[data-section="stats"]');
+                if (active && active.classList.contains('section--active')) {
+                    this.refreshDutyCycle();
+                } else {
+                    this._stopDutyRefresh();
+                }
+            }, 60000);
+        }
+    }
+
+    _stopDutyRefresh() {
+        if (this._dutyInterval) {
+            clearInterval(this._dutyInterval);
+            this._dutyInterval = null;
         }
     }
 
@@ -256,6 +295,11 @@ class StatsTab {
                         <div class="stats-card__label">Rejection Reasons</div>
                         <div class="stats-card__desc">Why packets were not relayed</div>
                         <canvas id="sc-reject"></canvas>
+                    </div>
+                    <div class="stats-card stats-card--full">
+                        <div class="stats-card__label">Relay duty budget (est.)</div>
+                        <div class="stats-card__desc" id="sc-duty-desc">Per-channel rolling 1 h ToA usage vs throttle</div>
+                        <div id="sc-duty-meter" class="stats-duty-meter"></div>
                     </div>
                 </div>
             </section>
@@ -532,6 +576,46 @@ class StatsTab {
         const values = Object.values(reasons);
         if (labels.length === 0) return;
         this._renderHorizontalBar('sc-reject', labels, values, '#ef4444');
+    }
+
+    _updateDutyMeter(data) {
+        const el = document.getElementById('sc-duty-meter');
+        const desc = document.getElementById('sc-duty-desc');
+        if (!el) return;
+
+        const channels = data.channels || [];
+        const ceiling = data.regulatory_ceiling_percent;
+        let descText = 'Per-channel rolling 1 h relay ToA usage vs throttle (est.)';
+        if (ceiling != null) {
+            descText += ` — EU regulatory ceiling ${ceiling}%`;
+        }
+        if (desc) desc.textContent = descText;
+
+        const visible = channels.filter(
+            (c) => c.used_toa_ms_estimated > 0 || c.throttle_percent < 100,
+        );
+        const rows = (visible.length ? visible : channels.slice(0, 4)).map((c) => {
+            const limit = c.effective_limit_percent || 100;
+            const fill = limit > 0
+                ? Math.min(100, (c.usage_percent / limit) * 100)
+                : 0;
+            return `
+                <div class="stats-duty-row">
+                    <span class="stats-duty-ch">Ch ${c.channel}</span>
+                    <div class="stats-duty-bar">
+                        <div class="stats-duty-fill" style="width:${fill.toFixed(1)}%"></div>
+                    </div>
+                    <span class="stats-duty-val">${c.usage_percent}% / ${limit}%</span>
+                </div>
+            `;
+        }).join('');
+
+        const total = data.relay_total_usage_percent != null
+            ? data.relay_total_usage_percent
+            : 0;
+        el.innerHTML = `${rows || '<p class="stats-duty-empty">No relay airtime in the current window.</p>'}`
+            + `<p class="stats-duty-total">Aggregate relay usage (est.): `
+            + `<strong>${total}%</strong></p>`;
     }
 
     _renderDoughnut(canvasId, labels, values, colors, centerText) {

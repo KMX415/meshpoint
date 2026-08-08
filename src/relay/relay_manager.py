@@ -5,6 +5,7 @@ import logging
 from typing import Optional
 
 from src.models.packet import Packet, PacketType
+from src.relay.channel_budget import ChannelBudget, build_channel_budget
 from src.relay.dedup_filter import DeduplicationFilter
 from src.relay.rate_limiter import RateLimiter
 
@@ -51,12 +52,25 @@ class RelayManager:
         min_relay_rssi: float = -110.0,
         max_relay_rssi: float = -50.0,
         enabled: bool = False,
+        channel_budget: ChannelBudget | None = None,
+        channel_throttle_percent: dict[str, float] | None = None,
+        region: str = "US",
+        default_sf: int = 11,
+        default_bw_khz: float = 250.0,
+        default_preamble: int = 16,
     ):
         self._dedup = DeduplicationFilter()
         self._limiter = RateLimiter(max_relay_per_minute, burst_size)
         self._min_rssi = min_relay_rssi
         self._max_rssi = max_relay_rssi
         self._enabled = enabled
+        self._channel_budget = channel_budget or build_channel_budget(
+            throttle_percent=channel_throttle_percent,
+            region=region,
+            default_sf=default_sf,
+            default_bw_khz=default_bw_khz,
+            default_preamble=default_preamble,
+        )
         self._local_node_hex: str | None = None
         self._relay_count = 0
         self._rejected_count = 0
@@ -79,6 +93,18 @@ class RelayManager:
     def set_transmit_function(self, fn: callable) -> None:
         """Register the function used to transmit relay packets."""
         self._transmit_fn = fn
+
+    def reload_channel_budget(
+        self,
+        *,
+        channel_throttle_percent: dict[str, float] | None = None,
+        region: str | None = None,
+    ) -> None:
+        """Hot-reload per-channel relay throttle settings."""
+        self._channel_budget.reload(
+            throttle_percent=channel_throttle_percent,
+            region=region,
+        )
 
     def evaluate(self, packet: Packet) -> RelayDecision:
         """Decide whether a captured packet should be relayed."""
@@ -110,6 +136,9 @@ class RelayManager:
 
         if not self._limiter.allow():
             return RelayDecision(False, "rate_limited")
+
+        if not self._channel_budget.check_packet(packet):
+            return RelayDecision(False, "channel_throttled")
 
         return RelayDecision(True, "approved")
 
@@ -161,6 +190,7 @@ class RelayManager:
                 # Sync transmit (legacy USB-companion path) blocks on
                 # serial I/O, so it must run off the event loop.
                 await asyncio.to_thread(self._transmit_fn, packet)
+            self._channel_budget.record_packet(packet)
         except Exception:
             logger.exception("Relay transmission failed")
 
@@ -173,4 +203,5 @@ class RelayManager:
             "dedup_cache_size": self._dedup.size,
             "rate_remaining": self._limiter.remaining_capacity,
             "current_rate": self._limiter.current_rate,
+            "channel_budget": self._channel_budget.summary(),
         }

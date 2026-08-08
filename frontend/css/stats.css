@@ -160,6 +160,68 @@
     max-height: 220px;
 }
 
+.stats-card--hourly {
+    min-height: 300px;
+}
+
+.stats-card--hourly canvas {
+    max-height: 260px;
+}
+
+.stats-duty-meter {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    margin-top: 0.5rem;
+}
+
+.stats-duty-row {
+    display: grid;
+    grid-template-columns: 2.5rem 1fr 5.5rem;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 11px;
+}
+
+.stats-duty-ch {
+    color: var(--text-secondary, #94a3b8);
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.stats-duty-bar {
+    height: 8px;
+    background: rgba(30, 41, 59, 0.8);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.stats-duty-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #06b6d4, #f59e0b);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.stats-duty-val {
+    text-align: right;
+    color: var(--text-secondary, #94a3b8);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+}
+
+.stats-duty-empty {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-secondary, #94a3b8);
+    font-style: italic;
+}
+
+.stats-duty-total {
+    margin: 0.35rem 0 0;
+    font-size: 12px;
+    color: var(--text-primary, #e2e8f0);
+}
+
 /* --- Range cards --- */
 .stats-range-grid {
     display: grid;
