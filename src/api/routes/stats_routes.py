@@ -7,11 +7,12 @@ richness of the cloud per-Meshpoint stats page.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from src.analytics.network_mapper import NetworkMapper
+from src.analytics.toa_estimate import sum_hourly_toa_ms
 from src.analytics.signal_analyzer import SignalAnalyzer
 from src.analytics.stats_reporter import StatsReporter
 from src.analytics.traffic_monitor import TrafficMonitor
@@ -106,6 +107,61 @@ async def stats_summary():
         "direct_relayed": direct_relayed,
         "farthest_mesh": farthest_mesh,
     }
+
+
+@router.get("/hourly")
+async def stats_hourly(hours: int = Query(24, ge=1, le=168)):
+    """SQL-backed hourly traffic buckets for the 24h Stats chart."""
+    if not _packet_repo:
+        return {"hours": hours, "region": "US", "buckets": []}
+
+    try:
+        config = load_config()
+        radio = config.radio
+        region = radio.region or "US"
+        default_sf = radio.spreading_factor
+        default_bw = radio.bandwidth_khz
+        preamble = radio.preamble_length
+    except Exception:
+        region = "US"
+        default_sf = 11
+        default_bw = 250.0
+        preamble = 16
+
+    count_rows, modem_by_hour = await _packet_repo.get_hourly_traffic(
+        hours,
+        default_sf=default_sf,
+        default_bw_khz=default_bw,
+    )
+    counts_by_hour = {row["hour_start"]: row for row in count_rows}
+
+    now = datetime.now(timezone.utc)
+    end_hour = now.replace(minute=0, second=0, microsecond=0)
+    hour_ms = 3_600_000
+
+    buckets = []
+    for offset in range(hours - 1, -1, -1):
+        hour_dt = end_hour - timedelta(hours=offset)
+        hour_key = hour_dt.strftime("%Y-%m-%dT%H:00:00Z")
+        counts = counts_by_hour.get(hour_key, {})
+        modem_buckets = modem_by_hour.get(hour_key, [])
+        toa_ms = sum_hourly_toa_ms(
+            modem_buckets,
+            default_sf=default_sf,
+            default_bw_khz=default_bw,
+            default_preamble=preamble,
+        )
+        duty_pct = round((toa_ms / hour_ms) * 100, 2) if hour_ms else 0.0
+        buckets.append({
+            "hour": hour_key.replace("Z", "+00:00"),
+            "meshtastic": int(counts.get("meshtastic") or 0),
+            "meshcore": int(counts.get("meshcore") or 0),
+            "total": int(counts.get("total") or 0),
+            "toa_ms_estimated": toa_ms,
+            "duty_cycle_pct": duty_pct,
+        })
+
+    return {"hours": hours, "region": region, "buckets": buckets}
 
 
 def _get_device_context() -> dict:
