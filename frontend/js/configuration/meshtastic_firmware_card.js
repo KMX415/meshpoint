@@ -1,19 +1,3 @@
-/**
- * Configuration → Firmware page: Meshtastic card.
- *
- * Second card on the shared Firmware page, sitting below MeshCore's own
- * (frontend/js/configuration/meshcore_firmware_card.js) -- moved out of
- * Configuration → Serial for the same reason MeshCore's was: flashing a
- * spare board is a different action than configuring an already-
- * assigned device. Drives src/api/routes/meshtastic_firmware_routes.py.
- *
- * Same shape as MeshCore's card (Version + Board dropdown + Device to
- * flash, both lists refreshable without reloading the page) with one
- * real difference: no Flavor field. MeshCore ships separate BLE-only vs
- * USB-only builds per board; Meshtastic's per-board firmware already
- * covers BLE+USB+WiFi together in one image, so there's nothing to pick.
- * Credit: javastraat/meshpoint 85fb576 (erase default OFF).
- */
 
 class MeshtasticFirmwareConfigCard {
     constructor(api) {
@@ -66,6 +50,7 @@ class MeshtasticFirmwareConfigCard {
                         <input type="checkbox" data-mt-erase-all>
                         <span class="cfg-field__label">Erase everything (wipes board settings)</span>
                     </label>
+                    <div data-mt-nrf-host hidden></div>
                     <div class="cfg-card__actions">
                         <button class="terminal-button terminal-button--primary"
                                 type="button" data-mt-firmware-flash>
@@ -91,7 +76,10 @@ class MeshtasticFirmwareConfigCard {
         this._root.querySelector('[data-mt-firmware-tag]')
             .addEventListener('change', () => this._loadMtFirmwareTargets());
         this._root.querySelector('[data-mt-firmware-board]')
-            .addEventListener('change', () => this._updateFlashButtonState());
+            .addEventListener('change', () => {
+                this._syncMtFlashMethodUi();
+                this._updateFlashButtonState();
+            });
         this._root.querySelector('[data-mt-rescan-releases]')
             .addEventListener('click', (e) => this._rescanReleases(e.currentTarget));
         this._root.querySelector('[data-mt-rescan-usb]')
@@ -169,13 +157,7 @@ class MeshtasticFirmwareConfigCard {
         return base;
     }
 
-    /** Maps every currently-configured serial_port value (across Serial
-     * devices, MeshCore companions, and POCSAG companions -- one shared
-     * USB pool) to a human label, for the "already used by ..." hint in
-     * the device picker. Same logic as meshcore_firmware_card.js's own copy --
-     * duplicated rather than shared, this file is otherwise independent
-     * of that one. */
-    _buildPortUsageMap(config) {
+        _buildPortUsageMap(config) {
         const usage = {};
         const cap = (config && config.capture) || {};
         (Array.isArray(cap.serial) ? cap.serial : []).forEach((d) => {
@@ -190,20 +172,14 @@ class MeshtasticFirmwareConfigCard {
                 return usage;
     }
 
-    /** Live USB-serial enumeration for the device picker. Re-fetched
-     * whenever this page is mounted; the "↻ Rescan USB" button covers a
-     * device plugged in after landing on this page instead of needing a
-     * full reload. */
-    async _refreshSerialPortsList() {
+        async _refreshSerialPortsList() {
         const result = await this._api.get('/api/config/serial-ports');
         const ports = (result && Array.isArray(result.ports)) ? result.ports : [];
         this._enumeratedPorts = ports;
         this._renderMtFirmwareDevicePicker();
     }
 
-    /** "↻ Rescan USB" click handler -- disable + "Scanning…" while in
-     * flight, same as MeshCore's own copy. */
-    async _rescanUsb(button) {
+        async _rescanUsb(button) {
         const original = button.textContent;
         button.disabled = true;
         button.textContent = 'Scanning…';
@@ -215,9 +191,7 @@ class MeshtasticFirmwareConfigCard {
         }
     }
 
-    /** Native <datalist>-truncation-avoiding label, identical to
-     * meshcore_firmware_card.js's own _portOptionLabel. */
-    _portOptionLabel(p, usage) {
+        _portOptionLabel(p, usage) {
         const devName = (p.device || '').split('/').pop();
         const chip = (p.description || '')
             .replace(/^Silicon Labs\s+/i, '')
@@ -230,10 +204,7 @@ class MeshtasticFirmwareConfigCard {
         return parts.filter(Boolean).join(' — ');
     }
 
-    /** Board choices for the Board dropdown from the selected release's
-     * manifest. Plain ``<select>`` so mobile and desktop pick the exact
-     * target id without free-text typos. */
-    async _loadMtFirmwareTargets() {
+        async _loadMtFirmwareTargets() {
         const select = this._root.querySelector('[data-mt-firmware-board]');
         if (!select) return;
 
@@ -251,23 +222,71 @@ class MeshtasticFirmwareConfigCard {
         } else {
             select.innerHTML = [
                 '<option value="">Select a board…</option>',
-                ...boards.map((b) => (
-                    `<option value="${this._esc(b.board)}">${this._esc(b.label)}</option>`
-                )),
+                ...boards.map((b) => {
+                    const method = b.flash_method || 'esptool';
+                    const disabled = method === 'unsupported' ? ' disabled' : '';
+                    const suffix = method === 'nrf_dfu' ? ' (nRF DFU)'
+                        : method === 'unsupported' ? ' (not flashable yet)' : '';
+                    return (
+                        `<option value="${this._esc(b.board)}" data-flash-method="${this._esc(method)}"${disabled}>`
+                        + `${this._esc(b.label)}${suffix}</option>`
+                    );
+                }),
             ].join('');
             if (previous && boards.some((b) => b.board === previous)) {
                 select.value = previous;
             }
         }
+        this._syncMtFlashMethodUi();
         this._updateFlashButtonState();
     }
 
-    /** Flash is only enabled once BOTH a real board and a real device are
-     * selected -- board and device availability are checked by two
-     * independent async loads (targets vs. serial-ports), so this is the
-     * one place that reconciles them instead of each overwriting the
-     * other's disabled/title state. */
-    _updateFlashButtonState() {
+    _selectedFlashMethod() {
+        const select = this._root?.querySelector('[data-mt-firmware-board]');
+        const opt = select?.selectedOptions?.[0];
+        return opt?.dataset?.flashMethod || 'esptool';
+    }
+
+    _syncMtFlashMethodUi() {
+        const method = this._selectedFlashMethod();
+        const eraseWrap = this._root.querySelector('[data-mt-erase-all-wrap]');
+        const host = this._root.querySelector('[data-mt-nrf-host]');
+        const hint = this._root.querySelector('.cfg-card__hint');
+        if (method === 'nrf_dfu') {
+            if (eraseWrap) eraseWrap.hidden = true;
+            if (hint) {
+                hint.textContent = 'Flash official Meshtastic firmware (nRF: Adafruit DFU over USB).';
+            }
+            if (host && window.FirmwareNrfPanel) {
+                if (!this._nrfPanel) {
+                    this._nrfPanel = new window.FirmwareNrfPanel({
+                        uploadUrl: '/api/config/serial/firmware/upload',
+                        onFlashWithUpload: (opts) => this._flashMeshtasticFirmware(opts),
+                        appendOutput: (t) => this._appendMtFirmwareOutput(t),
+                        setStatus: (kind, text) => {
+                            const status = this._root.querySelector('[data-mt-firmware-status]');
+                            if (!status) return;
+                            status.dataset.kind = kind;
+                            status.textContent = text;
+                        },
+                    });
+                }
+                this._nrfPanel.mount(host);
+            }
+        } else {
+            if (eraseWrap) eraseWrap.hidden = false;
+            if (hint) {
+                hint.textContent = (
+                    'Flash official Meshtastic firmware from GitHub. '
+                    + 'Leave erase off for upgrades; turn it on for a blank board.'
+                );
+            }
+            if (this._nrfPanel) this._nrfPanel.unmount();
+            if (host) host.hidden = true;
+        }
+    }
+
+        _updateFlashButtonState() {
         const flashBtn = this._root.querySelector('[data-mt-firmware-flash]');
         if (!flashBtn) return;
         const boardInput = this._root.querySelector('[data-mt-firmware-board]');
@@ -285,24 +304,12 @@ class MeshtasticFirmwareConfigCard {
         }
     }
 
-    /** Looks up a board's friendly label from the last-loaded list, for
-     * the confirm-modal/status text -- falls back to a lightly cleaned
-     * version of the raw value if it's somehow not in that list (e.g. a
-     * stale value left over from before a Version change). */
-    _boardLabel(board) {
+        _boardLabel(board) {
         const match = (this._boards || []).find((b) => b.board === board);
         return match ? match.label : board.replace(/-/g, ' ');
     }
 
-    /** Populates the "Device to flash" pulldown from every currently
-     * enumerated USB-serial device -- deliberately NOT limited to
-     * already-configured devices, so a spare board (or a friend's, just
-     * passing through) can be flashed without adding-then-removing a
-     * permanent device entry first. Options carry the same "used by ..."
-     * hint as serial_card.js's own device port field. The selected value
-     * is a stable_path, re-validated against the live enumeration
-     * server-side -- never trusted as a raw path from the browser. */
-    _renderMtFirmwareDevicePicker() {
+        _renderMtFirmwareDevicePicker() {
         const select = this._root.querySelector('[data-mt-firmware-device]');
         if (!select) return;
 
@@ -323,13 +330,7 @@ class MeshtasticFirmwareConfigCard {
         this._updateFlashButtonState();
     }
 
-    /** Version pulldown, from the last 10 Meshtastic releases (GET
-     * .../releases), newest first. "Latest" (empty tag, the default)
-     * covers routine flashing; this is for the deliberate case -- pinning
-     * an older or specific version. Fetched once at mount; the
-     * "↻ Refresh" button below covers a release published while already
-     * on this page. */
-    async _loadMtFirmwareReleases() {
+        async _loadMtFirmwareReleases() {
         const select = this._root.querySelector('[data-mt-firmware-tag]');
         if (!select) return;
         const result = await this._api.get('/api/config/serial/firmware/releases');
@@ -343,11 +344,7 @@ class MeshtasticFirmwareConfigCard {
         if (previous && releases.some((r) => r.tag === previous)) select.value = previous;
     }
 
-    /** "↻ Refresh" click handler for Version -- re-checks GitHub for a
-     * newly-published release, then re-runs the Board fetch too: if
-     * "Latest" is selected and a new release just landed, the board list
-     * fetched at mount time is for the now-stale "latest". */
-    async _rescanReleases(button) {
+        async _rescanReleases(button) {
         const original = button.textContent;
         button.disabled = true;
         button.textContent = 'Checking…';
@@ -374,41 +371,54 @@ class MeshtasticFirmwareConfigCard {
         pre.scrollTop = pre.scrollHeight;
     }
 
-    async _flashMeshtasticFirmware() {
+    async _flashMeshtasticFirmware(uploadOpts) {
         const boardInput = this._root.querySelector('[data-mt-firmware-board]');
         const deviceSelect = this._root.querySelector('[data-mt-firmware-device]');
         const tagSelect = this._root.querySelector('[data-mt-firmware-tag]');
         const eraseAllInput = this._root.querySelector('[data-mt-erase-all]');
         const board = (boardInput?.value || '').trim();
         const port = deviceSelect?.value;
-        const eraseAll = eraseAllInput ? eraseAllInput.checked : false;
-        if (!board || !port) return;
+        const method = this._selectedFlashMethod();
+        const eraseAll = method === 'esptool' && eraseAllInput
+            ? eraseAllInput.checked : false;
+        const uploadId = uploadOpts?.upload_id || '';
+        const flashMode = uploadOpts?.flash_mode || '';
+        if ((!board && !uploadId) || !port) return;
 
         const status = this._root.querySelector('[data-mt-firmware-status]');
-        if (!(this._boards || []).some((b) => b.board === board)) {
+        if (board && !(this._boards || []).some((b) => b.board === board)) {
             if (status) {
                 status.dataset.kind = 'error';
                 status.textContent = 'Pick a board from the list.';
             }
             return;
         }
+        if (method === 'unsupported') {
+            if (status) {
+                status.dataset.kind = 'error';
+                status.textContent = 'This board is not flashable from Meshpoint yet.';
+            }
+            return;
+        }
 
-        const boardLabel = this._boardLabel(board);
+        const boardLabel = board ? this._boardLabel(board) : 'uploaded image';
         const deviceLabel = deviceSelect.options[deviceSelect.selectedIndex]?.text || port;
         const tag = tagSelect?.value || '';
 
-        const ok = await window.confirmModal({
-            label: 'Flash Meshtastic firmware',
-            description: eraseAll
-                ? `Erase the ENTIRE flash on "${deviceLabel}" and write official Meshtastic `
-                    + `firmware (${tag || 'latest'}) for ${boardLabel}? This replaces whatever `
-                    + 'is currently on the board -- not reversible from here.'
-                : `Write official Meshtastic firmware (${tag || 'latest'}) for ${boardLabel} `
-                    + `to "${deviceLabel}", keeping its existing channels and settings? Only `
-                    + 'do this for a board already running Meshtastic -- on anything else, the '
-                    + 'result is unpredictable.',
-        });
-        if (!ok) return;
+        if (!uploadId) {
+            const ok = await window.confirmModal({
+                label: 'Flash Meshtastic firmware',
+                description: method === 'nrf_dfu'
+                    ? `Write Meshtastic firmware (${tag || 'latest'}) for ${boardLabel} `
+                        + `to "${deviceLabel}" via USB DFU? Enters DFU automatically (no unplug).`
+                    : eraseAll
+                        ? `Erase the ENTIRE flash on "${deviceLabel}" and write official Meshtastic `
+                            + `firmware (${tag || 'latest'}) for ${boardLabel}?`
+                        : `Write official Meshtastic firmware (${tag || 'latest'}) for ${boardLabel} `
+                            + `to "${deviceLabel}", keeping channels and settings?`,
+            });
+            if (!ok) return;
+        }
 
         const flashBtn = this._root.querySelector('[data-mt-firmware-flash]');
         const outputPre = this._root.querySelector('[data-mt-firmware-output]');
@@ -417,13 +427,23 @@ class MeshtasticFirmwareConfigCard {
         status.dataset.kind = 'pending';
         status.textContent = `Flashing ${deviceLabel}…`;
         if (outputPre) outputPre.textContent = '';
-        this._appendMtFirmwareOutput(`# Flashing ${boardLabel} (${tag || 'latest'}) onto ${port}…`);
+        this._appendMtFirmwareOutput(
+            `# Flashing ${boardLabel} (${tag || 'latest'}, ${method}) onto ${port}…`,
+        );
+        if (this._nrfPanel && method === 'nrf_dfu') {
+            this._nrfPanel.setConsole('meshpoint:dfu$ flash --touch 1200');
+        }
 
         let finalResult = null;
         try {
+            const body = { board, port, tag, erase_all: eraseAll };
+            if (uploadId) {
+                body.upload_id = uploadId;
+                body.flash_mode = flashMode || 'dfu';
+            }
             finalResult = await window.UpdateStreamClient.postNdjson(
                 '/api/config/serial/firmware/flash/stream',
-                { board, port, tag, erase_all: eraseAll },
+                body,
                 (event) => {
                     if (event.type === 'started' && Array.isArray(event.cmd)) {
                         this._appendMtFirmwareOutput(`$ ${event.cmd.join(' ')}`);

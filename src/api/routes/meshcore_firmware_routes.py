@@ -1,7 +1,7 @@
-"""Download and flash official MeshCore companion firmware via esptool.
+"""Download and flash official MeshCore companion firmware (ESP + nRF).
 
-Fetches companion- tagged releases from meshcore-dev/MeshCore, caches
-``*-merged.bin`` assets, and streams esptool write_flash as NDJSON.
+Fetches companion- tagged releases from meshcore-dev/MeshCore. ESP boards
+use esptool ``*-merged.bin``; nRF boards use Adafruit serial DFU on ``.zip``.
 Credit: javastraat/meshpoint (firmware flash port).
 """
 
@@ -10,12 +10,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
-import tempfile
 from pathlib import Path
 from typing import AsyncIterator, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -27,8 +25,13 @@ from src.api.firmware import (
     WRITE_FLASH_SUBCOMMAND,
     EspToolBinaryResolver,
     EspToolNdjsonStreamer,
-    GithubHttpClient,
 )
+from src.api.firmware.firmware_upload_store import FirmwareUploadStore
+from src.api.firmware.meshcore_firmware_catalog import (
+    FLAVORS,
+    MeshcoreFirmwareAssetCatalog,
+)
+from src.api.firmware.nrf_flash_session import NrfFlashSession
 from src.config import AppConfig
 
 logger = logging.getLogger(__name__)
@@ -40,17 +43,11 @@ _meshcore_sources: list = []
 _tx_service = None
 
 _CACHE_DIR = Path(__file__).resolve().parents[3] / "data" / "meshcore-firmware"
-_RELEASES_LIST_URL = (
-    "https://api.github.com/repos/meshcore-dev/MeshCore/releases?per_page=20"
-)
-_FLAVORS = ("usb", "ble")
-_MERGED_BIN_RE = re.compile(
-    r"^(?P<board>.+)_companion_radio_(?P<flavor>usb|ble)-.+-merged\.bin$"
-)
-
-_http = GithubHttpClient()
+_catalog = MeshcoreFirmwareAssetCatalog(cache_dir=_CACHE_DIR)
+_uploads = FirmwareUploadStore(_CACHE_DIR / "uploads")
 _streamer = EspToolNdjsonStreamer()
 _esptool = EspToolBinaryResolver()
+_nrf = NrfFlashSession(streamer=_streamer)
 
 
 def init_routes(config: AppConfig, meshcore_sources=None, tx_service=None) -> None:
@@ -67,7 +64,6 @@ def _resolve_meshcore_tx():
 
 
 def _resolve_meshcore_source(label: str):
-    """Match ``meshcore_usb`` / ``meshcore_usb_<label>`` capture sources."""
     name = f"meshcore_usb_{label}" if label else "meshcore_usb"
     for src in _meshcore_sources:
         if src.name == name:
@@ -83,20 +79,17 @@ def _ndjson(payload: dict) -> bytes:
 async def firmware_installed(
     _claims: SessionClaims = Depends(require_admin),
 ) -> dict:
-    """Firmware version reported by the connected MeshCore USB companion."""
     mc_tx = _resolve_meshcore_tx()
     source = next(
         (s for s in _meshcore_sources if getattr(s, "name", "") == "meshcore_usb"),
         _meshcore_sources[0] if _meshcore_sources else None,
     )
-
     port = None
     if source is not None:
         port = (
             getattr(source, "_resolved_port", None)
             or getattr(source, "serial_port", None)
         )
-
     connected = bool(mc_tx and mc_tx.connected)
     payload = {
         "connected": connected,
@@ -108,7 +101,6 @@ async def firmware_installed(
     }
     if not connected or mc_tx is None:
         return payload
-
     info = await mc_tx.get_device_info()
     if info:
         payload.update({
@@ -125,13 +117,14 @@ async def firmware_targets(
     flavor: str = "usb",
     _claims: SessionClaims = Depends(require_admin),
 ) -> dict:
-    """Board choices for the flash pulldown (live from release assets)."""
-    if flavor not in _FLAVORS:
-        raise HTTPException(400, f"Unknown flavor, expected one of {_FLAVORS}")
+    if flavor not in FLAVORS:
+        raise HTTPException(400, f"Unknown flavor, expected one of {FLAVORS}")
     loop = asyncio.get_running_loop()
     try:
-        release = await loop.run_in_executor(None, _resolve_release_sync, tag)
-        boards = _board_list_from_release_sync(release, flavor)
+        release = await loop.run_in_executor(None, _catalog.resolve_release_sync, tag)
+        boards = await loop.run_in_executor(
+            None, _catalog.board_list_from_release_sync, release, flavor,
+        )
     except Exception as exc:
         raise HTTPException(502, f"Could not fetch MeshCore board list: {exc}")
     return {"boards": boards, "tag": release.get("tag_name", "")}
@@ -139,10 +132,11 @@ async def firmware_targets(
 
 @router.get("/releases")
 async def firmware_releases(_claims: SessionClaims = Depends(require_admin)) -> dict:
-    """Recent companion- releases for the version pulldown, newest first."""
     loop = asyncio.get_running_loop()
     try:
-        releases = await loop.run_in_executor(None, _companion_releases_sync, 10)
+        releases = await loop.run_in_executor(
+            None, _catalog.companion_releases_sync, 10,
+        )
     except Exception as exc:
         raise HTTPException(502, f"Could not fetch MeshCore releases: {exc}")
     return {
@@ -153,98 +147,35 @@ async def firmware_releases(_claims: SessionClaims = Depends(require_admin)) -> 
     }
 
 
+@router.post("/upload")
+async def firmware_upload(
+    file: UploadFile = File(...),
+    _claims: SessionClaims = Depends(require_admin),
+) -> dict:
+    data = await file.read()
+    try:
+        upload_id = _uploads.save(file.filename or "firmware.bin", data)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return {"upload_id": upload_id, "filename": file.filename}
+
+
+# Test / catalog shims (keep existing unit tests working)
 def _companion_releases_sync(limit: int = 10) -> list[dict]:
-    """Return up to ``limit`` companion- tagged releases (not /releases/latest)."""
-    releases = _http.fetch_json_sync(_RELEASES_LIST_URL)
-    if not isinstance(releases, list):
-        raise RuntimeError("Unexpected GitHub API response for MeshCore releases")
-    companion_releases = [
-        r for r in releases if str(r.get("tag_name", "")).startswith("companion-")
-    ]
-    if not companion_releases:
-        raise RuntimeError("No companion-tagged MeshCore release found")
-    return companion_releases[:limit]
-
-
-def _companion_release_by_tag_sync(tag: str) -> dict:
-    release = _http.fetch_json_sync(
-        f"https://api.github.com/repos/meshcore-dev/MeshCore/releases/tags/{tag}"
-    )
-    if not isinstance(release, dict) or not str(release.get("tag_name", "")).startswith(
-        "companion-"
-    ):
-        raise RuntimeError(f"'{tag}' is not a valid companion- release")
-    return release
-
-
-def _resolve_release_sync(tag: str) -> dict:
-    return _companion_release_by_tag_sync(tag) if tag else _companion_releases_sync(1)[0]
+    return _catalog.companion_releases_sync(limit)
 
 
 def _board_list_from_release_sync(release: dict, flavor: str) -> list[dict]:
-    boards: dict[str, str] = {}
-    for asset in release.get("assets", []):
-        m = _MERGED_BIN_RE.match(asset.get("name", ""))
-        if m and m.group("flavor") == flavor:
-            board = m.group("board")
-            boards[board] = board.replace("_", " ")
-    return [
-        {"board": board, "label": label}
-        for board, label in sorted(boards.items(), key=lambda kv: kv[1].casefold())
-    ]
-
-
-def _cache_dir_for(board: str, tag: str, flavor: str) -> Path:
-    return _CACHE_DIR / board / tag / flavor
+    return _catalog.board_list_from_release_sync(release, flavor)
 
 
 def _ensure_board_firmware_cached_sync(
     board: str, tag: str = "", flavor: str = "usb",
 ) -> dict:
-    """Download (if needed) ``board`` merged.bin; return tag/flavor/path."""
-    if flavor not in _FLAVORS:
-        raise RuntimeError(f"Unknown flavor '{flavor}', expected one of {_FLAVORS}")
-    release = _resolve_release_sync(tag)
-    resolved_tag = release.get("tag_name", "")
-
-    cache_dir = _cache_dir_for(board, resolved_tag, flavor)
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    existing = list(cache_dir.glob(f"{board}_companion_radio_{flavor}-*-merged.bin"))
-    if existing:
-        return {"tag": resolved_tag, "flavor": flavor, "merged_bin": existing[0]}
-
-    prefix = f"{board}_companion_radio_{flavor}-"
-    asset = next(
-        (
-            a for a in release.get("assets", [])
-            if a["name"].startswith(prefix) and a["name"].endswith("-merged.bin")
-        ),
-        None,
-    )
-    if asset is None:
-        raise RuntimeError(
-            f"Could not find a '{prefix}*-merged.bin' asset in {resolved_tag} -- "
-            "this board/flavor combination isn't esptool-flashable in this release.",
-        )
-
-    dest = cache_dir / asset["name"]
-    with tempfile.NamedTemporaryFile(
-        suffix=".bin", dir=cache_dir, delete=False,
-    ) as tmp:
-        tmp_path = Path(tmp.name)
-    try:
-        _http.download_to_sync(asset["browser_download_url"], tmp_path)
-        tmp_path.rename(dest)
-        dest.chmod(0o644)
-    except BaseException:
-        tmp_path.unlink(missing_ok=True)
-        raise
-
-    return {"tag": resolved_tag, "flavor": flavor, "merged_bin": dest}
+    return _catalog.ensure_board_firmware_cached_sync(board, tag=tag, flavor=flavor)
 
 
 def _port_aliases(port: str) -> set[str]:
-    """All known path aliases for a connected USB-serial device."""
     from src.hal.usb_classifier import list_serial_ports_with_stable_paths
 
     aliases = {port}
@@ -256,7 +187,6 @@ def _port_aliases(port: str) -> set[str]:
 
 
 def _match_meshcore_source(port: str):
-    """Resolve a live capture source for ``port`` (single MeshcoreUsbConfig)."""
     if _config is None:
         return "", None
     aliases = _port_aliases(port)
@@ -274,13 +204,14 @@ def _match_meshcore_source(port: str):
     return "", None
 
 
-# Credit: javastraat/meshpoint 85fb576 — erase_all default False (plan flip)
 class FlashRequest(BaseModel):
     board: str
     port: str
     tag: str = ""
     flavor: str = "usb"
     erase_all: bool = False
+    upload_id: str = ""
+    flash_mode: str = ""  # "", "dfu", "uf2"
 
 
 @router.post("/flash/stream")
@@ -289,15 +220,10 @@ async def flash_meshcore_stream(
     claims: SessionClaims = Depends(require_admin),
     audit: AuditLogWriter = Depends(get_audit_writer),
 ) -> StreamingResponse:
-    """Download MeshCore companion firmware and flash ``port`` via esptool.
-
-    ``erase_all`` default False (in-place upgrade). True runs ``--erase-all``.
-    Credit: javastraat/meshpoint 85fb576
-    """
-    if not req.board:
+    if not req.board and not req.upload_id:
         raise HTTPException(400, "No board selected")
-    if req.flavor not in _FLAVORS:
-        raise HTTPException(400, f"Unknown flavor, expected one of {_FLAVORS}")
+    if req.flavor not in FLAVORS:
+        raise HTTPException(400, f"Unknown flavor, expected one of {FLAVORS}")
 
     from src.hal.usb_classifier import list_serial_ports_with_stable_paths
 
@@ -326,43 +252,112 @@ async def flash_meshcore_stream(
                 "tag": req.tag or "latest",
                 "flavor": req.flavor,
                 "erase_all": req.erase_all,
+                "upload_id": req.upload_id or None,
             },
         ) as ctx:
-            yield _ndjson({
-                "type": "line",
-                "stream": "stdout",
-                "text": (
-                    f"Fetching MeshCore {req.tag or 'latest'} ({req.flavor}) companion "
-                    f"firmware for {req.board.replace('_', ' ')}…"
-                ),
-            })
             loop = asyncio.get_running_loop()
-            try:
-                fw = await loop.run_in_executor(
-                    None,
-                    _ensure_board_firmware_cached_sync,
-                    req.board,
-                    req.tag,
-                    req.flavor,
-                )
-            except Exception as exc:
-                logger.exception("MeshCore firmware fetch failed for %s", req.board)
-                yield _ndjson({"type": "line", "stream": "stderr", "text": str(exc)})
+            uploaded = _uploads.resolve(req.upload_id) if req.upload_id else None
+            fw = None
+            flash_method = "esptool"
+            if uploaded is not None:
+                flash_method = "nrf_dfu" if uploaded.suffix.lower() in {
+                    ".zip", ".uf2",
+                } else "esptool"
                 yield _ndjson({
-                    "type": "result",
-                    "result": {"returncode": -1, "success": False, "error": str(exc)},
+                    "type": "line",
+                    "stream": "stdout",
+                    "text": f"Using uploaded firmware {uploaded.name}.",
                 })
-                ctx.set_result("error")
+            else:
+                yield _ndjson({
+                    "type": "line",
+                    "stream": "stdout",
+                    "text": (
+                        f"Fetching MeshCore {req.tag or 'latest'} ({req.flavor}) "
+                        f"for {req.board.replace('_', ' ')}…"
+                    ),
+                })
+                try:
+                    fw = await loop.run_in_executor(
+                        None,
+                        _catalog.ensure_board_firmware_cached_sync,
+                        req.board,
+                        req.tag,
+                        req.flavor,
+                    )
+                except Exception as exc:
+                    logger.exception("MeshCore firmware fetch failed for %s", req.board)
+                    yield _ndjson({
+                        "type": "line", "stream": "stderr", "text": str(exc),
+                    })
+                    yield _ndjson({
+                        "type": "result",
+                        "result": {
+                            "returncode": -1, "success": False, "error": str(exc),
+                        },
+                    })
+                    ctx.set_result("error")
+                    return
+                flash_method = fw["flash_method"]
+                yield _ndjson({
+                    "type": "line",
+                    "stream": "stdout",
+                    "text": f"Using MeshCore {fw['tag']} ({fw['flavor']}, {flash_method}).",
+                })
+
+            if flash_method == "nrf_dfu":
+                package = uploaded
+                mode = req.flash_mode or "dfu"
+                if package is None and fw is not None:
+                    if mode == "uf2":
+                        package = fw.get("uf2")
+                        if package is None:
+                            yield _ndjson({
+                                "type": "line",
+                                "stream": "stderr",
+                                "text": "No UF2 asset cached for this board.",
+                            })
+                            yield _ndjson({
+                                "type": "result",
+                                "result": {
+                                    "returncode": -1,
+                                    "success": False,
+                                    "error": "missing uf2",
+                                },
+                            })
+                            ctx.set_result("error")
+                            return
+                    else:
+                        package = fw["dfu_zip"]
+                elif package is not None and package.suffix.lower() == ".uf2":
+                    mode = "uf2"
+                elif package is not None:
+                    mode = "dfu"
+
+                async def _release():
+                    await source.stop()
+
+                async def _restore():
+                    await source.start()
+
+                success = False
+                async for chunk in _nrf.run(
+                    package=package,
+                    port=port,
+                    mode=mode,
+                    release_source=_release if source is not None else None,
+                    restore_source=_restore if source is not None else None,
+                    reconnect_sleep_s=10.0,
+                    source_name=source.name if source else "meshcore_usb",
+                ):
+                    yield chunk
+                    event = json.loads(chunk)
+                    if event.get("type") == "result":
+                        success = bool((event.get("result") or {}).get("success"))
+                ctx.set_result("success" if success else "error")
                 return
 
-            yield _ndjson({
-                "type": "line",
-                "stream": "stdout",
-                "text": f"Using MeshCore {fw['tag']} ({fw['flavor']}).",
-            })
-
-            # Always stop a matched source before esptool — even when
-            # handshake failed, background reconnect still races the port.
+            # ESP / esptool path
             released = source is not None
             if released:
                 yield _ndjson({
@@ -388,19 +383,9 @@ async def flash_meshcore_stream(
                 })
                 if released:
                     await source.start()
-                    yield _ndjson({
-                        "type": "line",
-                        "stream": "stdout",
-                        "text": (
-                            f"Flash aborted; {source.name} restored on {port}."
-                        ),
-                    })
                 ctx.set_result("error")
                 return
 
-            # Credit: javastraat/meshpoint 85fb576 — erase toggle on flash
-            # stream. Subcommand is write_flash (esptool 4.x); write-flash
-            # only exists on esptool 5+ and exits non-zero on 4.7.x.
             cmd = [
                 *_esptool.resolve_argv(),
                 "--chip", "auto", "--port", port, "--baud", "921600",
@@ -427,26 +412,13 @@ async def flash_meshcore_stream(
                         ),
                     })
                     await source.start()
-                    yield _ndjson({
-                        "type": "line",
-                        "stream": "stdout",
-                        "text": (
-                            f"{source.name} restored on {port}."
-                            if source.connected
-                            else (
-                                f"{source.name} did NOT come back -- "
-                                "a service restart may be needed."
-                            )
-                        ),
-                    })
                 elif req.flavor == "ble":
                     yield _ndjson({
                         "type": "line",
                         "stream": "stdout",
                         "text": (
                             f"Flashed BLE firmware -- {source.name} won't "
-                            "reconnect over USB (that's expected); pair it "
-                            "with the MeshCore app instead."
+                            "reconnect over USB (that's expected)."
                         ),
                     })
                 else:
@@ -455,7 +427,6 @@ async def flash_meshcore_stream(
                         "stream": "stdout",
                         "text": "Waiting for the board to finish rebooting…",
                     })
-                    # ESP32-S3 USB companions often need >3s after flash.
                     await asyncio.sleep(10.0)
                     await source.start()
                     yield _ndjson({
@@ -464,13 +435,9 @@ async def flash_meshcore_stream(
                         "text": (
                             f"{source.name} reconnected on {port}."
                             if source.connected
-                            else (
-                                f"{source.name} did NOT reconnect -- "
-                                "a service restart may be needed."
-                            )
+                            else f"{source.name} did NOT reconnect."
                         ),
                     })
-
             ctx.set_result("success" if success else "error")
 
     return StreamingResponse(

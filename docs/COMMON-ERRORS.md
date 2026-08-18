@@ -271,16 +271,38 @@ sudo systemctl restart meshpoint
 ```
 
 Or re-run `sudo /opt/meshpoint/scripts/install.sh` (always ensures
-`esptool>=4.7.0,<5` in the venv).
+`esptool>=4.7.0,<5` and `adafruit-nrfutil` in the venv).
 
 Then open **Configuration → Firmware**, pick board/port from the dropdowns,
 and flash again. Leave **Erase everything** unchecked for in-place upgrades
-of the same stack.
+of the same stack (ESP only; nRF boards use DFU and hide that toggle).
 
 If the UI said "reconnected" but **Installed** still shows the old companion
 version, the flash failed (often missing esptool or the old `write-flash`
 verb on esptool 4.7). Current firmware uses `write_flash` and only reports
 reconnect after a successful esptool exit.
+
+### Configuration → Firmware: nRF flash asks for BOOT button / DFU fails
+
+**Cause:** Healthy nRF boards (MeshCore T096-class companions, Meshtastic
+T114 / RAK4631, etc.) enter DFU when Meshpoint opens the USB serial port at
+1200 baud (`adafruit-nrfutil --touch 1200`). No unplug or BOOT press is
+needed for that happy path. If touch fails (hung app, wrong bootloader, or
+`adafruit-nrfutil` missing), the stream reports recovery steps.
+
+**Fix (remote / happy path):**
+
+```bash
+sudo /opt/meshpoint/venv/bin/pip install -r /opt/meshpoint/requirements.txt
+sudo systemctl restart meshpoint
+```
+
+Then flash again from Configuration → Firmware with the nRF board selected.
+The DFU panel text should say DFU enters over USB automatically.
+
+**Fix (on-site recovery only):** Double-press RESET so a UF2 drive appears
+and retry (or drop a `.uf2` onto the DFU panel if the volume is mounted on
+the Pi), or hold BOOT/PROG while plugging USB, then Flash again.
 
 ### `error: externally-managed-environment`
 

@@ -56,6 +56,7 @@ class TestMeshcoreBoardList(unittest.TestCase):
         usb = mc_routes._board_list_from_release_sync(release, "usb")
         ble = mc_routes._board_list_from_release_sync(release, "ble")
         self.assertEqual([b["board"] for b in usb], ["Heltec_v3"])
+        self.assertEqual(usb[0]["flash_method"], "esptool")
         self.assertEqual([b["board"] for b in ble], ["Heltec_v3"])
 
 
@@ -66,7 +67,7 @@ class TestMeshcoreCompanionFilter(unittest.TestCase):
             {"tag_name": "companion-v1.16.0", "published_at": "2026-01-01"},
             {"tag_name": "companion-v1.15.0", "published_at": "2025-12-01"},
         ]
-        with patch.object(mc_routes._http, "fetch_json_sync", return_value=fake):
+        with patch.object(mc_routes._catalog._http, "fetch_json_sync", return_value=fake):
             out = mc_routes._companion_releases_sync(10)
         self.assertEqual(
             [r["tag_name"] for r in out],
@@ -186,7 +187,7 @@ class TestFirmwareRouteAuth(unittest.TestCase):
     def test_admin_releases_ok_with_mock(self):
         self._admin_cookie()
         fake = [{"tag_name": "companion-v1.16.0", "published_at": "2026-01-01"}]
-        with patch.object(mc_routes._http, "fetch_json_sync", return_value=fake):
+        with patch.object(mc_routes._catalog._http, "fetch_json_sync", return_value=fake):
             res = self.client.get("/api/config/meshcore/firmware/releases")
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["releases"][0]["tag"], "companion-v1.16.0")

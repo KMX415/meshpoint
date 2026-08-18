@@ -2,6 +2,20 @@
 
 ### Unreleased
 
+#### Firmware flash (nRF DFU)
+
+- **nRF boards on Configuration → Firmware.** MeshCore companions with
+  `.zip`/`.uf2` assets (e.g. Heltec T096) and Meshtastic `nrf52840` targets
+  (T114, RAK4631, …) flash via Adafruit serial DFU (`adafruit-nrfutil`,
+  1200-baud touch) instead of esptool. ESP boards keep the existing path.
+- **Progressive DFU UI.** Selecting an nRF board hides erase-all and shows a
+  DFU hint plus drag-drop for custom `.zip`/`.uf2`. ESP selections stay compact.
+- **RP2040 / RP2350 / STM32** targets are listed but disabled with a
+  “not flashable yet” hint until a later UF2-only wave.
+- **Dependency:** `adafruit-nrfutil` pinned in `requirements.txt`;
+  `install.sh` installs it into the venv. Closes
+  [#124](https://github.com/KMX415/meshpoint/issues/124).
+
 ### v0.7.9 (August 2026)
 
 Firmware flash for Meshtastic/MeshCore companions, serial footgun fixes, MeshCore live radio + messaging harden, dashboard hygiene ports, and companion-app bearer login. Edge-only, pure Python. **Upgrade:** Settings → Updates → **Stable**, or the full SSH block in `docs/COMMON-ERRORS.md` (`git fetch`, `checkout main`, `pull`, `scripts/install.sh`, `restart`). Witness-tested on RAK V2 (USB smoke: flash MC+MT, installed versions, MeshCore presets, serial live modem, busy-serial soft-fail, MeshCore messaging). Settings → Updates RC picker now points at **v0.8.0** on `feat/v0.8.0`.

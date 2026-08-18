@@ -479,6 +479,9 @@ pip install pyserial -q
 # Credit: javastraat/meshpoint (esptool install path adapted for venv).
 info "Ensuring esptool is installed in Meshpoint venv..."
 pip install --upgrade 'esptool>=4.7.0,<5' -q
+# nRF companion / Meshtastic DFU flash (Adafruit serial DFU + 1200 touch)
+info "Ensuring adafruit-nrfutil is installed in Meshpoint venv..."
+pip install --upgrade 'adafruit-nrfutil>=0.5.3.post16' -q
 
 deactivate
 

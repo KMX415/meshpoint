@@ -160,12 +160,23 @@ See the [Onboarding Guide](ONBOARDING.md#changing-meshcore-radio-frequency) for 
 ## Firmware flash (Configuration → Firmware)
 
 Flash official **Meshtastic** or **MeshCore** companion firmware to a USB-serial
-board from the dashboard (GitHub release → board → port → esptool stream).
-Admin session required. Needs `esptool` in the Meshpoint venv via
-`requirements.txt` / `scripts/install.sh` (do not use the Debian system
-package). **Erase everything** defaults off so
-same-stack upgrades keep identity/settings; enable it for blank boards or
-stack swaps. See `docs/COMMON-ERRORS.md` if flash fails with esptool missing.
+board from the dashboard (GitHub release → board → port → flash stream).
+Admin session required.
+
+- **ESP32 family:** `esptool` `write_flash` of merged/factory binaries. Needs
+  `esptool` in the Meshpoint venv via `requirements.txt` / `scripts/install.sh`
+  (do not use the Debian system package). **Erase everything** defaults off so
+  same-stack upgrades keep identity/settings; enable it for blank boards or
+  stack swaps.
+- **nRF52840 family:** Adafruit serial DFU of the release `.zip` / `-ota.zip`
+  via `adafruit-nrfutil` with 1200-baud touch (enters DFU over USB without
+  unplug). Selecting an nRF board shows a DFU panel and optional drag-drop for
+  a custom `.zip` or `.uf2`. UF2 volume copy is recovery when a bootloader
+  drive is already mounted. Needs `adafruit-nrfutil` in the venv.
+- **RP2040 / RP2350 / STM32:** listed but not flashable from Meshpoint yet.
+
+See `docs/COMMON-ERRORS.md` if flash fails with esptool / nrfutil missing or
+asks for a BOOT button (touch failed; on-site recovery).
 
 ## Capture Sources
 
