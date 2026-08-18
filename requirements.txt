@@ -15,3 +15,4 @@ bcrypt>=4.2.0
 PyJWT>=2.10.0
 esptool>=4.7.0,<5
 adafruit-nrfutil>=0.5.3.post16
+python-multipart>=0.0.9

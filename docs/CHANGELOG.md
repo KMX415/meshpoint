@@ -12,8 +12,9 @@
   DFU hint plus drag-drop for custom `.zip`/`.uf2`. ESP selections stay compact.
 - **RP2040 / RP2350 / STM32** targets are listed but disabled with a
   “not flashable yet” hint until a later UF2-only wave.
-- **Dependency:** `adafruit-nrfutil` pinned in `requirements.txt`;
-  `install.sh` installs it into the venv. Closes
+- **Dependency:** `adafruit-nrfutil` and `python-multipart` (firmware upload
+  FormData) pinned in `requirements.txt`; `install.sh` installs nrfutil into
+  the venv. Closes
   [#124](https://github.com/KMX415/meshpoint/issues/124).
 
 ### v0.7.9 (August 2026)
