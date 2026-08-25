@@ -13,6 +13,8 @@ A **Meshpoint** is an edge device that:
   concentrator
 - **Sends and receives Meshtastic messages** directly from the browser dashboard (native TX via the concentrator)
 - Optionally monitors **MeshCore** traffic via a USB companion radio
+- Optionally adds extra **Meshtastic** USB sticks for a second preset or slot
+  (see [USB nodes](USB-NODES.md))
 - Decodes, stores, and visualizes packets on a real-time dashboard with full chat UI, node discovery, and radio configuration
 - Ships data upstream to the [Meshradar](https://meshradar.io) cloud platform for regional mesh intelligence
 
@@ -49,6 +51,7 @@ flash (see [Syncrobit Chameleon guide](SYNCROBIT-CHAMELEON.md)).
 | **USB-C power supply** (5V 3A) | Power | Official Pi PSU recommended |
 | **LoRa antenna** (906 MHz) | RX + TX | 10 dBi gain recommended for US915 band |
 | **Ethernet cable or WiFi** | Network connectivity | Needed for cloud uplink |
+| **Optional: Meshtastic USB stick** | Extra Meshtastic preset / slot | Xiao S3, Heltec, T-Beam with Meshtastic firmware. [USB nodes](USB-NODES.md) |
 | **Optional: MeshCore USB companion** | MeshCore traffic monitor | Heltec V3/V4 or T-Beam with [USB companion firmware](https://meshcore.io/flasher) |
 
 ### Supported Pre-Built Units
@@ -291,7 +294,24 @@ The command auto-detects the USB port, stops the service, configures the radio, 
 | **Channels** | SF7-SF12 parallel (one RF plan) | 1 |
 | **Spreading factors** | SF7-SF12 all at once | Fixed (SF7 default) |
 | **Connection** | SPI (internal HAT) | USB serial |
-| **Configuration** | Dashboard Radio settings | Region preset via wizard |
+| **Configuration** | Dashboard Radio settings | Region preset via wizard or `meshpoint meshcore-radio` |
+
+---
+
+## Adding a Meshtastic USB radio
+
+Optional. A second Meshtastic radio (Seeed Xiao S3, Heltec, T-Beam, and
+similar boards already running Meshtastic firmware) can listen on another
+preset or slot while the concentrator stays on LongFast.
+
+Dashboard: **Configuration → Serial**. Enable serial capture, pin the
+port (prefer `/dev/serial/by-path/…`), save, restart, then set the stick's
+modem preset on that same card. Up to four Meshtastic USB sticks.
+
+This is not MeshCore. When the MeshCore companion arrives, it is a
+separate USB device on **Configuration → MeshCore**. Pin both ports.
+
+Full steps: [USB nodes](USB-NODES.md).
 
 ---
 

@@ -879,6 +879,9 @@ the other browser will get bumped.
 
 ## Meshtastic USB serial
 
+Setup (add a stick, second preset, multiple devices, MeshCore alongside):
+[USB nodes](USB-NODES.md).
+
 ### Serial port open failed but the dashboard and concentrator still work
 
 **Cause:** The Meshtastic USB capture source could not open its configured
@@ -964,16 +967,20 @@ time. Auto-detect cannot reliably pick the MeshCore one, especially with
 mixed Heltec V4 firmwares (see
 [Hardware Matrix > Heltec V3 vs V4 USB enumeration gotcha](HARDWARE-MATRIX.md#heltec-v3-vs-v4-usb-enumeration-gotcha)).
 
-**Fix:** Pin the port explicitly:
+**Fix:** Pin both USB radios. Prefer `/dev/serial/by-path/…` from
+**Configuration → Serial** and **Configuration → MeshCore**. Yaml:
 
 ```yaml
 capture:
+  serial:
+    - serial_port: "/dev/serial/by-path/..."
+      label: "mf"
   meshcore_usb:
     auto_detect: false
-    serial_port: "/dev/ttyACM0"
+    serial_port: "/dev/serial/by-path/..."
 ```
 
-Then `sudo systemctl restart meshpoint`.
+Then `sudo systemctl restart meshpoint`. Full steps: [USB nodes](USB-NODES.md).
 
 ### `MeshCore companion handshake failed` in the logs
 

@@ -116,7 +116,8 @@ sets a single frequency, bandwidth, and default spreading factor for TX. The
 concentrator still demodulates **SF7-SF12 in parallel on that frequency**, so
 you can hear nodes using different spreading factors on the same channel plan.
 You cannot listen to multiple modem presets or multiple frequencies at once on
-one concentrator (multi-preset IF chains are backlog).
+one concentrator (multi-preset IF chains are backlog). A Meshtastic USB stick
+can sit on a second preset while the concentrator stays put: [USB nodes](USB-NODES.md).
 
 ### Custom presets (Configuration → Radio)
 
@@ -184,27 +185,34 @@ asks for a BOOT button (touch failed; on-site recovery).
 capture:
   sources:
     - concentrator             # SX1302/SX1303 LoRa concentrator (RAK2287, etc.)
-    - meshcore_usb             # optional MeshCore USB companion node
-    # - serial                 # optional plain Meshtastic USB node as a capture source
+    - meshcore_usb             # optional MeshCore USB companion
+    # - serial                 # optional Meshtastic USB stick(s), alongside concentrator or instead of it
     # - mock                   # optional synthetic packets for development
+  serial:                      # dashboard: Configuration → Serial (up to 4 sticks)
+    - serial_port: "/dev/serial/by-path/..."
+      serial_baud: 115200
+      label: "mf"
   meshcore_usb:
     auto_detect: true          # scans /dev/ttyUSB* and /dev/ttyACM*
-    serial_port: null          # or set explicitly: "/dev/ttyACM0"
+    serial_port: null          # pin this when more than one USB radio is attached
     baud_rate: 115200
 ```
 
-The setup wizard configures sources automatically. To add or remove a MeshCore companion later, edit `sources` and restart.
+The setup wizard configures sources automatically. To add or remove USB
+radios later, use the dashboard (preferred) or edit `sources` and restart.
 
 **Available source types:**
 
 | Source | Purpose |
 |---|---|
 | `concentrator` | SX1302/SX1303 LoRa concentrator (RAK2287, RAK7248, SenseCap M1) |
-| `meshcore_usb` | MeshCore USB companion node (Heltec V4, T-Beam, RAK4631 with MeshCore firmware) |
-| `serial` | Plain Meshtastic node over USB serial. Used when you don't have a concentrator. |
+| `meshcore_usb` | MeshCore USB companion (Heltec V4, T-Beam, RAK4631 with MeshCore firmware) |
+| `serial` | Meshtastic USB stick(s). Works with a concentrator (second preset / band) or as the only Meshtastic source. Dashboard: **Configuration → Serial**. |
 | `mock` | Synthetic packet generator for development. Not for production. |
 
-When running both Meshtastic concentrator capture and a MeshCore USB companion, pin `meshcore_usb.serial_port` explicitly. Auto-detect can grab the wrong device when multiple Espressif boards are attached.
+When more than one USB radio is attached, pin each port (Serial list and
+`meshcore_usb.serial_port`). Auto-detect can grab the wrong Espressif
+board. How-to: [USB nodes](USB-NODES.md).
 
 ---
 
@@ -822,9 +830,14 @@ capture:               # what packet sources to read from
   sources:
     - concentrator
     - meshcore_usb
+    # - serial                 # Meshtastic USB stick(s); see docs/USB-NODES.md
+  # serial:
+  #   - serial_port: "/dev/serial/by-path/..."
+  #     serial_baud: 115200
+  #     label: "mf"
   meshcore_usb:
     auto_detect: true
-    serial_port: null
+    serial_port: null          # pin when a second USB radio is attached
     baud_rate: 115200
 
 location:              # GPS / location source

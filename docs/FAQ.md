@@ -1,7 +1,8 @@
 # FAQ
 
 Quick answers to questions that come up often. For setup walkthroughs see
-[Onboarding](ONBOARDING.md), for error catalogs see [Common Errors](COMMON-ERRORS.md),
+[Onboarding](ONBOARDING.md), for USB radios see [USB nodes](USB-NODES.md),
+for error catalogs see [Common Errors](COMMON-ERRORS.md),
 and for config syntax see [Configuration](CONFIGURATION.md).
 
 ---
@@ -112,16 +113,30 @@ the old SD card first if you want it gone for good.
 
 ## Can I listen to multiple modem presets (LongFast, MediumFast, etc.) at once?
 
-**No, not today.** Pick **one** modem preset in **Configuration → Radio**
-(region, frequency, bandwidth, spreading factor). The SX1302 runs eight
-demod chains on **that** channel plan so you still hear nodes using
-different spreading factors (SF7-SF12) on the same frequency and bandwidth.
+**Not on one concentrator.** Pick **one** modem preset in
+**Configuration → Radio**. The SX1302 runs eight demod chains on **that**
+channel plan, so you still hear nodes using different spreading factors
+(SF7-SF12) on the same frequency and bandwidth.
 
-A Meshtastic **preset** is not just SF: it is frequency plus bandwidth plus
-spreading factor (LongFast, MediumFast, ShortFast, and so on). You cannot
-monitor multiple presets or multiple frequencies on one concentrator at the
-same time. Multi-preset / multi-frequency capture is on the roadmap and is
-limited by concentrator hardware, not missing UI.
+A Meshtastic **preset** is frequency plus bandwidth plus spreading factor,
+not SF alone. You cannot put LongFast and MediumFast on two different
+slots on the same concentrator. That multi-preset IF work is backlog.
+
+**USB workaround:** attach a Meshtastic USB stick and set **its** preset
+on **Configuration → Serial**. Leave the concentrator on LongFast. Full
+steps: [USB nodes](USB-NODES.md).
+
+If your local MediumFast mesh is the same freq/slot as LongFast (both
+usually BW 250), the concentrator already hears SF9 and you may not need
+the stick.
+
+---
+
+## How do I add a USB Meshtastic or MeshCore radio?
+
+[USB nodes](USB-NODES.md). Meshtastic sticks: **Configuration → Serial**.
+MeshCore companions: **Configuration → MeshCore**. Pin both ports when
+two USB radios are plugged in.
 
 ---
 

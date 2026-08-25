@@ -2,6 +2,13 @@
 
 ### Unreleased
 
+#### Docs
+
+- **USB nodes guide.** `docs/USB-NODES.md` covers Meshtastic USB sticks
+  (Configuration → Serial, live preset, up to four devices) alongside a
+  concentrator, plus pinning ports when a MeshCore companion is also
+  attached. FAQ / Configuration / Onboarding / Hardware Matrix point at it.
+
 #### Firmware flash (nRF DFU)
 
 - **nRF boards on Configuration → Firmware.** MeshCore companions with
