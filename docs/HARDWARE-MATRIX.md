@@ -150,7 +150,7 @@ Full runbook: **[WisMesh Node guide](WISMESH-NODE.md)**. See also [Onboarding](O
 | Helium WHIP / Linxdot Indoor | Not validated | Same chip family as RAK V2 but the carrier varies; community testing welcome |
 | Bobcat Miner 300 (G285) | Not validated | G290/G295 community path documented; G285 untested |
 | Nebra Indoor (Rock Pi 4 + SX1301) | Not supported | Daughter board uses SX1301, not SX1302/SX1303; different HAL |
-| Single-channel SX1276/SX1262 boards | Not for concentrator role | These are single-channel radios. They can run as a [Meshtastic USB stick](#meshtastic-usb-serial-radios) or a [MeshCore USB companion](#meshcore-usb-companion-radios), not as the main concentrator. |
+| Single-channel SX1276/SX1262 boards | Not for concentrator role | These are single-channel radios. They can run as a [Meshtastic USB node](#meshtastic-usb-serial-radios) or a [MeshCore USB companion](#meshcore-usb-companion-radios), not as the main concentrator. |
 
 ---
 
@@ -159,13 +159,13 @@ Full runbook: **[WisMesh Node guide](WISMESH-NODE.md)**. See also [Onboarding](O
 Optional. Adds extra Meshtastic RX through a single-channel USB radio
 (Seeed Xiao S3, Heltec, T-Beam, and similar boards running **Meshtastic**
 firmware). The concentrator keeps its own plan in Configuration → Radio.
-Each stick has its own region / modem preset on **Configuration → Serial**
+Each node has its own region / modem preset on **Configuration → Serial**
 (up to four devices).
 
 Use this when you want MediumFast (or another slot) **and** LongFast on
 the concentrator. Same-freq / same-BW MediumFast is often already heard
-by the concentrator's SF7-SF12 demodulators; the stick is for a different
-slot, or for stick-local TX/replies.
+by the concentrator's SF7-SF12 demodulators; the USB node is for a different
+slot, or for TX/replies from that node.
 
 How-to: [USB nodes](USB-NODES.md). Flash from Configuration → Firmware
 or the Meshtastic web flasher.
@@ -227,7 +227,7 @@ JTAG/serial endpoint.
 
 If you have both a MeshCore companion and a Meshtastic node attached over
 USB at the same time, **pin both ports**. MeshCore auto-detect can grab
-the Meshtastic stick. Prefer `/dev/serial/by-path/…` on
+the Meshtastic node. Prefer `/dev/serial/by-path/…` on
 **Configuration → Serial** and **Configuration → MeshCore**. Yaml
 equivalent:
 

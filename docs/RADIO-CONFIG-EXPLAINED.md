@@ -172,7 +172,7 @@ on that tuned channel, which is different from monitoring two Meshtastic
 slots at once.
 
 To listen to a second preset (for example MediumFast on another slot)
-while the concentrator stays on LongFast, attach a Meshtastic USB stick
+while the concentrator stays on LongFast, attach a Meshtastic USB node
 and set its modem on **Configuration → Serial**. See [USB nodes](USB-NODES.md).
 
 ---

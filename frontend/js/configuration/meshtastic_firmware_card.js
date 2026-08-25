@@ -107,7 +107,7 @@ class MeshtasticFirmwareConfigCard {
         const data = await this._api.get('/api/config/serial/firmware/installed');
         if (!data) {
             versionEl.textContent = 'Unavailable';
-            metaEl.textContent = 'Could not query serial sticks';
+            metaEl.textContent = 'Could not query serial nodes';
             return;
         }
         const devices = data.devices || [];
@@ -117,7 +117,7 @@ class MeshtasticFirmwareConfigCard {
             metaEl.textContent = '';
             return;
         }
-        // One primary stick shown prominently; extras in meta.
+        // One primary node shown prominently; extras in meta.
         const primary = connected[0];
         const version = (primary.version || '').trim() || 'Version not reported';
         let hw = (primary.hw_model || '').toString().trim();

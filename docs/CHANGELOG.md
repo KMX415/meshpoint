@@ -4,7 +4,7 @@
 
 #### Docs
 
-- **USB nodes guide.** `docs/USB-NODES.md` covers Meshtastic USB sticks
+- **USB nodes guide.** `docs/USB-NODES.md` covers Meshtastic USB nodes
   (Configuration → Serial, live preset, up to four devices) alongside a
   concentrator, plus pinning ports when a MeshCore companion is also
   attached. FAQ / Configuration / Onboarding / Hardware Matrix point at it.

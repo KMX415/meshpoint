@@ -24,7 +24,7 @@ class SerialConfigCard {
                     <header class="cfg-card__head">
                         <h3 class="cfg-card__title">USB capture sources</h3>
                         <p class="cfg-card__hint">
-                            One entry per Meshtastic USB stick (Heltec, T-Beam, etc.).
+                            One entry per Meshtastic USB node (Heltec, T-Beam, etc.).
                             Use a label like 433 or 868 so packets tag as serial_433.
                             Up to ${this._MAX_DEVICES}. Requires a service restart after changes.
                         </p>

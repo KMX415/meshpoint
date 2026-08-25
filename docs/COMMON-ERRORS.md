@@ -879,7 +879,7 @@ the other browser will get bumped.
 
 ## Meshtastic USB serial
 
-Setup (add a stick, second preset, multiple devices, MeshCore alongside):
+Setup (add a USB node, second preset, multiple devices, MeshCore alongside):
 [USB nodes](USB-NODES.md).
 
 ### Serial port open failed but the dashboard and concentrator still work

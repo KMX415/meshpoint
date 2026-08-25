@@ -171,9 +171,9 @@ OTG not confirmed on G295).
 
 Add a Heltec V3/V4 or T-Beam running [MeshCore USB companion firmware](https://meshcore.io/flasher) to monitor MeshCore traffic alongside Meshtastic. Plug it into any USB port on the Pi -- the setup wizard auto-detects the device and configures its radio frequency for your region. You can also flash from the dashboard under Configuration → Firmware.
 
-### Optional: Meshtastic USB stick
+### Optional: Meshtastic USB node
 
-A second Meshtastic radio (Seeed Xiao S3, Heltec, T-Beam, and similar) can listen on another preset or slot while the concentrator stays on LongFast. Dashboard: **Configuration → Serial**. Up to four sticks. See [USB nodes](docs/USB-NODES.md).
+A second Meshtastic radio (Seeed Xiao S3, Heltec, T-Beam, and similar) can listen on another preset or slot while the concentrator stays on LongFast. Dashboard: **Configuration → Serial**. Up to four USB nodes. See [USB nodes](docs/USB-NODES.md).
 
 > **Full step-by-step guide:** See the [Onboarding Guide](docs/ONBOARDING.md) for detailed instructions covering SD flashing, Chameleon eMMC recovery, assembly, installation, MeshCore setup, USB nodes, and troubleshooting for all hardware options.
 
@@ -300,12 +300,12 @@ Start with the doc that matches what you are trying to do.
 
 **Setup and configuration**
 - **[Onboarding Guide](docs/ONBOARDING.md):** step-by-step from empty Pi to running Meshpoint
-- **[Hardware Matrix](docs/HARDWARE-MATRIX.md):** RAK V2 vs SenseCap M1 vs Chameleon vs Bobcat vs DIY, WisMesh Node (experimental), Meshtastic USB sticks, MeshCore companion radios, antennas, what's not supported
+- **[Hardware Matrix](docs/HARDWARE-MATRIX.md):** RAK V2 vs SenseCap M1 vs Chameleon vs Bobcat vs DIY, WisMesh Node (experimental), Meshtastic USB nodes, MeshCore companion radios, antennas, what's not supported
 - **[Bobcat Miner 300](docs/BOBCAT-300.md):** Rockchip RK3566 + Armbian repurposing (manual SPI/GPIO)
 - **[WisMesh Node (experimental)](docs/plans/WISMESH-BRANCH.md):** RAK6421 HAT, meshtasticd, long-lived `feat/wismesh-hat` branch
 - **[Gateway ↔ Node migration](docs/MIGRATE-GATEWAY-TO-NODE.md):** switch between concentrator Gateway and WisMesh Node platforms
 - **[Configuration Guide](docs/CONFIGURATION.md):** all config options, private channels, relay, upstream, MQTT, radio tuning
-- **[USB nodes](docs/USB-NODES.md):** Meshtastic USB sticks (second preset, up to four) and MeshCore USB alongside the concentrator
+- **[USB nodes](docs/USB-NODES.md):** Meshtastic USB nodes (second preset, up to four) and MeshCore USB alongside the concentrator
 - **[Radio Config Explained](docs/RADIO-CONFIG-EXPLAINED.md):** the "why" behind region, spreading factor, bandwidth, custom slots, Part 15 awareness
 - **[MQTT and Meshradar](docs/MQTT-AND-MESHRADAR.md):** the two cloud paths side-by-side, what data flows where, privacy posture
 - **[Home Assistant cookbook](docs/HOME-ASSISTANT-COOKBOOK.md):** copy-paste REST sensors, alerts, and broadcast automations for LAN integrations

@@ -20,6 +20,9 @@ Meshpoint brand rules:
 - The platform is **Meshradar**: one word, capital M. Never
   "Mesh Radar", "MeshRadar", or "mesh radar".
 - Plurals are **Meshpoints** and **Meshradars**.
+- USB Meshtastic and MeshCore radios are **nodes**, never **sticks**.
+  Say "USB node", "Meshtastic USB node", or "MeshCore companion".
+  GPS dongles may still be called USB sticks.
 - Code identifiers (CSS class names, JS variables, config keys) keep
   existing project conventions (`top-bar`, `meshpoint`, `mesh_point`).
   The branding rule applies to prose, docs, UI strings, and

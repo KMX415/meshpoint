@@ -122,19 +122,19 @@ A Meshtastic **preset** is frequency plus bandwidth plus spreading factor,
 not SF alone. You cannot put LongFast and MediumFast on two different
 slots on the same concentrator. That multi-preset IF work is backlog.
 
-**USB workaround:** attach a Meshtastic USB stick and set **its** preset
+**USB workaround:** attach a Meshtastic USB node and set **its** preset
 on **Configuration → Serial**. Leave the concentrator on LongFast. Full
 steps: [USB nodes](USB-NODES.md).
 
 If your local MediumFast mesh is the same freq/slot as LongFast (both
 usually BW 250), the concentrator already hears SF9 and you may not need
-the stick.
+the extra node.
 
 ---
 
 ## How do I add a USB Meshtastic or MeshCore radio?
 
-[USB nodes](USB-NODES.md). Meshtastic sticks: **Configuration → Serial**.
+[USB nodes](USB-NODES.md). Meshtastic USB nodes: **Configuration → Serial**.
 MeshCore companions: **Configuration → MeshCore**. Pin both ports when
 two USB radios are plugged in.
 
