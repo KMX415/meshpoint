@@ -255,8 +255,23 @@ html, body {
     overflow: hidden;
 }
 
+#map .leaflet-tile-pane {
+    filter: invert(1) hue-rotate(180deg) saturate(0.22) brightness(0.72) contrast(1.22);
+}
+
+#map .leaflet-control-attribution {
+    background: rgba(7, 11, 20, 0.82) !important;
+    color: var(--text-muted) !important;
+    font-size: 10px !important;
+}
+
+#map .leaflet-control-attribution a {
+    color: var(--accent-cyan) !important;
+}
+
 .leaflet-container {
     overflow: hidden !important;
+    background: var(--bg-primary) !important;
 }
 
 .leaflet-control-layers {

@@ -2,6 +2,12 @@
 
 ### Unreleased
 
+#### Dashboard
+
+- **Local map tiles.** OSM raster with a dark invert filter, replacing
+  CARTO Dark Matter after anonymous CARTO raster requests started
+  returning an API-key watermark.
+
 #### Docs
 
 - **Bobcat 300 capture yaml.** Step 5 now uses `capture.concentrator_spi_device`
