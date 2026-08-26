@@ -114,16 +114,15 @@ Do **not** start the service at the end of the wizard.
 
 ## Step 5: Point capture at the Bobcat SPI bus
 
-Edit `/opt/meshpoint/config/local.yaml`. Set the concentrator block:
+Edit `/opt/meshpoint/config/local.yaml`. Set the SPI device. There is no nested
+`capture.concentrator` block: chip type is detected at start, and GPIO 149/147
+belong in the Step 6 drop-in, not yaml.
 
 ```yaml
 capture:
   sources:
     - concentrator
-  concentrator:
-    board: "sx1302"
-    spi_path: "/dev/spidev5.0"
-    reset_pin: 149
+  concentrator_spi_device: "/dev/spidev5.0"
 ```
 
 Save the file.
@@ -250,6 +249,10 @@ is stable. See [Hardware Matrix > MeshCore USB](HARDWARE-MATRIX.md#meshcore-usb-
 ---
 
 ## Troubleshooting
+
+**`Ignoring unknown config key(s): capture.concentrator`:** An older version of
+this guide showed a nested `concentrator:` block. Meshpoint ignores it. Use
+`concentrator_spi_device` as in Step 5, keep the Step 6 drop-in, then restart.
 
 **Chip version 0x00:** Re-check SPI overlay, symlinks, GPIO reset sequence in
 the systemd drop-in, and that kernel packages are still **held**. Power-cycle

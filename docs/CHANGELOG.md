@@ -2,12 +2,22 @@
 
 ### Unreleased
 
+#### Dashboard
+
+- **Local map tiles.** OSM raster with a dark invert filter, replacing
+  CARTO Dark Matter after anonymous CARTO raster requests started
+  returning an API-key watermark.
+
 #### Docs
 
 - **USB nodes guide.** `docs/USB-NODES.md` covers Meshtastic USB nodes
   (Configuration → Serial, live preset, up to four devices) alongside a
   concentrator, plus pinning ports when a MeshCore companion is also
   attached. FAQ / Configuration / Onboarding / Hardware Matrix point at it.
+- **Bobcat 300 capture yaml.** Step 5 now uses `capture.concentrator_spi_device`
+  instead of a nested `capture.concentrator` block that Meshpoint ignores.
+  GPIO reset stays in the systemd drop-in. Fixes
+  [#125](https://github.com/KMX415/meshpoint/issues/125).
 
 #### Firmware flash (nRF DFU)
 

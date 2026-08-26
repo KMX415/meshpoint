@@ -192,6 +192,7 @@ capture:
     - serial_port: "/dev/serial/by-path/..."
       serial_baud: 115200
       label: "mf"
+  concentrator_spi_device: "/dev/spidev0.0"  # Bobcat 300: "/dev/spidev5.0"
   meshcore_usb:
     auto_detect: true          # scans /dev/ttyUSB* and /dev/ttyACM*
     serial_port: null          # pin this when more than one USB radio is attached
