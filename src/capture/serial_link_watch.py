@@ -15,12 +15,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any, Optional, Protocol
 
 logger = logging.getLogger(__name__)
 
 _RECONNECT_INITIAL_DELAY_S = 5.0
+_REBOOT_INITIAL_DELAY_S = 15.0
 _RECONNECT_MAX_DELAY_S = 60.0
+_REBOOT_REASONS = frozenset({"lora config write", "bluetooth config write"})
 
 
 class SerialReconnectHost(Protocol):
@@ -46,6 +49,9 @@ class SerialReconnectController:
         self._host = host
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._task: Optional[asyncio.Task] = None
+        self._phase: Optional[str] = None
+        self._retry_at: Optional[float] = None
+        self._next_delay: Optional[float] = None
 
     @property
     def task(self) -> Optional[asyncio.Task]:
@@ -54,8 +60,25 @@ class SerialReconnectController:
     def bind_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
 
-    def clear_task(self) -> None:
-        self._task = None
+    def status_snapshot(self) -> dict:
+        """Dashboard fields: reconnecting, link_phase, retry_in_s."""
+        busy = (
+            self._task is not None
+            and not self._task.done()
+            and not self._host.connected
+        )
+        retry_in = 0
+        if busy and self._retry_at is not None:
+            retry_in = max(0, int(self._retry_at - time.monotonic()))
+        return {
+            "reconnecting": busy,
+            "link_phase": self._phase if busy else None,
+            "retry_in_s": retry_in,
+        }
+
+    def arm_open_fail(self) -> None:
+        if self._phase is None:
+            self._set_wait("reconnecting", _RECONNECT_INITIAL_DELAY_S)
 
     def handle_drop(self, reason: str, interface: Any = None) -> None:
         """Close our interface if this event belongs to us, then reconnect."""
@@ -69,16 +92,26 @@ class SerialReconnectController:
             and interface is not current
         ):
             return
+        if reason in _REBOOT_REASONS:
+            self._set_wait("rebooting", _REBOOT_INITIAL_DELAY_S)
+        elif self._phase != "rebooting":
+            self._set_wait("reconnecting", _RECONNECT_INITIAL_DELAY_S)
         if current is None:
             self.schedule()
             return
         host._close_interface()
         logger.warning(
-            "%s: serial link dropped (%s); reconnecting",
+            "%s: serial link dropped (%s); %s",
             host.name,
             reason,
+            self._phase or "reconnecting",
         )
         self.schedule()
+
+    def _set_wait(self, phase: str, delay: float) -> None:
+        self._phase = phase
+        self._next_delay = delay
+        self._retry_at = time.monotonic() + delay
 
     def schedule(self) -> None:
         if self._task is not None and not self._task.done():
@@ -110,6 +143,7 @@ class SerialReconnectController:
 
     async def cancel(self) -> None:
         if self._task is None:
+            self._clear_status()
             return
         self._task.cancel()
         try:
@@ -117,37 +151,52 @@ class SerialReconnectController:
         except asyncio.CancelledError:
             pass
         self._task = None
+        self._clear_status()
+
+    def _clear_status(self) -> None:
+        self._phase = None
+        self._retry_at = None
+        self._next_delay = None
 
     async def _reconnect_until_connected(self) -> None:
         host = self._host
-        delay = _RECONNECT_INITIAL_DELAY_S
+        delay = self._next_delay or _RECONNECT_INITIAL_DELAY_S
+        self._next_delay = None
         try:
             while host._running and not host.connected:
+                self._retry_at = time.monotonic() + delay
                 await asyncio.sleep(delay)
                 if not host._running:
                     return
-                try:
-                    await asyncio.to_thread(host._open_interface)
-                    logger.info(
-                        "Serial capture recovered on %s",
-                        host._port or "auto-detect",
-                    )
+                delay = await self._attempt_open(host, delay)
+                if host.connected:
                     return
-                except ImportError:
-                    host._running = False
-                    raise
-                except Exception:
-                    next_delay = min(delay * 2, _RECONNECT_MAX_DELAY_S)
-                    logger.warning(
-                        "Serial reconnect still failing on %s; retry in %.0fs",
-                        host._port or "auto-detect",
-                        next_delay,
-                        exc_info=True,
-                    )
-                    delay = next_delay
         except asyncio.CancelledError:
             pass
         except Exception:
-            logger.exception(
-                "Serial reconnect loop error on %s", host.name
+            logger.exception("Serial reconnect loop error on %s", host.name)
+        finally:
+            if host.connected:
+                self._clear_status()
+
+    async def _attempt_open(self, host: SerialReconnectHost, delay: float) -> float:
+        self._retry_at = None
+        try:
+            await asyncio.to_thread(host._open_interface)
+            logger.info(
+                "Serial capture recovered on %s",
+                host._port or "auto-detect",
             )
+            return delay
+        except ImportError:
+            host._running = False
+            raise
+        except Exception as exc:
+            next_delay = min(delay * 2, _RECONNECT_MAX_DELAY_S)
+            logger.warning(
+                "Serial reconnect still failing on %s (%s); retry in %.0fs",
+                host._port or "auto-detect",
+                exc,
+                next_delay,
+            )
+            return next_delay

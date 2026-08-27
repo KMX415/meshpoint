@@ -57,6 +57,10 @@ class SerialCaptureSource(CaptureSource):
         """Connect-time LoRa/identity snapshot (copy)."""
         return dict(self._radio_info)
 
+    def link_status(self) -> dict:
+        """Reconnect/reboot fields for the dashboard serial chip."""
+        return self._reconnect.status_snapshot()
+
     def resolve_channel_index(self, name: str) -> Optional[int]:
         """This stick's channel-table index for ``name``, or None."""
         table = self._radio_info.get("channel_table") or {}
@@ -91,6 +95,7 @@ class SerialCaptureSource(CaptureSource):
                 self._port or "auto-detect",
                 exc_info=True,
             )
+            self._reconnect.arm_open_fail()
             self._reconnect.schedule()
 
     def _open_interface(self) -> None:

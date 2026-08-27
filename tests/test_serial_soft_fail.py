@@ -136,6 +136,9 @@ class SerialLiveDropReconnectTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(source.connected)
         iface.close.assert_called_once()
+        snap = source.link_status()
+        self.assertTrue(snap["reconnecting"])
+        self.assertEqual(snap["link_phase"], "reconnecting")
         self.assertIsNotNone(source._reconnect_task)
         await source.stop()
 
@@ -171,6 +174,10 @@ class SerialLiveDropReconnectTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["success"])
         self.assertFalse(source.connected)
         iface.close.assert_called_once()
+        snap = source.link_status()
+        self.assertTrue(snap["reconnecting"])
+        self.assertEqual(snap["link_phase"], "rebooting")
+        self.assertGreaterEqual(snap["retry_in_s"], 10)
         self.assertIsNotNone(source._reconnect_task)
         await source.stop()
 

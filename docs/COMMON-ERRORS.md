@@ -919,10 +919,12 @@ which reboots the radio and drops USB CDC. Older firmware left the dead
 serial handle in place, so the dashboard still looked connected.
 
 **Fix:** On the v0.8.0 RC, Meshpoint closes that handle and reconnects.
-Look for `serial link dropped` then `Serial capture recovered` in
-`journalctl`. If reconnect never recovers (busy port, unplugged node),
-the existing background retry still applies: confirm the by-path pin,
-then `sudo systemctl restart meshpoint` as a last resort.
+The top-bar USB pill and Configuration → Serial show **REBOOTING** (after
+Set Preset / region) or **RECONNECTING** (after an unplug) plus a retry
+countdown. Look for `serial link dropped` then `Serial capture recovered`
+in `journalctl`. If reconnect never recovers (busy port, unplugged node),
+confirm the by-path pin, then `sudo systemctl restart meshpoint` as a
+last resort.
 
 ---
 

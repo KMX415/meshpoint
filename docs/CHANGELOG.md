@@ -6,7 +6,9 @@
 
 - **Meshtastic USB reconnect after live drop.** Set Preset / region writes
   reboot the node and drop USB. Serial now closes the dead handle and
-  reconnects instead of staying green with no packets.
+  reconnects. The top-bar serial pill and Configuration → Serial show
+  **REBOOTING** or **RECONNECTING** plus a retry countdown instead of a
+  silent red lamp.
 
 #### Dashboard
 

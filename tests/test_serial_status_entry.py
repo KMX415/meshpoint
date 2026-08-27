@@ -34,6 +34,29 @@ class SerialStatusEntryTest(unittest.TestCase):
         self.assertTrue(entry["connected"])
         self.assertEqual(entry["frequency_mhz"], 869.525)
         self.assertEqual(entry["own_node_id_hex"], "aabbccdd")
+        self.assertFalse(entry["reconnecting"])
+        self.assertIsNone(entry["link_phase"])
+
+    def test_forwards_reboot_countdown(self):
+        src = MagicMock()
+        src.name = "serial_Xiao S3"
+        src.connected = False
+        src.get_radio_info.return_value = {
+            "region": "US",
+            "modem_preset": "LONG_MODERATE",
+            "bandwidth_khz": 125.0,
+            "use_preset": True,
+            "own_node_num": 0x1DE9D754,
+        }
+        src.link_status.return_value = {
+            "reconnecting": True,
+            "link_phase": "rebooting",
+            "retry_in_s": 12,
+        }
+        entry = _serial_status_entry(src)
+        self.assertTrue(entry["reconnecting"])
+        self.assertEqual(entry["link_phase"], "rebooting")
+        self.assertEqual(entry["retry_in_s"], 12)
 
 
 class FindSerialSourcesTest(unittest.TestCase):

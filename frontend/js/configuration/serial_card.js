@@ -63,6 +63,13 @@ class SerialConfigCard {
         this._root.querySelector('[data-serial-rescan-usb]')
             .addEventListener('click', (e) => this._rescanUsb(e.currentTarget));
         this._refreshSerialPortsList();
+        if (this._onConfigUpdated) {
+            document.removeEventListener(
+                'meshpoint:configUpdated', this._onConfigUpdated,
+            );
+        }
+        this._onConfigUpdated = (ev) => this._syncLive(ev.detail || {});
+        document.addEventListener('meshpoint:configUpdated', this._onConfigUpdated);
     }
 
     render(config) {
@@ -192,15 +199,27 @@ class SerialConfigCard {
     }
 
     _liveReadoutHtml(live) {
+        if (live && (live.reconnecting || live.link_phase)) {
+            const rebooting = live.link_phase === 'rebooting';
+            const word = rebooting ? 'Rebooting' : 'Reconnecting';
+            const n = Number(live.retry_in_s) || 0;
+            const wait = n > 0
+                ? ` Retry in ${n}s.`
+                : ' Handshake in progress.';
+            const why = rebooting
+                ? ' Node is applying modem settings and USB will return.'
+                : ' USB serial dropped; retrying in the background.';
+            return `<p class="cfg-field__hint" data-serial-link-status>${word}.${why}${wait}</p>`;
+        }
         if (!live || !live.connected) {
-            return `<p class="cfg-field__hint">Not connected (save + restart to capture).</p>`;
+            return `<p class="cfg-field__hint" data-serial-link-status>Not connected (save + restart to capture).</p>`;
         }
         const region = this._esc(live.region || '?');
         const preset = this._esc(live.modem_preset || '?');
         const freq = live.frequency_mhz != null
-            ? `${Number(live.frequency_mhz).toFixed(3)} MHz` : '—';
+            ? `${Number(live.frequency_mhz).toFixed(3)} MHz` : '?';
         return `
-            <div class="cfg-mc-readouts">
+            <div class="cfg-mc-readouts" data-serial-link-status>
                 <div class="cfg-mc-readout">
                     <span class="cfg-mc-readout__label">Region</span>
                     <span class="cfg-mc-readout__value">${region}</span>
@@ -215,6 +234,28 @@ class SerialConfigCard {
                 </div>
             </div>
         `;
+    }
+
+    _syncLive(cfg) {
+        this._liveSerial = Array.isArray(cfg.serial) ? cfg.serial : [];
+        if (!this._devicesEl) return;
+        this._devicesEl.querySelectorAll('.cfg-companion').forEach((div) => {
+            const label = (div.querySelector('[data-device-label]')?.value || '').trim();
+            const live = this._liveFor(label);
+            const slot = div.querySelector('[data-serial-link-status]');
+            if (slot) {
+                slot.outerHTML = this._liveReadoutHtml(live);
+            }
+            const host = div.querySelector('[data-serial-live-host]');
+            if (!this._radioControls || !host) return;
+            const shouldShow = Boolean(live && live.connected);
+            const showing = host.childElementCount > 0;
+            if (shouldShow && !showing) {
+                this._radioControls.mount(host, label, live);
+            } else if (!shouldShow && showing) {
+                host.innerHTML = '';
+            }
+        });
     }
 
     _updateResolvedPort(input) {

@@ -73,6 +73,9 @@ def _serial_status_entry(src) -> dict:
 
     info = src.get_radio_info() if hasattr(src, "get_radio_info") else {}
     own_node_num = info.get("own_node_num")
+    link = src.link_status() if hasattr(src, "link_status") else {}
+    if not isinstance(link, dict):
+        link = {}
     return {
         "name": src.name,
         "connected": bool(getattr(src, "connected", False)),
@@ -90,6 +93,9 @@ def _serial_status_entry(src) -> dict:
         "own_node_id_hex": (
             f"{own_node_num:08x}" if own_node_num is not None else None
         ),
+        "reconnecting": bool(link.get("reconnecting")),
+        "link_phase": link.get("link_phase"),
+        "retry_in_s": int(link.get("retry_in_s") or 0),
     }
 
 

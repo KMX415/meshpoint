@@ -13,6 +13,7 @@ class TopbarController {
         this._root = rootEl;
         this._ws = dashboardWs;
         this._refreshTimer = null;
+        this._refreshMs = 10_000;
         this._meshtastic = new TopbarMeshtasticChip(
             rootEl.querySelector('.topbar-meshtastic'),
         );
@@ -31,8 +32,9 @@ class TopbarController {
     init() {
         this._wireWebSocket();
         this._refreshConfig();
+        this._refreshMs = 10_000;
         this._refreshTimer = setInterval(
-            () => this._refreshConfig(), 10_000,
+            () => this._refreshConfig(), this._refreshMs,
         );
     }
 
@@ -86,6 +88,7 @@ class TopbarController {
             });
             this._meshcore.setMeshcore(cfg.meshcore || null);
             this._serial.setSerial(cfg.serial || []);
+            this._syncPollCadence(cfg.serial || []);
             document.dispatchEvent(
                 new CustomEvent('meshpoint:configUpdated', { detail: cfg }),
             );
@@ -93,6 +96,19 @@ class TopbarController {
             this._meshcore.setDashboardReachable(false);
             this._serial.setDashboardReachable(false);
         }
+    }
+
+    _syncPollCadence(serialDevices) {
+        const busy = (serialDevices || []).some(
+            (d) => d && (d.reconnecting || d.link_phase),
+        );
+        const ms = busy ? 1000 : 10_000;
+        if (ms === this._refreshMs) return;
+        this._refreshMs = ms;
+        if (this._refreshTimer) clearInterval(this._refreshTimer);
+        this._refreshTimer = setInterval(
+            () => this._refreshConfig(), this._refreshMs,
+        );
     }
 
     registerAction(spec) {

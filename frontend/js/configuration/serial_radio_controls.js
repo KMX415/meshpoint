@@ -235,9 +235,9 @@ class SerialRadioControls {
         status.textContent = 'Setting region…';
         const result = await this._api.put('/api/config/serial/region', { label, region });
         if (result && result.success) {
-            status.dataset.kind = 'success';
-            status.textContent = `Region set to ${result.region}.`;
-            this._api.toast(`Serial region → ${result.region}`);
+            status.dataset.kind = 'pending';
+            status.textContent = 'Node rebooting onto the new region. USB reconnects shortly.';
+            this._api.toast('Serial node rebooting. USB will reconnect.');
             await this._api.refresh();
         } else {
             status.dataset.kind = 'error';
@@ -262,9 +262,9 @@ class SerialRadioControls {
             label, modem_preset,
         });
         if (result && result.success) {
-            status.dataset.kind = 'success';
-            status.textContent = `Preset set to ${result.modem_preset}.`;
-            this._api.toast(`Serial preset → ${result.modem_preset}`);
+            status.dataset.kind = 'pending';
+            status.textContent = 'Node rebooting onto the new preset. USB reconnects shortly.';
+            this._api.toast('Serial node rebooting. USB will reconnect.');
             await this._api.refresh();
         } else {
             status.dataset.kind = 'error';
@@ -322,9 +322,9 @@ class SerialRadioControls {
         status.textContent = 'Setting Bluetooth…';
         const result = await this._api.put('/api/config/serial/bluetooth', body);
         if (result && result.success) {
-            status.dataset.kind = 'success';
-            status.textContent = 'Bluetooth updated.';
-            this._api.toast('Serial Bluetooth updated');
+            status.dataset.kind = 'pending';
+            status.textContent = 'Node rebooting. USB reconnects shortly.';
+            this._api.toast('Serial node rebooting. USB will reconnect.');
             await this._api.refresh();
         } else {
             status.dataset.kind = 'error';

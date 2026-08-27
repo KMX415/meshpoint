@@ -361,6 +361,7 @@
     .topbar-meshcore__name { max-width: 5rem; }
     .topbar-meshtastic__call { font-size: 0.78rem; }
     .topbar-serial__preset { display: none; }
+    .topbar-serial__preset--phase { display: inline; }
 }
 
 /* --- Serial Meshtastic USB device chip(s) --- */
@@ -383,9 +384,13 @@
     color: var(--text-secondary);
 }
 
-.topbar-serial--offline,
-.topbar-serial--reconnecting {
+.topbar-serial--offline {
     border-color: rgba(239, 68, 68, 0.3);
+}
+
+.topbar-serial--reconnecting,
+.topbar-serial--rebooting {
+    border-color: rgba(245, 158, 11, 0.45);
 }
 
 .topbar-serial__brand {
@@ -414,13 +419,15 @@
     box-shadow: 0 0 6px rgba(0, 229, 160, 0.65);
 }
 
-.topbar-serial__lamp--offline .topbar-serial__dot,
-.topbar-serial__lamp--reconnecting .topbar-serial__dot {
+.topbar-serial__lamp--offline .topbar-serial__dot {
     background: var(--accent-red, #ef4444);
     box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
 }
 
-.topbar-serial__lamp--reconnecting .topbar-serial__dot {
+.topbar-serial__lamp--reconnecting .topbar-serial__dot,
+.topbar-serial__lamp--rebooting .topbar-serial__dot {
+    background: var(--accent-amber, #f59e0b);
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.55);
     animation: topbar-meshtastic-blink 0.9s steps(2, end) infinite;
 }
 
@@ -463,9 +470,12 @@
 
 .topbar-serial--offline .topbar-serial__region,
 .topbar-serial--offline .topbar-serial__freq,
-.topbar-serial--offline .topbar-serial__preset,
-.topbar-serial--reconnecting .topbar-serial__region,
-.topbar-serial--reconnecting .topbar-serial__freq,
-.topbar-serial--reconnecting .topbar-serial__preset {
+.topbar-serial--offline .topbar-serial__preset {
     opacity: 0.55;
+}
+
+.topbar-serial__preset--phase {
+    color: var(--accent-amber, #f59e0b);
+    opacity: 1;
+    letter-spacing: 0.06em;
 }

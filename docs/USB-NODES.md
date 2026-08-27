@@ -70,9 +70,10 @@ node's own NVS, not `radio:` in `local.yaml`.
 9. After the row shows connected: **Modem settings** on that same card.
    Set **Region** if it is `UNSET` (the node will not TX until region is
    set). Pick the preset chip (for example MediumFast) → **Set Preset**.
-   The node reboots onto the new modem. The Serial row goes briefly
-   disconnected, then green again when USB comes back. No Meshpoint
-   service restart for that step.
+   The node reboots onto the new modem. The Serial row and top-bar
+   Meshtastic USB pill show **REBOOTING** plus a countdown, then go
+   green when USB comes back. No Meshpoint service restart for that
+   step.
 
 Leave **Configuration → Radio** on LongFast (or whatever the concentrator
 should stay on). The USB node's preset does not move the concentrator.
