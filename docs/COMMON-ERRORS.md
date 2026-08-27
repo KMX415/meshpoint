@@ -912,6 +912,18 @@ an amber warning. Prefer `/dev/serial/by-path/…` for the Meshtastic radio.
 Leave GPS for Configuration → GPS / `gpsd`. After correcting the pin, save
 and restart.
 
+### Serial shows connected after Set Preset but no USB packets
+
+**Cause:** Changing Region or modem preset writes LoRa config on the node,
+which reboots the radio and drops USB CDC. Older firmware left the dead
+serial handle in place, so the dashboard still looked connected.
+
+**Fix:** On the v0.8.0 RC, Meshpoint closes that handle and reconnects.
+Look for `serial link dropped` then `Serial capture recovered` in
+`journalctl`. If reconnect never recovers (busy port, unplugged node),
+the existing background retry still applies: confirm the by-path pin,
+then `sudo systemctl restart meshpoint` as a last resort.
+
 ---
 
 ## MeshCore companion

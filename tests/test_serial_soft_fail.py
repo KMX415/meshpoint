@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import unittest
 from typing import AsyncIterator, Optional
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from src.capture.base import CaptureSource
 from src.capture.capture_coordinator import CaptureCoordinator
@@ -120,6 +120,80 @@ class CaptureCoordinatorContinueOnFailTest(unittest.IsolatedAsyncioTestCase):
             await coordinator.start()
 
         self.assertFalse(ok.started)
+
+
+class SerialLiveDropReconnectTest(unittest.IsolatedAsyncioTestCase):
+    """Set Preset / unplug must not leave a dead SerialInterface looking connected."""
+
+    async def test_connection_lost_clears_connected_and_schedules_reconnect(self):
+        source = SerialCaptureSource(port="/dev/ttyUSB0")
+        source._running = True
+        source._reconnect.bind_loop(asyncio.get_running_loop())
+        iface = MagicMock()
+        source._interface = iface
+
+        source._on_connection_lost(interface=iface)
+
+        self.assertFalse(source.connected)
+        iface.close.assert_called_once()
+        self.assertIsNotNone(source._reconnect_task)
+        await source.stop()
+
+    async def test_foreign_interface_is_ignored(self):
+        source = SerialCaptureSource(port="/dev/ttyUSB0")
+        source._running = True
+        source._reconnect.bind_loop(asyncio.get_running_loop())
+        iface = MagicMock()
+        source._interface = iface
+
+        source._on_connection_lost(interface=object())
+
+        self.assertTrue(source.connected)
+        iface.close.assert_not_called()
+        self.assertIsNone(source._reconnect_task)
+        await source.stop()
+
+    async def test_set_modem_preset_success_drops_link_for_reconnect(self):
+        source = SerialCaptureSource(port="/dev/ttyUSB0")
+        source._running = True
+        source._reconnect.bind_loop(asyncio.get_running_loop())
+        iface = MagicMock()
+        source._interface = iface
+        writer = MagicMock()
+        writer.set_modem_preset.return_value = {
+            "success": True,
+            "modem_preset": "MEDIUM_FAST",
+        }
+
+        with patch.object(source, "_config_writer", return_value=writer):
+            result = source.set_modem_preset("MEDIUM_FAST")
+
+        self.assertTrue(result["success"])
+        self.assertFalse(source.connected)
+        iface.close.assert_called_once()
+        self.assertIsNotNone(source._reconnect_task)
+        await source.stop()
+
+    async def test_failed_preset_write_keeps_link(self):
+        source = SerialCaptureSource(port="/dev/ttyUSB0")
+        source._running = True
+        source._reconnect.bind_loop(asyncio.get_running_loop())
+        iface = MagicMock()
+        source._interface = iface
+        writer = MagicMock()
+        writer.set_modem_preset.return_value = {
+            "success": False,
+            "error": "Unknown modem preset",
+        }
+
+        with patch.object(source, "_config_writer", return_value=writer):
+            result = source.set_modem_preset("NOPE")
+
+        self.assertFalse(result["success"])
+        self.assertTrue(source.connected)
+        iface.close.assert_not_called()
+        self.assertIsNone(source._reconnect_task)
+        await source.stop()
 
 
 if __name__ == "__main__":

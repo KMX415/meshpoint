@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import AsyncIterator, Optional
 
 from src.capture.base import CaptureSource
+from src.capture.serial_link_watch import SerialReconnectController
 from src.capture.serial_radio_handshake import SerialRadioHandshake
 from src.capture.serial_self_origin import SerialSelfOriginFilter
 from src.models.packet import RawCapture
@@ -17,9 +18,6 @@ logger = logging.getLogger(__name__)
 
 # Re-export for existing test imports.
 __all__ = ["SerialCaptureSource", "SerialSelfOriginFilter"]
-
-_RECONNECT_INITIAL_DELAY_S = 5.0
-_RECONNECT_MAX_DELAY_S = 60.0
 
 
 class SerialCaptureSource(CaptureSource):
@@ -44,7 +42,8 @@ class SerialCaptureSource(CaptureSource):
         self._self_origin = SerialSelfOriginFilter()
         self._radio_info: dict = {"channel_table": {}}
         self._queue: asyncio.Queue[RawCapture] = asyncio.Queue(maxsize=500)
-        self._reconnect_task: Optional[asyncio.Task] = None
+        self._reconnect = SerialReconnectController(self)
+        self._pubsub_subscribed = False
 
     @property
     def name(self) -> str:
@@ -66,9 +65,15 @@ class SerialCaptureSource(CaptureSource):
                 return idx
         return None
 
+    @property
+    def _reconnect_task(self) -> Optional[asyncio.Task]:
+        """Test/compat alias for the background reconnect task."""
+        return self._reconnect.task
+
     async def start(self) -> None:
         """Open the stick; soft-fail busy/wrong ports so other sources stay up."""
         self._running = True
+        self._reconnect.bind_loop(asyncio.get_running_loop())
         try:
             await asyncio.to_thread(self._open_interface)
         except ImportError:
@@ -86,12 +91,11 @@ class SerialCaptureSource(CaptureSource):
                 self._port or "auto-detect",
                 exc_info=True,
             )
-            self._schedule_reconnect()
+            self._reconnect.schedule()
 
     def _open_interface(self) -> None:
         """Blocking open + handshake. Raises on failure."""
         import meshtastic.serial_interface
-        from pubsub import pub
 
         try:
             if self._port:
@@ -119,7 +123,7 @@ class SerialCaptureSource(CaptureSource):
                 )
                 self._radio_info["channel_table"] = {}
 
-            pub.subscribe(self._on_receive, "meshtastic.receive")
+            self._ensure_pubsub()
             region = self._radio_info.get("region")
             freq = resolve_frequency_mhz(
                 region=region,
@@ -152,52 +156,50 @@ class SerialCaptureSource(CaptureSource):
                     freq,
                 )
         except Exception:
-            if self._interface is not None:
-                try:
-                    self._interface.close()
-                except Exception:
-                    pass
-                self._interface = None
-            self._self_origin.set_own_node_num(None)
+            self._close_interface()
             raise
 
-    def _schedule_reconnect(self) -> None:
-        if self._reconnect_task and not self._reconnect_task.done():
+    def _ensure_pubsub(self) -> None:
+        if self._pubsub_subscribed:
             return
-        self._reconnect_task = asyncio.create_task(
-            self._reconnect_until_connected(),
-            name=f"{self.name}-reconnect",
-        )
+        from pubsub import pub
 
-    async def _reconnect_until_connected(self) -> None:
-        delay = _RECONNECT_INITIAL_DELAY_S
+        pub.subscribe(self._on_receive, "meshtastic.receive")
+        pub.subscribe(self._on_connection_lost, "meshtastic.connection.lost")
+        self._pubsub_subscribed = True
+
+    def _unsubscribe_pubsub(self) -> None:
+        if not self._pubsub_subscribed:
+            return
+        from pubsub import pub
+
         try:
-            while self._running and not self.connected:
-                await asyncio.sleep(delay)
-                if not self._running:
-                    return
-                try:
-                    await asyncio.to_thread(self._open_interface)
-                    logger.info(
-                        "Serial capture recovered on %s",
-                        self._port or "auto-detect",
-                    )
-                    return
-                except ImportError:
-                    self._running = False
-                    raise
-                except Exception:
-                    logger.warning(
-                        "Serial reconnect still failing on %s; retry in %.0fs",
-                        self._port or "auto-detect",
-                        min(delay * 2, _RECONNECT_MAX_DELAY_S),
-                        exc_info=True,
-                    )
-                    delay = min(delay * 2, _RECONNECT_MAX_DELAY_S)
-        except asyncio.CancelledError:
-            pass
+            pub.unsubscribe(self._on_receive, "meshtastic.receive")
+            pub.unsubscribe(
+                self._on_connection_lost, "meshtastic.connection.lost"
+            )
         except Exception:
-            logger.exception("Serial reconnect loop error on %s", self.name)
+            logger.debug("Serial pubsub unsubscribe failed", exc_info=True)
+        self._pubsub_subscribed = False
+
+    def _close_interface(self) -> None:
+        iface = self._interface
+        self._interface = None
+        self._self_origin.set_own_node_num(None)
+        if iface is None:
+            return
+        try:
+            iface.close()
+        except Exception:
+            logger.debug("Serial interface close failed", exc_info=True)
+
+    def _on_connection_lost(self, interface=None, **_kwargs) -> None:
+        self._reconnect.handle_drop("connection.lost", interface)
+
+    def _after_reboot_write(self, result: dict, reason: str) -> dict:
+        if result.get("success"):
+            self._reconnect.handle_drop(reason)
+        return result
 
     @property
     def connected(self) -> bool:
@@ -217,13 +219,17 @@ class SerialCaptureSource(CaptureSource):
         writer = self._config_writer()
         if writer is None:
             return {"success": False, "error": "Not connected"}
-        return writer.set_region(region)
+        return self._after_reboot_write(
+            writer.set_region(region), "lora config write"
+        )
 
     def set_modem_preset(self, preset: str) -> dict:
         writer = self._config_writer()
         if writer is None:
             return {"success": False, "error": "Not connected"}
-        return writer.set_modem_preset(preset)
+        return self._after_reboot_write(
+            writer.set_modem_preset(preset), "lora config write"
+        )
 
     def set_broadcast_intervals(
         self,
@@ -244,7 +250,10 @@ class SerialCaptureSource(CaptureSource):
         writer = self._config_writer()
         if writer is None:
             return {"success": False, "error": "Not connected"}
-        return writer.set_bluetooth(enabled, mode, fixed_pin)
+        return self._after_reboot_write(
+            writer.set_bluetooth(enabled, mode, fixed_pin),
+            "bluetooth config write",
+        )
 
     @staticmethod
     def _read_channel_table(
@@ -313,20 +322,9 @@ class SerialCaptureSource(CaptureSource):
 
     async def stop(self) -> None:
         self._running = False
-        if self._reconnect_task:
-            self._reconnect_task.cancel()
-            try:
-                await self._reconnect_task
-            except asyncio.CancelledError:
-                pass
-            self._reconnect_task = None
-        self._self_origin.set_own_node_num(None)
-        if self._interface:
-            try:
-                self._interface.close()
-            except Exception:
-                pass
-            self._interface = None
+        await self._reconnect.cancel()
+        self._unsubscribe_pubsub()
+        self._close_interface()
         logger.info("Serial capture stopped")
 
     async def packets(self) -> AsyncIterator[RawCapture]:

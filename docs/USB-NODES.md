@@ -8,7 +8,9 @@ not add a second preset to the concentrator.
 
 Need **v0.7.8 or later** for the Serial card, live modem chips, and more
 than one Meshtastic USB node. **v0.7.9** is better: a busy serial port no
-longer takes down the whole service.
+longer takes down the whole service. The v0.8.0 RC reconnects USB after
+Set Preset / region writes (the node reboots; Meshpoint does not need a
+service restart).
 
 ---
 
@@ -68,6 +70,9 @@ node's own NVS, not `radio:` in `local.yaml`.
 9. After the row shows connected: **Modem settings** on that same card.
    Set **Region** if it is `UNSET` (the node will not TX until region is
    set). Pick the preset chip (for example MediumFast) → **Set Preset**.
+   The node reboots onto the new modem. The Serial row goes briefly
+   disconnected, then green again when USB comes back. No Meshpoint
+   service restart for that step.
 
 Leave **Configuration → Radio** on LongFast (or whatever the concentrator
 should stay on). The USB node's preset does not move the concentrator.

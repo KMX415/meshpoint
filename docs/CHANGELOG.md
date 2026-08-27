@@ -2,6 +2,12 @@
 
 ### Unreleased
 
+#### Capture
+
+- **Meshtastic USB reconnect after live drop.** Set Preset / region writes
+  reboot the node and drop USB. Serial now closes the dead handle and
+  reconnects instead of staying green with no packets.
+
 #### Dashboard
 
 - **Local map tiles.** OSM raster with a dark invert filter, replacing
