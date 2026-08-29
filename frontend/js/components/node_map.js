@@ -100,16 +100,26 @@ class NodeMap {
                 this.loadNodes(this._lastNodes, this._lastDevice);
             }
         });
+        document.addEventListener('meshpoint:radioView', () => {
+            if (this._lastNodes) {
+                this.loadNodes(this._lastNodes, this._lastDevice);
+            }
+        });
     }
 
     _nodesForMapMarkers(nodes) {
-        const filter = window.MeshpointNodeCardsSort
-            ? window.MeshpointNodeCardsSort.readSavedFilter()
-            : 'all';
-        if (filter === 'all' || !window.MeshpointNodeCardsSort) {
-            return nodes;
+        let out = nodes;
+        if (window.MeshpointNodeCardsSort) {
+            const hop = window.MeshpointNodeCardsSort.readSavedFilter();
+            if (hop !== 'all') {
+                out = window.MeshpointNodeCardsSort.applyFilter(out, hop);
+            }
         }
-        return window.MeshpointNodeCardsSort.applyFilter(nodes, filter);
+        if (window.MeshpointRadioViewFilter) {
+            const key = MeshpointRadioViewFilter.current();
+            out = out.filter((n) => MeshpointRadioViewFilter.matchesNode(n, key));
+        }
+        return out;
     }
 
     _loadSavedView() {
@@ -220,49 +230,36 @@ class NodeMap {
 
     _addNodeMarker(n) {
         const isMeshtastic = (n.protocol || 'meshtastic') === 'meshtastic';
-        const protoColor = isMeshtastic ? '#06b6d4' : '#a855f7';
-
         const heard = n.last_heard || n.last_seen;
         const isRecent = heard && (Date.now() - new Date(heard).getTime()) < 60000;
         const isFav = !!(window.MeshpointNodeFavorites && window.MeshpointNodeFavorites.has(n.node_id));
-
-        let marker;
-        if (isMeshtastic) {
-            // Order of border color precedence: recent (green) > favorite (amber) > protocol (cyan).
-            let borderColor = protoColor;
-            if (isFav) borderColor = '#f59e0b';
-            if (isRecent) borderColor = '#00ff88';
-            marker = L.circleMarker([n.latitude, n.longitude], {
-                radius: 6,
-                fillColor: protoColor,
-                fillOpacity: 0.8,
-                color: borderColor,
-                weight: (isRecent || isFav) ? 2 : 1,
-                className: isRecent ? 'node-pulse' : '',
-            });
-            marker._meshpointKind = 'circle';
-        } else {
-            const recentClass = isRecent ? ' node-marker__diamond--recent' : '';
-            const favClass = isFav ? ' node-marker__diamond--fav' : '';
-            marker = L.marker([n.latitude, n.longitude], {
-                icon: L.divIcon({
-                    html: `<div class="node-marker__diamond${favClass}${recentClass}"></div>`,
-                    className: '',
-                    iconSize: [12, 12],
-                    iconAnchor: [6, 6],
-                }),
-            });
-            marker._meshpointKind = 'diamond';
-        }
+        const preset = window.ModemPresetLabel ? ModemPresetLabel.fromNode(n) : null;
+        let extra = '';
+        if (isRecent) extra += ' node-marker-wrap--recent';
+        if (isFav) extra += ' node-marker-wrap--fav';
+        const html = window.ModemPresetLabel
+            ? ModemPresetLabel.markerMarkup(preset, isMeshtastic, extra)
+            : `<div class="node-marker-wrap${extra}"><div class="${isMeshtastic ? 'node-marker__dot' : 'node-marker__diamond'}"></div></div>`;
+        const marker = L.marker([n.latitude, n.longitude], {
+            icon: L.divIcon({
+                html,
+                className: '',
+                iconSize: [28, 16],
+                iconAnchor: [6, 8],
+            }),
+        });
+        marker._meshpointKind = 'wrap';
 
         const name = n.long_name || n.name || n.node_id || '--';
         const rssi = (n.rssi ?? n.latest_rssi) != null
             ? `${Number(n.rssi ?? n.latest_rssi).toFixed(0)} dBm` : '--';
         const lastHeard = this._formatRelativeTime(heard);
+        const presetLine = preset ? `Preset: ${preset.name}<br>` : '';
 
         marker.bindPopup(
             `<strong>${this._esc(name)}</strong><br>` +
             `Protocol: ${n.protocol || 'meshtastic'}<br>` +
+            presetLine +
             `RSSI: ${rssi}<br>` +
             `Last heard: ${lastHeard}`
         );
@@ -348,34 +345,29 @@ class NodeMap {
 
     updateFromPacket(packet) {
         if (!packet.source_id || !this._initialized) return;
+        this._stampNodeModem(packet);
         const marker = this._markers[packet.source_id];
         if (!marker) return;
 
-        const isMeshtastic = (packet.protocol || 'meshtastic') === 'meshtastic';
-        const proto = isMeshtastic ? '#06b6d4' : '#a855f7';
-
-        if (marker._meshpointKind === 'diamond') {
-            const el = marker.getElement()?.querySelector('.node-marker__diamond');
-            if (el) el.classList.add('node-marker__diamond--recent');
-            this._drawPacketLine(marker);
-            setTimeout(() => {
-                const el2 = marker.getElement()?.querySelector('.node-marker__diamond');
-                if (el2) el2.classList.remove('node-marker__diamond--recent');
-            }, 5000);
-            return;
-        }
-
-        // Default: circleMarker (Meshtastic).
-        marker.setStyle({ color: '#00ff88', weight: 2 });
+        const wrap = marker.getElement()?.querySelector('.node-marker-wrap');
+        if (wrap) wrap.classList.add('node-marker-wrap--recent');
         this._drawPacketLine(marker);
         setTimeout(() => {
-            const isFav = !!(window.MeshpointNodeFavorites
-                && window.MeshpointNodeFavorites.has(packet.source_id));
-            marker.setStyle({
-                color: isFav ? '#f59e0b' : proto,
-                weight: isFav ? 2 : 1,
-            });
+            const wrap2 = marker.getElement()?.querySelector('.node-marker-wrap');
+            if (wrap2) wrap2.classList.remove('node-marker-wrap--recent');
         }, 5000);
+    }
+
+    _stampNodeModem(packet) {
+        if (!this._lastNodes) return;
+        const node = this._lastNodes.find((n) => n.node_id === packet.source_id);
+        if (!node) return;
+        const sig = packet.signal || {};
+        const sf = sig.spreading_factor ?? packet.spreading_factor;
+        const bw = sig.bandwidth_khz ?? packet.bandwidth_khz;
+        if (sf != null) node.latest_spreading_factor = sf;
+        if (bw != null) node.latest_bandwidth_khz = bw;
+        if (packet.protocol) node.protocol = packet.protocol;
     }
 
     _drawPacketLine(sourceMarker) {

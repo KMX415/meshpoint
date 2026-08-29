@@ -307,9 +307,8 @@ html, body {
     box-shadow: 0 0 10px var(--accent-green), 0 0 20px rgba(0, 229, 160, 0.3);
 }
 
-/* MeshCore node marker (Meshtastic uses circleMarker; diamond visually
-   distinguishes the two protocols on the local map per Kaylee's
-   request, Discord May 2026). */
+/* MeshCore node marker (Meshtastic uses a circle; diamond visually
+   distinguishes the two protocols on the local map). */
 .node-marker__diamond {
     width: 10px;
     height: 10px;

@@ -7,8 +7,14 @@ class SimplePacketFeed {
         this._tbody = document.getElementById(tbodyId);
         this._maxRows = maxRows || 200;
         this._count = 0;
+        this._packets = [];
         this._nodeByLastByte = new Map();
         this._onFocus = null;
+        const pills = document.getElementById('packet-preset-pills');
+        if (window.MeshpointRadioViewFilter) {
+            MeshpointRadioViewFilter.wirePills(pills);
+            document.addEventListener(MeshpointRadioViewFilter.EVENT, () => this._render());
+        }
     }
 
     setOnFocus(cb) {
@@ -26,71 +32,87 @@ class SimplePacketFeed {
     }
 
     addPacket(packet) {
+        this._packets.unshift(packet);
+        if (this._packets.length > this._maxRows) {
+            this._packets.length = this._maxRows;
+        }
+        this._count += 1;
+        this._render();
+    }
+
+    _render() {
+        if (!this._tbody) return;
+        const key = window.MeshpointRadioViewFilter
+            ? MeshpointRadioViewFilter.current()
+            : 'all';
+        const visible = window.MeshpointRadioViewFilter
+            ? this._packets.filter((p) => MeshpointRadioViewFilter.matchesPacket(p, key))
+            : this._packets;
+        this._tbody.replaceChildren();
+        for (const packet of visible) {
+            this._tbody.appendChild(this._buildRow(packet));
+        }
+        const countEl = document.getElementById('packet-count');
+        if (countEl) countEl.textContent = this._count;
+    }
+
+    _buildRow(packet) {
         const tr = document.createElement('tr');
         tr.classList.add('packet-row', 'packet-row--new');
         tr.addEventListener('animationend', () => tr.classList.remove('packet-row--new'));
+        tr.innerHTML = this._rowHtml(packet);
+        tr.addEventListener('click', () => this._openDetail(tr, packet));
+        return tr;
+    }
 
-        const time = packet.rx_time
-            ? new Date(packet.rx_time * 1000).toLocaleTimeString()
-            : packet.timestamp
-                ? new Date(packet.timestamp).toLocaleTimeString()
-                : new Date().toLocaleTimeString();
-
+    _rowHtml(packet) {
+        const time = this._formatTime(packet);
         const srcShort = this._shortId(packet.source_id);
         const relayByte = packet.relay_node || 0;
         const srcCell = relayByte
             ? `${srcShort} <span class="relay-hop">↝ ${this._resolveRelay(relayByte)}</span>`
             : srcShort;
-
         const sig = packet.signal || {};
         const rawRssi = sig.rssi != null ? sig.rssi : packet.rssi;
         const rawSnr = sig.snr != null ? sig.snr : packet.snr;
         const rssiVal = rawRssi != null ? Number(rawRssi).toFixed(0) : null;
-        const rssi = rssiVal != null ? rssiVal : '--';
-        const snr = rawSnr != null ? `${Number(rawSnr).toFixed(1)}` : '--';
         const type = packet.packet_type || '--';
         const protocol = packet.protocol || 'meshtastic';
-        const details = this._summarize(packet);
-
-        const destShort = this._shortId(packet.destination_id);
         const hops = packet.hop_start > 0
             ? `${packet.hop_start - packet.hop_limit}/${packet.hop_start}`
             : '--';
-
-        const typeClass = `type-${type.replace(/[^a-zA-Z0-9_-]/g, '')}`;
-        const protocolClass = `protocol-${protocol}`;
-        const rssiClass = this._rssiClass(rssiVal);
-
         const freqMhz = sig.frequency_mhz || packet.frequency_mhz;
         const freq = freqMhz ? `${Number(freqMhz).toFixed(1)}` : '--';
         const sfVal = sig.spreading_factor || packet.spreading_factor;
         const sf = sfVal ? `SF${sfVal}` : '--';
-
-        tr.innerHTML = `
+        return `
             <td>${time}</td>
-            <td class="${protocolClass}">${protocol}</td>
+            <td class="protocol-${protocol}">${protocol}</td>
             <td class="td-source">${srcCell}</td>
-            <td>${destShort}</td>
-            <td class="${typeClass}">${type}</td>
-            <td class="${rssiClass}">${rssi}</td>
-            <td>${snr}</td>
+            <td>${this._shortId(packet.destination_id)}</td>
+            <td class="type-${type.replace(/[^a-zA-Z0-9_-]/g, '')}">${type}</td>
+            <td class="${this._rssiClass(rssiVal)}">${rssiVal != null ? rssiVal : '--'}</td>
+            <td>${rawSnr != null ? Number(rawSnr).toFixed(1) : '--'}</td>
+            <td>${this._presetChip(packet)}</td>
             <td class="td-freq">${freq}</td>
             <td class="td-sf">${sf}</td>
             <td>${hops}</td>
-            <td class="packet-details-cell ${typeClass}">${this._esc(details)}</td>
+            <td class="packet-details-cell type-${type.replace(/[^a-zA-Z0-9_-]/g, '')}">${this._esc(this._summarize(packet))}</td>
         `;
+    }
 
-        tr.addEventListener('click', () => this._openDetail(tr, packet));
+    _formatTime(packet) {
+        if (packet.rx_time) return new Date(packet.rx_time * 1000).toLocaleTimeString();
+        if (packet.timestamp) return new Date(packet.timestamp).toLocaleTimeString();
+        return new Date().toLocaleTimeString();
+    }
 
-        this._tbody.prepend(tr);
-        this._count++;
-
-        const countEl = document.getElementById('packet-count');
-        if (countEl) countEl.textContent = this._count;
-
-        while (this._tbody.children.length > this._maxRows) {
-            this._tbody.removeChild(this._tbody.lastChild);
-        }
+    _presetChip(packet) {
+        const preset = window.ModemPresetLabel
+            ? ModemPresetLabel.fromPacket(packet)
+            : null;
+        if (!preset) return '<span class="packet-chip packet-chip--unknown">--</span>';
+        return `<span class="packet-chip packet-chip--${preset.key}">${preset.chip}</span>`;
     }
 
     _openDetail(tr, packet) {

@@ -162,16 +162,18 @@ class TestNodeRepository(unittest.TestCase):
         _run(self.db.execute(
             "INSERT INTO packets "
             "(packet_id, source_id, destination_id, protocol, packet_type, "
-            " capture_source, timestamp) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            " capture_source, spreading_factor, bandwidth_khz, timestamp) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             ("p1", node_id, "ffffffff", "meshtastic", "data",
-             "serial_433", "2026-07-09T12:00:00+00:00"),
+             "serial_433", 9, 250.0, "2026-07-09T12:00:00+00:00"),
         ))
         _run(self.db.commit())
 
         rows = _run(self.repo.get_all_with_signal())
         row = next(r for r in rows if r["node_id"] == node_id)
         self.assertEqual(row["latest_capture_source"], "serial_433")
+        self.assertEqual(row["latest_spreading_factor"], 9)
+        self.assertEqual(row["latest_bandwidth_khz"], 250.0)
 
     def test_meshcore_display_name_ignores_id_placeholder(self):
         node = Node(
