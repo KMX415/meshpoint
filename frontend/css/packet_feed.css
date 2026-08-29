@@ -19,19 +19,29 @@
     line-height: 1.3;
 }
 
-.packet-chip--lf {
-    color: var(--accent-blue);
-    background: rgba(59, 130, 246, 0.15);
+.packet-chip--short {
+    color: var(--accent-green);
+    background: rgba(34, 197, 94, 0.15);
 }
 
-.packet-chip--mf {
+.packet-chip--medium {
     color: var(--accent-cyan);
     background: rgba(6, 182, 212, 0.15);
 }
 
-.packet-chip--lt {
+.packet-chip--long {
+    color: var(--accent-blue);
+    background: rgba(59, 130, 246, 0.15);
+}
+
+.packet-chip--turbo {
     color: var(--accent-amber);
     background: rgba(245, 158, 11, 0.15);
+}
+
+.packet-chip--vlong {
+    color: var(--accent-red);
+    background: rgba(239, 68, 68, 0.15);
 }
 
 .packet-chip--mc {

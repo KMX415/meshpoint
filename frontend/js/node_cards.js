@@ -135,6 +135,9 @@ class NodeCards {
 
     loadNodes(nodes) {
         this._nodes = nodes;
+        if (window.MeshpointRadioViewFilter) {
+            MeshpointRadioViewFilter.noteNodes(nodes);
+        }
         this._render();
     }
 

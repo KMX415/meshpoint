@@ -37,6 +37,9 @@ class SimplePacketFeed {
             this._packets.length = this._maxRows;
         }
         this._count += 1;
+        if (window.MeshpointRadioViewFilter) {
+            MeshpointRadioViewFilter.notePacket(packet);
+        }
         this._render();
     }
 
@@ -112,7 +115,7 @@ class SimplePacketFeed {
             ? ModemPresetLabel.fromPacket(packet)
             : null;
         if (!preset) return '<span class="packet-chip packet-chip--unknown">--</span>';
-        return `<span class="packet-chip packet-chip--${preset.key}">${preset.chip}</span>`;
+        return `<span class="packet-chip packet-chip--${preset.tone}">${preset.chip}</span>`;
     }
 
     _openDetail(tr, packet) {

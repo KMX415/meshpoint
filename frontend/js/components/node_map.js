@@ -160,6 +160,9 @@ class NodeMap {
 
         this._lastNodes = nodes;
         this._lastDevice = device;
+        if (window.MeshpointRadioViewFilter) {
+            MeshpointRadioViewFilter.noteNodes(nodes);
+        }
 
         this._markerGroup.clearLayers();
         this._markers = {};
