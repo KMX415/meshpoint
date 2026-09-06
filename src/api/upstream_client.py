@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import websockets
-from websockets.exceptions import ConnectionClosed
+from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from src.analytics.stats_reporter import StatsReporter
 from src.config import UpstreamConfig
@@ -136,6 +136,13 @@ class UpstreamClient:
                 logger.warning(
                     f" {CYAN}--{RESET} {RED}UPSTREAM{RESET}  "
                     f"connection closed"
+                )
+            except (OSError, WebSocketException) as exc:
+                # Expected network/handshake failures keep retrying below.
+                # Unexpected errors retain their traceback in the next handler.
+                logger.warning(
+                    f" {CYAN}--{RESET} {YELLOW}UPSTREAM{RESET}  "
+                    "connection failed: %s: %s", type(exc).__name__, exc,
                 )
             except Exception:
                 logger.exception(
