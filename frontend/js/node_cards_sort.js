@@ -132,9 +132,12 @@ class MeshpointNodeCardsSort {
 
 window.MeshpointNodeCardsSort = MeshpointNodeCardsSort;
 
-// Keep the sort control in sync with the comparator contract. The option is
-// inserted here as a compatibility fallback for dashboard builds that load
-// this extracted module without the newer static HTML option.
+// Keep older dashboard HTML compatible while allowing the extracted sort
+// helper to introduce the new key without duplicating comparator logic.
+if (typeof NodeCards !== 'undefined' && NodeCards.SORT_KEYS) {
+    NodeCards.SORT_KEYS.add('packets');
+}
+
 function ensurePacketsSortOption() {
     const select = document.getElementById('node-sort');
     if (!select || select.querySelector('option[value="packets"]')) return;
