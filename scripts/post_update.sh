@@ -49,6 +49,21 @@ for grp in systemd-journal adm; do
     fi
 done
 
+# Tighten the old bundled Espressif rule; preserve operator-customized rules.
+UDEV_RULE_ESP='SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", MODE="0660", GROUP="dialout"'
+UDEV_RULE_ESP_OLD='SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", MODE="0666"'
+UDEV_FILE_ESP="/etc/udev/rules.d/99-meshpoint-esp.rules"
+if [ -f "$UDEV_FILE_ESP" ] && [ "$(cat "$UDEV_FILE_ESP")" = "$UDEV_RULE_ESP_OLD" ]; then
+    if ! id -nG meshpoint | grep -qw dialout; then
+        usermod -a -G dialout meshpoint
+    fi
+    info "Tightening Espressif USB permissions..."
+    echo "$UDEV_RULE_ESP" > "$UDEV_FILE_ESP"
+    udevadm control --reload-rules 2>/dev/null || true
+    udevadm trigger 2>/dev/null || true
+    CHANGED=1
+fi
+
 # ── 4. HAL TX sync word patch (one-time, ~2 minutes if needed) ──────
 if [ -f "$HAL_SRC" ]; then
     if ! grep -q "PEAK1_POS.*sx1302_tx_sw_peak1" "$HAL_SRC"; then

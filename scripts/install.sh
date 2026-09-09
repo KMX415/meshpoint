@@ -507,13 +507,16 @@ usermod -a -G systemd-journal,adm meshpoint 2>/dev/null || true
 chown -R meshpoint:meshpoint "${MESHPOINT_DIR}/data"
 chown -R meshpoint:meshpoint "${MESHPOINT_DIR}/config"
 
-# Espressif USB serial devices (Heltec V3/V4, T-Beam ESP32-S3) may not
-# default to dialout group on all Pi OS versions. Add a udev rule so
-# the meshpoint service user can access them for relay and MeshCore.
-UDEV_RULE='SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", MODE="0666"'
+# Espressif USB nodes need dialout access, not world-writable serial ports.
+UDEV_RULE='SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", MODE="0660", GROUP="dialout"'
+UDEV_RULE_OLD='SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", MODE="0666"'
 UDEV_FILE="/etc/udev/rules.d/99-meshpoint-esp.rules"
-if [ ! -f "$UDEV_FILE" ]; then
-    info "Installing udev rule for Espressif USB serial devices..."
+if [ ! -f "$UDEV_FILE" ] || [ "$(cat "$UDEV_FILE")" = "$UDEV_RULE_OLD" ]; then
+    # Verify group membership before tightening access on existing installs.
+    if ! id -nG meshpoint | grep -qw dialout; then
+        usermod -a -G dialout meshpoint
+    fi
+    info "Installing/updating udev rule for Espressif USB nodes..."
     echo "$UDEV_RULE" > "$UDEV_FILE"
     udevadm control --reload-rules 2>/dev/null || true
     udevadm trigger 2>/dev/null || true
