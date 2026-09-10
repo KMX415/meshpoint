@@ -2,6 +2,16 @@
 
 ### Unreleased
 
+#### Reliability and permissions
+
+- Backup restore rejects symbolic links, hard links, device entries and FIFOs
+  before extraction. Regular backups remain supported.
+- Expected upstream connection failures log concise warnings while retaining
+  reconnect backoff and buffered packets. Unexpected errors retain tracebacks.
+- Espressif USB nodes use group-based serial permissions on fresh installs.
+  Updates migrate the old bundled rule after ensuring `dialout` membership;
+  operator-customized rules are preserved.
+
 #### Capture
 
 - **Meshtastic USB reconnect after live drop.** Set Preset / region writes
