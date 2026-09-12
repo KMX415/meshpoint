@@ -15,6 +15,9 @@
 
 #### Optional apps, themes and dashboard access (v0.8.0 development)
 
+- Opt-in Reticulum interface discovery with operator contact drafts. RNode
+  contact publishing is separately enabled, uses a six-hour announce interval,
+  and omits location and network credentials. Automatic connections remain off.
 - MeshCore disconnect events and missing selected USB paths clear connection
   status promptly. Failed or cancelled connection attempts clean up their
   background event tasks; unavailable serial ports produce concise retry warnings.

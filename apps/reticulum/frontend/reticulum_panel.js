@@ -171,6 +171,12 @@ class ReticulumPanel {
                                 No peers discovered yet. Connect an interface in Settings, then wait for nearby peers to announce.
                             </p>
                             <p class="lw-panel__limit" id="rt-peer-limit-note" style="display:none"></p>
+                            <section class="cfg-card" aria-label="Discovered interfaces">
+                                <h3 class="cfg-card__title">Discovered interfaces</h3>
+                                <p class="cfg-field__hint">Interface announcements are separate from messaging peers. Operator addresses are advertised by the interface owner; verify who you are contacting. No automatic connections or messages are sent.</p>
+                                <p id="rt-interface-status" role="status"></p>
+                                <div id="rt-interface-list"></div>
+                            </section>
                         </div>
                     </div>
                     <div data-rt-view="messages" hidden>
@@ -500,6 +506,8 @@ class ReticulumPanel {
      * "Send Message" button) -- clears any active search filter first so
      * the target option is guaranteed visible/selectable. */
     composeMessageTo(destinationHash) {
+        if (!/^[0-9a-f]{32}$/i.test(destinationHash)) return;
+        this._operatorContact = destinationHash.toLowerCase();
         this._sendPeerSearchQuery = '';
         const searchEl = this._q('#rt-send-peer-search');
         if (searchEl) searchEl.value = '';
@@ -786,6 +794,7 @@ class ReticulumPanel {
     }
 
     async _loadPeers() {
+        this._loadInterfaces();
         try {
             const r = await fetch('/api/reticulum/peers', { credentials: 'same-origin' });
             if (!r.ok) return;
@@ -803,12 +812,45 @@ class ReticulumPanel {
         } catch (_) {}
     }
 
+    async _loadInterfaces() {
+        const list = this._q('#rt-interface-list');
+        const status = this._q('#rt-interface-status');
+        if (!list || !status) return;
+        try {
+            const response = await fetch('/api/reticulum/interfaces', {credentials:'same-origin'});
+            if (!response.ok) throw new Error('Could not load interface discovery. Retry after restarting Reticulum.');
+            const data = await response.json();
+            list.replaceChildren();
+            status.textContent = !data.enabled ? 'Interface discovery is off. Enable “List discovered interfaces” in Reticulum Settings, save and restart Meshpoint.'
+                : data.interfaces.length ? 'Recently discovered interfaces. Availability reflects announcements, not a live connection test.'
+                    : 'No interfaces discovered yet. After enabling discovery, restart Meshpoint and wait for announcements on a connected interface.';
+            for (const entry of data.interfaces) {
+                const row = document.createElement('article'); row.className = 'cfg-card';
+                const name = document.createElement('h4'); name.textContent = entry.name;
+                const detail = document.createElement('p'); detail.textContent = `${entry.type} · ${entry.status}`;
+                const contact = document.createElement('p'); contact.className = 'cfg-field__hint';
+                contact.textContent = entry.operator_lxmf_address || 'No operator contact advertised';
+                row.append(name, detail, contact);
+                if (this._isAdmin && /^[0-9a-f]{32}$/i.test(entry.operator_lxmf_address || '')) {
+                    const button = document.createElement('button'); button.type = 'button';
+                    button.className = 'terminal-button'; button.textContent = 'Contact operator';
+                    button.addEventListener('click', () => this.composeMessageTo(entry.operator_lxmf_address));
+                    row.append(button);
+                }
+                list.append(row);
+            }
+        } catch (error) { list.replaceChildren(); status.textContent = error.message; }
+    }
+
     _renderSendPeers() {
         // Only lxmf.delivery destinations are real message recipients,
         // matching the backend's own send_message() semantics.
         const select = this._q('#rt-send-peer');
         if (!select) return;
         let deliveryPeers = this._peers.filter((p) => p.aspect === 'lxmf.delivery');
+        if (this._operatorContact && !deliveryPeers.some(p => p.destination_hash === this._operatorContact)) {
+            deliveryPeers = [...deliveryPeers, {destination_hash:this._operatorContact, display_name:'Interface operator'}];
+        }
         if (this._sendPeerSearchQuery) {
             const q = this._sendPeerSearchQuery;
             deliveryPeers = deliveryPeers.filter((p) =>

@@ -346,6 +346,11 @@ class LxmfService:
         self._router = None
         self._source = None
 
+    def discovered_interfaces(self):
+        if self._reticulum is None:
+            return []
+        return self._reticulum.discovered_interfaces()
+
     async def rnode_connected(self) -> Optional[bool]:
         """Read the daemon's live RNode state, independently of LXMF liveness."""
         if self._reticulum is None:

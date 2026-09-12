@@ -13,6 +13,7 @@ Read endpoints stay open to any authenticated viewer, same as core's
 
 from __future__ import annotations
 
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -76,6 +77,20 @@ async def reticulum_status():
             "backbone": bool(cfg.get("backbone_enabled")),
         },
     }
+
+
+@router.get("/interfaces")
+async def reticulum_interfaces(_claims: SessionClaims = Depends(require_admin)):
+    if not state.to_dict().get("discover_interfaces"):
+        return {"enabled": False, "interfaces": []}
+    if _service is None or not _service.own_address:
+        raise HTTPException(503, "Reticulum is not running")
+    from .discovery import public_interfaces
+    try:
+        rows = await asyncio.to_thread(_service.discovered_interfaces)
+        return {"enabled": True, "interfaces": public_interfaces(rows)}
+    except Exception as exc:
+        raise HTTPException(503, "Interface discovery is unavailable; retry after restarting Reticulum") from exc
 
 
 @router.get("/peers")

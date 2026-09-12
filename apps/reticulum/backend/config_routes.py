@@ -103,6 +103,22 @@ class ExtraInterface(BaseModel):
 
 
 class ReticulumUpdate(BaseModel):
+    discover_interfaces: bool = False
+    rnode_discovery_enabled: bool = False
+    rnode_discovery_lxmf_address: str = ""
+
+    @field_validator("rnode_discovery_lxmf_address")
+    @classmethod
+    def _operator_contact(cls, value):
+        from .discovery import contact_address
+        return contact_address(value)
+
+    @model_validator(mode="after")
+    def _discovery_publication(self):
+        from .discovery import publication_block
+        publication_block(self.model_dump())
+        return self
+
     display_name: str = "Meshpoint"
     nomad_timeout_s: int = Field(20, ge=5, le=120)
     node_enabled: bool = False
@@ -248,6 +264,9 @@ async def update_reticulum(
     if "node_pages_dir" in req.model_fields_set and req.node_pages_dir.strip() != pages_dir:
         raise HTTPException(422, "The page directory is managed by Meshpoint")
     updates = {
+        "discover_interfaces": req.discover_interfaces,
+        "rnode_discovery_enabled": req.rnode_discovery_enabled,
+        "rnode_discovery_lxmf_address": req.rnode_discovery_lxmf_address,
         "display_name": req.display_name,
         "nomad_timeout_s": req.nomad_timeout_s,
         "node_enabled": req.node_enabled,
