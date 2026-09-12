@@ -1,0 +1,16 @@
+name = "p25"
+version = "0.1.0"
+meshpoint_api = 1
+provides = ["listener", "routes", "hook"]
+locked = false
+[deps]
+executables = ["meshpoint-op25", "ffmpeg"]
+[frontend]
+scripts = ["frontend/p25_panel.js"]
+styles = []
+[hook]
+host = "rtlsdr"
+[meta]
+description = "Optional P25 Phase I/II receiver with OP25 trunk tracking, talkgroup filtering and browser audio"
+homepage = "https://github.com/boatbod/op25"
+author = "Meshpoint contributors"

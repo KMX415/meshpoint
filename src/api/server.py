@@ -54,6 +54,7 @@ from src.api.routes import (
     nodes,
     packets,
     public_radar_routes,
+    public_view_routes,
     metrics_routes,
     rf_routes,
     serial_config_routes,
@@ -66,6 +67,9 @@ from src.api.routes import (
     update_check,
     update_routes,
     backup_routes,
+    theme_routes,
+    plugin_routes,
+    plugin_source_routes,
 )
 from src.api.terminal import CommandCatalog, SessionManager
 from src.api.update import ReleaseChannelRegistry, UpdateApplier
@@ -106,6 +110,11 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     if config is None:
         config = load_config()
 
+    from src.plugins.runtime import PluginRuntime
+
+    plugin_runtime = PluginRuntime(Path(config.storage.database_path).parent / "plugins" / "apps", config)
+    from src.api.routes import plugin_asset_routes
+    plugin_runtime.discover()
     auth_subsystem = build_auth_subsystem(config)
     auth_routes.init_routes(auth_subsystem.service)
     auth_config_routes.init_routes(auth_subsystem.service)
@@ -118,6 +127,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         command_catalog=CommandCatalog(),
         jwt_service=auth_subsystem.jwt_service,
         audit_writer=audit_writer,
+        enabled=config.dashboard.web_terminal_enabled,
     )
     update_routes.init_routes(
         applier=UpdateApplier(
@@ -132,6 +142,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         ),
     )
     backup_routes.init_routes(config)
+    theme_root = Path(config.storage.database_path).parent / "plugins" / "themes"
+    theme_routes.init_routes(Path(config.dashboard.static_dir) / "themes", theme_root, config)
     # Dangerous registry is wired in lifespan so clear-db / wipe-phantoms /
     # force-nodeinfo can close over the live pipeline objects.
 
@@ -164,6 +176,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         await _hydrate_public_keys(pipeline)
 
         await pipeline.start()
+        await plugin_runtime.start(pipeline, ws_manager)
 
         message_repo = MessageRepository(pipeline.database)
         tx_service = _build_tx_service(config, pipeline)
@@ -257,6 +270,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         if position_broadcaster is not None:
             await position_broadcaster.stop()
         await upstream.stop()
+        await plugin_runtime.stop()
         await pipeline.stop()
         session_manager.shutdown()
         logger.info("Meshpoint stopped")
@@ -272,9 +286,13 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(identity_routes.router)
     app.include_router(auth_config_routes.router)
     app.include_router(public_radar_routes.router)
+    app.include_router(public_view_routes.build_router(config, auth_subsystem.service))
     app.include_router(terminal_routes.router)
     app.include_router(update_routes.router)
     app.include_router(backup_routes.router)
+    app.include_router(theme_routes.router)
+    app.include_router(plugin_routes.build_router(plugin_runtime))
+    app.include_router(plugin_source_routes.build_router(plugin_runtime))
     app.include_router(dangerous_routes.router)
 
     protected = [Depends(require_auth)]
@@ -302,6 +320,9 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     app.include_router(stats_routes.router, dependencies=protected)
     app.include_router(rf_routes.router, dependencies=protected)
 
+    plugin_runtime.mount(app)
+    app.state.plugin_runtime = plugin_runtime
+
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
         if not await _gate_ws_or_close(
@@ -316,6 +337,8 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
             await ws_manager.disconnect(websocket)
 
     static_dir = Path(config.dashboard.static_dir)
+
+    app.include_router(plugin_asset_routes.build_router(plugin_runtime))
 
     @app.get("/setup", include_in_schema=False)
     async def serve_setup_page():
@@ -334,12 +357,37 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         if not _request_has_valid_session(
             request, auth_subsystem.jwt_service
         ):
+            if public_view_routes.available_pages(auth_subsystem.service):
+                return HTMLResponse(
+                    _read_busted_html(static_dir / "public.html"),
+                    headers={"Cache-Control": "no-store"},
+                )
             target = "/login" if auth_subsystem.service.is_setup_complete() else "/setup"
             return RedirectResponse(url=target, status_code=302)
+        from src.api.theme_registry import inject_theme_links, stamp_default_theme
+
+        html = inject_theme_links(
+            _read_busted_html(static_dir / "index.html"), static_dir / "themes", theme_root,
+        )
+        html = stamp_default_theme(html, config.dashboard.theme, static_dir / "themes", theme_root)
         return HTMLResponse(
-            _read_busted_html(static_dir / "index.html"),
+            html,
             headers={"Cache-Control": "no-cache"},
         )
+
+    from fastapi.responses import FileResponse
+
+    @app.get("/plugins/themes/{theme_id}/theme.css", include_in_schema=False)
+    async def serve_theme_css(theme_id: str):
+        from src.api.theme_registry import scan_themes
+        from fastapi import HTTPException
+
+        known = {t["id"] for t in scan_themes(static_dir / "themes", theme_root)
+                 if t["source"] == "plugin"}
+        target = theme_root / theme_id / "theme.css"
+        if theme_id not in known or not target.is_file():
+            raise HTTPException(404, "Theme not found")
+        return FileResponse(target, media_type="text/css", headers={"Cache-Control": "no-cache"})
 
     if static_dir.exists():
         app.mount("/", StaticFiles(directory=str(static_dir), html=True))
@@ -1313,7 +1361,8 @@ def _init_routes(
     message_repo: MessageRepository | None = None,
     channel_hash_resolver=None,
 ) -> None:
-    identity_routes.init_routes(identity, auth_subsystem.service)
+    identity_routes.init_routes(identity, auth_subsystem.service,
+                                terminal_enabled=config.dashboard.web_terminal_enabled)
     network_mapper = NetworkMapper(coord.node_repo)
     signal_analyzer = SignalAnalyzer(coord.packet_repo)
     traffic_monitor = TrafficMonitor(coord.packet_repo)

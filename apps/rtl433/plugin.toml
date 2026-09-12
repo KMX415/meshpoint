@@ -1,0 +1,22 @@
+name = "rtl433"
+version = "1.0.0"
+meshpoint_api = 1
+provides = ["listener", "routes", "hook"]
+locked = false
+
+[deps]
+executables = ["rtl_433"]
+apt = ["rtl-433"]
+
+
+
+[frontend]
+scripts = ["frontend/rtl433_panel.js"]
+
+[hook]
+host = "rtlsdr"
+
+[meta]
+description = "Generic RTL-SDR OOK/FSK decoder (rtl_433) -- weather stations, TPMS, remote sensors, and hundreds of other 433/315/868 MHz devices"
+homepage = "https://github.com/merbanan/rtl_433"
+author = "Einstein PD2EMC"

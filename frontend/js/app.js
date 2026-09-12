@@ -37,10 +37,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (await _redirectIfSetupRequired()) return;
 
     const identity = await _loadIdentity();
+    window.installViewerAccess(identity);
+    const pluginPages = await window.loadPluginPages(identity);
 
     const router = new Router({
         defaultRoute: 'dashboard',
         allowedRoutes: [
+            ...pluginPages.map(page => page.routeId),
             'dashboard', 'stats', 'rf', 'messages', 'radio', 'terminal',
             'configuration/identity', 'configuration/radio',
             'configuration/channels', 'configuration/transmit',
@@ -49,7 +52,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             'configuration/meshcore',
             'configuration/serial',
             'configuration/firmware',
-            'settings/updates', 'settings/auth', 'settings/dangerous',
+            'settings/updates', 'settings/auth', 'settings/dangerous', 'settings/themes', 'settings/plugins',
         ],
     });
     const sidebar = new SidebarController({ router, identity });
@@ -76,6 +79,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.sinceLineController = sinceCtrl;
     }
 
+    for (const {routeId, panel} of pluginPages) {
+        let visible = false;
+        router.onRouteChange(route => {
+            const next = route === routeId;
+            if (next === visible) return;
+            visible = next;
+            if (next) panel?.show?.();
+            else panel?.hide?.();
+        });
+    }
     router.start();
 
     const logoFrame = document.getElementById('sidebar-logo-frame');
@@ -90,6 +103,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const topbar = new TopbarController(topbarRoot, window.concentratorWS);
         topbar.init();
         window.topbar = topbar;
+        window.mountPluginTopbarChips();
     }
 
     if (window.BuildStamp) {
@@ -129,6 +143,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     _bootUpdatePanel(router);
     _bootConfigurationPanel(router);
     _bootDangerousPanel(router);
+    const pluginsRoot = document.getElementById('settings-plugins-panel');
+    if (pluginsRoot && window.PluginsPanelController) {
+        const plugins = new window.PluginsPanelController(pluginsRoot);
+        router.onRouteChange((route) => {
+            if (route === 'settings/plugins') plugins.refresh();
+        });
+    }
+    const themeRoot = document.getElementById('settings-themes-panel');
+    if (themeRoot && window.ThemeEditor) {
+        const editor = new window.ThemeEditor(themeRoot);
+        editor.bind();
+        router.onRouteChange((route) => {
+            if (route === 'settings/themes') editor.onActivated();
+            else if (editor.active) editor.onLeft();
+        });
+    }
 
     const nodeMap = new NodeMap('map');
     const packetFeed = new SimplePacketFeed('packet-tbody');

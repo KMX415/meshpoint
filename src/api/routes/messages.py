@@ -156,7 +156,9 @@ async def get_conversation(
 
 
 @router.post("/conversation/{node_id:path}/read")
-async def mark_conversation_read(node_id: str):
+async def mark_conversation_read(
+    node_id: str, _claims: SessionClaims = Depends(require_admin),
+):
     if _message_repo is None:
         raise HTTPException(503, "Message storage not available")
     await _message_repo.mark_read(node_id)

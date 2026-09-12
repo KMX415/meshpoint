@@ -1,0 +1,116 @@
+/* ADS-B plugin: aircraft table, map modal, and marker styling.
+   .pager-status / .pager-actions / .pager-count / .lsn-section base styles
+   come from core listener.css; only the adsb-specific bits live here. */
+.adsb-metric-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    margin-right: 4px;
+}
+
+.adsb-metric-toggle input[type="checkbox"] {
+    cursor: pointer;
+}
+
+.adsb-metric-toggle:has(input:disabled) {
+    cursor: default;
+    opacity: 0.6;
+}
+
+/* Aircraft map modal (AdsbMapModal) -- Leaflet fills the flush modal body
+   the same way topology_tab.js's .topo-map fills its container. */
+.adsb-map {
+    width: 100%;
+    height: 100%;
+    min-height: 60vh;
+    background: var(--bg-inset);
+}
+
+.adsb-map .leaflet-tile-pane {
+    filter: invert(1) hue-rotate(180deg) saturate(0.22) brightness(0.72) contrast(1.22);
+}
+
+.adsb-map .leaflet-control-attribution {
+    background: var(--bg-popover) !important;
+    color: var(--text-muted) !important;
+    font-size: 10px !important;
+}
+
+.adsb-map .leaflet-control-attribution a {
+    color: var(--accent-cyan) !important;
+}
+
+/* Leaflet's default divIcon adds a white box + border meant for text
+   labels; our plane icon is a self-contained SVG, so strip it. */
+.adsb-map .leaflet-div-icon {
+    background: transparent;
+    border: none;
+}
+
+.adsb-marker {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.8));
+}
+
+.adsb-table-wrap {
+    max-height: 60vh;
+    overflow: auto;
+}
+
+.adsb-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    white-space: nowrap;
+}
+
+.adsb-table th {
+    position: sticky;
+    top: 0;
+    text-align: left;
+    /* Symmetric cell padding so the first column isn't jammed against the
+       table edge (the panel body still supplies the outer inset). */
+    padding: 6px 10px;
+    color: var(--text-muted);
+    font-weight: 400;
+    background: var(--bg-glass);
+    border-bottom: 1px solid var(--border);
+}
+
+.adsb-table td {
+    padding: 5px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+}
+
+.adsb-table__hex {
+    color: var(--accent-green);
+}
+
+.adsb-table__empty td {
+    color: var(--text-muted);
+    padding: 12px 10px;
+    border-bottom: none;
+}
+
+.adsb-table__row {
+    cursor: pointer;
+}
+
+.adsb-table__row:hover td {
+    background: rgba(6, 182, 212, 0.08);
+}
+
+/* Aircraft photo (AdsbFlightModal, planespotters.net lookup) */
+.adsb-photo {
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+    display: block;
+}

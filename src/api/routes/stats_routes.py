@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from src.analytics.network_mapper import NetworkMapper
 from src.analytics.signal_analyzer import SignalAnalyzer
@@ -54,6 +54,28 @@ def init_routes(
     _node_repo = node_repo
     _packet_repo = packet_repo
     _start_time = datetime.now(timezone.utc)
+
+
+async def public_snapshot(page: str) -> dict:
+    """Aggregate projection only: never IDs, positions, payloads or secrets."""
+    if _node_repo is None or _traffic_monitor is None or _signal_analyzer is None:
+        raise HTTPException(503, "Statistics are starting up")
+    if page == "dashboard":
+        return {
+            "total_nodes": await _node_repo.get_count(),
+            "active_24h": await _node_repo.get_active_count(24),
+        }
+    if page != "stats":
+        raise HTTPException(404, "Public page unavailable")
+    traffic = await _traffic_monitor.get_traffic_summary()
+    signal = await _signal_analyzer.get_signal_summary()
+    return {
+        "total_packets": traffic.get("total_packets", 0),
+        "packets_last_hour": traffic.get("packets_last_hour", 0),
+        "packets_per_minute": traffic.get("packets_per_minute", 0),
+        "avg_rssi": signal.get("avg_rssi"),
+        "avg_snr": signal.get("avg_snr"),
+    }
 
 
 @router.get("/summary")

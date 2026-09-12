@@ -156,9 +156,12 @@ class MetricsConfig:
 
 @dataclass
 class DashboardConfig:
+    # Device-side opt-in; deliberately not writable through dashboard APIs.
+    web_terminal_enabled: bool = False
     host: str = "0.0.0.0"  # nosec B104 -- intentional for local device dashboard
     port: int = 8080
     static_dir: str = "frontend"
+    theme: str = "dark"
 
 
 @dataclass
@@ -344,6 +347,8 @@ class WebAuthConfig:
     # range-checked at the route layer (5 min .. 30 days).
     jwt_expiry_minutes: int = 480
     allow_read_only: bool = False
+    public_view_enabled: bool = False
+    public_view_pages: list[str] = field(default_factory=lambda: ["dashboard"])
     lockout_attempts: int = 5
     lockout_cooldown_minutes: int = 5
     session_version: int = 1
@@ -351,6 +356,8 @@ class WebAuthConfig:
 
 @dataclass
 class AppConfig:
+    plugin_sources_enabled: bool = False
+    plugins: dict = field(default_factory=dict)
     radio: RadioConfig = field(default_factory=RadioConfig)
     meshtastic: MeshtasticConfig = field(default_factory=MeshtasticConfig)
     meshcore: MeshcoreConfig = field(default_factory=MeshcoreConfig)
@@ -394,6 +401,9 @@ def _merge_dataclass(instance, overrides: dict):
         return
     for key, value in overrides.items():
         if not hasattr(instance, key):
+            continue
+        if isinstance(instance, DashboardConfig) and key == "web_terminal_enabled":
+            instance.web_terminal_enabled = value is True
             continue
         current = getattr(instance, key)
         if dataclasses.is_dataclass(current) and isinstance(value, dict):
@@ -459,6 +469,17 @@ def _apply_yaml(cfg: AppConfig, path: Path) -> None:
 
     unknown_keys: list[str] = []
     for section_name, section_value in raw.items():
+        if section_name == "plugin_sources_enabled":
+            cfg.plugin_sources_enabled = section_value is True
+            continue
+        if section_name == "plugins":
+            if not isinstance(section_value, dict):
+                raise ValueError("plugins must be a mapping")
+            for name, values in section_value.items():
+                if not isinstance(values, dict):
+                    raise ValueError("each plugin configuration must be a mapping")
+                cfg.plugins[name] = {**cfg.plugins.get(name, {}), **values}
+            continue
         section_instance = section_map.get(section_name)
         if section_instance is None:
             unknown_keys.append(section_name)

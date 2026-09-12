@@ -20,6 +20,7 @@
 class AuthPanelController {
     constructor(rootEl) {
         this.root = rootEl;
+        this.publicView = new window.PublicViewForm(rootEl.querySelector('[data-public-view-root]'));
         this.passwordChange = new window.PasswordChangeForm(
             rootEl.querySelector('[data-pwc-root]')
         );
@@ -38,6 +39,7 @@ class AuthPanelController {
     }
 
     bind() {
+        this.publicView.bind();
         this.passwordChange.bind();
         this.signOutAll.bind();
         this.viewerRole.bind();
@@ -54,6 +56,7 @@ class AuthPanelController {
             this.viewerRole.setEnabled(!!identity.viewer_enabled);
         }
         if (settings) {
+            this.publicView.setValues(settings);
             this.lockout.setValues(
                 settings.lockout_attempts,
                 settings.lockout_cooldown_minutes,

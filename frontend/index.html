@@ -36,6 +36,8 @@
     <link rel="stylesheet" href="css/radio_readout.css" />
     <link rel="stylesheet" href="css/stats.css" />
     <link rel="stylesheet" href="css/settings.css" />
+    <link rel="stylesheet" href="css/viewer_access.css" />
+    <link rel="stylesheet" href="css/theme_editor.css" />
     <link rel="stylesheet" href="css/update_commits.css" />
     <link rel="stylesheet" href="css/update_release_notes_modal.css" />
     <link rel="stylesheet" href="css/configuration.css" />
@@ -43,9 +45,11 @@
     <link rel="stylesheet" href="css/packet_detail_modal.css" />
     <link rel="stylesheet" href="css/packet_feed.css" />
     <link rel="stylesheet" href="css/terminal_theme.css" />
-    <link rel="stylesheet" href="css/terminal.css" />
+    <link rel="stylesheet" href="css/terminal.css?v=terminal-20260911-1" />
     <link rel="stylesheet" href="/vendor/xterm/xterm.css" />
     <link rel="stylesheet" href="css/responsive.css" />
+    <link rel="stylesheet" href="css/plugin_pages.css?v=store-20260911-2">
+    <link rel="stylesheet" href="css/plugin_store.css?v=store-20260911-2">
 </head>
 <body>
     <div class="app" data-sidebar="expanded">
@@ -80,7 +84,7 @@
 
             <nav class="sidebar__nav" aria-label="Sections">
                 <ul class="sidebar__list">
-                    <li class="sidebar__group-header" aria-hidden="true">
+                    <li class="sidebar__group-header" data-category="networks" aria-hidden="true">
                         <span class="sidebar__group-header-label">Status</span>
                     </li>
                     <li class="sidebar__item">
@@ -195,6 +199,8 @@
                         </button>
                         <ul class="sidebar__sublist">
                             <li class="sidebar__subitem"><a href="#/settings/updates" class="sidebar__link" data-route="settings/updates"><span class="sidebar__label">Updates</span><span class="sidebar__badge sidebar__badge--update" data-badge-for="settings/updates" style="display:none"></span></a></li>
+                            <li class="sidebar__subitem" data-requires-section="settings.plugins"><a href="#/settings/plugins" class="sidebar__link" data-route="settings/plugins"><span class="sidebar__label">Plugins</span></a></li>
+                            <li class="sidebar__subitem" data-requires-section="settings.themes"><a href="#/settings/themes" class="sidebar__link" data-route="settings/themes"><span class="sidebar__label">Themes</span></a></li>
                             <li class="sidebar__subitem"><a href="#/settings/auth" class="sidebar__link" data-route="settings/auth"><span class="sidebar__label">Auth</span></a></li>
                             <li class="sidebar__subitem" data-requires-section="settings.dangerous"><a href="#/settings/dangerous" class="sidebar__link" data-route="settings/dangerous"><span class="sidebar__label">System</span></a></li>
                         </ul>
@@ -363,6 +369,7 @@
                                         <option value="last_heard">Sort: Last heard</option>
                                         <option value="signal">Sort: Signal</option>
                                         <option value="hops">Sort: Hops</option>
+                                        <option value="packets">Sort: Packets</option>
                                         <option value="name">Sort: Name</option>
                                     </select>
                                     <button id="node-favorites-toggle" type="button"
@@ -553,6 +560,113 @@
                     <section class="update-log" data-update-log></section>
                 </div>
             </section>
+            <section class="section" data-section="settings/plugins" style="display:none">
+                <div id="settings-plugins-panel" class="theme-editor plugin-store">
+                    <header class="store-hero">
+                        <div><p class="store-eyebrow">MESHPOINT MODULES</p>
+                            <h2>Make room for more.</h2>
+                            <p>Keep your mesh simple. Or explore radio, aviation, sensors and a new way to connect.</p>
+                            <span class="store-included">Meshtastic + MeshCore included · Every module is optional</span>
+                        </div>
+                        <div class="store-hero__art" aria-hidden="true"><span></span><span></span><span></span><b>+</b></div>
+                    </header>
+                    <section id="plugin-catalog" aria-label="Module catalog">
+                        <div class="store-toolbar">
+                            <label class="store-search"><span class="sr-only">Search modules</span><input class="cfg-field__input" type="search" placeholder="Search modules, protocols or hardware" data-store-search></label>
+                            <button class="terminal-button" type="button" data-store-sources>Manage sources</button>
+                        </div>
+                        <div class="store-filters" role="group" aria-label="Module category" data-store-filters></div>
+                        <div class="store-results"><h3>Discover modules</h3><span data-store-count role="status"></span></div>
+                        <p class="store-note" data-store-note></p>
+                        <p class="auth-status" data-source-status role="status"></p>
+                        <div class="store-grid" data-source-catalog></div>
+                        <p class="store-empty" data-store-empty hidden>No modules match. Try another search or category.</p>
+                        <details class="auth-card store-sources" data-store-source-panel>
+                        <summary>Plugin sources <span>Choose where your modules come from</span></summary>
+                        <p class="auth-card__hint">Add a trusted GitHub catalog to install modules. Each download uses the revision shown below.</p>
+                        <form data-source-form>
+                            <label class="cfg-field"><span class="cfg-field__label">GitHub repository</span><input class="cfg-field__input" type="url" name="url" required placeholder="https://github.com/owner/plugins"></label>
+                            <label class="cfg-field"><span class="cfg-field__label">Branch, tag or commit</span><input class="cfg-field__input" name="ref" value="main" required></label>
+                            <label><input type="checkbox" name="trusted" required> I trust this source. Enabled plugins can run code with Meshpoint's permissions.</label>
+                            <button class="terminal-button" type="submit">Add source</button>
+                        </form>
+                        <div data-source-list></div>
+                        </details>
+                    </section>
+                    <article class="auth-card store-installed" data-store-installed>
+                        <h3 class="auth-card__title">Installed plugins</h3>
+                        <p class="auth-card__hint">Enablement changes take effect after restarting Meshpoint. Installing a plugin does not enable it.</p>
+                        <button class="terminal-button" type="button" data-plugin-refresh>Refresh</button>
+                        <p class="auth-status" data-plugin-status role="status"></p>
+                        <div data-plugin-list></div>
+                    </article>
+                </div>
+            </section>
+            <section class="section" data-section="settings/themes" style="display:none">
+                <div id="settings-themes-panel" class="theme-editor">
+                    <header class="theme-editor__head">
+                        <h2 class="theme-editor__title">Themes</h2>
+                        <p class="theme-editor__subtitle">Choose the default appearance, or build and save a custom palette.</p>
+                    </header>
+
+                    <article class="auth-card">
+                        <h3 class="auth-card__title">Default theme</h3>
+                        <p class="auth-card__hint">The default for browsers without a saved theme preference. Your browser preference takes priority.</p>
+                        <label class="cfg-field">
+                            <span class="cfg-field__label">Default for new sessions</span>
+                            <select class="cfg-field__input" data-default-theme></select>
+                        </label>
+                        <p class="auth-status" data-default-theme-status aria-live="polite"></p>
+                    </article>
+
+                    <article class="auth-card theme-editor__builder">
+                        <h3 class="auth-card__title">Theme builder</h3>
+                        <p class="auth-card__hint">Changes preview across the dashboard. Leaving this page restores your previous appearance. Choose Save to device to keep a theme.</p>
+                        <div class="theme-editor__controls">
+                            <label class="cfg-field">
+                                <span class="cfg-field__label">Start from</span>
+                                <select class="cfg-field__input" data-te-base></select>
+                            </label>
+                            <label class="cfg-field">
+                                <span class="cfg-field__label">New theme name</span>
+                                <input class="cfg-field__input" type="text" maxlength="32" placeholder="my-theme" data-te-name>
+                            </label>
+                            <label class="cfg-field">
+                                <span class="cfg-field__label">Author <span class="cfg-field__label-opt">(optional)</span></span>
+                                <input class="cfg-field__input" type="text" maxlength="80" placeholder="Your name" data-te-author>
+                            </label>
+                            <label class="cfg-field">
+                                <span class="cfg-field__label">Homepage <span class="cfg-field__label-opt">(optional)</span></span>
+                                <input class="cfg-field__input" type="url" maxlength="200" placeholder="https://…" data-te-homepage>
+                            </label>
+                            <label class="cfg-field theme-editor__controls-wide">
+                                <span class="cfg-field__label">Description <span class="cfg-field__label-opt">(optional)</span></span>
+                                <input class="cfg-field__input" type="text" maxlength="120" placeholder="One line about the palette" data-te-desc>
+                            </label>
+                        </div>
+                        <p class="theme-editor__base-meta" data-te-base-meta hidden></p>
+                        <div class="theme-editor__groups" data-te-groups></div>
+                        <div class="theme-editor__advanced-note">
+                            The Messages panel and Terminal keep their own colour sets (<code>--msg-*</code> / <code>--term-*</code>) : you can't preview them from here, so they aren't swatches. Where your <strong>Start from</strong> theme already overrides them (e.g. Light) the download carries those in; tick the box below to also get the rest as a commented-out scaffold to hand-tune.
+                            <label class="theme-editor__refopt"><input type="checkbox" data-te-carry-ref> Include Messages / Terminal tokens for reference</label>
+                        </div>
+                        <div class="cfg-card__actions">
+                            <button class="terminal-button" type="button" data-te-reset>Reset changes</button>
+                            <button class="terminal-button terminal-button--primary" type="button" data-te-save>Save to device</button>
+                            <button class="terminal-button" type="button" data-te-download>Download theme.css</button>
+                            <button class="terminal-button" type="button" data-te-download-json>Download theme.json</button>
+                        </div>
+                        <p class="auth-card__hint">Save keeps the theme on this device. Reload to use a newly saved theme. Download a copy to share it.</p>
+                        <p class="auth-status" data-te-status aria-live="polite"></p>
+                    </article>
+
+                    <article class="auth-card">
+                        <h3 class="auth-card__title">Installed themes</h3>
+                        <p class="auth-card__hint">Manage themes saved on this device. Built-in themes are always available.</p>
+                        <div data-te-installed></div>
+                    </article>
+                </div>
+            </section>
             <section class="section" data-section="settings/auth" style="display:none">
                 <div id="settings-auth-panel" class="auth-panel">
                     <header class="auth-panel__head">
@@ -613,6 +727,22 @@
                                     <button class="auth-button auth-button--ghost" type="button" data-viewer-disable disabled>Disable viewer</button>
                                 </div>
                                 <p class="auth-status" data-viewer-status aria-live="polite"></p>
+                            </form>
+                        </article>
+
+                        <article class="auth-card" data-public-view-root>
+                            <h3 class="auth-card__title">Public view</h3>
+                            <p class="auth-card__hint">Off by default. When enabled, anyone who can reach this dashboard can see the selected summaries without signing in. Messages, node locations and other configuration stay private.</p>
+                            <form class="auth-card__form">
+                                <label><input type="checkbox" data-public-enabled disabled> Enable public viewing</label>
+                                <fieldset>
+                                    <legend>Pages to share</legend>
+                                    <label class="auth-field"><span><input type="checkbox" data-public-page value="dashboard" disabled> Dashboard</span><span class="auth-card__hint">Known and recently active node counts</span></label>
+                                    <label class="auth-field"><span><input type="checkbox" data-public-page value="stats" disabled> Stats</span><span class="auth-card__hint">Packet counts, rate and signal averages</span></label>
+                                    <label class="auth-field"><span><input type="checkbox" data-public-page value="radio" disabled> Radio</span><span class="auth-card__hint">Configured region, frequency, bandwidth and spreading factor</span></label>
+                                </fieldset>
+                                <div class="auth-card__actions"><button type="submit" class="auth-button auth-button--primary" disabled>Save public view</button></div>
+                                <p class="auth-status" role="status" aria-live="polite"></p>
                             </form>
                         </article>
 
@@ -782,6 +912,7 @@
     <script src="js/settings/viewer_role_form.js"></script>
     <script src="js/settings/lockout_config_form.js"></script>
     <script src="js/settings/session_lifetime_form.js"></script>
+    <script src="js/settings/public_view_form.js"></script>
     <script src="js/settings/auth_panel_controller.js"></script>
     <script src="js/settings/update_log_view.js"></script>
     <script src="js/settings/update_progress_view.js"></script>
@@ -822,14 +953,14 @@
     <script src="/vendor/xterm/xterm-addon-search.js"></script>
     <script src="/vendor/xterm/xterm-addon-web-links.js"></script>
     <script src="/vendor/xterm/xterm-addon-unicode11.js"></script>
-    <script src="js/terminal/dangerous_modal.js"></script>
+    <script src="js/terminal/dangerous_modal.js?v=terminal-20260911-1"></script>
     <script src="js/terminal/command_drawer.js"></script>
     <script src="js/terminal/terminal_client.js"></script>
     <script src="js/terminal/terminal_chrome.js"></script>
-    <script src="js/terminal/terminal_renderer.js"></script>
+    <script src="js/terminal/terminal_renderer.js?v=terminal-20260911-1"></script>
     <script src="js/terminal/terminal_search_overlay.js"></script>
     <script src="js/terminal/terminal_splash.js"></script>
-    <script src="js/terminal/terminal_panel.js"></script>
+    <script src="js/terminal/terminal_panel.js?v=terminal-20260911-1"></script>
     <script src="sidebar/router.js"></script>
     <script src="sidebar/sidebar_controller.js"></script>
     <script src="sidebar/sidebar_logo_pip.js"></script>
@@ -854,6 +985,17 @@
     <script src="js/keymap_overlay.js"></script>
     <script src="js/sound_engine.js"></script>
     <script src="js/theme_controller.js"></script>
+    <script src="js/theme_glyphs.js"></script>
+    <script src="js/settings/theme_colors.js"></script>
+    <script src="js/settings/theme_editor.js"></script>
+    <script src="js/settings/plugin_store_data.js?v=regions-20260911"></script>
+    <script src="js/settings/plugin_catalog.js?v=store-20260911"></script>
+    <script src="js/settings/plugins_panel_controller.js?v=store-20260911"></script>
+    <script src="sidebar/sidebar_plugin_registry.js"></script>
+    <script src="sidebar/page_hook_registry.js"></script>
+    <script src="sidebar/topbar_plugin_registry.js"></script>
+    <script src="js/settings/plugin_pages.js"></script>
+    <script src="js/viewer_access.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

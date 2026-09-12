@@ -368,6 +368,19 @@ The device also sends data to the Meshradar cloud platform. Your device operator
 
 ## Managing Your Meshpoint
 
+### Optional additions in v0.8.0 development
+
+Existing Meshtastic and MeshCore use does not require optional plugins, an SDR
+or an RNode. Once normal capture works, administrators can use **Settings >
+Plugins** to select individual apps and **Settings > Themes** to customize the
+appearance. Installing an app does not enable it or install its native tools.
+Follow [Plugins and themes](PLUGINS.md) for the full setup/restart sequence.
+
+For trusted observers, configure a Viewer login in **Settings > Auth**. For
+limited no-login access, the separate **Public view** form shares only selected
+aggregate summaries and is off by default. Follow [Dashboard access](DASHBOARD-ACCESS.md)
+and verify it in a signed-out browser before sharing the address.
+
 ### CLI Commands
 
 | Command | Description |

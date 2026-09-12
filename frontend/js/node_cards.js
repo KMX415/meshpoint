@@ -6,7 +6,7 @@
 class NodeCards {
     /** Match Meshtastic-style "recently heard" (not cloud device heartbeat at 15 min). */
     static ONLINE_THRESHOLD_MS = 2 * 60 * 60 * 1000;
-    static SORT_KEYS = new Set(['last_heard', 'signal', 'hops', 'name']);
+    static SORT_KEYS = new Set(['last_heard', 'signal', 'hops', 'packets', 'name']);
     static FILTER_KEYS = new Set(['all', 'direct', 'relayed']);
     static SORT_STORAGE_KEY = 'meshpoint.nodeCards.sortBy';
     static FILTER_STORAGE_KEY = 'meshpoint.nodeCards.filter';

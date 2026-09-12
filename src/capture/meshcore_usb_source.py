@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from typing import AsyncIterator, Optional
 
 from src.capture.base import CaptureSource
@@ -67,6 +68,8 @@ class MeshcoreUsbCaptureSource(CaptureSource):
         self._last_event_at: float = 0.0
         self._last_device_info: Optional[dict] = None
         self._on_connected_callback = None
+        self._command_lock = asyncio.Lock()
+        self._auto_fetch_lock = asyncio.Lock()
 
     @property
     def name(self) -> str:
@@ -171,18 +174,30 @@ class MeshcoreUsbCaptureSource(CaptureSource):
                 if raw is not None:
                     yield raw
             except asyncio.TimeoutError:
+                self._check_usb_presence()
                 continue
+
+    def _check_usb_presence(self) -> None:
+        """Detect removed Linux USB nodes without probing or resetting the radio."""
+        if (self._connected and self._resolved_port
+                and self._resolved_port.startswith("/dev/")
+                and os.name == "posix" and not os.path.exists(self._resolved_port)):
+            self._trigger_reconnect("USB device removed")
 
     async def _connect(self, port: str) -> None:
         try:
             from meshcore import MeshCore, EventType
+            from src.capture.meshcore_serial import create_serial_connection
 
-            self._meshcore = await MeshCore.create_serial(
-                port,
-                self._baud_rate,
+            # Retain ownership before connecting: create_serial() can raise
+            # after starting its dispatcher without returning the instance.
+            self._meshcore = MeshCore(
+                create_serial_connection(port, self._baud_rate),
                 default_timeout=_MESHCORE_COMMAND_TIMEOUT_SECONDS,
             )
-            if self._meshcore is None:
+            response = await self._meshcore.connect()
+            if response is None:
+                await self._disconnect()
                 logger.error(
                     "MeshCore companion handshake failed on %s. "
                     "Verify the device is running Companion USB firmware "
@@ -192,7 +207,6 @@ class MeshcoreUsbCaptureSource(CaptureSource):
                 self._connected = False
                 return
 
-            self._connected = True
             await self._cache_device_info_on_connect()
 
             for event_type in (
@@ -208,6 +222,7 @@ class MeshcoreUsbCaptureSource(CaptureSource):
                 self._subscriptions.append(sub)
 
             await self._meshcore.start_auto_message_fetching()
+            self._connected = True
             logger.info(
                 "MeshCore USB source started on %s @ %d baud",
                 port, self._baud_rate,
@@ -217,7 +232,17 @@ class MeshcoreUsbCaptureSource(CaptureSource):
                     self._on_connected_callback(),
                     name="meshcore-on-connected",
                 )
+        except asyncio.CancelledError:
+            await self._disconnect()
+            raise
+        except OSError as exc:
+            await self._disconnect()
+            logger.warning(
+                "MeshCore USB unavailable on %s (%s); waiting for reconnect",
+                port, exc,
+            )
         except Exception:
+            await self._disconnect()
             logger.exception(
                 "Failed to start MeshCore USB source on %s", port
             )
@@ -414,12 +439,22 @@ class MeshcoreUsbCaptureSource(CaptureSource):
         try:
             from meshcore import EventType
 
-            result = await asyncio.wait_for(
-                self._meshcore.commands.send_device_query(),
-                timeout=_HEALTH_CHECK_TIMEOUT_SECONDS,
-            )
-            if result.type != EventType.ERROR:
+            async with self._command_lock:
+                mc = self._meshcore
+                if mc is None or not self._connected:
+                    return False
+                await mc.stop_auto_message_fetching()
+                try:
+                    result = await asyncio.wait_for(
+                        mc.commands.send_device_query(),
+                        timeout=_HEALTH_CHECK_TIMEOUT_SECONDS,
+                    )
+                finally:
+                    if self._meshcore is mc and self._connected:
+                        await self.restart_auto_fetching()
+            if result is not None and result.type != EventType.ERROR:
                 self._remember_device_info_event(result)
+                logger.info("MeshCore USB health probe responded")
                 return True
             return False
         except Exception:
@@ -427,6 +462,12 @@ class MeshcoreUsbCaptureSource(CaptureSource):
 
     async def _on_event(self, event) -> None:
         if not self._running:
+            return
+        event_type = getattr(event, "type", None)
+        if (getattr(event_type, "name", "") == "DISCONNECTED"
+                or getattr(event_type, "value", event_type) == "disconnected"):
+            if self._connected:
+                self._trigger_reconnect("serial transport disconnected")
             return
         # Any event from the device is proof the connection is alive.
         # The health check loop uses this to skip its active probe.
@@ -478,14 +519,24 @@ class MeshcoreUsbCaptureSource(CaptureSource):
         """Register a coroutine called after every successful connection."""
         self._on_connected_callback = callback
 
+    def set_command_lock(self, lock: asyncio.Lock) -> None:
+        """Share command serialization with the attached transmit client."""
+        self._command_lock = lock
+
     async def restart_auto_fetching(self) -> None:
         """Re-enable auto message fetching after TX operations."""
-        if self._meshcore and self._connected:
-            try:
-                await self._meshcore.start_auto_message_fetching()
-                logger.info("MeshCore auto message fetching restarted")
-            except Exception:
-                logger.debug("Failed to restart auto fetching", exc_info=True)
+        async with self._auto_fetch_lock:
+            mc = self._meshcore
+            if mc and self._connected:
+                try:
+                    # The library's start method is not idempotent: each call
+                    # creates another subscription and loses the old handle.
+                    await mc.stop_auto_message_fetching()
+                    if self._meshcore is mc and self._connected:
+                        await mc.start_auto_message_fetching()
+                    logger.debug("MeshCore auto message fetching restarted")
+                except Exception:
+                    logger.debug("Failed to restart auto fetching", exc_info=True)
 
     async def _resolve_port(self) -> Optional[str]:
         if self._configured_port:

@@ -125,6 +125,7 @@ class MessagingPanel {
     }
 
     async _onSendMessage(text, convo) {
+        if (window.meshpointReadOnly) return;
         const isBroadcast = convo.is_broadcast || (convo.node_id || '').startsWith('broadcast:');
         const destination = isBroadcast ? 'broadcast' : convo.node_id;
 

@@ -1,8 +1,9 @@
 """FastAPI dependencies for the local dashboard auth contract.
 
-Exposes three callables routes can pin via ``Depends``:
+Exposes callables routes can pin via ``Depends``:
 
-- ``require_auth``    -- reject unless a valid session is present.
+- ``require_auth``    -- valid session for reads, admin for shared-state writes.
+- ``require_session`` -- session only, for changing the caller's own password.
 - ``require_admin``   -- reject unless the session is the admin role.
 - ``optional_auth``   -- attach claims if present, never reject.
 
@@ -79,7 +80,7 @@ def _raise_forbidden() -> NoReturn:
     )
 
 
-async def require_auth(
+async def require_session(
     request: Request,
     authorization: Optional[str] = Header(default=None),
 ) -> SessionClaims:
@@ -89,6 +90,17 @@ async def require_auth(
     claims = _claims_or_none(_extract_token(request, authorization))
     if claims is None:
         _raise_unauthorized()
+    return claims
+
+
+async def require_auth(
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+) -> SessionClaims:
+    """Authenticate dashboard reads; shared-state writes require admin."""
+    claims = await require_session(request, authorization)
+    if request.method not in ("GET", "HEAD", "OPTIONS") and claims.role != ROLE_ADMIN:
+        _raise_forbidden()
     return claims
 
 

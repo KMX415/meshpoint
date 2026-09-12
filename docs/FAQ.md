@@ -7,6 +7,35 @@ and for config syntax see [Configuration](CONFIGURATION.md).
 
 ---
 
+For a full guide index, see [Documentation](README.md).
+
+## Do I need the optional plugins for Meshtastic or MeshCore?
+
+No. The v0.8.0 development managers let you choose apps without installing all
+radio decoders. Existing mesh features stay available without SDR or Reticulum
+dependencies. See [Plugins and themes](PLUGINS.md).
+
+## Can I offer a genuinely read-only dashboard?
+
+The v0.8.0 development build prevents Viewer shared-state writes and makes the
+UI read-only. Viewer still sees conversations and is for trusted observers.
+The separate public view is off by default and shares only selected node/packet
+counts, signal averages and configured radio parameters without login. See
+[Dashboard access](DASHBOARD-ACCESS.md) for setup and the exact field list.
+
+## Are P25, DAPNET and Flock detection ready?
+
+P25 has local draft code and a catalog entry but lacks native/hardware signoff.
+DAPNET integration is pending. Flock camera detection is not implemented.
+Neither a store preview nor a process starting establishes working reception.
+
+## Has Reticulum been tested over a real radio?
+
+Yes: bidirectional LXMF delivery was verified with separate Heltec V3/V4 RNodes
+on official firmware 1.86. Reconnect/reboot endurance and external network
+interoperability remain release checks. Outbound `sent` currently means queued,
+not a persisted delivery receipt. See [Reticulum](../apps/reticulum/README.md).
+
 ## What is a Meshpoint?
 
 A Raspberry Pi 4 plus an SX1302/SX1303 LoRa concentrator that listens for

@@ -64,7 +64,7 @@ class RadioSettings {
                     </div>
 
                     <div class="r-console">
-                        <span class="r-console__prompt">admin@meshpoint:~$</span>
+                        <span class="r-console__prompt">${window.meshpointReadOnly ? 'viewer' : 'admin'}@meshpoint:~$</span>
                         <span class="r-console__cursor">_</span>
                         <span class="r-console__cmd">radio status</span>
                         <div class="r-console__right">

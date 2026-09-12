@@ -2,6 +2,63 @@
 
 ### Unreleased
 
+#### Dashboard fixes (v0.8.0 development)
+
+- Sort the local node grid by packet count, highest first, with last-heard
+  tie-breaking, favorites pinning and existing hop filters. The selection is
+  remembered across reloads; missing and zero counts sort after positive counts.
+- Stats range cards honor metric/imperial display preferences and update their
+  values and labels immediately when the preference changes.
+
+#### Optional apps, themes and dashboard access (v0.8.0 development)
+
+- MeshCore disconnect events and missing selected USB paths clear connection
+  status promptly. Failed or cancelled connection attempts clean up their
+  background event tasks; unavailable serial ports produce concise retry warnings.
+  CP210x USB connections release DTR after opening to avoid holding the boot
+  button and triggering companion CLI Rescue mode. Other USB types keep their
+  existing control-line behavior. Health queries share command serialization,
+  and restarting message fetching replaces its existing subscription.
+
+- Reticulum's RNode indicator now follows live radio connectivity. An unplugged
+  RNode shows offline even while the Reticulum service continues running;
+  unavailable interface telemetry is shown as unknown.
+
+- Terminal colors follow the active dashboard palette, including custom light
+  themes, and update without reconnecting. Confirmation dialogs restore focus
+  to their opener and support keyboard cancellation without confirming an action.
+
+- Device-side opt-ins for plugin source mutations and Web Terminal, both off
+  by default, including upgrades without explicit settings. Catalog browsing and
+  installed-module management remain available. Terminal access requires
+  `dashboard.web_terminal_enabled: true`; source downloads require
+  `plugin_sources_enabled: true`. Both require a service restart.
+
+- Optional plugin store with search, categories, hardware/dependency information,
+  source trust and commit pinning, selected installs, enablement, update and removal.
+  Apps install disabled; native tools are separately installed. Existing mesh
+  features do not require optional receiver packages.
+- Theme manager, custom palette editing and device defaults; a browser's chosen
+  theme takes precedence. Optional pages use shared styling and clearer layouts.
+- Reticulum/LXMF worker and daemon isolation, checksum-pinned private libraries,
+  messaging/contacts, NomadNet browsing/hosting, propagation and telemetry options.
+  External interfaces default off. Regional starting profiles preserve saved
+  settings. Physical two-RNode LXMF delivery passed; recovery/endurance and
+  external-network interoperability remain release checks.
+- Optional Radio, DAB+, ACARS, ADS-B, RTL433 and pager adapters. Local channel
+  selection is explicit where required; Netherlands presets are opt-in, P2000
+  is labeled Netherlands-specific, and DAB reception is Band III. Native receiver
+  hardware signoff remains pending. P25 is experimental; DAPNET remains unfinished.
+- Viewer shared-state writes are blocked server-side; configuration controls
+  are disabled, message actions hidden, and reads no longer mark conversations read.
+- Opt-in public Dashboard, Stats and Radio summaries with admin-selected pages
+  and an Admin sign-in link. Default off; private APIs and WebSocket remain gated.
+- Expanded setup, access, recovery and hardware documentation.
+
+These entries describe unreleased branch work, not a shipped version or a
+published plugin catalog. See [documentation](README.md) and the
+[release overview](plans/v0.8.0-release.md).
+
 #### Reliability and permissions
 
 - Backup restore rejects symbolic links, hard links, device entries and FIFOs
@@ -283,7 +340,7 @@ Major dashboard release on `main` (merge `56d4f7c`). Builds on v0.7.3 auth: ever
 
 #### Relay and RF telemetry
 
-- **Native onboard relay (experimental).** Meshtastic packets can be re-broadcast through the onboard SX1302 with identity preserved (`hop_limit` decrements, sender and ciphertext unchanged). Decoder now retains `raw_app_payload` so the relay path is not silently empty. See [docs/CONFIGURATION.md#smart-relay](docs/CONFIGURATION.md#smart-relay).
+- **Native onboard relay (experimental).** Meshtastic packets can be re-broadcast through the onboard SX1302 with identity preserved (`hop_limit` decrements, sender and ciphertext unchanged). Decoder now retains `raw_app_payload` so the relay path is not silently empty. See [Configuration: smart relay](CONFIGURATION.md#smart-relay).
 - **Noise floor.** Sidebar telemetry uses a rolling minimum of `rssi - snr` (fixes endless "calibrating" on rural single-neighbour links). Optional SX1302 spectral scan when `radio.sx1261_spi_path` is set (off by default on RAK/SenseCap: SX1261 is not on a Pi-visible SPI bus). UI tooltips describe whether the readout is packet-derived or spectral-scan sourced.
 
 #### Sign-off polish and UX

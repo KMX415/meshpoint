@@ -18,6 +18,8 @@ class DangerousModal {
         this._confirmBtn = null;
         this._cancelBtn = null;
         this._currentResolver = null;
+        this._returnFocus = null;
+        this._focusTimer = null;
     }
 
     _ensureMounted() {
@@ -52,10 +54,14 @@ class DangerousModal {
         document.addEventListener('keydown', (event) => {
             if (!this._currentResolver) return;
             if (event.key === 'Escape') {
+                event.preventDefault();
                 this._resolve(false);
             } else if (event.key === 'Enter') {
                 event.preventDefault();
-                this._resolve(true);
+                this._resolve(document.activeElement !== this._cancelBtn);
+            } else if (event.key === 'Tab') {
+                event.preventDefault();
+                (document.activeElement === this._confirmBtn ? this._cancelBtn : this._confirmBtn).focus();
             }
         });
     }
@@ -66,13 +72,18 @@ class DangerousModal {
      */
     confirm({ label, command, description }) {
         this._ensureMounted();
+        if (this._currentResolver) this._resolve(false);
+        this._returnFocus = document.activeElement;
         const labelText = (label || '').trim() || 'Confirm';
         this._titleEl.textContent = `Confirm: ${labelText}`;
+        this._root.querySelector('[role="dialog"]').setAttribute('aria-label', this._titleEl.textContent);
         this._descEl.textContent = description || 'This command can leave the host in a degraded state.';
         this._codeEl.textContent = command || '';
         this._codeEl.style.display = command ? '' : 'none';
         this._show();
-        setTimeout(() => this._confirmBtn.focus(), 50);
+        this._focusTimer = setTimeout(() => {
+            if (this._currentResolver) this._confirmBtn.focus();
+        }, 50);
         return new Promise((resolve) => { this._currentResolver = resolve; });
     }
 
@@ -82,8 +93,13 @@ class DangerousModal {
     }
 
     _hide() {
+        // Adapted from javastraat: never leave focus inside aria-hidden content.
+        clearTimeout(this._focusTimer);
+        if (this._root.contains(document.activeElement)) document.activeElement.blur();
         this._root.setAttribute('aria-hidden', 'true');
         this._root.classList.remove('danger-modal--open');
+        if (this._returnFocus?.isConnected) this._returnFocus.focus({preventScroll: true});
+        this._returnFocus = null;
     }
 
     _resolve(value) {

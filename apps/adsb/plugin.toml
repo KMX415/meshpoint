@@ -1,0 +1,22 @@
+name = "adsb"
+version = "1.0.0"
+meshpoint_api = 1
+provides = ["listener", "routes", "hook"]
+locked = false
+
+[deps]
+executables = ["dump1090"]
+
+
+
+[frontend]
+scripts = ["frontend/adsb_panel.js", "frontend/adsb_map_modal.js", "frontend/adsb_flight_modal.js"]
+styles = ["frontend/adsb_panel.css"]
+
+[hook]
+host = "rtlsdr"
+
+[meta]
+description = "Live ADS-B (1090 MHz) air traffic tracking via dump1090 -- aircraft table plus a live map"
+homepage = "https://github.com/MalcolmRobb/dump1090"
+author = "Einstein PD2EMC"

@@ -1,0 +1,28 @@
+:root { color-scheme:light dark; --bg:#f5f7fa; --card:#fff; --text:#1d2939; --muted:#526277; --line:#dbe2ea; --accent:#17675b; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); font-family:Inter,system-ui,sans-serif; line-height:1.5; }
+.public-shell { max-width:1100px; margin:auto; padding:0 28px; }
+header { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:24px 0; border-bottom:1px solid var(--line); }
+a { color:var(--accent); }
+.brand { color:var(--text); font-size:22px; font-weight:750; text-decoration:none; }
+.brand span { display:inline-block; font-size:12px; font-weight:500; color:var(--muted); margin-left:12px; }
+.sign-in { border:1px solid var(--line); border-radius:8px; padding:9px 14px; background:var(--card); text-decoration:none; white-space:nowrap; }
+main { padding:46px 0 36px; min-height:70vh; }
+.eyebrow { color:var(--accent); font-size:11px; font-weight:700; letter-spacing:.14em; }
+h1 { font-size:clamp(28px,4vw,40px); letter-spacing:-.03em; margin:8px 0; overflow-wrap:anywhere; }
+.intro,#page-description,footer,#public-status { color:var(--muted); }
+nav { display:flex; gap:8px; flex-wrap:wrap; margin:32px 0; }
+nav a { padding:10px 18px; border:1px solid var(--line); border-radius:8px; text-decoration:none; background:var(--card); }
+nav a[aria-current="page"] { background:var(--accent); border-color:var(--accent); color:white; }
+h2 { margin-bottom:4px; font-size:22px; }
+#page-description { margin-top:0; }
+.metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:16px; margin-top:24px; }
+.metric { background:var(--card); padding:24px; border:1px solid var(--line); border-radius:12px; }
+.metric dt { color:var(--muted); font-size:13px; }
+.metric dd { font-size:30px; letter-spacing:-.03em; font-weight:650; margin:12px 0 0; overflow-wrap:anywhere; }
+dl { margin:0; }
+#public-status { font-size:12px; margin-top:24px; }
+footer { border-top:1px solid var(--line); padding:20px 0; font-size:12px; }
+a:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
+@media(prefers-color-scheme:dark) { :root { --bg:#17212b; --card:#21303c; --text:#edf2f6; --muted:#b4c4d1; --line:#415362; --accent:#80d8c7; } nav a[aria-current="page"] { color:#102b27; } }
+@media(max-width:480px) { .public-shell { padding:0 18px; } .brand span { display:block; margin:0; } main { padding-top:26px; } .metrics { grid-template-columns:1fr; } }

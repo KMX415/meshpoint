@@ -1,0 +1,715 @@
+.lsn-section {
+    padding: 0 clamp(16px, 3vw, 32px) 20px;
+}
+
+.lsn-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: flex-end;
+    /* Tuner fields line up with the panel header, not the card edge. */
+    padding: 12px 0.75rem;
+}
+
+.lsn-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.lsn-field label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+}
+
+.lsn-field input,
+.lsn-field select {
+    background: var(--overlay-weak);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: inherit;
+    font: inherit;
+    font-size: 13px;
+    padding: 7px 10px;
+    min-width: 110px;
+}
+
+.lsn-field--freq input {
+    width: 140px;
+    font-variant-numeric: tabular-nums;
+}
+
+.lsn-field input:focus,
+.lsn-field select:focus {
+    outline: none;
+    border-color: rgba(56, 189, 248, 0.6);
+}
+
+.lsn-field--buttons {
+    flex-direction: row;
+    gap: 8px;
+}
+
+.lsn-field--level {
+    min-width: 160px;
+}
+
+.lsn-field--level input[type="range"] {
+    width: 160px;
+    accent-color: #38bdf8;
+    padding: 0;
+    min-width: 0;
+    background: none;
+    border: none;
+}
+
+.lsn-field--level label span {
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Presets ─────────────────────────────────────────── */
+
+.lsn-preset-group + .lsn-preset-group {
+    margin-top: 16px;
+}
+
+.lsn-preset-group__name {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--accent-cyan);
+    margin-bottom: 8px;
+}
+
+/* List of rows (like the DAB+ tab's station list) rather than a wrapped
+   chip grid -- one preset per row: star, name, frequency. */
+.lsn-presets {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.lsn-presets button {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    background: var(--overlay-weak);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-align: left;
+    padding: 8px 10px;
+    cursor: pointer;
+}
+
+.lsn-preset-row__label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.lsn-preset-row__freq {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.lsn-presets button:hover {
+    background: rgba(56, 189, 248, 0.12);
+    border-color: rgba(56, 189, 248, 0.5);
+}
+
+/* Currently tuned preset : lit like a pressed station button */
+.lsn-presets button.lsn-preset--active {
+    color: #04121a;
+    font-weight: 700;
+    background: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+    box-shadow: var(--glow-cyan);
+}
+
+.lsn-presets button.lsn-preset--active .lsn-preset-row__freq {
+    color: rgba(4, 18, 26, 0.65);
+}
+
+/* ── Radio face (bezel / display / meter) ────────────── */
+
+.lsn-radio {
+    /* Inset "device panel" bezel with a subtle top-lit gradient. */
+    background:
+        radial-gradient(120% 80% at 50% -20%, rgba(6, 182, 212, 0.08), transparent 60%),
+        var(--bg-inset);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.06),
+        inset 0 0 30px rgba(0, 0, 0, 0.45);
+}
+
+.lsn-radio__body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px clamp(16px, 3vw, 28px);
+}
+
+/* Status LED strip */
+.lsn-leds {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.lsn-led {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    transition: color 0.2s ease;
+    cursor: help;
+}
+
+.lsn-badge, .lsn-tag { cursor: help; }
+
+.lsn-led i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--overlay-strong);
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.lsn-led--onair.on {
+    color: var(--accent-green);
+}
+.lsn-led--onair.on i {
+    background: var(--accent-green);
+    box-shadow: var(--glow-green);
+}
+
+.lsn-led--tune.on {
+    color: var(--accent-amber);
+}
+.lsn-led--tune.on i {
+    background: var(--accent-amber);
+    box-shadow: var(--glow-amber);
+    animation: lsn-blink 0.7s steps(1) infinite;
+}
+
+@keyframes lsn-blink { 50% { opacity: 0.25; } }
+
+.lsn-badge {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--accent-cyan);
+    border: 1px solid rgba(6, 182, 212, 0.4);
+    border-radius: 4px;
+    padding: 2px 8px;
+}
+
+/* Now-playing station / RDS line : sits directly under the frequency */
+.lsn-station {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: -4px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent-cyan);
+    letter-spacing: 0.4px;
+    min-height: 20px;
+    max-width: 720px;
+    width: 100%;
+}
+
+.lsn-station--rds {
+    color: var(--accent-green);
+}
+
+/* Small RDS / PTY tags (kept fixed while the text scrolls). */
+.lsn-tag {
+    flex: none;
+    display: inline-block;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #04121a;
+}
+
+.lsn-tag--rds { background: var(--accent-green); }
+.lsn-tag--pty {
+    background: transparent;
+    color: var(--accent-green);
+    border: 1px solid rgba(0, 229, 160, 0.5);
+    letter-spacing: 0.5px;
+}
+
+/* RDS lock-quality pill: green = clean lock, amber = marginal, red = poor. */
+.lsn-tag--qual { font-variant-numeric: tabular-nums; }
+.lsn-tag--qual.q-good { background: var(--accent-green); color: #04121a; }
+.lsn-tag--qual.q-mid  { background: var(--accent-amber); color: #04121a; }
+.lsn-tag--qual.q-bad  { background: var(--accent-red); color: #fff; }
+
+/* Scrolling container: clips overflow; the inner text marquees when long. */
+.lsn-station__scroll {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.lsn-station__text {
+    display: inline-block;
+    will-change: transform;
+}
+
+.lsn-station__text.scroll {
+    animation: lsn-marquee var(--scroll-dur, 10s) linear infinite alternate;
+}
+
+@keyframes lsn-marquee {
+    0%, 12%   { transform: translateX(0); }
+    88%, 100% { transform: translateX(var(--scroll-dist, 0)); }
+}
+
+/* Big illuminated frequency readout */
+.lsn-freq {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.lsn-freq__num {
+    font-family: var(--font-mono);
+    font-size: clamp(40px, 9vw, 64px);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 1px;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent-cyan);
+    /* Softer, cleaner bloom (was heavier/blurrier). */
+    text-shadow:
+        0 0 3px rgba(6, 182, 212, 0.45),
+        0 0 14px rgba(6, 182, 212, 0.2);
+}
+
+.lsn-freq__unit {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: var(--accent-cyan);
+}
+
+/* DAB+'s VFD readout is now-playing-first: the big slot shows the
+   station/RadioText (what a listener actually cares about), not a
+   channel code -- that space was originally sized for the Radio tab's
+   frequency digits, so a smaller/more flexible clamp keeps a full
+   "station : RadioText" line from overflowing (it can also marquee via
+   the existing .lsn-station__text/.scroll mechanics if it's long).
+   Channel + friendly name moved down into the small tag row instead. */
+.lsn-station__text--big {
+    font-family: var(--font-mono);
+    font-size: clamp(20px, 4.5vw, 32px);
+    font-weight: 700;
+    color: var(--accent-cyan);
+    text-shadow:
+        0 0 3px rgba(6, 182, 212, 0.45),
+        0 0 14px rgba(6, 182, 212, 0.2);
+}
+
+
+/* Segmented VU meter */
+.lsn-vu {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: 720px;
+    width: 100%;
+}
+
+.lsn-vu__label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+}
+
+.lsn-vu__bar {
+    display: flex;
+    gap: 3px;
+    flex: 1;
+    height: 14px;
+}
+
+.lsn-vu__seg {
+    flex: 1;
+    border-radius: 2px;
+    background: var(--overlay-med);
+    transition: background 0.12s linear, box-shadow 0.12s linear;
+}
+
+.lsn-vu__seg.on[data-zone="g"] { background: var(--accent-green); box-shadow: 0 0 6px rgba(0, 229, 160, 0.5); }
+.lsn-vu__seg.on[data-zone="a"] { background: var(--accent-amber); box-shadow: 0 0 6px rgba(245, 158, 11, 0.5); }
+.lsn-vu__seg.on[data-zone="r"] { background: var(--accent-red); box-shadow: 0 0 6px rgba(239, 68, 68, 0.6); }
+
+.lsn-vu__seg.peak {
+    background: var(--text-secondary);
+    box-shadow: 0 0 6px var(--text-muted);
+}
+
+/* ── Audio ───────────────────────────────────────────── */
+
+#lsn-audio {
+    width: 100%;
+    max-width: 720px;
+    display: block;
+}
+
+.lsn-hint {
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* ── Skin toggle + display wrapper ─────────────────────── */
+
+.lsn-head-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.lsn-skins {
+    display: inline-flex;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.lsn-skins button {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.lsn-skins button:hover { color: var(--text-primary); }
+.lsn-skins button.active {
+    background: var(--accent-cyan);
+    color: #04121a;
+}
+
+/* #lsn-display holds the active skin; it stacks the skin's blocks. */
+.lsn-display {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ── Analogue skin (slide-rule dial + needle VU) ───────── */
+
+.lsn-ana {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 720px;   /* match the digital skin's compact content width */
+    width: 100%;
+}
+
+.lsn-ana__band {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--accent-amber);
+    border: 1px solid rgba(245, 158, 11, 0.5);
+    border-radius: 4px;
+    padding: 2px 8px;
+}
+
+.lsn-ana__dial {
+    position: relative;
+    height: 66px;
+    border-radius: 8px;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    background:
+        radial-gradient(120% 140% at 50% -30%, rgba(245, 158, 11, 0.12), transparent 60%),
+        var(--bg-inset);
+    box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+.lsn-ana__scale { position: absolute; inset: 6px 10px; }
+
+.lsn-ana__tick {
+    position: absolute;
+    top: 0;
+    width: 1px;
+    height: 9px;
+    background: rgba(255, 214, 150, 0.3);
+    transform: translateX(-0.5px);
+}
+.lsn-ana__tick.major { height: 16px; background: rgba(255, 214, 150, 0.6); }
+
+.lsn-ana__tlabel {
+    position: absolute;
+    top: 20px;
+    transform: translateX(-50%);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--accent-amber);
+}
+
+.lsn-ana__needle {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    left: 50%;
+    width: 2px;
+    margin-left: -1px;
+    background: var(--accent-red);
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.9);
+    transition: left 0.25s ease, background 0.3s ease, box-shadow 0.3s ease;
+}
+/* Pointer greens up when RDS locks cleanly (good BLER). */
+.lsn-ana__needle.locked {
+    background: var(--accent-green);
+    box-shadow: 0 0 10px rgba(0, 229, 160, 0.95);
+}
+
+/* Preset flags on the slide-rule scale (dots at station frequencies). */
+.lsn-ana__flag {
+    position: absolute;
+    bottom: -1px;
+    width: 6px;
+    height: 6px;
+    margin-left: -3px;
+    border-radius: 50%;
+    background: var(--accent-cyan);
+    box-shadow: 0 0 5px rgba(6, 182, 212, 0.8);
+    cursor: help;
+}
+
+.lsn-ana__freq {
+    font-family: var(--font-mono);
+    font-size: clamp(28px, 6vw, 42px);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 1px;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent-amber);
+    text-shadow: 0 0 4px rgba(245, 158, 11, 0.5), 0 0 16px rgba(245, 158, 11, 0.25);
+}
+.lsn-ana__freq em {
+    font-size: 13px;
+    font-style: normal;
+    letter-spacing: 2px;
+    color: var(--accent-amber);
+}
+
+.lsn-ana__row {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+}
+
+/* Swinging-needle VU gauge (SVG: green/yellow/red arc + ticks + needle) */
+.lsn-ana__vu {
+    position: relative;
+    width: 220px;             /* fixed moderate meter next to the station text */
+    flex: none;
+}
+.lsn-ana__vusvg {
+    width: 100%;
+    height: auto;
+    display: block;
+    overflow: visible;
+}
+
+/* Round glass cover over the VU : retro domed-meter reflection. */
+.lsn-ana__vu::after {
+    content: "";
+    position: absolute;
+    left: 8%; right: 8%; top: 0; bottom: 14px;
+    pointer-events: none;
+    border-radius: 50% 50% 45% 45% / 80% 80% 30% 30%;
+    background:
+        radial-gradient(70% 90% at 32% 8%, rgba(255, 255, 255, 0.16), transparent 55%),
+        radial-gradient(120% 120% at 50% 120%, rgba(255, 214, 150, 0.05), transparent 60%);
+    box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.05);
+}
+.vz { fill: none; stroke-width: 5; stroke-linecap: round; }
+.vz-g { stroke: var(--accent-green); }
+.vz-y { stroke: var(--accent-amber); }
+.vz-r { stroke: var(--accent-red); }
+.lsn-ana__vutick { stroke: rgba(255, 214, 150, 0.4); stroke-width: 1; }
+.lsn-ana__vuhub { fill: rgba(255, 214, 150, 0.85); }
+.lsn-ana__vuneedle {
+    stroke: var(--text-primary);
+    stroke-width: 2;
+    stroke-linecap: round;
+    filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.8));
+}
+.lsn-ana__vulabel {
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+}
+
+/* Dial glass sheen : a subtle diagonal reflection for that tuner look. */
+.lsn-ana__dial::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(115deg,
+        rgba(255, 255, 255, 0.06) 0%,
+        transparent 22%,
+        transparent 100%);
+}
+
+/* RDS panel: tags row on top, station text below (next to the VU meter). */
+.lsn-ana__display {
+    flex: 1;
+    min-width: 0;
+    margin-top: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 8px;
+}
+.lsn-ana__tags {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.lsn-ana__display .lsn-station__scroll { width: 100%; }
+.lsn-ana__display .lsn-station__text { font-size: 17px; }
+.lsn-ana__display .lsn-ana__freq { font-size: clamp(24px, 5vw, 34px); }
+
+/* ── Station presets: search + category tabs ──────────── */
+
+.lsn-preset-bar { margin-bottom: 12px; }
+
+.lsn-preset-search {
+    width: 100%;
+    max-width: 320px;
+    background: var(--overlay-weak);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: inherit;
+    font: inherit;
+    font-size: 13px;
+    padding: 7px 10px;
+}
+.lsn-preset-search:focus {
+    outline: none;
+    border-color: rgba(56, 189, 248, 0.6);
+}
+
+.lsn-preset-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+.lsn-preset-tabs.dimmed .lsn-preset-tab { opacity: 0.4; }
+
+.lsn-preset-tab {
+    background: var(--overlay-weak);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.lsn-preset-tab:hover {
+    color: var(--text-primary);
+    border-color: rgba(56, 189, 248, 0.4);
+}
+.lsn-preset-tab.active {
+    background: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+    color: #04121a;
+}
+
+.lsn-preset-empty {
+    color: var(--text-muted);
+    font-size: 13px;
+    padding: 8px 0;
+}
+
+/* ── Favorites star + tuned-category dot ──────────────── */
+
+.lsn-fav {
+    display: inline-block;
+    margin-right: 5px;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.lsn-fav:hover { color: var(--accent-amber); }
+.lsn-fav.on { color: var(--accent-amber); }
+/* Keep the star readable on a lit (tuned) preset chip. */
+.lsn-presets button.lsn-preset--active .lsn-fav { color: #04121a; }
+.lsn-presets button.lsn-preset--active .lsn-fav.on { color: #7a4f00; }
+
+.lsn-preset-tab--fav { color: var(--accent-amber); }
+
+.lsn-preset-tab__dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-left: 6px;
+    border-radius: 50%;
+    background: var(--accent-green);
+    box-shadow: 0 0 5px rgba(0, 229, 160, 0.9);
+    vertical-align: middle;
+}
+
+/* Green "now playing" dot on the tuned preset chip (matches the tab dot). */
+.lsn-presets button.lsn-preset--active::after {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-left: 7px;
+    border-radius: 50%;
+    background: var(--accent-green);
+    box-shadow: 0 0 5px rgba(0, 229, 160, 0.95);
+    vertical-align: middle;
+}

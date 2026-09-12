@@ -198,7 +198,7 @@ demodulating MeshCore at 62.5 kHz. Meshpoint then decodes those packets
 natively through its MeshCore decoder. If MeshCore networks in your area
 ever migrate to 125 kHz or wider, the SX1302 will be able to receive them
 directly and the USB companion becomes optional. See
-[ROADMAP](../ROADMAP.md) for the status of dual-protocol HAL work that
+[dual-radio development plan](plans/v0.7.7-sx1261-meshcore-rx.md) for the status of work that
 would enable that path.
 
 | Device | Chipset | Notes |
@@ -244,6 +244,19 @@ capture:
 See [USB nodes](USB-NODES.md).
 
 ---
+
+## Optional plugin hardware (v0.8.0 development)
+
+| Module family | Hardware and validation scope |
+| --- | --- |
+| Reticulum RNode | Dedicated compatible RNode; physical LXMF exchange tested with Heltec V3 and screenless V4 on official firmware 1.86. Recovery and sustained-operation checks remain pending. |
+| Radio, DAB+, ACARS, ADS-B, RTL433 and pagers | Separate supported RTL-SDR receiver and each module's native tools; native reception signoff pending. |
+| P25 | Draft OP25 adapter; OS dependencies, SDR integration and Pi performance not validated. |
+| Themes / plugin manager | No additional radio hardware. |
+
+The current receiver reservation supports one active SDR receiver at a time.
+An SDR is not a Meshtastic/MeshCore USB node, and the RNode cannot share an
+occupied serial port. See [Plugins](PLUGINS.md) and [USB nodes](USB-NODES.md).
 
 ## Antennas
 

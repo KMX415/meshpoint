@@ -98,6 +98,13 @@ double-open a port.
 
 ## Add a MeshCore companion
 
+On CP210x USB bridges, an asserted serial DTR line can act like a held boot
+button and put the companion into CLI Rescue mode shortly after startup.
+Symptoms include a brief successful connection followed by repeated query
+timeouts. Meshpoint releases DTR on identified CP210x bridges; native USB
+devices retain their existing behavior. This uses USB hardware identifiers,
+so it does not depend on the node label or a particular USB port number.
+
 MeshCore is a different USB device and a different firmware. Walkthrough:
 [Onboarding > Adding a MeshCore Companion](ONBOARDING.md#adding-a-meshcore-companion-optional).
 
@@ -138,6 +145,34 @@ still work. Prefer the `capture.serial` list.
 ---
 
 ## Troubleshooting
+
+### RNode is a separate optional radio
+
+In v0.8.0 development, Reticulum can use a dedicated RNode. It does not replace
+the existing Meshtastic or MeshCore USB node. Never assign the same serial port
+to two owners. If identical boards share a by-id identifier, verify the physical
+`/dev/serial/by-path/` path, and recheck it after moving USB sockets. See the
+[Reticulum setup guide](../apps/reticulum/README.md).
+
+### Serial permissions after an update
+
+The reliability update changes the bundled Espressif rule from world-writable
+access to mode `0660`, group `dialout`. The installer ensures the service user's
+group membership before migrating the exact old bundled rule. Customized rules
+are retained. This does not grant access to all SDR devices or resolve a busy port.
+
+Check the service account and the actual port permissions:
+
+```sh
+systemctl show meshpoint -p User -p Group
+id meshpoint
+ls -l /dev/serial/by-id/ /dev/serial/by-path/
+```
+
+Check the resolved device's owner/group too. Group changes require a fresh
+service process. Use the normal installer/update path for bundled-rule repair;
+do not work around errors with world-writable permissions. Close flashers and
+serial monitors before Meshpoint opens the device.
 
 - [Common Errors > Meshtastic USB serial](COMMON-ERRORS.md#meshtastic-usb-serial):
   port open failed, GPS picked as a radio

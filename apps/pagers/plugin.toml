@@ -1,0 +1,21 @@
+name = "pagers"
+version = "1.0.0"
+meshpoint_api = 1
+provides = ["listener", "routes", "hook"]
+locked = false
+
+[deps]
+executables = ["rtl_fm", "multimon-ng"]
+
+
+
+[frontend]
+scripts = ["frontend/pagers_panel.js"]
+
+[hook]
+host = "rtlsdr"
+
+[meta]
+description = "POCSAG512/1200/2400 pager decoding on an explicitly selected receive frequency via rtl_fm + multimon-ng"
+homepage = "https://github.com/EliasOenal/multimon-ng"
+author = "Einstein PD2EMC"

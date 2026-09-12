@@ -43,6 +43,7 @@ class TerminalPanelController {
 
     bind() {
         this.drawer.bind();
+        window.addEventListener('meshpoint:themechange', () => this.renderer?.refreshTheme());
         this.connectBtn?.addEventListener('click', () => this.connect());
         this.disconnectBtn?.addEventListener('click', () => this.disconnect());
         this.clearBtn?.addEventListener('click', () => this.renderer?.clear());
@@ -126,8 +127,9 @@ class TerminalPanelController {
             this.renderer?.writeln(`\r\n\x1b[31m[error: ${message}]\x1b[0m`);
             this._handleDisconnected('error', `error: ${message}`);
         };
-        this.client.onClose = () => {
-            this._handleDisconnected('idle', 'disconnected');
+        this.client.onClose = (event) => {
+            this._handleDisconnected(event?.code === 4403 ? 'error' : 'idle',
+                event?.code === 4403 ? 'Terminal is disabled on this device. Enable dashboard.web_terminal_enabled in config/local.yaml and restart Meshpoint.' : 'disconnected');
             this.chrome.reset();
             if (this.splash) this.splash.reset();
         };

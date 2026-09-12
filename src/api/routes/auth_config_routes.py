@@ -1,6 +1,6 @@
 """Auth-related configuration endpoints.
 
-Three admin-only endpoints, all prefixed ``/api/config/``:
+Admin-only endpoints, all prefixed ``/api/config/``:
 
 * ``GET  /auth_settings``         -- live snapshot of lockout +
   session-lifetime values, used to prime the Settings -> Auth forms
@@ -20,6 +20,7 @@ lifecycle events (login, logout, password change).
 from __future__ import annotations
 
 import logging
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -96,7 +97,30 @@ async def get_auth_settings(
         "session_lifetime_minutes": cfg.jwt_expiry_minutes,
         "session_lifetime_min_minutes": _SESSION_LIFETIME_MIN_MINUTES,
         "session_lifetime_max_minutes": _SESSION_LIFETIME_MAX_MINUTES,
+        "public_view_enabled": cfg.public_view_enabled,
+        "public_view_pages": cfg.public_view_pages,
     }
+
+
+class PublicViewRequest(BaseModel):
+    enabled: bool
+    pages: list[Literal["dashboard", "stats", "radio"]] = Field(max_length=3)
+
+
+@router.put("/public_view")
+async def update_public_view(
+    payload: PublicViewRequest,
+    claims: SessionClaims = Depends(require_admin),
+    audit: AuditLogWriter = Depends(get_audit_writer),
+) -> dict:
+    if payload.enabled and not payload.pages:
+        raise HTTPException(422, "Select at least one public page")
+    with audit.timed_action(
+        user=claims.subject, action="config.public_view_update",
+        params={"enabled": payload.enabled, "pages": payload.pages},
+    ):
+        _service().update_public_view(payload.enabled, payload.pages)
+    return {"enabled": payload.enabled, "pages": _service().config.public_view_pages}
 
 
 @router.put("/auth_lockout")

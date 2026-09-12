@@ -1,0 +1,23 @@
+name = "acars"
+version = "1.0.0"
+meshpoint_api = 1
+provides = ["listener", "routes", "hook"]
+locked = false
+
+[deps]
+executables = ["acarsdec"]
+apt = ["cmake", "pkg-config", "libcjson-dev", "zlib1g-dev", "libxml2-dev", "libsndfile1-dev"]
+
+
+
+[frontend]
+scripts = ["frontend/acars_panel.js"]
+styles = ["frontend/acars_panel.css"]
+
+[hook]
+host = "rtlsdr"
+
+[meta]
+description = "Aircraft VHF datalink (ACARS) decoding via acarsdec + libacars"
+homepage = "https://github.com/f00b4r0/acarsdec"
+author = "Einstein PD2EMC"

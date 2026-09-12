@@ -48,6 +48,7 @@ class TestTerminalRoutes(unittest.TestCase):
             command_catalog=CommandCatalog(),
             jwt_service=self.jwt,
             audit_writer=self.audit,
+            enabled=True,
         )
         auth_deps.init_auth(self.jwt)
         audit_deps.init_audit(self.audit)
@@ -71,6 +72,32 @@ class TestTerminalRoutes(unittest.TestCase):
         self.assertIn("commands", body)
         self.assertIn("categories", body)
         self.assertGreater(len(body["commands"]), 0)
+
+    def test_disabled_terminal_denies_http_and_socket_without_spawning(self) -> None:
+        terminal_routes.init_routes(self.manager, CommandCatalog(), self.jwt, self.audit)
+        self.client.cookies.set("meshpoint_session", self.admin_token)
+        with mock.patch.object(self.manager, "spawn") as spawn:
+            for path in ("commands", "status"):
+                self.assertEqual(self.client.get(f"/api/terminal/{path}").status_code, 403)
+            with self.client.websocket_connect("/api/terminal/ws") as ws:
+                frame = ws.receive()
+                self.assertEqual(frame["type"], "websocket.close")
+                self.assertEqual(frame["code"], 4403)
+            spawn.assert_not_called()
+
+    def test_enabled_socket_reaches_spawn_only_for_admin(self) -> None:
+        with mock.patch.object(self.manager, "spawn", side_effect=RuntimeError("test cap")) as spawn:
+            for token in (None, self.viewer_token):
+                self.client.cookies.clear()
+                if token:
+                    self.client.cookies.set("meshpoint_session", token)
+                with self.client.websocket_connect("/api/terminal/ws") as ws:
+                    self.assertEqual(ws.receive()["code"], 4401)
+            spawn.assert_not_called()
+            self.client.cookies.set("meshpoint_session", self.admin_token)
+            with self.client.websocket_connect("/api/terminal/ws") as ws:
+                self.assertEqual(ws.receive_json()["type"], "error")
+            spawn.assert_called_once()
 
     def test_commands_rejects_anonymous(self) -> None:
         client = TestClient(self.client.app)

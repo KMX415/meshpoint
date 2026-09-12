@@ -70,6 +70,7 @@ _session_manager: SessionManager | None = None
 _command_catalog: CommandCatalog | None = None
 _jwt_service: JwtSessionService | None = None
 _audit_writer: AuditLogWriter | None = None
+_enabled = False
 
 
 def init_routes(
@@ -77,6 +78,7 @@ def init_routes(
     command_catalog: CommandCatalog,
     jwt_service: JwtSessionService,
     audit_writer: AuditLogWriter,
+    enabled: bool = False,
 ) -> None:
     """Bind app-scope dependencies for the terminal endpoints."""
     global _session_manager, _command_catalog, _jwt_service, _audit_writer
@@ -84,6 +86,8 @@ def init_routes(
     _command_catalog = command_catalog
     _jwt_service = jwt_service
     _audit_writer = audit_writer
+    global _enabled
+    _enabled = enabled is True
 
 
 def reset_routes() -> None:
@@ -92,9 +96,13 @@ def reset_routes() -> None:
     _command_catalog = None
     _jwt_service = None
     _audit_writer = None
+    global _enabled
+    _enabled = False
 
 
 def _require_initialized() -> tuple[SessionManager, CommandCatalog]:
+    if not _enabled:
+        raise HTTPException(403, "Terminal is disabled. Set dashboard.web_terminal_enabled: true on the device and restart Meshpoint.")
     if _session_manager is None or _command_catalog is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -144,6 +152,9 @@ async def terminal_websocket(websocket: WebSocket) -> None:
         return
 
     await websocket.accept()
+    if not _enabled:
+        await websocket.close(code=4403, reason="Terminal is disabled on this device")
+        return
     try:
         spawn = _session_manager.spawn()
     except PtyUnavailable as exc:

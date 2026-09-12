@@ -1,6 +1,47 @@
 # Troubleshooting
 
+## v0.8.0 development checks
+
+- **Plugin card exists but cannot install:** a preview is not a published source.
+  Add a trusted, published source and inspect its pinned revision. This local
+  candidate catalog has not yet been published by the current sprint work.
+- **Setup needed:** install the declared native commands for the service user,
+  then refresh inventory. Command presence does not prove USB access or reception.
+  Only Reticulum has the reviewed dashboard Python-library recipe.
+- **Enabled but no page:** restart Meshpoint and reload the browser. Sign in as
+  administrator. Check registration failures and host dependencies in logs.
+- **SDR busy:** stop the active decoder before starting another. Changing tabs
+  does not release the reservation. Do not run a standalone decoder concurrently.
+- **Update/uninstall rejected:** disable the app and restart first. Updating a
+  catalog pin does not update installed code. Uninstall keeps separately stored
+  data, configuration and shared tools.
+- **Reticulum unavailable:** check its worker/daemon status, library setup,
+  selected interfaces and dedicated USB port. Core capture should remain running
+  through optional-worker failure. See [Reticulum](../apps/reticulum/README.md).
+- **RNode connected but messages do not arrive:** verify receipt in both
+  directions. The connection indicator and USB byte counters do not prove RF
+  delivery. Check peer settings and antennas; if needed, reset the dedicated
+  RNode and retest after reconnection. See the
+  [RNode test and recovery steps](../apps/reticulum/README.md#first-rnode-session).
+- **Theme unchanged:** reload after saving/installing; a browser's saved theme
+  overrides the device default. Built-in themes cannot be deleted.
+- **Public page or Viewer behavior unexpected:** use the access matrix and
+  signed-out checks in [Dashboard access](DASHBOARD-ACCESS.md).
+
+Before optional-app backups, disable the app and restart to stop its writers.
+After restore, check dependencies, source revision, app enablement, USB paths
+and public-view policy. See [backup scope](CONFIGURATION.md#backup-and-restore).
+
+Expected upstream disconnects now log concise warnings rather than routine
+tracebacks. Retry/backoff and buffering still apply. Repeated failures still
+need network, endpoint and credential diagnosis; shorter logs do not mean a
+connection succeeded. Unexpected exceptions continue to include tracebacks.
+
 ### Service won't start
+
+For unreleased optional app, theme or public-view issues, see the
+[v0.8.0 checks below](#v080-development-checks).
+
 
 ```bash
 meshpoint logs

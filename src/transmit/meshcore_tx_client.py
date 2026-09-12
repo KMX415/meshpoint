@@ -95,6 +95,9 @@ class MeshCoreTxClient:
     def set_source(self, source) -> None:
         """Attach the capture source so we always see live connect state."""
         self._source = source
+        bind_lock = getattr(source, "set_command_lock", None)
+        if callable(bind_lock):
+            bind_lock(self._cmd_lock)
         logger.info("MeshCore TX client bound to live capture source")
 
     def set_connection(self, mc_instance) -> None:

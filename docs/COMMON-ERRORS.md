@@ -1,5 +1,35 @@
 # Common Errors
 
+## v0.8.0 development additions
+
+### Public page unavailable, or Viewer cannot edit
+
+Public summaries are off by default and only selected pages are exposed. Save
+the setting as administrator, then test in a signed-out window. Disabling access
+returns visitors to login. Viewer configuration controls are intentionally
+disabled and sending/deleting is blocked. [Access guide](DASHBOARD-ACCESS.md).
+
+### Plugin dependency missing, receiver busy, or update requires restart
+
+The manager installs selected code, not native OS packages. Enablement requires
+a restart and receivers start only when requested. Stop the active SDR decoder
+before using another; disable and restart before update/removal. See
+[plugin setup](PLUGINS.md) and [development troubleshooting](TROUBLESHOOTING.md#v080-development-checks).
+
+### Backup rejected for an unsupported archive member
+
+Restore now rejects symlinks, hard links, devices and FIFOs before extraction.
+Use a fresh archive produced by Meshpoint, and do not bypass the validator.
+An accepted archive still needs a recovery test, particularly for optional-app
+data. See [backup and restore](CONFIGURATION.md#backup-and-restore).
+
+### USB permission denied after the Espressif rule migration
+
+The bundled rule uses `0660` and `dialout`, preserving customized rules. Confirm
+the service account's group membership, the resolved port's permissions and
+that no flasher/monitor owns the port. A new service process is needed after
+group changes. See [USB permissions](USB-NODES.md#serial-permissions-after-an-update).
+
 Searchable catalog of error messages, their cause, and the fix. Use Ctrl+F /
 Cmd+F to find your message. For longer diagnostic flows see
 [Troubleshooting](TROUBLESHOOTING.md). For configuration syntax see

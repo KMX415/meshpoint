@@ -66,12 +66,12 @@ class MessagingChat {
         this._messagesEl.innerHTML = '';
         this._lastDayKey = null;
         this._container.classList.remove('msg-chat--empty');
-        this._input.disabled = isUnmapped;
-        this._sendBtn.disabled = isUnmapped;
+        this._input.disabled = isUnmapped || !!window.meshpointReadOnly;
+        this._sendBtn.disabled = isUnmapped || !!window.meshpointReadOnly;
         this._input.placeholder = isUnmapped
             ? "Can't reply: no matching local channel"
             : 'Type a message…';
-        if (!isUnmapped) this._input.focus();
+        if (!isUnmapped && !window.meshpointReadOnly) this._input.focus();
         this._loadMessages();
     }
 
@@ -133,7 +133,9 @@ class MessagingChat {
 
             if (messages.length < 50) this._allLoaded = true;
 
-            await fetch(`/api/messages/conversation/${nodeId}/read`, { method: 'POST' });
+            if (!window.meshpointReadOnly) {
+                await fetch(`/api/messages/conversation/${nodeId}/read`, { method: 'POST' });
+            }
         } catch (e) {
             console.error('Failed to load messages:', e);
         } finally {
@@ -155,9 +157,9 @@ class MessagingChat {
                 </div>
                 <h3 class="msg-chat__placeholder-title">No conversation selected</h3>
                 <p class="msg-chat__placeholder-body">
-                    Choose a channel or direct message in the list on the left,
-                    or tap <span class="msg-chat__placeholder-cta">+ New</span>
-                    to start a DM with a specific node.
+                    ${window.meshpointReadOnly
+                        ? 'Choose a channel or direct message in the list to read it.'
+                        : 'Choose a conversation in the list, or tap <span class="msg-chat__placeholder-cta">+ New</span> to start a DM.'}
                 </p>
                 <p class="msg-chat__placeholder-hint">
                     Filter the list with
@@ -182,8 +184,8 @@ class MessagingChat {
                     </svg>
                 </div>
                 <p class="msg-chat__placeholder-body">
-                    No messages in this thread yet. Type below and send
-                    when you are ready.
+                    ${window.meshpointReadOnly ? 'No messages in this thread yet.'
+                        : 'No messages in this thread yet. Type below and send when you are ready.'}
                 </p>
             </div>
         `;

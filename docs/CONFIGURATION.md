@@ -1,5 +1,24 @@
 # Configuration Guide
 
+## v0.8.0 device-side permissions
+
+In the development build, source installation and Web Terminal default to disabled,
+including on upgrades with no explicit settings. Merge only the permissions you
+want into `config/local.yaml` on the device, using unquoted YAML booleans, then
+restart Meshpoint:
+
+```yaml
+plugin_sources_enabled: true
+dashboard:
+  web_terminal_enabled: true
+```
+
+These permissions have no dashboard toggle. Existing installed modules remain
+usable when source installation is locked. Terminal grants an administrator a
+full shell as the service account. See [plugins](PLUGINS.md#install-and-enable)
+and [dashboard access](DASHBOARD-ACCESS.md#device-side-permissions) for scope and
+backup-restore considerations. Merge with any existing `dashboard` mapping.
+
 All settings live in `config/default.yaml` with user overrides in `config/local.yaml`. The service merges both files at startup: anything in `local.yaml` overrides the default. You only need to add the settings you want to change.
 
 Edit your local config:
@@ -11,6 +30,21 @@ sudo nano /opt/meshpoint/config/local.yaml
 Restart after any config change: `sudo systemctl restart meshpoint`
 
 ### Backup and restore
+
+**v0.8.0 development:** Restore validation rejects symbolic links, hard links,
+device entries and FIFOs before extraction. Use a backup produced by Meshpoint;
+do not remove validation to accept a hand-edited archive. Regular file and
+directory members remain supported.
+
+The backup includes regular files under the configured database's parent data
+directory, including installed plugin/theme files and Reticulum data when stored
+there. Native tools installed elsewhere on the OS are not included. Only the
+main database receives a live SQLite snapshot; other plugin databases are
+copied as files. For a consistent optional-app backup, disable the app and
+restart Meshpoint before downloading the archive, then re-enable it afterward.
+The saved backup reflects that disabled state. Verify optional app recovery on
+a test device before relying on it. Treat backups containing plugin code and
+Reticulum identity material as trusted, private archives.
 
 **Download backup (healthy Pi):** **Settings → System → Download backup** writes a timestamped `.tar.gz` to your browser. Save it on your PC or NAS, not only on the Pi. The archive is not encrypted and contains API keys, channel PSKs, PKI private material, and your full local database.
 
@@ -31,6 +65,13 @@ Full walkthrough: [TROUBLESHOOTING.md](TROUBLESHOOTING.md#disaster-recovery-with
 ---
 
 ## Radio
+
+For dashboard roles and opt-in public summaries, see
+[Dashboard access](DASHBOARD-ACCESS.md). Public-view changes apply immediately;
+the general restart guidance above does not apply to those access controls.
+For optional app configuration, dependency setup, enable/restart requirements,
+and themes, see [Plugins and themes](PLUGINS.md). Reticulum uses separate radio
+settings; see [regional profiles](RETICULUM-REGIONS.md).
 
 ```yaml
 radio:
