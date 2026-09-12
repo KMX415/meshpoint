@@ -8,6 +8,9 @@ from . import regional
 
 _DEFAULTS: dict[str, Any] = {
     "display_name": "Meshpoint",
+    "discover_interfaces": False,
+    "rnode_discovery_enabled": False,
+    "rnode_discovery_lxmf_address": "",
     "reticulum_config_dir": "data/reticulum/rns_config",
     "identity_path": "data/reticulum/identity",
     "lxmf_storage_dir": "data/reticulum/lxmf",

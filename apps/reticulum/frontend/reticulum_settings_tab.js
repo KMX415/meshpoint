@@ -48,6 +48,15 @@ class ReticulumSettingsTab {
                         </p>
                     </header>
                     <form class="cfg-form" data-rt-form>
+                        <fieldset class="cfg-fieldset">
+                            <legend class="cfg-fieldset__legend">Interface discovery and operator contact</legend>
+                            <label class="cfg-field cfg-field--checkbox"><input type="checkbox" data-rt-discover-interfaces><span>List discovered interfaces</span></label>
+                            <p class="cfg-field__hint">Listen for interface announcements on your configured network. View them under Peers and contact their operators. This does not automatically connect to interfaces or enable LAN discovery.</p>
+                            <label class="cfg-field cfg-field--checkbox"><input type="checkbox" data-rt-discovery-publish><span>Publish my RNode interface and operator contact</span></label>
+                            <p class="cfg-field__hint">Opt-in: announces your RNode radio parameters and the contact address below to the reachable Reticulum network, which may include public directories. Uses RNS access-point interface mode and a six-hour announce interval. Transport forwarding stays off; location and network credentials are not published. Requires an enabled RNode. Other interfaces are not advertised.</p>
+                            <label class="cfg-field"><span class="cfg-field__label">Operator LXMF address</span><input class="cfg-field__input" data-rt-discovery-address maxlength="32" pattern="[0-9a-fA-F]{32}" placeholder="32 hexadecimal characters"><span class="cfg-field__hint">Use an LXMF messaging address you control, not a transport or NomadNet address. Leaving publishing off keeps this address private.</span></label>
+                            <p class="cfg-field__hint">Save and restart Meshpoint to apply discovery changes. Turning publishing off stops future announcements after restart; copies already received by others may remain.</p>
+                        </fieldset>
                         <label class="cfg-field">
                             <span class="cfg-field__label">Display name</span>
                             <input class="cfg-field__input" type="text" maxlength="32"
@@ -592,6 +601,9 @@ class ReticulumSettingsTab {
     }
 
     _render(rt) {
+        this._q('[data-rt-discover-interfaces]').checked = rt.discover_interfaces === true;
+        this._q('[data-rt-discovery-publish]').checked = rt.rnode_discovery_enabled === true;
+        this._q('[data-rt-discovery-address]').value = rt.rnode_discovery_lxmf_address || '';
         this._regionDefaults = rt.radio_defaults || {};
         const hint = this._q('[data-rt-region-hint]');
         if (hint) hint.textContent = `Meshpoint region: ${rt.radio_region || 'Unknown'}. `
@@ -864,6 +876,9 @@ class ReticulumSettingsTab {
         const ifaceErr = this._validateExtraInterfaces();
         if (ifaceErr) { this._setStatus('error', ifaceErr); return; }
         const payload = {
+            discover_interfaces: this._q('[data-rt-discover-interfaces]').checked,
+            rnode_discovery_enabled: this._q('[data-rt-discovery-publish]').checked,
+            rnode_discovery_lxmf_address: this._q('[data-rt-discovery-address]').value.trim(),
             display_name: this._displayName.value.trim() || 'Meshpoint',
             nomad_timeout_s: Number(this._nomadTimeout.value) || 20,
             node_enabled: !!this._nodeEnabled.checked,

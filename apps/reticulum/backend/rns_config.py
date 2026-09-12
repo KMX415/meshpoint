@@ -1,4 +1,6 @@
 """Reticulum daemon configuration adapted from the contributor generator."""
+from .discovery import publication_block
+
 _TEMPLATE = """\
 # Generated from Meshpoint Reticulum settings.
 # Replaced when the managed worker restarts.
@@ -7,6 +9,8 @@ _TEMPLATE = """\
   enable_transport = False
   share_instance = Yes
   instance_name = meshpoint
+  discover_interfaces = {discover_interfaces}
+  autoconnect_discovered_interfaces = 0
 
 [logging]
   loglevel = 4
@@ -29,7 +33,7 @@ _RNODE_TEMPLATE = """
     txpower = {rnode_tx_power}
     spreadingfactor = {rnode_spreading_factor}
     codingrate = {rnode_coding_rate}
-{airtime_block}"""
+{airtime_block}{discovery_block}"""
 
 _BACKBONE_TEMPLATE = """
   [[ReticulumNet Internet]]
@@ -134,7 +138,9 @@ def render_config(config: dict) -> str:
                 raise ValueError("Airtime limits must be greater than 0 and at most 100 percent")
             limits.append(f"    airtime_limit_{term} = {float(value):g}\n")
     cfg["airtime_block"] = "".join(limits)
+    cfg["discovery_block"] = publication_block(cfg)
     return _TEMPLATE.format(
+        discover_interfaces="Yes" if cfg.get("discover_interfaces") is True else "No",
         rnode_block=_RNODE_TEMPLATE.format(**cfg) if cfg.get("rnode_enabled") else "",
         backbone_block=_BACKBONE_TEMPLATE.format(**cfg) if cfg.get("backbone_enabled") else "",
         extra_block=_extra_interface_blocks(cfg.get("extra_interfaces", [])),

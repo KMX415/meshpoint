@@ -64,7 +64,7 @@ class TestExtraInterfaceBlocks(unittest.TestCase):
 
     def test_template_has_the_extra_slot(self) -> None:
         # a formatting regression here means rnsd gets a broken config
-        rendered = w._TEMPLATE.format(rnode_block="", backbone_block="", extra_block="X")
+        rendered = w._TEMPLATE.format(rnode_block="", backbone_block="", extra_block="X", discover_interfaces="No")
         self.assertIn("X", rendered)
         self.assertIn("[interfaces]", rendered)
 

@@ -37,6 +37,29 @@ Messages, peer records, contacts, identity, hosted pages and LXMF data live in t
 
 The generated daemon configuration lives in `reticulum/rns_config/`. Configure interfaces through the dashboard; generated files are replaced on startup. Shared native/Python dependencies and this data directory remain when the plugin is uninstalled. Disable and restart before updating or uninstalling the code.
 
+## Interface discovery and operator contacts
+
+In **Reticulum > Settings**, enable **List discovered interfaces** to receive
+interface announcements on your configured network. Save and restart Meshpoint.
+The **Peers** page lists advertised interfaces and offers **Contact operator**
+when a valid LXMF address is present. This opens a message draft; it does not
+send anything, save a contact, or automatically connect to the interface.
+Advertised addresses are supplied by the interface owner, not verified identities.
+
+To advertise your own RNode, separately enable **Publish my RNode interface and
+operator contact** and enter a 32-character hexadecimal LXMF messaging address
+you control. RNS publishes the RNode's radio parameters and contact address at
+a six-hour interval using access-point interface mode. Transport forwarding
+remains off. Meshpoint does not include location or IFAC credentials. Publishing
+requires the RNode interface to be enabled and may make its details visible in
+public directories. Other configured interfaces are not published by this option.
+
+Both settings default off. Save and restart to apply changes or stop publishing.
+Stopping future announcements cannot remove copies already received by others.
+Discovery requires a connected interface and may take time to receive announcements.
+This uses the pinned RNS 1.5.3 library; no dependency upgrade is required.
+On-air interface discovery and interoperability testing remain part of RC validation.
+
 ## Validation status
 
 This is an unreleased plugin. Automated checks cover configuration, messaging,
