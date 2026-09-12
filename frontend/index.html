@@ -49,7 +49,7 @@
     <link rel="stylesheet" href="/vendor/xterm/xterm.css" />
     <link rel="stylesheet" href="css/responsive.css" />
     <link rel="stylesheet" href="css/plugin_pages.css?v=store-20260911-2">
-    <link rel="stylesheet" href="css/plugin_store.css?v=store-20260911-2">
+    <link rel="stylesheet" href="css/plugin_store.css?v=source-setup-20260912">
 </head>
 <body>
     <div class="app" data-sidebar="expanded">
@@ -583,10 +583,21 @@
                         <p class="store-empty" data-store-empty hidden>No modules match. Try another search or category.</p>
                         <details class="auth-card store-sources" data-store-source-panel>
                         <summary>Plugin sources <span>Choose where your modules come from</span></summary>
+                        <section class="store-source-setup" data-source-setup hidden aria-label="Enable plugin downloads">
+                            <h3>Enable downloads on the device first</h3>
+                            <p>This permission cannot be changed from the dashboard. Ask the device owner to complete these steps, or use SSH if you manage this Meshpoint.</p>
+                            <ol>
+                                <li>Edit <code>/opt/meshpoint/config/local.yaml</code> on the device. Add or update the top-level setting below, outside any other section:<pre><code>plugin_sources_enabled: true</code></pre></li>
+                                <li>Save the file, then restart Meshpoint:<pre><code>sudo systemctl restart meshpoint</code></pre>Capture briefly pauses during the restart.</li>
+                                <li>Reload this page. The source fields will unlock. Review the catalog below, confirm that you trust it, then select <strong>Add source</strong>.</li>
+                            </ol>
+                            <p>Your existing mesh features and installed modules do not need this permission. Enabling downloads does not install anything automatically.</p>
+                        </section>
                         <p class="auth-card__hint">Add a trusted GitHub catalog to install modules. Each download uses the revision shown below.</p>
+                        <p class="auth-card__hint">The fields below suggest the Meshpoint RC catalog. You can replace them with another trusted catalog. Adding a branch pins its current commit; later updates require your action.</p>
                         <form data-source-form>
-                            <label class="cfg-field"><span class="cfg-field__label">GitHub repository</span><input class="cfg-field__input" type="url" name="url" required placeholder="https://github.com/owner/plugins"></label>
-                            <label class="cfg-field"><span class="cfg-field__label">Branch, tag or commit</span><input class="cfg-field__input" name="ref" value="main" required></label>
+                            <label class="cfg-field"><span class="cfg-field__label">GitHub repository</span><input class="cfg-field__input" type="url" name="url" required value="https://github.com/KMX415/meshpoint" placeholder="https://github.com/owner/plugins"></label>
+                            <label class="cfg-field"><span class="cfg-field__label">Branch, tag or commit</span><input class="cfg-field__input" name="ref" value="feat/v0.8.0" required></label>
                             <label><input type="checkbox" name="trusted" required> I trust this source. Enabled plugins can run code with Meshpoint's permissions.</label>
                             <button class="terminal-button" type="submit">Add source</button>
                         </form>
@@ -989,7 +1000,7 @@
     <script src="js/settings/theme_colors.js"></script>
     <script src="js/settings/theme_editor.js"></script>
     <script src="js/settings/plugin_store_data.js?v=regions-20260911"></script>
-    <script src="js/settings/plugin_catalog.js?v=store-20260911"></script>
+    <script src="js/settings/plugin_catalog.js?v=source-setup-20260912"></script>
     <script src="js/settings/plugins_panel_controller.js?v=store-20260911"></script>
     <script src="sidebar/sidebar_plugin_registry.js"></script>
     <script src="sidebar/page_hook_registry.js"></script>

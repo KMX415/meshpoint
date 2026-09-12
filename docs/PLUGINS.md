@@ -47,15 +47,15 @@ native decoder is available. Use the source catalog and installed inventory to
 confirm what is actually downloaded and enabled. Optional pages require an
 administrator; [public summaries](DASHBOARD-ACCESS.md) do not expose them.
 
-1. Open **Settings > Plugins** as an administrator.
-2. Add a trusted GitHub catalog URL and a branch, tag, or commit. Adding a source resolves it to a fixed commit. No background update follows subsequent branch changes.
+1. Open **Settings > Plugins** as an administrator. If downloads are locked, select **How to enable downloads** for device setup instructions. Disabled source fields do not mean the page is broken.
+2. Review the suggested Meshpoint RC repository and revision, or enter another trusted GitHub catalog. Confirm trust and select **Add source**. Adding a source resolves the branch, tag, or commit to a fixed commit. No background update follows subsequent branch changes.
 3. Browse the source and install only the desired items. Installation downloads and validates code; it does not enable it or install dependencies.
 4. Install and enable the **RTL-SDR** host before enabling one of its receiver modules.
 5. Install the module's native tools on the device. Refresh the plugin list to see missing command checks.
 6. Enable the module and restart Meshpoint using the existing restart controls. Reload the dashboard to load its page.
 7. Open the optional page, review its receiver settings, and press **Start**. Enablement alone leaves a receiver idle.
 
-The catalog in this feature branch is not published until the branch is pushed. Do not add the stable branch expecting these entries yet. Catalog source code is trusted application code, with access to the Meshpoint process when enabled; it is not sandboxed.
+The Meshpoint RC catalog is at `https://github.com/KMX415/meshpoint`, revision `feat/v0.8.0`. Do not add the stable branch expecting these entries yet. Catalog source code is trusted application code, with access to the Meshpoint process when enabled; it is not sandboxed.
 
 ## Dependency setup
 

@@ -74,7 +74,7 @@ def test_viewer_cannot_delete(clients, path):
 
 def test_all_dashboard_write_routes_have_guard(tmp_path):
     """Check production router wiring, including newly mounted plugin managers."""
-    from fastapi.routing import APIRoute
+    from fastapi import routing
     from src.api.server import create_app
     from src.config import AppConfig
 
@@ -95,8 +95,13 @@ def test_all_dashboard_write_routes_have_guard(tmp_path):
         "/api/auth/change_password",
     }
     checked = 0
-    for route in app.routes:
-        if not isinstance(route, APIRoute) or not route.methods & {"POST", "PUT", "PATCH", "DELETE"}:
+    # Newer FastAPI retains included routers instead of flattening app.routes.
+    # Effective contexts include guards inherited at each include_router call.
+    iter_contexts = getattr(routing, "iter_route_contexts", None)
+    routes = iter_contexts(app.routes) if iter_contexts else app.routes
+    for route in routes:
+        original = getattr(route, "original_route", route)
+        if not isinstance(original, routing.APIRoute) or not route.methods & {"POST", "PUT", "PATCH", "DELETE"}:
             continue
         if route.path in session_routes:
             continue

@@ -55,6 +55,15 @@
 .plugin-store .store-install { border-color: var(--accent-cyan); background: color-mix(in srgb, var(--bg-card), var(--accent-cyan) 18%); }
 .store-empty { text-align: center; padding: 48px 20px; border: 1px dashed var(--border); border-radius: 14px; color: var(--text-secondary); }
 .plugin-store .store-sources { margin-top: 24px; display: block; }
+.store-source-access, .store-source-setup { padding: 20px; margin-bottom: 20px; border: 1px solid var(--accent-amber); border-radius: 12px; background: color-mix(in srgb, var(--bg-card), var(--accent-amber) 7%); }
+.store-source-access[hidden], .store-source-setup[hidden] { display: none; }
+.store-source-access h3, .store-source-setup h3 { font-size: 1rem; margin-bottom: 10px; }
+.store-source-access p, .store-source-setup p, .store-source-setup li { font-size: .85rem; line-height: 1.65; color: var(--text-secondary); }
+.store-source-access button { margin-top: 14px; }
+.store-source-setup ol { padding-left: 22px; margin-block: 14px; }
+.store-source-setup li + li { margin-top: 14px; }
+.store-source-setup code { overflow-wrap: anywhere; }
+.store-source-setup pre { white-space: pre-wrap; padding: 12px; margin-block: 8px; background: var(--bg-primary); border-radius: 6px; }
 .store-sources summary { cursor: pointer; font-size: .95rem; font-weight: 600; }
 .store-sources summary span { font-weight: 400; font-size: .8rem; color: var(--text-secondary); margin-left: 12px; }
 .store-sources[open] > :not(summary) { margin-top: 18px; }

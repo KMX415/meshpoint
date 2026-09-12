@@ -4,6 +4,9 @@
 
 #### Dashboard fixes (v0.8.0 development)
 
+- Plugin source setup explains locked downloads above the module cards, provides
+  device setup steps and suggests the RC catalog. Permission-check failures are
+  distinguished from an intentional download lock.
 - Sort the local node grid by packet count, highest first, with last-heard
   tie-breaking, favorites pinning and existing hop filters. The selection is
   remembered across reloads; missing and zero counts sort after positive counts.

@@ -8,11 +8,11 @@ class PluginCatalog {
         this.catalog = root.querySelector('[data-source-catalog]');
         this.sourcesPanel = root.querySelector('[data-store-source-panel]');
         this.sourcesEnabled = false;
-        this.permissionNote = document.createElement('p');
-        this.permissionNote.className = 'store-note';
+        this.permissionNote = document.createElement('aside');
+        this.permissionNote.className = 'store-source-access';
         this.permissionNote.setAttribute('role', 'status');
-        this.sourcesPanel.before(this.permissionNote);
-        this.setSourceAccess(false);
+        this.root.prepend(this.permissionNote);
+        this.setSourceAccess(null);
         this.installedPlugins = new Map();
         this.entries = [];
         this.category = 'All';
@@ -58,22 +58,39 @@ class PluginCatalog {
 
     setSourceAccess(enabled) {
         this.sourcesEnabled = enabled === true;
-        this.permissionNote.textContent = this.sourcesEnabled ? ''
-            : 'Downloads are locked on this device. Set plugin_sources_enabled: true in config/local.yaml and restart Meshpoint to add sources, install or update. Installed modules remain available.';
+        this.sourceAccess = enabled;
+        const heading = document.createElement('h3');
+        const explanation = document.createElement('p');
+        heading.textContent = enabled === false ? 'Plugin downloads are locked' : enabled === null
+            ? 'Checking download permission...' : 'Download permission could not be checked';
+        explanation.textContent = enabled === false
+            ? 'This is the default on new and upgraded devices. Source fields, installs and updates stay disabled until the device owner enables downloads. You can still browse previews and manage installed plugins.'
+            : enabled === null ? 'Source controls will stay disabled until Meshpoint confirms access.'
+                : 'Source controls are temporarily disabled. Refresh to retry before changing device settings.';
+        this.permissionNote.replaceChildren(heading, explanation);
+        if (enabled === false) this.permissionNote.append(this.button('How to enable downloads', () => this.showSources()));
         this.permissionNote.hidden = this.sourcesEnabled;
+        this.sourcesPanel.querySelector('[data-source-setup]').hidden = enabled !== false;
+        this.root.querySelector('[data-store-sources]').textContent = enabled === false ? 'Source setup' : 'Manage sources';
         for (const control of this.root.querySelectorAll('form input, form button, [data-source-mutation]')) {
             control.disabled = !this.sourcesEnabled;
         }
     }
 
     async refresh() {
-        this.setSourceAccess(false);
+        this.setSourceAccess(null);
         this.render();
         this.status.textContent = 'Checking module sources...';
         try {
             const data = await this.request('');
             this.setSourceAccess(data.sources_enabled);
             this.list.replaceChildren();
+            if (!data.sources.length) {
+                const empty = document.createElement('p');
+                empty.className = 'store-note';
+                empty.textContent = 'No plugin sources added yet. The module cards are previews until you add a catalog. Adding a source does not install or enable any plugins.';
+                this.list.append(empty);
+            }
             this.entries = [];
             for (const source of data.sources) {
                 const row = document.createElement('div'); row.className = 'store-source';
@@ -98,7 +115,7 @@ class PluginCatalog {
             const failures = results.filter(result => result.status === 'rejected').length;
             this.status.textContent = failures ? `Could not load ${failures} catalog(s). Check the sources below and retry.` : '';
             this.render();
-        } catch (error) { this.status.textContent = error.message; this.render(); }
+        } catch (error) { this.setSourceAccess('error'); this.status.textContent = error.message; this.render(); }
     }
 
     async loadSource(source) {
@@ -202,7 +219,7 @@ class PluginCatalog {
             button.disabled = !this.sourcesEnabled || !entry.compatible || (entry.installed && !updating);
             button.classList.add('store-install'); actions.append(button);
         } else if (!entry.installed) {
-            actions.append(this.button('Choose source', () => this.showSources()));
+            actions.append(this.button(this.sourceAccess === false ? 'Set up downloads' : 'Choose source', () => this.showSources()));
         }
         card.append(top, category, title, description, details, actions);
         return card;
