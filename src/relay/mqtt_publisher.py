@@ -2,7 +2,9 @@
 
 Gate 1: mqtt.enabled must be true (off by default).
 Gate 2: only packets from channels listed in publish_channels are published.
-         Private/custom channels never leak unless explicitly listed.
+
+Only broadcasts are eligible, regardless of channel. A separate packet copy
+applies location privacy before protobuf, JSON, or Home Assistant output.
 
 Supports dual-protocol publishing (Meshtastic + MeshCore) with optional
 JSON mirror for Home Assistant and Node-RED consumers.
@@ -19,6 +21,7 @@ from typing import Optional
 from src.config import MqttConfig
 from src.models.packet import Packet, PacketType, Protocol
 from src.relay.channel_resolver import ChannelResolver
+from src.relay.mqtt_privacy import is_broadcast, prepare_packet
 from src.relay.map_report import MapReportData, build_map_report_message
 from src.relay.mqtt_formatter import (
     MeshCoreMqttFormatter,
@@ -57,6 +60,8 @@ class MqttPublisher:
         self._client: Optional[paho_mqtt.Client] = None
         self._connected = False
         self._publish_count = 0
+        self._blocked_destination_count = 0
+        self._last_privacy_log_monotonic = None
         self._disconnect_count = 0
         self._last_connect_rc: int | None = None
         self._last_disconnect_rc: int | None = None
@@ -74,14 +79,14 @@ class MqttPublisher:
             topic_root=config.topic_root,
             region=config.region,
             gateway_id=self._gateway_id,
-            location_precision=config.location_precision,
+            location_precision="exact",  # One shared policy is applied before formatting.
             channel_resolver=self._channel_resolver,
         )
         self._mc_formatter = MeshCoreMqttFormatter(
             topic_root=config.topic_root,
             region=config.region,
             gateway_id=self._gateway_id,
-            location_precision=config.location_precision,
+            location_precision="exact",
         )
         self._ha_discovery: Optional[HomeAssistantDiscovery] = None
         self._topic_prefix = self._resolve_topic_prefix()
@@ -103,6 +108,7 @@ class MqttPublisher:
         return {
             "connected": self._connected,
             "publish_count": self._publish_count,
+            "blocked_destination_count": self._blocked_destination_count,
             "disconnect_count": self._disconnect_count,
             "last_connect_rc": self._last_connect_rc,
             "last_disconnect_rc": self._last_disconnect_rc,
@@ -180,6 +186,7 @@ class MqttPublisher:
         if not self._passes_safety_gates(packet):
             return False
 
+        packet = prepare_packet(packet, self._config.location_precision)
         messages = self._format_packet(packet)
         published = False
         for msg in messages:
@@ -192,9 +199,17 @@ class MqttPublisher:
             self._publish_count += 1
             self._last_publish_monotonic = time.monotonic()
             logger.debug("MQTT published %s (%s)", packet.packet_id, packet.packet_type.value)
-            if self._ha_discovery:
+        if self._ha_discovery:
+            if published:
                 self._ha_discovery.announce_node(packet)
                 self._ha_discovery.publish_state(packet)
+            # A suppressed POSITION may have no standard MQTT outputs, but
+            # its old retained HA coordinates must not remain current.
+            if packet.packet_type == PacketType.POSITION and not (
+                packet.decoded_payload and packet.decoded_payload.get("latitude") is not None
+                and packet.decoded_payload.get("longitude") is not None
+            ):
+                self._ha_discovery.clear_position(packet.source_id)
 
         return published
 
@@ -231,6 +246,19 @@ class MqttPublisher:
         return True
 
     def _passes_safety_gates(self, packet: Packet) -> bool:
+        if not self._config.enabled:
+            return False
+        if not is_broadcast(packet):
+            self._blocked_destination_count += 1
+            now = time.monotonic()
+            if self._last_privacy_log_monotonic is None or now - self._last_privacy_log_monotonic >= 60:
+                logger.info(
+                    "MQTT privacy: blocked direct-message or unrecognized destination "
+                    "(%d total); broadcasts remain eligible",
+                    self._blocked_destination_count,
+                )
+                self._last_privacy_log_monotonic = now
+            return False
         if packet.packet_type == PacketType.ENCRYPTED:
             return False
 
@@ -392,6 +420,10 @@ class HomeAssistantDiscovery:
                 qos=1,
                 retain=True,
             )
+
+    def clear_position(self, node_id: str) -> None:
+        if node_id:
+            self._client.publish(f"meshpoint/{node_id}/position", b"", qos=1, retain=True)
 
     def _device_block(self, node_id: str) -> dict:
         return {

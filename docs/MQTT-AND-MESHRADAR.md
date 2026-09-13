@@ -98,12 +98,20 @@ pass for any packet to leave the device:
 **Gate 1: Global kill switch.** `mqtt.enabled: true` must be explicitly set.
 
 **Gate 2: Channel allowlist.** Only packets on channels listed in
-`mqtt.publish_channels` are published. The default list contains only
-`LongFast`. Private channels, custom-PSK channels, and packets on
-channels not in the list never leave the device via MQTT.
+`mqtt.publish_channels` are published. The default list contains
+`LongFast` and `MeshCore`. Custom Meshtastic channels must be explicitly
+listed before their broadcasts can be published.
 
 Encrypted packets (those the Meshpoint could not decrypt) are **always**
 blocked from MQTT regardless of channel configuration.
+
+Only broadcasts are eligible. Meshtastic direct messages (PKI or legacy) and
+MeshCore contact messages stay off MQTT even when their channel is allowlisted.
+Packets with missing or unrecognized destinations are also blocked. These
+restrictions apply to protobuf, JSON, and Home Assistant output without changing
+local message history.
+Blocked destinations are counted in runtime MQTT status and reported through a
+rate-limited INFO log that does not include message text or node IDs.
 
 This two-gate approach is informed by active community discussion around
 MQTT privacy in the Meshtastic firmware:
@@ -204,13 +212,30 @@ publish under `EU` if it serves an EU community broker, and vice versa.
 
 ### Location precision
 
-Choose how much GPS detail leaves the device via MQTT:
+Set `mqtt.location_precision` to choose how much GPS detail from captured
+packets leaves the device via MQTT. The same policy applies to Meshtastic
+protobuf, JSON, MeshCore JSON, and retained Home Assistant position state:
 
 | Value | Behavior |
 |---|---|
 | `exact` | Full GPS coordinates (default) |
-| `approximate` | Rounded to ~1.1 km precision (2 decimal places) |
-| `none` | Location stripped entirely from MQTT messages |
+| `approximate` | Coordinates rounded to 2 decimal places (about 1.1 km latitude); altitude and other location detail removed |
+| `none` | Location fields removed; position-only protobuf messages suppressed |
+
+Incomplete or invalid coordinates are omitted. Local packets are preserved at
+their original precision. With Home Assistant discovery enabled, when a new eligible position packet has hidden or
+invalid coordinates, Meshpoint clears that node's retained Home Assistant
+position topic, including when the JSON mirror is disabled.
+
+Changing this setting does not erase historical data. Retained positions for
+offline nodes or nodes no longer allowed by the channel policy require separate
+cleanup on your broker, as does retained state after Home Assistant discovery
+is disabled. Review only the affected `meshpoint/<node_id>/position`
+topics; clearing unrelated retained topics can disrupt other applications.
+Subscriber databases and archives must be handled separately.
+
+The optional native MapReport below is a separate, explicit publication of this
+Meshpoint's own configured position and uses `map_report_position_precision`.
 
 Full-precision location is always available on the Meshradar dashboard
 (if upstream is enabled) regardless of this MQTT setting.
