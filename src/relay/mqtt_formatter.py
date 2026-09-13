@@ -58,6 +58,12 @@ class MeshtasticMqttFormatter:
         self._channel_resolver = channel_resolver or ChannelResolver()
 
     def format(self, packet: Packet) -> Optional[MqttMessage]:
+        if packet.packet_type == PacketType.POSITION and (
+            not packet.decoded_payload
+            or packet.decoded_payload.get("latitude") is None
+            or packet.decoded_payload.get("longitude") is None
+        ):
+            return None
         try:
             from meshtastic.protobuf.mqtt_pb2 import ServiceEnvelope
             from meshtastic.protobuf.mesh_pb2 import MeshPacket
