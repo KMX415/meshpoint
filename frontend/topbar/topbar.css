@@ -53,6 +53,8 @@
 
 /* --- Meshtastic chip (cyan group, permanent glow) ----------------- */
 
+.topbar-meshtastic[hidden] { display: none; }
+
 .topbar-meshtastic {
     display: inline-flex;
     align-items: center;

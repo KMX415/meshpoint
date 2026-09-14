@@ -46,7 +46,9 @@ class TopbarMeshtasticChip {
         }
     }
 
-    setMeshtastic({ shortName, radio }) {
+    setMeshtastic({ shortName, radio, configured }) {
+        this._root.hidden = !configured;
+        if (!configured) return;
         const next = (shortName && String(shortName).trim())
             ? String(shortName).trim().toUpperCase()
             : '----';

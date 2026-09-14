@@ -83,6 +83,7 @@ class TopbarController {
             this._serial.setDashboardReachable(true);
             const tx = cfg.transmit || {};
             this._meshtastic.setMeshtastic({
+                configured: (cfg.capture?.sources || []).some(source => source === 'concentrator' || source === 'serial'),
                 shortName: tx.short_name,
                 radio: cfg.radio || null,
             });

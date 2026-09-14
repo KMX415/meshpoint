@@ -4,6 +4,9 @@
 
 #### Dashboard fixes (v0.8.0 development)
 
+- The Meshtastic topbar indicator only appears when a concentrator or Meshtastic
+  serial capture source is configured.
+
 - Dashboard startup opens its live connection before initial data fetches and
   clears the connecting indicator on handshake. Setup and role checks share one
   identity request.
