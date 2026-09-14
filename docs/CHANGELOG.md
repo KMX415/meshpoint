@@ -4,6 +4,10 @@
 
 #### Dashboard fixes (v0.8.0 development)
 
+- Plugins can declare service dependencies with `requires`. Enablement checks
+  dependencies, disabling a host also disables dependent plugins, and startup
+  loads hosts first while reporting missing or cyclic dependencies.
+
 - Plugin downloads can be enabled from an administrator checkbox without editing
   YAML or restarting. Source presets, per-module source selection, maintainer
   labels and installed-plugin checkboxes make setup available from the dashboard.

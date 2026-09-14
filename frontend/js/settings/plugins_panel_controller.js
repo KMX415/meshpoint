@@ -58,6 +58,7 @@ class PluginsPanelController {
                 if (!response.ok) throw new Error(result.detail || 'Could not save plugin settings.');
                 await this.refresh();
                 this.status.textContent = 'Saved. Restart Meshpoint to apply.';
+                if (result.also_disabled?.length) this.status.textContent += ` Also disabled: ${result.also_disabled.join(', ')}.`;
                 this.list.querySelector(`[data-plugin-id="${plugin.id}"] input[type="checkbox"]`)?.focus();
             } catch (failure) {
                 this.status.textContent = failure.message;

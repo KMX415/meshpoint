@@ -67,6 +67,12 @@ it, restart, uninstall it, and install from the chosen source. Settings are reta
 
 ## Dependency setup
 
+A plugin may declare `requires = "plugin-name"` when it needs another plugin's
+service or data. Use either `requires` or `[hook].host`, not both. Settings checks
+the dependency chain before enabling; disabling a host also disables its enabled
+dependents and reports them. Startup loads dependencies first and skips dependents
+whose host cannot load. Missing dependencies and cycles are reported explicitly.
+
 Reticulum supplies starting profiles for all six Meshpoint region labels,
 with explicit frequency selection required for unknown regions. Saved radio
 settings are preserved. See [Reticulum regions](RETICULUM-REGIONS.md).

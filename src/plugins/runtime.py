@@ -71,6 +71,34 @@ class PluginRuntime:
         self.states = {}
         self.live = []
         self.mutation_lock = asyncio.Lock()
+        self.load_order = []
+
+    def dependency(self, state):
+        """Resolve a requires name or legacy hook route without importing code."""
+        manifest = state.manifest
+        if manifest is None:
+            return None, None
+        if manifest.requires:
+            return manifest.requires, self.states.get(manifest.requires)
+        if manifest.hook:
+            return manifest.hook.host, next((s for s in self.states.values()
+                if s.manifest and s.manifest.sidebar
+                and s.manifest.sidebar.route == manifest.hook.host), None)
+        return None, None
+
+    def dependency_chain(self, state):
+        chain, seen = [], {state.name}
+        while True:
+            reference, target = self.dependency(state)
+            if reference is None:
+                return chain
+            if target is None or target.manifest is None:
+                raise ValueError("Install dependency first: " + reference)
+            if target.name in seen:
+                raise ValueError("Plugin dependency cycle: " + target.name)
+            seen.add(target.name)
+            chain.append(target)
+            state = target
 
     def discover(self):
         if not self.apps_dir.is_dir():
@@ -95,9 +123,25 @@ class PluginRuntime:
 
     def mount(self, app):
         occupied = {(r.path, method) for r in app.routes for method in getattr(r, "methods", ())}
+        pending = []
         for state in self.states.values():
             conf = self.config.plugins.get(state.name, {})
             if state.status != "installed" or conf.get("enabled") is not True:
+                continue
+            try:
+                chain = self.dependency_chain(state)
+            except ValueError as exc:
+                state.status, state.error = "failed", str(exc)
+                continue
+            pending.append((state, chain))
+        pending.sort(key=lambda item: len(item[1]))
+        self.load_order = [state for state, _ in pending]
+        for state, chain in pending:
+            conf = self.config.plugins.get(state.name, {})
+            unavailable = next((s for s in chain if s.registration is None), None)
+            if unavailable:
+                state.status = "setup needed"
+                state.error = "Dependency is not loaded: " + unavailable.name
                 continue
             manifest = state.manifest
             if state.name == "reticulum":
@@ -165,8 +209,13 @@ class PluginRuntime:
     async def start(self, pipeline, ws_manager):
         context = SimpleNamespace(pipeline=pipeline, ws_manager=ws_manager, config=self.config,
                                   plugin_lock=self.mutation_lock)
-        for state in self.states.values():
+        for state in self.load_order:
             if state.registration is None:
+                continue
+            unavailable = next((s for s in self.dependency_chain(state) if s.status != "loaded"), None)
+            if unavailable:
+                state.status = "failed"
+                state.error = "Dependency failed to start: " + unavailable.name
                 continue
             for name, build, wire in state.registration.listeners:
                 obj = None
