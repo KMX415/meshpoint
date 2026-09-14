@@ -162,6 +162,7 @@ class DashboardConfig:
     port: int = 8080
     static_dir: str = "frontend"
     theme: str = "dark"
+    map_tile_url: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 
 
 @dataclass

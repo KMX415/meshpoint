@@ -17,6 +17,7 @@ def enrich_config_payload(cfg: AppConfig, base: dict) -> dict:
     mc_usb = capture.meshcore_usb
 
     token = (upstream.auth_token or "").strip()
+    base["dashboard"] = {"map_tile_url": cfg.dashboard.map_tile_url}
     base["device"] = {
         "device_name": device.device_name,
         "latitude": device.latitude,

@@ -12,10 +12,12 @@ import binascii
 import logging
 import subprocess
 from typing import Optional
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 
+from src.api.audit.dependencies import get_audit_writer
 from src.api.auth.dependencies import require_admin, require_auth
 from src.api.auth.jwt_session import ROLE_ADMIN, SessionClaims
 from src.api.routes import (
@@ -47,6 +49,45 @@ _tx_service = None
 _identity: DeviceIdentity | None = None
 _channel_hash_resolver = None
 _serial_sources: list = []
+
+
+class DashboardUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    map_tile_url: StrictStr = Field(min_length=1, max_length=2048)
+
+    @field_validator("map_tile_url")
+    @classmethod
+    def validate_map_tile_url(cls, value: str) -> str:
+        if any(char.isspace() or ord(char) < 32 for char in value) or "\\" in value:
+            raise ValueError("Tile URL must not contain whitespace or backslashes")
+        if not all(token in value for token in ("{z}", "{x}", "{y}")):
+            raise ValueError("Tile URL must include {z}, {x}, and {y}")
+        parsed = urlsplit(value)
+        local = value.startswith("/") and not value.startswith("//")
+        remote = parsed.scheme in ("http", "https") and bool(parsed.hostname)
+        if not (local or remote) or parsed.username or parsed.password or parsed.fragment:
+            raise ValueError("Use a local path or HTTP(S) tile URL without credentials or fragments")
+        return value
+
+
+@router.put("/dashboard")
+async def update_dashboard(
+    req: DashboardUpdate,
+    claims: SessionClaims = Depends(require_admin),
+    audit=Depends(get_audit_writer),
+):
+    if _config is None:
+        raise HTTPException(503, "Config not loaded")
+    updates = {"map_tile_url": req.map_tile_url}
+    # Tile URLs may contain provider tokens; do not include the URL in the audit log.
+    with audit.timed_action(user=claims.subject, action="config.dashboard",
+                            params={"fields": list(updates)}):
+        try:
+            save_section_to_yaml("dashboard", updates)
+        except OSError as exc:
+            raise HTTPException(500, "Could not save map tile source") from exc
+        _config.dashboard.map_tile_url = req.map_tile_url
+    return {"saved": True, "restart_required": False, "updates": updates}
 
 
 def init_routes(

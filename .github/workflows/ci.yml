@@ -27,3 +27,10 @@ jobs:
 
       - name: Run tests
         run: python -m pytest tests/ -v --ignore=tests/test_crypto_service.py --ignore=tests/test_meshtastic_decoder.py --ignore=tests/test_meshcore_decoder.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Frontend behavior tests
+        run: node --test tests/*.test.cjs

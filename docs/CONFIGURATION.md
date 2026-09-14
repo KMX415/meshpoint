@@ -66,6 +66,20 @@ Full walkthrough: [TROUBLESHOOTING.md](TROUBLESHOOTING.md#disaster-recovery-with
 
 ---
 
+## Dashboard map tiles
+
+In **Configuration > Advanced > Map tiles**, administrators can save an
+OpenStreetMap-compatible tile URL template. Include `{z}`, `{x}`, and `{y}`;
+HTTP(S) URLs and local paths such as `/api/offline-map/tiles/region/{z}/{x}/{y}.png`
+are accepted. The local tile service or plugin must already be installed and running.
+The default is `https://tile.openstreetmap.org/{z}/{x}/{y}.png`.
+
+Reload the dashboard after saving; a service restart is unnecessary. The setting
+is persisted as `dashboard.map_tile_url` and is also available to plugins through
+admin-only `PUT /api/config/dashboard`. The map retains OpenStreetMap attribution.
+This configures tile requests only; it does not make the entire dashboard available
+offline. The default layer initializes immediately while configuration loads.
+
 ## Radio
 
 For dashboard roles and opt-in public summaries, see

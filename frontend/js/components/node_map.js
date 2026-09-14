@@ -37,10 +37,7 @@ class NodeMap {
             this._map.setView(MAP_DEFAULT_CENTER, MAP_DEFAULT_ZOOM);
         }
 
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
-            maxZoom: 19,
-        }).addTo(this._map);
+        window.createMapTileLayer(this._map);
 
         this._wireResizeRecalc();
 
