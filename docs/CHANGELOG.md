@@ -4,6 +4,10 @@
 
 #### Dashboard fixes (v0.8.0 development)
 
+- Dashboard startup opens its live connection before initial data fetches and
+  clears the connecting indicator on handshake. Setup and role checks share one
+  identity request.
+
 - Plugins can declare service dependencies with `requires`. Enablement checks
   dependencies, disabling a host also disables dependent plugins, and startup
   loads hosts first while reporting missing or cyclic dependencies.
