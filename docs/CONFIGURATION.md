@@ -3,17 +3,19 @@
 ## v0.8.0 device-side permissions
 
 In the development build, source installation and Web Terminal default to disabled,
-including on upgrades with no explicit settings. Merge only the permissions you
-want into `config/local.yaml` on the device, using unquoted YAML booleans, then
-restart Meshpoint:
+including on upgrades with no explicit settings. Administrators can change source
+installation immediately in **Settings > Plugins > Manage sources > Allow plugin
+downloads**. This saves `plugin_sources_enabled` automatically; no YAML edit is needed.
+
+Web Terminal still requires a device-side setting. Merge this into
+`config/local.yaml`, using an unquoted YAML boolean, then restart Meshpoint:
 
 ```yaml
-plugin_sources_enabled: true
 dashboard:
   web_terminal_enabled: true
 ```
 
-These permissions have no dashboard toggle. Existing installed modules remain
+Web Terminal has no dashboard toggle. Existing installed modules remain
 usable when source installation is locked. Terminal grants an administrator a
 full shell as the service account. See [plugins](PLUGINS.md#install-and-enable)
 and [dashboard access](DASHBOARD-ACCESS.md#device-side-permissions) for scope and

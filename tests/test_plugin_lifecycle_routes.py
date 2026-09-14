@@ -69,6 +69,26 @@ class TestPluginLifecycle(unittest.TestCase):
         self.assertEqual(self.client.delete("/api/plugins/sample").status_code, 409)
         self.assertTrue(self.folder.exists())
 
+    def test_inventory_includes_original_source_and_checkbox_persists(self):
+        self.login()
+        source = {"url": "https://github.com/example/plugins", "commit": "a" * 40}
+        self.runtime.config.plugins["sample"] = {"enabled": False, "source": source, "keep": 42}
+        response = self.client.put("/api/plugins/sample", json={"enabled": True})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["restart_required"])
+        row = self.client.get("/api/plugins").json()["plugins"][0]
+        self.assertEqual(row["source"], source)
+        self.assertTrue(row["enabled"])
+        self.assertEqual(self.runtime.config.plugins["sample"]["keep"], 42)
+
+    def test_update_rejects_different_source_before_downloading(self):
+        self.runtime.config.plugins["sample"] = {"enabled": False, "source": {"url": "original"}}
+        with patch("src.plugins.update.installer.install_from_source") as download:
+            with self.assertRaisesRegex(ValueError, "original source"):
+                replace_disabled(self.runtime, {}, {"url": "different"}, {"id": "sample"}, self.persist)
+            download.assert_not_called()
+        self.assertEqual((self.folder / "page.js").read_text(encoding="utf-8"), "// declared")
+
     def test_assets_require_loaded_plugin_admin_and_declared_path(self):
         self.assertEqual(self.client.get("/api/plugin-ui/sample/page.js").status_code, 401)
         self.login()

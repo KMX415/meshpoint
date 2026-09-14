@@ -36,28 +36,46 @@ class PluginsPanelController {
         state.textContent = `${plugin.status}${plugin.restart_required ? ' (restart required)' : ''}`;
         const error = document.createElement('p');
         error.textContent = plugin.error || '';
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'terminal-button';
-        button.textContent = plugin.enabled ? 'Disable' : 'Enable';
-        button.disabled = !plugin.enabled && ['incompatible', 'failed'].includes(plugin.status);
-        button.addEventListener('click', async () => {
+        const toggle = document.createElement('label');
+        toggle.className = 'store-toggle';
+        const button = document.createElement('input');
+        button.type = 'checkbox';
+        button.checked = plugin.enabled;
+        button.setAttribute('aria-label', `Enable ${module?.name || plugin.id}`);
+        button.disabled = !plugin.enabled && (['incompatible', 'failed'].includes(plugin.status)
+            || (plugin.dependency && !plugin.dependency.enabled));
+        toggle.append(button, document.createTextNode('Enabled'));
+        button.addEventListener('change', async () => {
+            const enabled = button.checked;
             button.disabled = true;
             try {
                 const response = await fetch(`/api/plugins/${encodeURIComponent(plugin.id)}`, {
                     method: 'PUT', credentials: 'same-origin',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({enabled: !plugin.enabled}),
+                    body: JSON.stringify({enabled}),
                 });
-                if (!response.ok) throw new Error('Could not save plugin settings.');
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.detail || 'Could not save plugin settings.');
                 await this.refresh();
                 this.status.textContent = 'Saved. Restart Meshpoint to apply.';
+                this.list.querySelector(`[data-plugin-id="${plugin.id}"] input[type="checkbox"]`)?.focus();
             } catch (failure) {
                 this.status.textContent = failure.message;
+                button.checked = plugin.enabled;
                 button.disabled = false;
             }
         });
-        card.append(title, description, state, error, button);
+        const source = document.createElement('p');
+        source.textContent = plugin.source?.url
+            ? `Updates & support: ${this.catalog.sourceName(plugin.source)} (${plugin.source.url})`
+            : plugin.locked ? 'Bundled with Meshpoint' : 'Source not recorded';
+        card.append(title, description, source, state, error, toggle);
+        if (plugin.dependency) {
+            const dependency = document.createElement('p');
+            dependency.textContent = plugin.dependency.enabled ? `Requires ${plugin.dependency.id} (enabled).`
+                : `Install and enable ${plugin.dependency.id} first.`;
+            card.append(dependency);
+        }
         if (plugin.python_setup && !plugin.python_ready) {
             const setup = document.createElement('button');
             setup.type = 'button'; setup.className = 'terminal-button'; setup.textContent = 'Install Reticulum dependencies';

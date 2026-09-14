@@ -25,11 +25,18 @@ def build_router(runtime):
             live_error = next((getattr(service, "failure", "") for owner, service in runtime.live
                                if owner == state.name and getattr(service, "failure", "")), "")
             enabled = runtime.config.plugins.get(state.name, {}).get("enabled") is True
+            host = next((s for s in runtime.states.values() if s.manifest and s.manifest.sidebar
+                         and manifest and manifest.hook
+                         and s.manifest.sidebar.route == manifest.hook.host), None)
             rows.append({
                 "id": state.name,
                 "version": manifest.version if manifest else "",
                 "description": manifest.description if manifest else "",
                 "author": manifest.author if manifest else "",
+                "source": runtime.config.plugins.get(state.name, {}).get("source"),
+                "dependency": ({"id": host.name if host else manifest.hook.host,
+                                "enabled": bool(host and runtime.config.plugins.get(host.name, {}).get("enabled") is True)}
+                               if manifest and manifest.hook else None),
                 "provides": list(manifest.provides) if manifest else [],
                 "packages": list(manifest.apt) if manifest else [],
                 "dependencies": dependency_report(manifest) if manifest else None,

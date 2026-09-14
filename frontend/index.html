@@ -583,19 +583,18 @@
                         <p class="store-empty" data-store-empty hidden>No modules match. Try another search or category.</p>
                         <details class="auth-card store-sources" data-store-source-panel>
                         <summary>Plugin sources <span>Choose where your modules come from</span></summary>
-                        <section class="store-source-setup" data-source-setup hidden aria-label="Enable plugin downloads">
-                            <h3>Enable downloads on the device first</h3>
-                            <p>This permission cannot be changed from the dashboard. Ask the device owner to complete these steps, or use SSH if you manage this Meshpoint.</p>
-                            <ol>
-                                <li>Edit <code>/opt/meshpoint/config/local.yaml</code> on the device. Add or update the top-level setting below, outside any other section:<pre><code>plugin_sources_enabled: true</code></pre></li>
-                                <li>Save the file, then restart Meshpoint:<pre><code>sudo systemctl restart meshpoint</code></pre>Capture briefly pauses during the restart.</li>
-                                <li>Reload this page. The source fields will unlock. Review the catalog below, confirm that you trust it, then select <strong>Add source</strong>.</li>
-                            </ol>
-                            <p>Your existing mesh features and installed modules do not need this permission. Enabling downloads does not install anything automatically.</p>
+                        <section class="store-source-setup" aria-label="Plugin download permission">
+                            <label class="store-toggle"><input type="checkbox" data-source-enabled disabled> Allow plugin downloads</label>
+                            <p>Allow administrators to add sources, install plugins and download updates. Changes save immediately. Installed plugins keep their current settings.</p>
                         </section>
-                        <p class="auth-card__hint">Add a trusted GitHub catalog to install modules. Each download uses the revision shown below.</p>
-                        <p class="auth-card__hint">The fields below suggest the Meshpoint RC catalog. You can replace them with another trusted catalog. Adding a branch pins its current commit; later updates require your action.</p>
+                        <p class="auth-card__hint">Choose a source you trust. Listing a source does not mean every plugin has been reviewed. The selected maintainer provides plugin updates and support.</p>
                         <form data-source-form>
+                            <label class="cfg-field store-source-picker"><span class="cfg-field__label">Plugin source</span><select class="cfg-field__input" data-source-preset disabled>
+                                <option value="meshpoint">Meshpoint maintained (release candidate)</option>
+                                <option value="einstein">Einstein PD2EMC</option>
+                                <option value="custom">Custom repository</option>
+                            </select></label>
+                            <p class="auth-card__hint store-source-picker" data-source-description></p>
                             <label class="cfg-field"><span class="cfg-field__label">GitHub repository</span><input class="cfg-field__input" type="url" name="url" required value="https://github.com/KMX415/meshpoint" placeholder="https://github.com/owner/plugins"></label>
                             <label class="cfg-field"><span class="cfg-field__label">Branch, tag or commit</span><input class="cfg-field__input" name="ref" value="feat/v0.8.0" required></label>
                             <label><input type="checkbox" name="trusted" required> I trust this source. Enabled plugins can run code with Meshpoint's permissions.</label>
@@ -606,7 +605,7 @@
                     </section>
                     <article class="auth-card store-installed" data-store-installed>
                         <h3 class="auth-card__title">Installed plugins</h3>
-                        <p class="auth-card__hint">Enablement changes take effect after restarting Meshpoint. Installing a plugin does not enable it.</p>
+                        <p class="auth-card__hint">Check Enabled to turn on a plugin. Changes save here and take effect after restarting Meshpoint. Installing a plugin does not enable it.</p>
                         <button class="terminal-button" type="button" data-plugin-refresh>Refresh</button>
                         <p class="auth-status" data-plugin-status role="status"></p>
                         <div data-plugin-list></div>

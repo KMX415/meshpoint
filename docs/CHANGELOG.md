@@ -4,9 +4,11 @@
 
 #### Dashboard fixes (v0.8.0 development)
 
-- Plugin source setup explains locked downloads above the module cards, provides
-  device setup steps and suggests the RC catalog. Permission-check failures are
-  distinguished from an intentional download lock.
+- Plugin downloads can be enabled from an administrator checkbox without editing
+  YAML or restarting. Source presets, per-module source selection, maintainer
+  labels and installed-plugin checkboxes make setup available from the dashboard.
+  Updates retain the original source. Permission-check failures are distinguished
+  from an intentional download lock.
 - Sort the local node grid by packet count, highest first, with last-heard
   tie-breaking, favorites pinning and existing hop filters. The selection is
   remembered across reloads; missing and zero counts sort after positive counts.
@@ -38,7 +40,8 @@
   by default, including upgrades without explicit settings. Catalog browsing and
   installed-module management remain available. Terminal access requires
   `dashboard.web_terminal_enabled: true`; source downloads require
-  `plugin_sources_enabled: true`. Both require a service restart.
+  `plugin_sources_enabled: true`, saved by the dashboard checkbox immediately.
+  Only the terminal permission requires a service restart.
 
 - Optional plugin store with search, categories, hardware/dependency information,
   source trust and commit pinning, selected installs, enablement, update and removal.

@@ -87,6 +87,47 @@ class TestPluginSourceRoutes(unittest.TestCase):
         self.assertEqual(sources[0]["ref"],SHA)
         self.assertEqual(self.add().status_code,409)
 
+    def test_download_permission_requires_admin_and_strict_boolean(self):
+        endpoint = "/api/plugin-sources/settings"
+        self.assertEqual(self.client.put(endpoint, json={"enabled": False}).status_code, 401)
+        self.login("viewer")
+        self.assertEqual(self.client.put(endpoint, json={"enabled": False}).status_code, 403)
+        self.login()
+        for invalid in ["true", "false", 1, None]:
+            self.assertEqual(self.client.put(endpoint, json={"enabled": invalid}).status_code, 422)
+        self.persist.assert_not_called()
+
+    def test_download_permission_applies_without_restart_and_preserves_plugins(self):
+        self.login()
+        self.runtime.config.plugins["sample"] = {"enabled": True, "option": "keep"}
+        endpoint = "/api/plugin-sources/settings"
+        response = self.client.put(endpoint, json={"enabled": False})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["restart_required"])
+        self.assertFalse(self.client.get("/api/plugin-sources").json()["sources_enabled"])
+        self.assertEqual(self.add().status_code, 403)
+        self.resolve.assert_not_called()
+        self.persist.assert_called_with("plugin_sources_enabled", False)
+        self.assertEqual(self.client.put(endpoint, json={"enabled": True}).status_code, 200)
+        self.assertEqual(self.add().status_code, 200)
+        self.assertEqual(self.runtime.config.plugins["sample"], {"enabled": True, "option": "keep"})
+
+    def test_permission_save_failure_keeps_effective_setting(self):
+        self.login()
+        self.persist.side_effect = PermissionError("read only")
+        response = self.client.put("/api/plugin-sources/settings", json={"enabled": False})
+        self.assertEqual(response.status_code, 500)
+        self.assertTrue(self.runtime.config.plugin_sources_enabled)
+
+    def test_permission_revoked_during_catalog_fetch_prevents_source_save(self):
+        self.login()
+        def revoke(*args):
+            self.runtime.config.plugin_sources_enabled = False
+            return CATALOG
+        self.catalog.side_effect = revoke
+        self.assertEqual(self.add().status_code, 403)
+        self.persist.assert_not_called()
+
     def test_install_clears_old_enablement_and_uses_pinned_sha(self):
         self.login()
         self.add()

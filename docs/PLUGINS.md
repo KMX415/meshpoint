@@ -29,13 +29,14 @@ An RTL-SDR receiver is separate hardware from the Meshtastic or MeshCore USB nod
 ## Install and enable
 
 Source downloads are locked by default, including on upgrades without an explicit
-opt-in. On the device, add `plugin_sources_enabled: true` at the top level of
-`config/local.yaml`, then restart Meshpoint. Use a YAML boolean, not a quoted
-string. There is no dashboard switch for this permission. With it off, catalog
+opt-in. As an administrator, open **Settings > Plugins > Manage sources** and
+check **Allow plugin downloads**. The permission saves immediately and survives
+restarts; no YAML editing or restart is needed to change it. With it off, catalog
 browsing and installed-module management remain available, but source addition,
 revision changes, installation and updates (including theme installs) are denied.
 The separate reviewed Reticulum dependency recipe remains available.
-Set the flag to `false` and restart to lock downloads again.
+Uncheck **Allow plugin downloads** to lock downloads again. Existing plugins keep
+their settings. A download already in progress finishes before the change saves.
 
 This controls the source API, not all administrator capabilities. Backup restore
 can replace configuration and plugin files, and enabled plugins run trusted code.
@@ -47,15 +48,22 @@ native decoder is available. Use the source catalog and installed inventory to
 confirm what is actually downloaded and enabled. Optional pages require an
 administrator; [public summaries](DASHBOARD-ACCESS.md) do not expose them.
 
-1. Open **Settings > Plugins** as an administrator. If downloads are locked, select **How to enable downloads** for device setup instructions. Disabled source fields do not mean the page is broken.
-2. Review the suggested Meshpoint RC repository and revision, or enter another trusted GitHub catalog. Confirm trust and select **Add source**. Adding a source resolves the branch, tag, or commit to a fixed commit. No background update follows subsequent branch changes.
+1. Open **Settings > Plugins** as an administrator. In **Manage sources**, check **Allow plugin downloads**.
+2. Pick **Meshpoint maintained (release candidate)**, **Einstein PD2EMC**, or **Custom repository**. Review the repository and revision, confirm trust and select **Add source**. Listing a source does not certify every plugin. Adding a source resolves the branch, tag, or commit to a fixed commit. No background update follows subsequent branch changes.
 3. Browse the source and install only the desired items. Installation downloads and validates code; it does not enable it or install dependencies.
 4. Install and enable the **RTL-SDR** host before enabling one of its receiver modules.
 5. Install the module's native tools on the device. Refresh the plugin list to see missing command checks.
-6. Enable the module and restart Meshpoint using the existing restart controls. Reload the dashboard to load its page.
+6. Check **Enabled** on the installed module and restart Meshpoint using the existing restart controls. Reload the dashboard to load its page.
 7. Open the optional page, review its receiver settings, and press **Start**. Enablement alone leaves a receiver idle.
 
 The Meshpoint RC catalog is at `https://github.com/KMX415/meshpoint`, revision `feat/v0.8.0`. Do not add the stable branch expecting these entries yet. Catalog source code is trusted application code, with access to the Meshpoint process when enabled; it is not sandboxed.
+
+Einstein's independent catalog is at `https://github.com/javastraat/meshpoint-plugins`,
+revision `main`. Cards show the source responsible for updates and support. If
+several sources offer the same plugin, its **Download source** picker chooses the
+version to install. Installed plugins default to their original source, which is
+retained for updates. To switch an installed plugin to another source, disable
+it, restart, uninstall it, and install from the chosen source. Settings are retained.
 
 ## Dependency setup
 
