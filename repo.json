@@ -1,7 +1,7 @@
 {
   "meshpoint_repo": 1,
-  "name": "Meshpoint optional plugins (unreleased)",
-  "description": "Select only the optional receivers you need. No automatic setup or enablement.",
+  "name": "Meshpoint legacy plugin catalog (release candidate)",
+  "description": "Compatibility snapshot for existing source pins. New official plugin development is maintained at https://github.com/KMX415/meshpoint-plugins. Installed plugins keep their original update source.",
   "plugins": [
     {
       "id": "rtlsdr",

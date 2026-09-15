@@ -590,13 +590,13 @@
                         <p class="auth-card__hint">Choose a source you trust. Listing a source does not mean every plugin has been reviewed. The selected maintainer provides plugin updates and support.</p>
                         <form data-source-form>
                             <label class="cfg-field store-source-picker"><span class="cfg-field__label">Plugin source</span><select class="cfg-field__input" data-source-preset disabled>
-                                <option value="meshpoint">Meshpoint maintained (release candidate)</option>
-                                <option value="einstein">Einstein PD2EMC</option>
+                                <option value="meshpoint">Meshpoint Official (release candidate)</option>
+                                <option value="einstein">Einstein Experimental</option>
                                 <option value="custom">Custom repository</option>
                             </select></label>
                             <p class="auth-card__hint store-source-picker" data-source-description></p>
-                            <label class="cfg-field"><span class="cfg-field__label">GitHub repository</span><input class="cfg-field__input" type="url" name="url" required value="https://github.com/KMX415/meshpoint" placeholder="https://github.com/owner/plugins"></label>
-                            <label class="cfg-field"><span class="cfg-field__label">Branch, tag or commit</span><input class="cfg-field__input" name="ref" value="feat/v0.8.0" required></label>
+                            <label class="cfg-field"><span class="cfg-field__label">GitHub repository</span><input class="cfg-field__input" type="url" name="url" required value="https://github.com/KMX415/meshpoint-plugins" placeholder="https://github.com/owner/plugins"></label>
+                            <label class="cfg-field"><span class="cfg-field__label">Branch, tag or commit</span><input class="cfg-field__input" name="ref" value="main" required></label>
                             <label><input type="checkbox" name="trusted" required> I trust this source. Enabled plugins can run code with Meshpoint's permissions.</label>
                             <button class="terminal-button" type="submit">Add source</button>
                         </form>
@@ -1000,7 +1000,7 @@
     <script src="js/settings/theme_colors.js"></script>
     <script src="js/settings/theme_editor.js"></script>
     <script src="js/settings/plugin_store_data.js?v=regions-20260911"></script>
-    <script src="js/settings/plugin_catalog.js?v=source-setup-20260912"></script>
+    <script src="js/settings/plugin_catalog.js?v=official-sources-20260915"></script>
     <script src="js/settings/plugins_panel_controller.js?v=store-20260911"></script>
     <script src="sidebar/sidebar_plugin_registry.js"></script>
     <script src="sidebar/page_hook_registry.js"></script>

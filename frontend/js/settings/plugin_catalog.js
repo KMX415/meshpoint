@@ -11,10 +11,10 @@ class PluginCatalog {
         this.sourceChoices = new Map();
         this.sourceOrder = [];
         this.sourcePresets = {
-            meshpoint: {label:'Meshpoint maintained', url:'https://github.com/KMX415/meshpoint', ref:'feat/v0.8.0',
-                description:'Meshpoint-maintained versions. This release candidate catalog contains optional modules adapted for Meshpoint.'},
-            einstein: {label:'Einstein PD2EMC', url:'https://github.com/javastraat/meshpoint-plugins', ref:'main',
-                description:'Independent plugins and themes maintained by Einstein PD2EMC. Available modules come from his published catalog.'},
+            meshpoint: {label:'Meshpoint Official', url:'https://github.com/KMX415/meshpoint-plugins', ref:'main',
+                description:'Official Meshpoint plugin repository, maintained through reviewed pull requests. This catalog targets the v0.8.0 release candidate; hardware validation varies by module.'},
+            einstein: {label:'Einstein Experimental', url:'https://github.com/javastraat/meshpoint-plugins', ref:'main',
+                description:'Experimental and additional plugins and themes maintained independently by Einstein PD2EMC. These are separate from the official Meshpoint catalog.'},
         };
         this.permission = root.querySelector('[data-source-enabled]');
         this.permission.addEventListener('change', () => this.setDownloads());
@@ -81,6 +81,7 @@ class PluginCatalog {
     }
 
     sourceName(source) {
+        if (source?.url === 'https://github.com/KMX415/meshpoint') return 'Meshpoint legacy catalog';
         return Object.values(this.sourcePresets).find(preset => preset.url === source?.url)?.label || source?.url || 'Source not recorded';
     }
 

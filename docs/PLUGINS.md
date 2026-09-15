@@ -6,7 +6,7 @@ This guide describes the unreleased `feat/v0.8.0` integration. The stable releas
 
 Meshtastic and MeshCore keep their existing capture, messaging, configuration, and firmware pages. Plugin and theme managers are available in Settings for administrators. An empty plugin installation performs no optional downloads, starts no extra receiver, and adds no optional Python packages to the core environment.
 
-The repository's `apps/` directory holds catalog source. Meshpoint discovers installed apps only in `plugins/apps/` beside the configured database, normally `data/plugins/apps/`. Cloning the repository does not enable its catalog modules.
+The official catalog is maintained in [KMX415/meshpoint-plugins](https://github.com/KMX415/meshpoint-plugins). This repository's `apps/` directory is a compatibility snapshot for existing source pins and core regression tests. New plugin changes belong in the dedicated repository. Meshpoint discovers installed apps only in `plugins/apps/` beside the configured database, normally `data/plugins/apps/`. Cloning either repository does not enable its catalog modules.
 
 ## Choose modules
 
@@ -49,17 +49,19 @@ confirm what is actually downloaded and enabled. Optional pages require an
 administrator; [public summaries](DASHBOARD-ACCESS.md) do not expose them.
 
 1. Open **Settings > Plugins** as an administrator. In **Manage sources**, check **Allow plugin downloads**.
-2. Pick **Meshpoint maintained (release candidate)**, **Einstein PD2EMC**, or **Custom repository**. Review the repository and revision, confirm trust and select **Add source**. Listing a source does not certify every plugin. Adding a source resolves the branch, tag, or commit to a fixed commit. No background update follows subsequent branch changes.
+2. Pick **Meshpoint Official (release candidate)**, **Einstein Experimental**, or **Custom repository**. Review the repository and revision, confirm trust and select **Add source**. Listing a source does not certify every plugin. Adding a source resolves the branch, tag, or commit to a fixed commit. No background update follows subsequent branch changes.
 3. Browse the source and install only the desired items. Installation downloads and validates code; it does not enable it or install dependencies.
 4. Install and enable the **RTL-SDR** host before enabling one of its receiver modules.
 5. Install the module's native tools on the device. Refresh the plugin list to see missing command checks.
 6. Check **Enabled** on the installed module and restart Meshpoint using the existing restart controls. Reload the dashboard to load its page.
 7. Open the optional page, review its receiver settings, and press **Start**. Enablement alone leaves a receiver idle.
 
-The Meshpoint RC catalog is at `https://github.com/KMX415/meshpoint`, revision `feat/v0.8.0`. Do not add the stable branch expecting these entries yet. Catalog source code is trusted application code, with access to the Meshpoint process when enabled; it is not sandboxed.
+The official RC catalog is at `https://github.com/KMX415/meshpoint-plugins`, revision `main`. Its protected branch requires independent review and compatibility checks. The catalog still targets Meshpoint v0.8.0 RC; individual modules retain the validation status listed above. Catalog source code is trusted application code, with access to the Meshpoint process when enabled; it is not sandboxed.
 
-Einstein's independent catalog is at `https://github.com/javastraat/meshpoint-plugins`,
-revision `main`. Cards show the source responsible for updates and support. If
+Existing sources pointing to `https://github.com/KMX415/meshpoint` remain valid and are labelled **Meshpoint legacy catalog**. This migration does not rewrite their pins or the source of any installed plugin. The compatibility snapshot remains on `feat/v0.8.0`; add the official repository for new development and updates. Before explicitly switching an installed plugin to the official source, back up its configuration and data and follow the disable/restart/uninstall/reinstall steps below.
+
+Einstein's independent catalog for experimental and additional plugins is at `https://github.com/javastraat/meshpoint-plugins`,
+revision `main`. Selecting this source is separate from trusting the official catalog. Cards show the source responsible for updates and support. If
 several sources offer the same plugin, its **Download source** picker chooses the
 version to install. Installed plugins default to their original source, which is
 retained for updates. To switch an installed plugin to another source, disable
