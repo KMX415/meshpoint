@@ -218,6 +218,28 @@ A second Meshtastic radio (Seeed Xiao S3, Heltec, T-Beam, and similar) can liste
 
 ---
 
+## Hardware and accessory links
+
+These optional parts cover USB nodes, installation, and accessories. Choose the
+radio frequency, antenna connector, and board variant that match your setup.
+See the [Hardware Matrix](docs/HARDWARE-MATRIX.md) for supported configurations.
+
+| Item | Use |
+| --- | --- |
+| [Heltec WiFi LoRa 32 V3 development board](https://amzn.to/4h7rIrf) | Sold by AYWHP; includes an SX1262 radio, 0.96-inch OLED display, and antenna. Optional USB node with the appropriate firmware. |
+| [Heltec ESP32 LoRa 32 V4 development board](https://amzn.to/4gTLJmj) | ESP32-S3/SX1262 board with OLED display, 2MB PSRAM, and 16MB flash; optional USB node with the appropriate firmware. |
+| [Seeed Studio XIAO ESP32S3 + Wio-SX1262 Meshtastic kit](https://amzn.to/4AbTKKQ) | Pre-flashed Meshtastic node with 3D-printed case, 2dBi SMA antenna, and USB-C cable. |
+| [RAKwireless WisBlock Meshtastic Starter Kit, US915](https://amzn.to/3UK1Z0C) | Includes RAK19007 baseboard, RAK4631 core, LoRa/Bluetooth antennas, USB cable, and screws. Pre-flashed; battery and case are not included. |
+| [Right-angle USB-A to USB-C data cables, 2-pack](https://amzn.to/4hslGTf) | Short 10cm flat cables with up/down 90-degree connectors for tight USB-node installations. |
+| [Atolla powered 4-port USB 3.0 hub](https://amzn.to/4xqrQIi) | Four switched data ports, a separate charging port, and a supplied 5V/3A adapter. Connect radios to the data ports. |
+| [Lexar E-Series 64GB microSDXC card](https://amzn.to/46m9VaT) | UHS-I, A1-rated storage for microSD-based gateways; listed transfer speed up to 100MB/s. |
+| [Acer USB-A/USB-C SD and microSD reader](https://amzn.to/4yEY3gi) | USB 3.0 reader with separate SD/microSD slots and both host connector types for flashing installation cards. |
+| [Slinkdsco 915MHz whip antennas, red, 2 sets](https://amzn.to/4j64VOY) | 17cm SMA-male antennas for 902–928MHz, with 10cm U.FL-to-SMA-female pigtails. Match your radio's band and connector. |
+| [Waveshare Mini Base Board for Raspberry Pi CM4](https://amzn.to/4ircy2n) | Carrier board for CM4 Lite/eMMC modules, with a standard CM4 socket and 40-pin GPIO header. See the [Chameleon eMMC flashing guide](docs/SYNCROBIT-CHAMELEON.md). |
+| [VFAN USB GPS receiver with magnetic base](https://amzn.to/4AgqHpk) | UBX-G7020KT GNSS receiver with NMEA output and a 2m USB cable; see [GPS configuration](docs/CONFIGURATION.md#location-gps-source). |
+
+---
+
 ## Install
 
 ```bash
@@ -406,3 +428,7 @@ FM audio correction follows the US/EU starting profile where known and can be
 selected explicitly. P2000 is Netherlands-specific; DAB/DAB+ currently supports
 Band III only. See [receiver region settings](docs/PLUGINS.md#receiver-regions-and-local-channels)
 for persistent configuration and module limitations.
+
+---
+
+As an Amazon Associate I earn from qualifying purchases.
