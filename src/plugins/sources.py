@@ -120,7 +120,9 @@ def tarball_url(owner: str, repo: str, ref: str) -> str:
 
 
 def commits_api_url(owner: str, repo: str, ref: str) -> str:
-    return f"https://api.github.com/repos/{owner}/{repo}/commits/{ref}"
+    # Metadata is repeated on each page; avoid downloading a whole import diff
+    # just to pin a source revision. The response-size limit still applies.
+    return f"https://api.github.com/repos/{owner}/{repo}/commits/{ref}?per_page=1"
 
 
 _MAX_COMMIT_JSON_BYTES = 512 * 1024
