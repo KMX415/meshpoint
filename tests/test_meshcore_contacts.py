@@ -76,6 +76,31 @@ class TestMeshcoreContactParser(unittest.TestCase):
             [],
         )
 
+    def test_position_survives_contact_parsing_without_a_name(self):
+        result = SimpleNamespace(payload={"aa": {
+            "public_key": "aabb0011223344", "adv_lat": "0", "adv_lon": "12.5",
+        }})
+        with patch.object(MeshcoreContactParser, "_is_error_event", return_value=False):
+            contacts = MeshcoreContactParser.from_command_result(result)
+        self.assertEqual(len(contacts), 1)
+        self.assertEqual(contacts[0]["name"], "")
+        self.assertEqual(contacts[0]["adv_lat"], 0.0)
+        self.assertEqual(contacts[0]["adv_lon"], 12.5)
+
+    def test_invalid_or_unset_position_is_dropped_as_a_pair(self):
+        for lat, lon in [
+            (None, 10), (10, None), (0, 0), (91, 10), (10, -181),
+            (float("nan"), 10), (10, float("inf")), (True, 10),
+            (10, False), ("bad", 10), ([], 10),
+        ]:
+            with self.subTest(lat=lat, lon=lon):
+                contact = MeshcoreContactParser._entries_to_contacts([{
+                    "public_key": "aabb0011223344", "adv_name": "Test",
+                    "adv_lat": lat, "adv_lon": lon,
+                }])[0]
+                self.assertIsNone(contact["adv_lat"])
+                self.assertIsNone(contact["adv_lon"])
+
 
 class TestMeshcoreContactCache(unittest.TestCase):
 

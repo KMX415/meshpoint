@@ -418,7 +418,13 @@ class PipelineCoordinator:
         if node_update:
             await self._node_repo.upsert(node_update)
             self._last_node_update[node_update.node_id] = node_update
-            self._stats_reporter.record_node(node_update.to_dict())
+            # A key-only MeshCore advert must not replace contact-enriched
+            # coordinates in the heartbeat with an incomplete event snapshot.
+            reported_node = node_update
+            if packet.protocol == Protocol.MESHCORE:
+                reported_node = await self._node_repo.get_by_id(node_update.node_id)
+            if reported_node is not None:
+                self._stats_reporter.record_node(reported_node.to_dict())
             if node_update.public_key:
                 try:
                     node_int = int(node_update.node_id, 16)

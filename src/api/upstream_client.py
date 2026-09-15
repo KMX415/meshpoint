@@ -247,9 +247,29 @@ class UpstreamClient:
         heartbeat["stats"] = report
         heartbeat["packets_since_last"] = report.get("total_packets", 0)
         if nodes:
-            heartbeat["nodes"] = nodes
+            heartbeat["nodes"] = [self._heartbeat_node(node) for node in nodes]
 
         return heartbeat
+
+    @staticmethod
+    def _heartbeat_node(node: dict) -> dict:
+        """Include the packet-shaped fields consumed by MeshCore cloud ingest.
+
+        Keep the flat roster fields for existing consumers. This is still a
+        node summary in the scheduled heartbeat, not another captured packet.
+        """
+        if node.get("protocol") != "meshcore":
+            return node
+        return {
+            **node,
+            "source_id": node["node_id"],
+            "packet_type": "nodeinfo",
+            "decoded_payload": {
+                key: node[key]
+                for key in ("long_name", "short_name", "latitude", "longitude", "role")
+                if node.get(key) is not None
+            },
+        }
 
     def _build_registration(self) -> dict:
         return {

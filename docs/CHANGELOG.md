@@ -2,6 +2,15 @@
 
 ### Unreleased
 
+#### MeshCore positions
+
+- Preserve advertised coordinates from the USB companion's contact roster and
+  apply them to heard MeshCore nodes, including adverts that carry only a public
+  key (#136). Queue enriched nodes in the existing Meshradar heartbeat using the
+  cloud's expected position fields. Later adverts without coordinates retain the
+  saved position. Invalid or unset coordinate pairs do not erase known positions;
+  contact refreshes do not increase packet counts or change reception times.
+
 #### Dashboard fixes (v0.8.0 development)
 
 - The Meshtastic topbar indicator only appears when a concentrator or Meshtastic
