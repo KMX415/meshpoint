@@ -2,6 +2,15 @@
 
 ### Unreleased
 
+#### Hardware support
+
+- Honor `RESET_GPIO` in the in-app concentrator reset fallback, matching valid
+  overrides used by the service reset script. Explicit arguments retain priority;
+  invalid nonempty overrides skip the fallback with a warning.
+- Document Einstein PD2EMC's COTX X3 findings: reset GPIO 22, button 23, LED 27,
+  manual service configuration and reported restart/transmission results. No
+  automatic board detection is added; physical validation of this port is pending.
+
 #### MeshCore positions
 
 - Preserve advertised coordinates from the USB companion's contact roster and

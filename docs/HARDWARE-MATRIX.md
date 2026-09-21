@@ -85,6 +85,62 @@ supply enough current for CM4 + concentrator (plan for up to ~2-3 A at 5 V
 equivalent). Prefer `sudo poweroff` before removing PoE to avoid SPI latch
 (see below).
 
+### COTX X3 Helium Miner notes
+
+**Community-tested unit, September 2026:** Einstein PD2EMC reports a Pi 4
+with an SX1302-class concentrator, working transmission and repeated service
+restarts after correcting the reset GPIO. See his
+[hardware findings](https://github.com/javastraat/meshpoint/commit/2f7c80137c8c962d6549a6499d572de5545565cb).
+These results describe his unit; this port has not been physically retested.
+
+| Setting | Reported value |
+|---|---|
+| Concentrator reset | GPIO **22** |
+| Front button | GPIO **23** |
+| Front LED | GPIO **27** |
+| Fan pin | Unknown |
+| Automatic board detection / installer preset | Not implemented |
+
+On this board, use `sudo systemctl edit meshpoint` and add:
+
+```ini
+[Service]
+Environment=RESET_GPIO=22
+```
+
+Then apply the override:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart meshpoint
+sudo systemctl show meshpoint -p Environment
+journalctl -u meshpoint -n 100 --no-pager
+```
+
+The reset shell script already accepts this variable. The **v0.8.0 development
+reset fix** also makes the in-app fallback honor it; older builds can still
+toggle the default 17/25 pins. Explicit in-app pin arguments take precedence.
+Use nonnegative, space-separated integers. An invalid nonempty override causes
+the updated in-app fallback to warn and skip reset; it does not validate or
+disable systemd's separate reset script. Do not use malformed values there.
+
+Einstein observed radio initialization failures on service restart before this
+correction, even when a full reboot appeared to recover the board. A successful
+reboot alone is not evidence that the reset wiring is correct.
+
+His tested power arrangement also showed under-voltage with a 2 A supply and
+USB passthrough. Use an adequately rated supply directly into the Pi and check
+`vcgencmd get_throttled`; see [Power and SD Cards](#power-and-sd-cards).
+Exact concentrator part number, carrier crypto chip and other unverified board
+details remain unknown. This branch does not add button/LED dashboard presets.
+
+**Owner verification:** Record the board revision, OS/kernel, Meshpoint commit
+and power supply. Check cold boot and at least three consecutive service
+restarts, reception from a known peer, transmission received by another node
+when TX is configured, and clean shutdown followed by power-on recovery.
+Record failures and logs separately from initialization success. Avoid forced
+power cuts as a test procedure. Physical verification of this port is pending.
+
 ### Bobcat Miner 300 notes
 
 The Bobcat is **not** a Raspberry Pi: it uses **Rockchip RK3566**, onboard
