@@ -4,6 +4,10 @@
 
 #### Hardware support
 
+- Document Bobcat G285 as community-reported working in #137, with a separate
+  SPI1 and GPIO 125/122/149 recipe. Preserve the G295 procedure and distinguish
+  reported operation from pending TX/RX and restart verification.
+
 - Honor `RESET_GPIO` in the in-app concentrator reset fallback, matching valid
   overrides used by the service reset script. Explicit arguments retain priority;
   invalid nonempty overrides skip the fallback with a warning.
