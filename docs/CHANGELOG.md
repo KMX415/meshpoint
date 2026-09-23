@@ -4,6 +4,10 @@
 
 #### Hardware support
 
+- Add sicXnull's Heltec HT-M2808 installation guide from #138 and link it
+  from the README, hardware matrix and documentation index. TX/RX status
+  reflects the contributor's report.
+
 - Document Bobcat G285 as community-reported working in #137, with a separate
   SPI1 and GPIO 125/122/149 recipe. Preserve the G295 procedure and distinguish
   reported operation from pending TX/RX and restart verification.

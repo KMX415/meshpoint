@@ -141,6 +141,18 @@ when TX is configured, and clean shutdown followed by power-on recovery.
 Record failures and logs separately from initialization success. Avoid forced
 power cuts as a test procedure. Physical verification of this port is pending.
 
+### Heltec HT-M2808 community guide
+
+See the [HT-M2808 installation guide](HELTEC-M2808.md), contributed by
+sicXnull in [PR #138](https://github.com/KMX415/meshpoint/pull/138).
+
+| Area | Contributor report |
+|---|---|
+| Host / storage | Rockchip RK3328 / eMMC |
+| OS | Board-specific Debian Bookworm image |
+| Setup | Manual SPI/GPIO and systemd configuration; see guide |
+| Meshtastic TX/RX | Reported working by the contributor; not independently verified by maintainers |
+
 ### Bobcat Miner 300 notes
 
 The Bobcat is **not** a Raspberry Pi: it uses **Rockchip RK3566**, onboard

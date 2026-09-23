@@ -206,6 +206,13 @@ OTG not confirmed on G295).
 
 > **Step-by-step:** [Bobcat Miner 300 guide](docs/BOBCAT-300.md) and [Hardware Matrix](docs/HARDWARE-MATRIX.md).
 
+### Heltec HT-M2808 (community installation guide)
+
+sicXnull contributed a [Heltec HT-M2808 installation guide](docs/HELTEC-M2808.md)
+covering Debian Bookworm flashing, manual SPI/GPIO setup and troubleshooting.
+Meshtastic TX/RX is reported by the contributor in [PR #138](https://github.com/KMX415/meshpoint/pull/138);
+the setup has not been independently verified by Meshpoint maintainers.
+
 ### Optional: MeshCore USB Companion
 
 Add a Heltec V3/V4 or T-Beam running [MeshCore USB companion firmware](https://meshcore.io/flasher) to monitor MeshCore traffic alongside Meshtastic. Plug it into any USB port on the Pi -- the setup wizard auto-detects the device and configures its radio frequency for your region. You can also flash from the dashboard under Configuration → Firmware.
@@ -370,6 +377,7 @@ Start with the doc that matches what you are trying to do.
 - **[Onboarding Guide](docs/ONBOARDING.md):** step-by-step from empty Pi to running Meshpoint
 - **[Hardware Matrix](docs/HARDWARE-MATRIX.md):** RAK V2 vs SenseCap M1 vs Chameleon vs Bobcat vs DIY, WisMesh Node (experimental), Meshtastic USB nodes, MeshCore companion radios, antennas, what's not supported
 - **[Bobcat Miner 300](docs/BOBCAT-300.md):** Rockchip RK3566 + Armbian repurposing (manual SPI/GPIO)
+- **[Heltec HT-M2808](docs/HELTEC-M2808.md):** Community-contributed Debian Bookworm installation guide (manual SPI/GPIO)
 - **[WisMesh Node (experimental)](docs/plans/WISMESH-BRANCH.md):** RAK6421 HAT, meshtasticd, long-lived `feat/wismesh-hat` branch
 - **[Gateway ↔ Node migration](docs/MIGRATE-GATEWAY-TO-NODE.md):** switch between concentrator Gateway and WisMesh Node platforms
 - **[Configuration Guide](docs/CONFIGURATION.md):** all config options, private channels, relay, upstream, MQTT, radio tuning
