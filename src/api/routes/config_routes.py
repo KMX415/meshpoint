@@ -49,6 +49,7 @@ _tx_service = None
 _identity: DeviceIdentity | None = None
 _channel_hash_resolver = None
 _serial_sources: list = []
+_meshcore_sources: list = []
 
 
 class DashboardUpdate(BaseModel):
@@ -97,15 +98,17 @@ def init_routes(
     identity: DeviceIdentity | None = None,
     channel_hash_resolver=None,
     serial_sources: list | None = None,
+    meshcore_sources: list | None = None,
 ) -> None:
     global _config, _crypto, _tx_service, _identity, _channel_hash_resolver
-    global _serial_sources
+    global _serial_sources, _meshcore_sources
     _config = config
     _crypto = crypto
     _tx_service = tx_service
     _identity = identity
     _channel_hash_resolver = channel_hash_resolver
     _serial_sources = serial_sources or []
+    _meshcore_sources = meshcore_sources or []
 
 
 def _serial_status_entry(src) -> dict:
@@ -174,6 +177,7 @@ async def get_config(claims: SessionClaims = Depends(require_auth)):
 
     mc_status = {
         "connected": False,
+        "capture_connected": any(bool(src.connected) for src in _meshcore_sources),
         "companion_name": "",
         "radio": {},
         "companion_expected": "meshcore_usb" in (_config.capture.sources or []),

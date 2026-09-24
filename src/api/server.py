@@ -1437,6 +1437,7 @@ def _init_routes(
         identity=identity,
         channel_hash_resolver=channel_hash_resolver,
         serial_sources=_find_serial_sources(coord),
+        meshcore_sources=_find_meshcore_sources(coord),
     )
     mqtt_config_routes.init_routes(
         config=config,
