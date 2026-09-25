@@ -141,6 +141,52 @@ when TX is configured, and clean shutdown followed by power-on recovery.
 Record failures and logs separately from initialization success. Avoid forced
 power cuts as a test procedure. Physical verification of this port is pending.
 
+### Pisces P100 community setup
+
+**Contributor report, September 2026:** Einstein PD2EMC reports working
+transmission and repeated service restarts on a Pisces P100 after setting
+the concentrator reset to **GPIO 23**. See his
+[hardware findings](https://github.com/javastraat/meshpoint/commit/b821baaa42ec74a8444768395c0312f77498b843).
+These results describe his unit and have not been independently verified
+by Meshpoint maintainers.
+
+| Area | Reported value |
+|---|---|
+| Host | Raspberry Pi 4, powered by PoE |
+| Concentrator | SX1302-class |
+| Enclosure | Sealed outdoor enclosure |
+| Concentrator reset | GPIO **23** |
+| Setup | Manual reset override; no automatic board detection or installer preset |
+
+On a Pisces P100 running the v0.8.0 RC, after the normal Meshpoint installation,
+run `sudo systemctl edit meshpoint` and add:
+
+```ini
+[Service]
+Environment=RESET_GPIO=23
+```
+
+Apply the override and inspect startup:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart meshpoint
+sudo systemctl show meshpoint -p Environment
+journalctl -u meshpoint -n 100 --no-pager
+```
+
+This uses the existing reset override in both the service script and the RC's
+in-app fallback. It is specific to the reported Pisces board, not a replacement
+for other boards' reset settings. A successful cold boot alone does not verify
+the reset pin: check repeated service restarts as well as reception and, when
+TX is configured, transmission received by a known peer. Record the board
+revision and Meshpoint commit with the results.
+
+Onboard GPS remains unresolved in the contributor's
+[later report](https://github.com/javastraat/meshpoint/commit/3a68730868551912e3a50f8e57499ee4ca2bdeb4).
+This setup covers the concentrator only; it adds no GPS power controls or
+direct UART GPS support.
+
 ### Heltec HT-M2808 community guide
 
 See the [HT-M2808 installation guide](HELTEC-M2808.md), contributed by

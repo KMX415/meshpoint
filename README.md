@@ -213,6 +213,14 @@ covering Debian Bookworm flashing, manual SPI/GPIO setup and troubleshooting.
 Meshtastic TX/RX is reported by the contributor in [PR #138](https://github.com/KMX415/meshpoint/pull/138);
 the setup has not been independently verified by Meshpoint maintainers.
 
+### Pisces P100 (community setup)
+
+Einstein PD2EMC reports working transmission and repeated service restarts
+on this Pi 4-based, PoE-powered outdoor miner with a manual **GPIO 23**
+concentrator reset override. See the
+[Pisces P100 setup notes](docs/HARDWARE-MATRIX.md#pisces-p100-community-setup).
+The report has not been independently verified by Meshpoint maintainers.
+
 ### Optional: MeshCore USB Companion
 
 Add a Heltec V3/V4 or T-Beam running [MeshCore USB companion firmware](https://meshcore.io/flasher) to monitor MeshCore traffic alongside Meshtastic. Plug it into any USB port on the Pi -- the setup wizard auto-detects the device and configures its radio frequency for your region. You can also flash from the dashboard under Configuration → Firmware.

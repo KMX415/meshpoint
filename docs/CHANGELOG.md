@@ -4,6 +4,10 @@
 
 #### Hardware support
 
+- Document the Pisces P100's community-reported GPIO 23 concentrator reset
+  override and link setup notes from the README. Physical verification is
+  pending; no automatic hardware configuration or GPS changes are included.
+
 - Add sicXnull's Heltec HT-M2808 installation guide from #138 and link it
   from the README, hardware matrix and documentation index. TX/RX status
   reflects the contributor's report.
