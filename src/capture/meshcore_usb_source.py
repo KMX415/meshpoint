@@ -48,7 +48,16 @@ class MeshcoreUsbCaptureSource(CaptureSource):
         serial_port: Optional[str] = None,
         baud_rate: int = 115200,
         auto_detect: bool = True,
+        connection_type: str = "serial",
+        tcp_host: str = "127.0.0.1",
+        tcp_port: int = 5000,
     ):
+        if connection_type not in ("serial", "tcp"):
+            raise ValueError("Unknown MeshCore transport")
+        if connection_type == "tcp" and (not tcp_host or not 1 <= tcp_port <= 65535):
+            raise ValueError("Invalid MeshCore TCP endpoint")
+        self.connection_type = connection_type
+        self._tcp_host, self._tcp_port = tcp_host, tcp_port
         self._configured_port = serial_port
         self._baud_rate = baud_rate
         self._auto_detect = auto_detect
@@ -191,8 +200,13 @@ class MeshcoreUsbCaptureSource(CaptureSource):
 
             # Retain ownership before connecting: create_serial() can raise
             # after starting its dispatcher without returning the instance.
+            if self.connection_type == "tcp":
+                from meshcore.tcp_cx import TCPConnection
+                connection = TCPConnection(self._tcp_host, self._tcp_port)
+            else:
+                connection = create_serial_connection(port, self._baud_rate)
             self._meshcore = MeshCore(
-                create_serial_connection(port, self._baud_rate),
+                connection,
                 default_timeout=_MESHCORE_COMMAND_TIMEOUT_SECONDS,
             )
             response = await self._meshcore.connect()
@@ -291,7 +305,7 @@ class MeshcoreUsbCaptureSource(CaptureSource):
                     return
 
                 attempt += 1
-                if attempt >= 2 and self._resolved_port:
+                if attempt >= 2 and self._resolved_port and self.connection_type == "serial":
                     from src.capture.meshcore_dtr import pulse_dtr_reset
 
                     await asyncio.to_thread(
@@ -539,6 +553,8 @@ class MeshcoreUsbCaptureSource(CaptureSource):
                     logger.debug("Failed to restart auto fetching", exc_info=True)
 
     async def _resolve_port(self) -> Optional[str]:
+        if self.connection_type == "tcp":
+            return f"tcp://{self._tcp_host}:{self._tcp_port}"
         if self._configured_port:
             return self._configured_port
         if not self._auto_detect:
