@@ -135,7 +135,7 @@ ExecStartPre=+/bin/sh -c 'echo 0 > /sys/class/gpio/gpio0/value'
 ExecStartPre=+/bin/sleep 1.5
 ```
 
-GPIO **2** is the SX1301 concentrator reset line; **0** is the SX125x reset
+GPIO **2** is the SX1302 concentrator reset line; **0** is the SX125x reset
 line. Both are held high 0.3s then dropped low, matching the vendor reset
 sequence. Save and exit.
 
