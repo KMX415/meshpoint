@@ -352,8 +352,8 @@ class _BridgeWorker:
             self._resp_queue.put((BridgeResponse.ERROR, "not connected"))
             return
 
-        def _do_send() -> None:
-            iface.sendText(
+        def _do_send():
+            return iface.sendText(
                 request.text,
                 destinationId=request.destination,
                 wantAck=request.want_ack,
@@ -361,14 +361,15 @@ class _BridgeWorker:
             )
 
         try:
-            self._run_iface_op("sendText", _do_send)
+            sent_packet = self._run_iface_op("sendText", _do_send)
             logger.info(
                 "meshtasticd sendText OK: dest=0x%08x channel=%d len=%d",
                 request.destination,
                 request.channel,
                 len(request.text),
             )
-            self._resp_queue.put((BridgeResponse.OK, None))
+            packet_id = getattr(sent_packet, "id", 0)
+            self._resp_queue.put((BridgeResponse.OK, {"packet_id": f"{packet_id:08x}" if packet_id else ""}))
         except Exception as exc:
             logger.exception("meshtasticd sendText failed")
             self._resp_queue.put((BridgeResponse.ERROR, str(exc)))

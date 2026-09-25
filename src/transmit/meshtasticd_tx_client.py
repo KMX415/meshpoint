@@ -56,6 +56,7 @@ class MeshtasticdTxClient:
                 return SendResult(
                     success=True,
                     protocol="meshtastic",
+                    packet_id=error.get("packet_id", "") if isinstance(error, dict) else "",
                     timestamp=time.time(),
                 )
             return SendResult(
