@@ -1146,14 +1146,20 @@ def _setup_message_interception(
         source = (packet.source_id or "").lower()
         is_broadcast = dest in ("ffffffff", "ffff", "broadcast") or dest.startswith("channel:")
         is_for_us = dest in our_node_ids or dest == "self"
+        message_channel = 0
+        api_channel = (packet.decoded_payload or {}).get("channel_index")
 
         if is_broadcast:
             if source in our_node_ids:
                 return
             if packet.protocol == Protocol.MESHCORE:
                 ch_idx = packet.channel_hash or 0
+            elif (packet.capture_source == "meshtasticd"
+                  and isinstance(api_channel, int) and 0 <= api_channel < 8):
+                ch_idx = api_channel
             else:
                 ch_idx = channel_hash_map.get(packet.channel_hash, 0)
+            message_channel = ch_idx
             node_id = f"broadcast:{packet.protocol.value}:{ch_idx}"
             direction = "received"
         elif is_for_us:
@@ -1269,6 +1275,7 @@ def _setup_message_interception(
                 protocol=packet.protocol.value,
                 packet_id=packet.packet_id or "",
                 direction=direction,
+                channel=message_channel,
                 rssi=rssi,
                 snr=snr,
             )
