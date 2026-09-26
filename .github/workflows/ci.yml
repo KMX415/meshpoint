@@ -17,7 +17,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt ruff pytest pytest-asyncio httpx
+        run: pip install -r requirements.txt ruff==0.15.22 pytest pytest-asyncio httpx
 
       - name: Lint
         run: ruff check src/ tests/
