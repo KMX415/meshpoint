@@ -77,6 +77,20 @@ MeshCore's application TX control blocks Meshpoint messages and adverts; native
 protocol acknowledgements remain managed by its daemon. Protocol-specific
 telemetry and advert behavior are retained.
 
+## Messaging validation
+
+On PiMesh V2 (E22P-915M30S), bidirectional over-the-air tests against a Meshpoint
+RAK gateway and MeshCore companion passed for public channels, private channels
+with different slot numbers on each device, and direct messages. Direct-message
+radio acknowledgements were verified for both protocols. Tests used US LongFast
+for Meshtastic and 910.525 MHz / 62.5 kHz / SF7 for MeshCore.
+
+Meshtastic encrypted DMs require the peers to exchange NodeInfo public keys
+first. An accepted send request does not prove delivery: the radio can still
+reject it or time out. Dashboard sent status currently records submission;
+these tests checked receiver storage and radio acknowledgements separately.
+This validates the messaging paths, not every protocol-specific feature.
+
 ## Diagnostics and backups
 
 ```bash

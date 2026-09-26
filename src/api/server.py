@@ -1304,18 +1304,26 @@ def _setup_message_interception(
         source = (packet.source_id or "").lower()
         is_broadcast = dest in ("ffffffff", "ffff", "broadcast") or dest.startswith("channel:")
         is_for_us = dest in our_node_ids or dest == "self"
+        message_channel = 0
+        api_channel = (packet.decoded_payload or {}).get("channel_index")
 
         if is_broadcast:
             if source in our_node_ids:
                 return
             if packet.protocol == Protocol.MESHCORE:
                 ch_idx = packet.channel_hash or 0
+                message_channel = ch_idx
                 node_id = f"broadcast:{packet.protocol.value}:{ch_idx}"
+            elif (packet.capture_source == "meshtasticd"
+                  and isinstance(api_channel, int) and 0 <= api_channel < 8):
+                message_channel = api_channel
+                node_id = f"broadcast:{packet.protocol.value}:{api_channel}"
             elif packet.remote_channel_name:
                 # Stick reported its local channel by name; hash byte may be
                 # that stick's table index, not a real OTA hash.
                 _idx = name_to_channel_index.get(packet.remote_channel_name)
                 if _idx is not None:
+                    message_channel = _idx
                     node_id = f"broadcast:{packet.protocol.value}:{_idx}"
                 else:
                     node_id = (
@@ -1325,6 +1333,7 @@ def _setup_message_interception(
             else:
                 ch_idx = channel_hash_resolver.lookup(packet.channel_hash)
                 if ch_idx is None and packet.matched_channel_index is not None:
+                    message_channel = packet.matched_channel_index
                     # Same PSK, different remote channel name: keyed bucket.
                     node_id = (
                         f"broadcast:{packet.protocol.value}:keyed:"
@@ -1338,6 +1347,7 @@ def _setup_message_interception(
                         f"unmapped:0x{packet.channel_hash:02x}"
                     )
                 else:
+                    message_channel = ch_idx
                     node_id = f"broadcast:{packet.protocol.value}:{ch_idx}"
             direction = "received"
         elif is_for_us:
@@ -1438,6 +1448,7 @@ def _setup_message_interception(
                 protocol=packet.protocol.value,
                 packet_id=packet.packet_id or "",
                 direction=direction,
+                channel=message_channel,
                 rssi=rssi,
                 snr=snr,
             )

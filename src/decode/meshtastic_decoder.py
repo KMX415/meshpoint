@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 from src.decode.crypto_service import CryptoService
 from src.decode.pki_crypto import PKC_OVERHEAD
-from src.decode.portnum_handlers import dispatch_portnum
+from src.decode.portnum_handlers import PORTNUM_ROUTING, dispatch_portnum
 from src.models.node import Node
 from src.models.packet import Packet, PacketType, Protocol
 from src.models.signal import SignalMetrics
@@ -234,12 +234,13 @@ class MeshtasticDecoder:
         decoded_payload = None
         packet_type = PacketType.UNKNOWN
         raw_app_payload: Optional[bytes] = None
-        request_id = 0
+        request_id = int(decoded.get("requestId", decoded.get("request_id", 0)) or 0)
 
         if inner:
-            decoded_payload, packet_type, raw_app_payload, request_id = (
+            decoded_payload, packet_type, raw_app_payload, inner_request_id = (
                 self._decode_payload(_build_data_bytes(portnum, inner))
             )
+            request_id = inner_request_id or request_id
 
         if decoded_payload is None:
             decoded_payload, packet_type = _decoded_from_api_fields(decoded, portnum)
@@ -248,6 +249,9 @@ class MeshtasticDecoder:
         if decoded_payload is None:
             return None
 
+        # Decrypted Phone API packets report a local slot, not an OTA hash.
+        if 0 <= channel_hash < 8:
+            decoded_payload["channel_index"] = channel_hash
         if request_id:
             decoded_payload["request_id"] = request_id
 
@@ -457,6 +461,11 @@ def _decoded_from_api_fields(
     decoded: dict[str, Any], portnum: int
 ) -> tuple[Optional[dict[str, Any]], PacketType]:
     """Use meshtastic-python's pre-parsed sub-messages when payload is empty."""
+    if portnum == PORTNUM_ROUTING:
+        routing = decoded.get('routing') or {}
+        reason = routing.get('errorReason', routing.get('error_reason', 0))
+        result = {} if reason in (0, 'NONE', None) else {'error_reason': str(reason)}
+        return result, PacketType.ROUTING
     if "text" in decoded:
         return {"text": decoded["text"]}, PacketType.TEXT
     if "user" in decoded and isinstance(decoded["user"], dict):

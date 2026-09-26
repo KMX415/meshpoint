@@ -6,6 +6,7 @@ messages, contacts, and TX status endpoints for the local dashboard.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -233,6 +234,23 @@ async def get_channels():
                     "name": name,
                     "node_id": f"{BROADCAST_NODE_MC}:{i}",
                 })
+
+    from src.radio.pimesh_runtime import provisioned
+
+    if _config is not None and provisioned(_config):
+        channels = [ch for ch in channels if ch['protocol'] != 'meshtastic']
+        if _config.device.radio_protocol == 'meshtastic':
+            from src.api.routes.config_routes import _pimesh_meshtastic_bridge
+
+            source = _pimesh_meshtastic_bridge()
+            if source is not None:
+                ok, rows = await asyncio.to_thread(source.request_read_channels)
+                if not ok:
+                    raise HTTPException(503, 'Radio channels unavailable')
+                channels = [{
+                    'protocol': 'meshtastic', 'channel': row['index'],
+                    'name': row['name'], 'node_id': f"{BROADCAST_NODE_MT}:{row['index']}",
+                } for row in rows if row.get('enabled')]
 
     return channels
 
