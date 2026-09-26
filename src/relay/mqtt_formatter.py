@@ -11,7 +11,7 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 
-from src.models.packet import Packet, PacketType
+from src.models.packet import Packet, PacketType, Protocol
 from src.relay.channel_resolver import ChannelResolver
 from src.hal.location.privacy import LocationPrivacy as LocationRounder
 
@@ -184,6 +184,8 @@ class MeshtasticMqttFormatter:
         return result
 
     def _resolve_channel(self, packet: Packet) -> str:
+        if packet.protocol == Protocol.MESHTASTIC and packet.remote_channel_name:
+            return packet.remote_channel_name
         return self._channel_resolver.resolve(
             packet.channel_hash, packet.protocol
         )

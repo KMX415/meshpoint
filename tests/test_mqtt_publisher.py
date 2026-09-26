@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from src.config import MqttConfig
-from src.models.packet import PacketType
+from src.models.packet import PacketType, Protocol
 from src.relay.mqtt_publisher import HomeAssistantDiscovery, MqttPublisher, _generate_gateway_id
 
 
@@ -23,6 +23,41 @@ class TestGatewayId(unittest.TestCase):
         cfg = MqttConfig(enabled=True, gateway_id="aabbccdd")
         pub = MqttPublisher(cfg, device_name="ignored")
         self.assertEqual(pub.gateway_id, "!aabbccdd")
+
+    def test_longturbo_requires_explicit_publish_channel(self) -> None:
+        packet = MagicMock(
+            protocol=Protocol.MESHTASTIC,
+            destination_id="ffffffff",
+            packet_type=PacketType.TEXT,
+            decrypted=True,
+            encrypted_payload=None,
+            channel_hash=118,
+            remote_channel_name=None,
+        )
+        default_pub = MqttPublisher(MqttConfig(enabled=True), "meshpoint")
+        allowed_pub = MqttPublisher(
+            MqttConfig(enabled=True, publish_channels=["LongTurbo"]),
+            "meshpoint",
+        )
+        self.assertFalse(default_pub._passes_safety_gates(packet))
+        self.assertTrue(allowed_pub._passes_safety_gates(packet))
+
+    def test_usb_channel_name_drives_gate_and_topic(self) -> None:
+        packet = MagicMock(
+            protocol=Protocol.MESHTASTIC,
+            destination_id="ffffffff",
+            packet_type=PacketType.TEXT,
+            decrypted=True,
+            encrypted_payload=None,
+            channel_hash=0,
+            remote_channel_name="LongTurbo",
+        )
+        pub = MqttPublisher(
+            MqttConfig(enabled=True, publish_channels=["LongTurbo"]),
+            "meshpoint",
+        )
+        self.assertTrue(pub._passes_safety_gates(packet))
+        self.assertEqual(pub._mt_formatter._resolve_channel(packet), "LongTurbo")
 
 
 class TestHomeAssistantState(unittest.TestCase):

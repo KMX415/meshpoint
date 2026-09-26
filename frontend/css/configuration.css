@@ -221,6 +221,8 @@ select.cfg-field__input option:checked {
     font-family: 'JetBrains Mono', Menlo, monospace;
     font-size: 13px;
     color: var(--brand-amber, #ffb84d);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
 .cfg-note {

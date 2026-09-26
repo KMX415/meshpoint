@@ -275,6 +275,8 @@ class MqttPublisher:
         return True
 
     def _resolve_channel_name(self, packet: Packet) -> str:
+        if packet.protocol == Protocol.MESHTASTIC and packet.remote_channel_name:
+            return packet.remote_channel_name
         return self._channel_resolver.resolve(
             packet.channel_hash, packet.protocol
         )
