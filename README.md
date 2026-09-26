@@ -216,7 +216,7 @@ protocol's settings and the normal Meshpoint UI. The HAT runs one protocol at a 
 Meshtastic radio operation is provided by [meshtasticd](https://github.com/meshtastic/firmware).
 MeshCore radio operation is provided by [openHop Repeater](https://github.com/openhop-dev/openhop_repeater)
 and [openHop Core](https://github.com/openhop-dev/openhop_core), developed by
-Rightup (Lloyd Newton) and contributors. Meshpoint integrates these upstream
+Rightup and contributors. Meshpoint integrates these upstream
 backends with its dashboard, installation and protocol-switching controls.
 See [backend architecture and attribution](docs/PIMESH.md#backends-and-attribution)
 for versions, licenses and the local compatibility patch.
@@ -278,14 +278,8 @@ See the [Hardware Matrix](docs/HARDWARE-MATRIX.md) for supported configurations.
 
 ## Install
 
-For **PiMesh-1W V1/V2**, use the experimental PiMesh build and explicit hardware
-selection described in [PiMesh installation and protocol switching](docs/PIMESH.md).
-Both protocols are installed together; choose Meshtastic or MeshCore in the
-normal Configuration > Radio page afterward. PiMesh controls and its update
-picker entry appear only on provisioned PiMesh installations.
-
-The default install commands below are for SX1302/SX1303 gateways. PiMesh owners
-should follow the linked PiMesh guide instead.
+The standard installation is for **SX1302/SX1303 concentrator gateways**, including
+repurposed Helium miners such as the RAK V2 and SenseCAP M1.
 
 ```bash
 sudo apt update && sudo apt install -y git
@@ -303,6 +297,12 @@ meshpoint status        # verify everything is running
 Open `http://<pi-ip>:8080` for the local dashboard. On first visit (and after upgrading from v0.7.2 or earlier) you'll be prompted to set an admin password at `/setup` (8-character minimum). After that, all dashboard access requires sign-in. If you forget the password, recover via SSH with `sudo meshpoint reset-password` -- the command prompts interactively, rotates the JWT secret, and invalidates any open browser sessions.
 
 > **First time?** The [Onboarding Guide](docs/ONBOARDING.md) walks through everything from flashing the SD card to verifying your first captured packets.
+
+### Other hardware
+
+For a **PiMesh-1W V1/V2**, follow the experimental [PiMesh setup guide](docs/PIMESH.md)
+for its hardware-specific install commands and Meshtastic/MeshCore switching.
+For a **RAK6421 WisMesh HAT**, follow the [WisMesh Node guide](docs/WISMESH-NODE.md).
 
 ---
 
