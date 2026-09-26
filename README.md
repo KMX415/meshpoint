@@ -213,8 +213,16 @@ single LoRa radio with either the Meshtastic or MeshCore Linux backend. Install
 both once, then switch in **Configuration > Radio** while retaining each
 protocol's settings and the normal Meshpoint UI. The HAT runs one protocol at a time.
 
+Meshtastic radio operation is provided by [meshtasticd](https://github.com/meshtastic/firmware).
+MeshCore radio operation is provided by [openHop Repeater](https://github.com/openhop-dev/openhop_repeater)
+and [openHop Core](https://github.com/openhop-dev/openhop_core), developed by
+Rightup (Lloyd Newton) and contributors. Meshpoint integrates these upstream
+backends with its dashboard, installation and protocol-switching controls.
+See [backend architecture and attribution](docs/PIMESH.md#backends-and-attribution)
+for versions, licenses and the local compatibility patch.
+
 Use the [PiMesh setup guide](docs/PIMESH.md) for board, band, region and initial
-protocol selection. V2 at 915 MHz has been tested on Pi 4 / 64-bit Debian 13;
+protocol selection. V2 at 915 MHz has been tested on Pi 4 / 64-bit Debian 13.
 Public/private channels and DMs passed bidirectional tests on both protocols;
 V1, 868 MHz and full feature parity remain unverified.
 PiMesh controls appear only on provisioned PiMesh installations.
@@ -451,7 +459,10 @@ AI-assisted contributions are allowed, but contributors should review and unders
 
 ## License
 
-AGPL-3.0: see [LICENSE](LICENSE). All source code, including HAL bindings, protocol decoders, and packet builders, is published in this repository under the same license.
+Meshpoint is licensed under AGPL-3.0: see [LICENSE](LICENSE). Separately installed
+upstream backends and third-party dependencies retain their own licenses and
+copyright notices. In particular, the PiMesh MeshCore backend uses MIT-licensed
+openHop Repeater and openHop Core; see the [PiMesh attribution](docs/PIMESH.md#backends-and-attribution).
 
 ---
 
