@@ -31,11 +31,12 @@ RAK2287). That is what the rest of this guide covers. Install from **`main`**
 |------|----------|--------|-------|
 | **Gateway** (recommended) | SX1302/SX1303 concentrator | `main` | Continue below |
 | **Node** (experimental) | RAK6421 HAT + RAK13300/13302 | `feat/wismesh-hat` | [WisMesh Node guide](WISMESH-NODE.md) |
-| **PiMesh** (experimental) | MeshSmith PiMesh-1W V1/V2 | `codex/pimesh-dual-protocol` (development) | [PiMesh installation and switching](PIMESH.md) |
+| **PiMesh** (experimental) | MeshSmith PiMesh-1W V1/V2 | `feat/v0.8.0` (RC) | [PiMesh installation and switching](PIMESH.md) |
 
 **PiMesh:** Follow the PiMesh guide for explicit HAT provisioning and initial
-protocol selection. Both Meshtastic and MeshCore backends are installed, with
-one active at a time. Later switches use Configuration > Radio. The concentrator
+protocol selection. The installer uses Meshtastic's meshtasticd and the openHop
+MeshCore backend; see [backend attribution](PIMESH.md#backends-and-attribution).
+Both are installed, with one active at a time. Later switches use Configuration > Radio. The concentrator
 assembly and default install commands below are for gateways.
 
 ---

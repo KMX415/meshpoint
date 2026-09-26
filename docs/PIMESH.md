@@ -10,18 +10,49 @@ Pi 4 running 64-bit Debian 13. V1 and 868 MHz profiles have not been verified on
 physical hardware. Bidirectional messaging and radio acknowledgements passed
 the tests described below; full feature parity remains unverified.
 
+## Backends and attribution
+
+Meshpoint provides the dashboard, message storage, installer and supervisor that
+switches ownership of the PiMesh radio. Radio operation is supplied by these
+upstream projects:
+
+| Protocol | Backend | Integration |
+| --- | --- | --- |
+| Meshtastic | [meshtasticd](https://github.com/meshtastic/firmware), from the Meshtastic project | A separate daemon, accessed through the Meshtastic TCP API. |
+| MeshCore | [openHop Repeater](https://github.com/openhop-dev/openhop_repeater) and [openHop Core](https://github.com/openhop-dev/openhop_core), by Rightup (Lloyd Newton) and contributors | A separate daemon with a local TCP companion interface used by Meshpoint. |
+
+openHop Core implements the MeshCore protocol in Python and drives the SPI radio.
+Credit for that backend belongs to the openHop authors; Meshpoint's PiMesh
+integration builds on their work. The original MeshCore protocol and C++ project
+are maintained by [MeshCore](https://github.com/meshcore-dev/MeshCore).
+
+The PiMesh installer clones openHop Repeater into `/opt/meshpoint-openhop` at
+revision `13eb8b2ea8b1cdb4a07ed6e282dc99e3aa8a5a8b`. That revision pins
+`openhop_core==1.1.3`. It uses a dedicated Python environment and system service.
+Meshpoint applies [a local compatibility patch](../scripts/patch_openhop.py) to
+ensure changes to TX power reach the radio; this patch is maintained by Meshpoint.
+
+The pinned [Repeater license](https://github.com/openhop-dev/openhop_repeater/blob/13eb8b2ea8b1cdb4a07ed6e282dc99e3aa8a5a8b/LICENSE)
+and [Core 1.1.3 release](https://pypi.org/project/openhop-core/1.1.3/) specify the
+MIT license. Their copyright and license notices must be retained when copying
+or distributing their software. The installer keeps the upstream checkout's
+license, and the Core package includes its license. Meshpoint's AGPL-3.0 license
+does not replace those upstream licenses. This integration does not imply
+endorsement by the upstream projects.
+
 ## Initial installation
 
 Start with a Pi 4 running 64-bit Debian 12 or 13, network access and a PiMesh HAT
 whose physical band matches your region. Debian 13 / V2 915 MHz is the tested
 combination. Connect the appropriate antenna before powering the radio.
 
-PiMesh support is on the experimental `codex/pimesh-dual-protocol` branch, not
-Stable. A fresh device can obtain it with:
+PiMesh support is experimental and is included in RC (`feat/v0.8.0`). The
+`codex/pimesh-dual-protocol` development branch also remains available. For the
+RC installation, a fresh device can obtain it with:
 
 ```bash
 sudo apt update && sudo apt install -y git
-sudo git clone --branch codex/pimesh-dual-protocol https://github.com/KMX415/meshpoint.git /opt/meshpoint
+sudo git clone --branch feat/v0.8.0 https://github.com/KMX415/meshpoint.git /opt/meshpoint
 cd /opt/meshpoint
 ```
 
