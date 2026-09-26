@@ -7,7 +7,7 @@ on:
       # Sprint + feature branches (e.g. feat/v0.7.8) — validate before merge to main.
       - "feat/**"
   pull_request:
-    branches: [main]
+    branches: [main, feat/v0.8.0]
 
 jobs:
   test:
@@ -33,4 +33,4 @@ jobs:
           node-version: "22"
 
       - name: Frontend behavior tests
-        run: node --test tests/*.test.cjs
+        run: node --test tests/*.test.cjs tests/frontend/*.test.cjs

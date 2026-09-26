@@ -75,6 +75,7 @@ class MeshCoreTxClient:
         # on the shared meshcore handle races into send timeouts.
         self._cmd_lock = asyncio.Lock()
         self._contact_cache = MeshcoreContactCache()
+        self.tx_enabled_provider = lambda: True
 
     @property
     def _mc(self):
@@ -280,6 +281,8 @@ class MeshCoreTxClient:
         self, channel: int, text: str
     ) -> SendResult:
         """Send a broadcast message on a MeshCore channel."""
+        if not self.tx_enabled_provider():
+            return SendResult(success=False, error='MeshCore TX disabled')
         return await self._run_tx_command(
             lambda: self._mc.commands.send_chan_msg(channel, text),
             success_log=f"MeshCore channel {channel} message sent",
@@ -290,6 +293,8 @@ class MeshCoreTxClient:
         self, destination, text: str
     ) -> SendResult:
         """Send a direct message to a MeshCore contact."""
+        if not self.tx_enabled_provider():
+            return SendResult(success=False, error='MeshCore TX disabled')
         return await self._run_tx_command(
             lambda: self._mc.commands.send_msg(destination, text),
             success_log="MeshCore DM sent",
@@ -298,6 +303,8 @@ class MeshCoreTxClient:
 
     async def send_advert(self, flood: bool = False) -> SendResult:
         """Broadcast a node advertisement."""
+        if not self.tx_enabled_provider():
+            return SendResult(success=False, error='MeshCore TX disabled')
         return await self._run_tx_command(
             lambda: self._mc.commands.send_advert(flood=flood),
             success_log="MeshCore advert sent",
@@ -402,6 +409,7 @@ class MeshCoreTxClient:
         """
         if not self.connected:
             return None
+
         try:
             info = self._mc.self_info or {}
             if not info:
@@ -417,6 +425,29 @@ class MeshCoreTxClient:
         except Exception:
             logger.exception("Failed to read MeshCore radio info")
             return None
+
+    async def refresh_radio_info(self) -> RadioStatus | None:
+        """Request fresh SELF_INFO after a host-managed radio change."""
+        from meshcore import EventType
+
+        if not self.connected:
+            return None
+        async with self._cmd_lock:
+            await self._pause_auto_fetch()
+            try:
+                event = await self._mc.commands.send_appstart()
+                if event.type != EventType.SELF_INFO:
+                    return None
+            finally:
+                await self._resume_auto_fetch()
+        return await self.get_radio_info()
+
+    async def set_coordinates(self, latitude: float, longitude: float) -> SendResult:
+        return await self._run_tx_command(
+            lambda: self._mc.commands.set_coords(latitude, longitude),
+            success_log="MeshCore coordinates saved",
+            timeout_label="Coordinate update timed out",
+        )
 
     async def get_device_info(self) -> Optional[dict]:
         """Return companion DEVICE_INFO (firmware version / model / build).
@@ -472,20 +503,27 @@ class MeshCoreTxClient:
         except Exception:
             logger.debug("Could not store MeshCore DEVICE_INFO cache", exc_info=True)
 
-    async def sync_channels(self, channel_keys: dict) -> None:
+    async def sync_channels(self, channel_keys: dict, *, verify: bool = False) -> None:
         """Sync configured channels to the companion device."""
         if not self.connected:
+            if verify:
+                raise RuntimeError('MeshCore disconnected')
             logger.debug("sync_channels: not connected, skipping")
             return
         async with self._cmd_lock:
             if not self.connected or self._mc is None:
+                if verify:
+                    raise RuntimeError('MeshCore disconnected')
                 return
             await self._pause_auto_fetch()
             try:
-                await MeshcoreChannelSync(
+                sync = MeshcoreChannelSync(
                     self._mc,
                     post_command=None,
-                ).sync(channel_keys)
+                )
+                await sync.sync(channel_keys)
+                if verify:
+                    await sync.verify(channel_keys)
             finally:
                 await self._resume_auto_fetch()
             await self._run_post_command()
