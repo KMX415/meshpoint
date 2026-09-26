@@ -1,0 +1,32 @@
+[Unit]
+Description=Meshpoint (WisMesh Node / meshtasticd)
+Documentation=https://github.com/KMX415/meshpoint
+After=network-online.target meshtasticd.service
+Wants=network-online.target meshtasticd.service
+
+[Service]
+Type=simple
+User=meshpoint
+Group=meshpoint
+WorkingDirectory=/opt/meshpoint
+ExecStartPre=+/bin/bash -c "cp /opt/meshpoint/config/sudoers-meshpoint /etc/sudoers.d/meshpoint && chmod 440 /etc/sudoers.d/meshpoint"
+ExecStartPre=+/bin/chown -R meshpoint:meshpoint /opt/meshpoint/config
+ExecStartPre=+/bin/chown -R meshpoint:meshpoint /opt/meshpoint/data
+ExecStart=/opt/meshpoint/venv/bin/python -m uvicorn src.api.server:create_app --factory --host 0.0.0.0 --port 8080
+TimeoutStopSec=10
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=meshpoint
+
+Environment=CONCENTRATOR_CONFIG=/opt/meshpoint/config/local.yaml
+Environment=PYTHONUNBUFFERED=1
+Environment=FORCE_COLOR=1
+
+NoNewPrivileges=false
+ProtectSystem=false
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

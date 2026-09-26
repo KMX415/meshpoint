@@ -479,3 +479,7 @@
     opacity: 1;
     letter-spacing: 0.06em;
 }
+.topbar-meshtastic[hidden],
+#topbar-meshcore-group[hidden] {
+    display: none !important;
+}

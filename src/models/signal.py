@@ -2,23 +2,26 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Optional
 
 
 @dataclass
 class SignalMetrics:
     """RF signal quality measurements from a received packet."""
 
-    rssi: float
-    snr: float
     frequency_mhz: float
     spreading_factor: int
     bandwidth_khz: float
+    rssi: Optional[float] = None
+    snr: Optional[float] = None
     coding_rate: str = "4/8"
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
-    def signal_quality_percent(self) -> float:
+    def signal_quality_percent(self) -> Optional[float]:
         """Rough 0-100 quality estimate from RSSI (-120 worst, -30 best)."""
+        if self.rssi is None:
+            return None
         clamped = max(-120.0, min(-30.0, self.rssi))
         return round(((clamped + 120.0) / 90.0) * 100.0, 1)
 

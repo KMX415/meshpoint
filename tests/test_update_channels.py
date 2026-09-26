@@ -16,6 +16,11 @@ class TestReleaseChannelRegistry(unittest.TestCase):
         ids = [c.id for c in DEFAULT_CHANNELS]
         self.assertEqual(len(ids), len(set(ids)))
 
+    def test_pimesh_channel_is_explicitly_opt_in(self) -> None:
+        self.assertIsNone(ReleaseChannelRegistry().find("pimesh"))
+        registry = ReleaseChannelRegistry(pimesh=True)
+        self.assertEqual(registry.resolve_branch("pimesh"), "codex/pimesh-dual-protocol")
+
     def test_to_payload_serializes_each_channel(self) -> None:
         payload = ReleaseChannelRegistry().to_payload()
         self.assertEqual(len(payload), len(DEFAULT_CHANNELS))

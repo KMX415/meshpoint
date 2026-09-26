@@ -57,11 +57,15 @@ class ConfigurationPanel {
                 card.mount(host);
                 this._cards.set('identity', card);
             }
-        } else if (section === 'radio' && window.RadioConfigEditCard) {
+        } else if (section === 'radio') {
             const host = document.getElementById('cfg-radio-panel');
+            const isNode = window.PlatformContext
+                && window.PlatformContext.isNodePlatform(this._config);
             if (host) {
                 host.innerHTML = `
                     <div class="cfg-section">
+                        <div data-cfg-pimesh></div>
+                        <div data-cfg-wismesh-hero></div>
                         <div data-cfg-radio></div>
                         <div data-cfg-nodeinfo-edit></div>
                         <div data-cfg-nodeinfo-status></div>
@@ -69,25 +73,41 @@ class ConfigurationPanel {
                         <div data-cfg-telemetry-status></div>
                     </div>
                 `;
-                const radio = new window.RadioConfigEditCard(api);
-                radio.mount(host.querySelector('[data-cfg-radio]'));
-                this._cards.set('radio', radio);
-                if (window.NodeInfoConfigCard) {
+                if (window.PlatformContext?.isPimesh(this._config) && window.PimeshProtocolCard) {
+                    const protocolCard = new window.PimeshProtocolCard(api);
+                    protocolCard.mount(host.querySelector('[data-cfg-pimesh]'));
+                    this._cards.set('pimesh', protocolCard);
+                    const mt = this._config.device.radio_protocol === 'meshtastic';
+                    const card = mt ? new window.WismeshRadioCard(api) : new window.MeshcoreConfigCard(api);
+                    card.mount(host.querySelector('[data-cfg-radio]'));
+                    this._cards.set('pimesh-radio', card);
+                } else if (isNode && window.WismeshStatusCard) {
+                    const hero = new window.WismeshStatusCard(api);
+                    hero.mount(host.querySelector('[data-cfg-wismesh-hero]'));
+                    this._cards.set('wismesh-hero', hero);
+                    const heroHost = host.querySelector('[data-cfg-radio]');
+                    if (heroHost) heroHost.style.display = 'none';
+                } else if (window.RadioConfigEditCard) {
+                    const radio = new window.RadioConfigEditCard(api);
+                    radio.mount(host.querySelector('[data-cfg-radio]'));
+                    this._cards.set('radio', radio);
+                }
+                if (!window.PlatformContext?.isPimesh(this._config) && window.NodeInfoConfigCard) {
                     const edit = new window.NodeInfoConfigCard(api);
                     edit.mount(host.querySelector('[data-cfg-nodeinfo-edit]'));
                     this._cards.set('nodeinfo-edit', edit);
                 }
-                if (window.RadioNodeInfoCard) {
+                if (!window.PlatformContext?.isPimesh(this._config) && window.RadioNodeInfoCard) {
                     const status = new window.RadioNodeInfoCard(api);
                     status.mount(host.querySelector('[data-cfg-nodeinfo-status]'));
                     this._cards.set('nodeinfo-status', status);
                 }
-                if (window.TelemetryBroadcastCard) {
+                if (!window.PlatformContext?.isPimesh(this._config) && window.TelemetryBroadcastCard) {
                     const telem = new window.TelemetryBroadcastCard(api);
                     telem.mount(host.querySelector('[data-cfg-telemetry-edit]'));
                     this._cards.set('telemetry-edit', telem);
                 }
-                if (window.BroadcastStatusCard) {
+                if (!window.PlatformContext?.isPimesh(this._config) && window.BroadcastStatusCard) {
                     const telemStatus = new window.BroadcastStatusCard(api, {
                         title: 'Telemetry Broadcast',
                         configKey: 'telemetry',
@@ -107,7 +127,9 @@ class ConfigurationPanel {
                         <div data-channels-mount></div>
                     </div>
                 `;
-                if (window.QuickDeployCard) {
+                const pimesh = window.PlatformContext?.isPimesh(this._config);
+                const pimeshMc = pimesh && this._config.device.radio_protocol === 'meshcore';
+                if (window.QuickDeployCard && !pimesh) {
                     const quickMount = host.querySelector('[data-quick-deploy-mount]');
                     const quick = new window.QuickDeployCard(api);
                     quick.mount(quickMount);
@@ -115,7 +137,7 @@ class ConfigurationPanel {
                 }
                 if (window.ChannelsConfigCard) {
                     const channelsMount = host.querySelector('[data-channels-mount]');
-                    const card = new window.ChannelsConfigCard(api);
+                    const card = pimeshMc ? new window.MeshcoreConfigCard(api) : new window.ChannelsConfigCard(api);
                     card.mount(channelsMount);
                     this._cards.set('channels', card);
                 }
@@ -138,6 +160,17 @@ class ConfigurationPanel {
             }
         } else if (section === 'firmware') {
             const host = document.getElementById('cfg-firmware-panel');
+            if (host && window.PlatformContext?.isPimesh(this._config)) {
+                host.innerHTML = `<article class="cfg-card"><header class="cfg-card__head">
+                    <h3 class="cfg-card__title">PiMesh software</h3>
+                    <p class="cfg-card__hint">PiMesh runs its radio software on the Pi.
+                    Both protocol backends are installed with Meshpoint. Use the PiMesh installer
+                    to update them while preserving each protocol’s configuration.</p>
+                    </header><p>Change the active protocol in
+                    <a href="#/configuration/radio">Configuration → Radio</a>.</p></article>`;
+                this._mounted.add(section);
+                return;
+            }
             if (host) {
                 host.innerHTML = `
                     <div class="cfg-section">
@@ -158,11 +191,24 @@ class ConfigurationPanel {
             }
         } else if (section === 'transmit' && window.TransmitConfigCard) {
             const host = document.getElementById('cfg-transmit-panel');
+            const isNode = window.PlatformContext
+                && window.PlatformContext.isNodePlatform(this._config);
             if (host) {
                 host.innerHTML = '';
-                const card = new window.TransmitConfigCard(api);
-                card.mount(host);
-                this._cards.set('transmit', card);
+                if (window.PlatformContext?.isPimesh(this._config)
+                    && this._config.device.radio_protocol === 'meshcore') {
+                    const card = new window.MeshcoreConfigCard(api);
+                    card.mount(host);
+                    this._cards.set('transmit', card);
+                } else if (isNode && window.WismeshRadioCard) {
+                    const card = new window.WismeshRadioCard(api);
+                    card.mount(host);
+                    this._cards.set('transmit', card);
+                } else if (window.TransmitConfigCard) {
+                    const card = new window.TransmitConfigCard(api);
+                    card.mount(host);
+                    this._cards.set('transmit', card);
+                }
             }
         } else if (section === 'mqtt' && window.MqttConfigCard) {
             const host = document.getElementById('cfg-mqtt-panel');

@@ -46,7 +46,7 @@ class TopbarMeshtasticChip {
         }
     }
 
-    setMeshtastic({ shortName, radio }) {
+    setMeshtastic({ shortName, radio, nodePlatform }) {
         const next = (shortName && String(shortName).trim())
             ? String(shortName).trim().toUpperCase()
             : '----';
@@ -63,14 +63,19 @@ class TopbarMeshtasticChip {
         const freq = r.frequency_mhz
             ? `${Number(r.frequency_mhz).toFixed(3)} MHz`
             : '--';
-        const preset = this._formatPresetLabel(r.current_preset);
+        let presetLabel = this._formatPresetLabel(r.current_preset);
+        if (nodePlatform && r.module_badge) {
+            presetLabel = r.module_badge;
+        } else if (nodePlatform && r.modem_preset) {
+            presetLabel = this._formatPresetLabel(r.modem_preset);
+        }
 
         this._regionEl.textContent = region;
-        this._freqEl.textContent = freq;
-        this._presetEl.textContent = preset;
+        this._freqEl.textContent = nodePlatform ? 'meshtasticd' : freq;
+        this._presetEl.textContent = presetLabel;
         this._root.classList.toggle(
             'topbar-meshtastic--unknown',
-            !radio || !radio.region,
+            !radio || (!nodePlatform && !radio.region),
         );
     }
 

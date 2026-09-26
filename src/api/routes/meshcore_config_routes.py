@@ -17,7 +17,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.api.auth.dependencies import require_admin
 from src.api.auth.jwt_session import SessionClaims
@@ -62,7 +62,9 @@ class CompanionNameUpdate(BaseModel):
 
 
 class CompanionRadioUpdate(BaseModel):
-    preset: str
+    preset: str | None = None
+    tx_power_dbm: int | None = Field(None, ge=2, le=22)
+    tx_enabled: bool | None = None
 
 
 @router.put("/companion-name")
@@ -151,26 +153,44 @@ async def update_companion_radio(
 
     key = (req.preset or "").strip().upper()
     preset = REGION_PRESETS.get(key)
-    if preset is None:
+    if key and preset is None:
         raise HTTPException(400, f"Unknown preset '{req.preset}'")
 
     mc_tx = _resolve_meshcore_tx()
     if mc_tx is None or not mc_tx.connected:
         raise HTTPException(503, "MeshCore companion not connected")
 
-    result = await mc_tx.set_radio_params(
-        preset.frequency_mhz,
-        preset.bandwidth_khz,
-        preset.spreading_factor,
-        preset.coding_rate,
-    )
-    if not result.success:
-        logger.warning(
-            "Dashboard set_radio_params failed: %s", result.error
+    from src.radio.pimesh_runtime import provisioned
+    if provisioned(_config):
+        from src.radio.openhop_control import apply_radio
+        try:
+            await apply_radio(mc_tx, preset, req.tx_power_dbm)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(502, "MeshCore radio change could not be verified; inspect daemon status") from exc
+        if req.tx_enabled is not None:
+            save_section_to_yaml('meshcore', {'tx_enabled': req.tx_enabled})
+            _config.meshcore.tx_enabled = req.tx_enabled
+        if preset is None:
+            return {'saved': True, 'tx_enabled': _config.meshcore.tx_enabled,
+                    'tx_power_dbm': req.tx_power_dbm}
+    else:
+        if preset is None or req.tx_power_dbm is not None or req.tx_enabled is not None:
+            raise HTTPException(400, 'Select a radio preset for this companion')
+        result = await mc_tx.set_radio_params(
+            preset.frequency_mhz,
+            preset.bandwidth_khz,
+            preset.spreading_factor,
+            preset.coding_rate,
         )
-        raise HTTPException(
-            400, result.error or "Companion rejected radio params"
-        )
+        if not result.success:
+            logger.warning(
+                "Dashboard set_radio_params failed: %s", result.error
+            )
+            raise HTTPException(
+                400, result.error or "Companion rejected radio params"
+            )
 
     logger.info(
         "MeshCore radio preset %s applied via dashboard (%s)",

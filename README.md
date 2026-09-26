@@ -175,7 +175,7 @@ aarch64 Raspbian 13 (Trixie) with live Meshtastic RX/TX.
 
 ### Option E: WisMesh Node (RAK6421 HAT, experimental)
 
-The [RAK WisMesh Pi Node](https://store.rakwireless.com/products/wismesh-pi-node) is a Pi HAT with a **WisBlock SX1262** LoRa module (RAK13300 standard or **RAK13302 1W** with PA). Meshpoint drives RF through **meshtasticd** (Portduino), not the SX1302 concentrator path used by Options A–D.
+The [RAK WisMesh Pi Node](https://store.rakwireless.com/products/meshtastic-raspberry-pi-hat-rak6421) is a Pi HAT with a **WisBlock SX1262** LoRa module (RAK13300 standard or **RAK13302 1W** with PA). Meshpoint drives RF through **meshtasticd** (Portduino), not the SX1302 concentrator path used by Options A–D.
 
 **Status:** User-facing docs are on **`main`**. The installer, dashboard, and capture bridge stay on the long-lived **`feat/wismesh-hat`** branch (not merged into Stable). Gateway users should stay on **`main`**.
 
@@ -219,6 +219,12 @@ A second Meshtastic radio (Seeed Xiao S3, Heltec, T-Beam, and similar) can liste
 ---
 
 ## Install
+
+For **PiMesh-1W V1/V2**, use the experimental PiMesh build and explicit hardware
+selection described in [PiMesh installation and protocol switching](docs/PIMESH.md).
+Both protocols are installed together; choose Meshtastic or MeshCore in the
+normal Configuration > Radio page afterward. PiMesh controls and its update
+picker entry appear only on provisioned PiMesh installations.
 
 ```bash
 sudo apt update && sudo apt install -y git

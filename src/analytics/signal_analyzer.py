@@ -19,7 +19,9 @@ class SignalAnalyzer:
         """Return RSSI values bucketed for histogram display."""
         packets = await self._packet_repo.get_recent(limit)
         values = [
-            p.signal.rssi for p in packets if p.signal is not None
+            p.signal.rssi
+            for p in packets
+            if p.signal is not None and p.signal.rssi is not None
         ]
         if not values:
             return {"buckets": [], "counts": []}
@@ -46,7 +48,9 @@ class SignalAnalyzer:
     ) -> dict[str, list]:
         packets = await self._packet_repo.get_recent(limit)
         values = [
-            p.signal.snr for p in packets if p.signal is not None
+            p.signal.snr
+            for p in packets
+            if p.signal is not None and p.signal.snr is not None
         ]
         if not values:
             return {"buckets": [], "counts": []}
@@ -70,8 +74,16 @@ class SignalAnalyzer:
 
     async def get_signal_summary(self) -> dict:
         packets = await self._packet_repo.get_recent(200)
-        rssi_vals = [p.signal.rssi for p in packets if p.signal]
-        snr_vals = [p.signal.snr for p in packets if p.signal]
+        rssi_vals = [
+            p.signal.rssi
+            for p in packets
+            if p.signal and p.signal.rssi is not None
+        ]
+        snr_vals = [
+            p.signal.snr
+            for p in packets
+            if p.signal and p.signal.snr is not None
+        ]
 
         if not rssi_vals:
             return {"avg_rssi": None, "avg_snr": None, "sample_count": 0}
@@ -80,6 +92,6 @@ class SignalAnalyzer:
             "avg_rssi": round(sum(rssi_vals) / len(rssi_vals), 1),
             "min_rssi": round(min(rssi_vals), 1),
             "max_rssi": round(max(rssi_vals), 1),
-            "avg_snr": round(sum(snr_vals) / len(snr_vals), 1),
+            "avg_snr": round(sum(snr_vals) / len(snr_vals), 1) if snr_vals else None,
             "sample_count": len(rssi_vals),
         }

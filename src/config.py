@@ -78,6 +78,7 @@ class MeshtasticConfig:
 
 @dataclass
 class MeshcoreConfig:
+    tx_enabled: bool = True
     default_key_b64: str = ""
     channel_keys: dict[str, str] = field(default_factory=dict)
     # Desired companion advert name. When set, the dashboard rename
@@ -95,6 +96,9 @@ class MeshcoreUsbConfig:
     serial_port: Optional[str] = None
     baud_rate: int = 115200
     auto_detect: bool = True
+    connection_type: str = "serial"
+    tcp_host: str = "127.0.0.1"
+    tcp_port: int = 5000
 
 
 @dataclass
@@ -129,6 +133,16 @@ def _coerce_serial_devices(value) -> list[SerialDeviceConfig]:
 
 
 @dataclass
+class MeshtasticdConfig:
+    """Local meshtasticd TCP bridge (WisMesh Node / PORTDUINO platforms)."""
+
+    host: str = "127.0.0.1"
+    port: int = 4403
+    mac_address_source: str = "eth0"
+    preset: str = "lora-RAK6421-13302-slot1.yaml"
+
+
+@dataclass
 class CaptureConfig:
     sources: list[str] = field(default_factory=lambda: ["mock"])
     serial_port: Optional[str] = None
@@ -136,6 +150,7 @@ class CaptureConfig:
     serial: list[SerialDeviceConfig] = field(default_factory=list)
     concentrator_spi_device: str = "/dev/spidev0.0"
     meshcore_usb: MeshcoreUsbConfig = field(default_factory=MeshcoreUsbConfig)
+    meshtasticd: MeshtasticdConfig = field(default_factory=MeshtasticdConfig)
 
 
 @dataclass
@@ -175,8 +190,12 @@ class UpstreamConfig:
 
 @dataclass
 class DeviceConfig:
+    radio_hat: str = ""
+    radio_protocol: str = ""
     device_id: Optional[str] = None
     device_name: str = "Meshpoint"
+    # gateway = SX1302/SX1303 concentrator; node = WisMesh HAT + meshtasticd
+    platform: str = "gateway"
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     altitude: Optional[float] = None
@@ -527,6 +546,8 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
     local = config_path or os.environ.get("CONCENTRATOR_CONFIG", "config/local.yaml")
     _apply_yaml(cfg, _validated_config_path(local))
     _resolve_radio_frequency(cfg.radio)
+    from src.radio.pimesh_runtime import configure_runtime
+    configure_runtime(cfg)
 
     return cfg
 

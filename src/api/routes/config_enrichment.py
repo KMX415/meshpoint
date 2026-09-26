@@ -2,10 +2,30 @@
 
 from __future__ import annotations
 
+from typing import Any, Callable
+
+from src.capture.meshtasticd_module_preset import (
+    list_module_presets,
+    module_id_from_preset_filename,
+)
 from src.config import AppConfig
 
 
-def enrich_config_payload(cfg: AppConfig, base: dict) -> dict:
+def _preset_badge(preset_file: str) -> str:
+    name = (preset_file or "").lower()
+    if "13302" in name:
+        return "RAK13302"
+    if "13300" in name:
+        return "RAK13300"
+    return ""
+
+
+def enrich_config_payload(
+    cfg: AppConfig,
+    base: dict,
+    *,
+    bridge_status_provider: Callable[[], Any] | None = None,
+) -> dict:
     """Merge device, upstream, storage, capture, location, and extended relay/radio into *base*."""
     device = cfg.device
     upstream = cfg.upstream
@@ -17,13 +37,21 @@ def enrich_config_payload(cfg: AppConfig, base: dict) -> dict:
     mc_usb = capture.meshcore_usb
 
     token = (upstream.auth_token or "").strip()
+    platform = device.platform or "gateway"
     base["device"] = {
         "device_name": device.device_name,
+        "platform": platform,
         "latitude": device.latitude,
         "longitude": device.longitude,
         "altitude": device.altitude,
         "hardware_description": device.hardware_description,
     }
+    from src.radio.pimesh_runtime import provisioned
+    if provisioned(cfg):
+        base["platform_ui"] = {"variant": "pimesh", "protocol_switch": True}
+        base["device"].update(radio_hat=device.radio_hat, radio_protocol=device.radio_protocol)
+    elif platform == "node":
+        base["platform_ui"] = {"variant": "wismesh_node"}
     base["upstream"] = {
         "url": upstream.url,
         "reconnect_interval_seconds": upstream.reconnect_interval_seconds,
@@ -36,8 +64,11 @@ def enrich_config_payload(cfg: AppConfig, base: dict) -> dict:
         "max_telemetry_retained": storage.max_telemetry_retained,
         "cleanup_interval_seconds": storage.cleanup_interval_seconds,
     }
+    sources = list(capture.sources or [])
+    md = capture.meshtasticd
+    preset_file = md.preset or ""
     base["capture"] = {
-        "sources": list(capture.sources or []),
+        "sources": sources,
         "serial_port": capture.serial_port,
         "serial_baud": capture.serial_baud,
         "concentrator_spi_device": capture.concentrator_spi_device,
@@ -53,8 +84,21 @@ def enrich_config_payload(cfg: AppConfig, base: dict) -> dict:
             "serial_port": mc_usb.serial_port,
             "baud_rate": mc_usb.baud_rate,
             "auto_detect": mc_usb.auto_detect,
+            "connection_type": mc_usb.connection_type,
+        },
+        "meshcore_usb_in_sources": "meshcore_usb" in sources,
+        "meshcore_usb_auto_detect_suppressed": platform == "node",
+        "meshtasticd": {
+            "host": md.host,
+            "port": md.port,
+            "preset": preset_file,
+            "module_badge": _preset_badge(preset_file),
+            "active_module_id": module_id_from_preset_filename(preset_file),
+            "module_presets": list_module_presets(preset_file),
         },
     }
+    if platform == "node":
+        base["meshtasticd_runtime"] = _fetch_meshtasticd_runtime(bridge_status_provider)
     base["relay"] = {
         "enabled": relay.enabled,
         "serial_port": relay.serial_port,
@@ -89,3 +133,24 @@ def enrich_config_payload(cfg: AppConfig, base: dict) -> dict:
             "startup_delay_seconds": telem.startup_delay_seconds,
         }
     return base
+
+
+def _fetch_meshtasticd_runtime(
+    bridge_status_provider: Callable[[], Any] | None,
+) -> dict[str, Any]:
+    """Best-effort live snapshot from the bridge (non-blocking for GET /api/config)."""
+    if bridge_status_provider is None:
+        return {"bridge_connected": False}
+    source = bridge_status_provider()
+    if source is None or not getattr(source, "is_running", False):
+        return {"bridge_connected": False}
+    try:
+        ok, detail = source.request_read_radio_state()
+        if ok and isinstance(detail, dict):
+            return {"bridge_connected": True, **detail}
+        return {
+            "bridge_connected": True,
+            "read_error": str(detail) if detail else "read failed",
+        }
+    except Exception:
+        return {"bridge_connected": True, "read_error": "read failed"}

@@ -6,8 +6,9 @@ on:
       - main
       # Sprint + feature branches (e.g. feat/v0.7.8) — validate before merge to main.
       - "feat/**"
+      - "codex/pimesh-dual-protocol"
   pull_request:
-    branches: [main]
+    branches: [main, feat/wismesh-hat]
 
 jobs:
   test:
@@ -27,3 +28,10 @@ jobs:
 
       - name: Run tests
         run: python -m pytest tests/ -v --ignore=tests/test_crypto_service.py --ignore=tests/test_meshtastic_decoder.py --ignore=tests/test_meshcore_decoder.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: PiMesh UI recovery regressions
+        run: node --test tests/test_pimesh_protocol_card.cjs

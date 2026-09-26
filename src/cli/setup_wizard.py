@@ -186,6 +186,15 @@ def _step_capture_source(config: dict, report: HardwareReport) -> None:
     """Choose the LoRa capture source based on detected hardware."""
     print("  [3/8] Capture source")
 
+    from src.radio.pimesh_supervisor import PROVISION, STATE, read_json
+    record = read_json(PROVISION)
+    if record.get("board") in ("pimesh-v1", "pimesh-v2"):
+        protocol = read_json(STATE).get("active", "meshtastic")
+        config["capture"] = {"sources": ["meshtasticd"] if protocol == "meshtastic" else ["meshcore_usb"]}
+        config.setdefault("device", {}).update(platform="node", radio_hat=record["board"],
+                                               hardware_description="MeshSmith PiMesh-1W")
+        print(f"        PiMesh configured for {protocol}; change protocol in Configuration > Radio.")
+        return
     if report.concentrator_available:
         print(f"        Concentrator detected on {report.spi_devices[0]}")
         print(f"        Hardware: {report.hardware_description}")
@@ -195,6 +204,16 @@ def _step_capture_source(config: dict, report: HardwareReport) -> None:
             "sources": [source],
             "concentrator_spi_device": spi_device,
         }
+        config.setdefault("device", {})["platform"] = "gateway"
+        config.setdefault("device", {})["hardware_description"] = (
+            report.hardware_description
+        )
+    elif report.platform == "node" or report.wismesh_hat_detected:
+        print("        WisMesh Pi HAT detected (RAK6421)")
+        print("        Platform: Node (meshtasticd)")
+        print("        RF capture uses meshtasticd (install per RAK WisMesh guide).")
+        config["capture"] = {"sources": ["meshtasticd"]}
+        config.setdefault("device", {})["platform"] = "node"
         config.setdefault("device", {})["hardware_description"] = (
             report.hardware_description
         )
