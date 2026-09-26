@@ -7,6 +7,7 @@ import logging
 import multiprocessing as mp
 import queue
 import time
+import threading
 from dataclasses import asdict
 from typing import Any, AsyncIterator, Optional
 
@@ -48,6 +49,8 @@ class MeshtasticdBridgeSource(CaptureSource):
         connect_delay_seconds: float = _DEFAULT_CONNECT_DELAY_SECONDS,
         sync_settings: MeshtasticdSyncSettings | None = None,
     ):
+        self._request_lock = threading.Lock()
+        self._command_failed = False
         self._host = host
         self._port = port
         self._default_frequency_mhz = default_frequency_mhz
@@ -72,6 +75,7 @@ class MeshtasticdBridgeSource(CaptureSource):
     def is_running(self) -> bool:
         return (
             self._running
+            and not self._command_failed
             and self._worker is not None
             and self._worker.is_alive()
         )
@@ -86,12 +90,16 @@ class MeshtasticdBridgeSource(CaptureSource):
         """Meshtastic node id owned by meshtasticd (8-char lowercase hex)."""
         return self._local_node_id_hex
 
+    async def _connect_worker(self):
+        await self.start()
+
     async def start(self) -> None:
         last_error: Optional[Exception] = None
         for attempt in range(1, self._connect_attempts + 1):
             try:
                 await asyncio.to_thread(wait_for_tcp_port, self._host, self._port)
                 await asyncio.to_thread(self._start_worker)
+                self._command_failed = False
                 self._running = True
                 self._connected_at = time.monotonic()
                 logger.info(
@@ -176,6 +184,16 @@ class MeshtasticdBridgeSource(CaptureSource):
 
     async def packets(self) -> AsyncIterator[RawCapture]:
         while self._running:
+            if self._worker is None or self._command_failed or not self._worker.is_alive():
+                # A late reply cannot be assigned safely to another command.
+                # Replace all IPC queues along with their owning worker.
+                await asyncio.to_thread(self._stop_worker)
+                try:
+                    await self._connect_worker()
+                except (OSError, RuntimeError):
+                    logger.warning('meshtasticd unavailable; retrying in background')
+                    await asyncio.sleep(self._connect_delay_seconds)
+                continue
             if self._worker is not None and not self._worker.is_alive():
                 raise RuntimeError("meshtasticd bridge worker exited unexpectedly")
             try:
@@ -248,12 +266,22 @@ class MeshtasticdBridgeSource(CaptureSource):
     def _request(
         self, command: BridgeCommand, payload: dict
     ) -> tuple[bool, Any]:
+        with self._request_lock:
+            if self._command_failed:
+                return False, "Bridge command stream needs reconnect after timeout"
+            return self._request_unlocked(command, payload)
+
+
+    def _request_unlocked(
+        self, command: BridgeCommand, payload: dict
+    ) -> tuple[bool, Any]:
         if self._cmd_queue is None or self._resp_queue is None:
             return False, "meshtasticd bridge not connected"
         self._cmd_queue.put((command, payload))
         try:
             status, detail = self._resp_queue.get(timeout=_TX_RESPONSE_TIMEOUT_SECONDS)
         except queue.Empty:
+            self._command_failed = True
             return False, "meshtasticd bridge command timed out"
         if status == BridgeResponse.OK:
             return True, detail
