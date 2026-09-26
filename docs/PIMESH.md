@@ -1,6 +1,7 @@
 # PiMesh installation and protocol switching
 
-Meshpoint supports the MeshSmith PiMesh-1W through Linux Meshtastic and MeshCore
+Meshpoint supports the [MeshSmith PiMesh-1W](https://meshsmith.net/wiki/products/pimesh-1w)
+through Linux Meshtastic and MeshCore
 backends. Both are installed together and share the normal Meshpoint dashboard.
 Only one protocol runs on the HAT at a time.
 
@@ -11,8 +12,21 @@ is still required before claiming full feature parity.
 
 ## Initial installation
 
-Use a Meshpoint build containing PiMesh support. From its checkout, for a V2
-E22P-915M30S in the US:
+Start with a Pi 4 running 64-bit Debian 12 or 13, network access and a PiMesh HAT
+whose physical band matches your region. Debian 13 / V2 915 MHz is the tested
+combination. Connect the appropriate antenna before powering the radio.
+
+PiMesh support is on the experimental `codex/pimesh-dual-protocol` branch, not
+Stable. Once that branch is published, a fresh device can obtain it with:
+
+```bash
+sudo apt update && sudo apt install -y git
+sudo git clone --branch codex/pimesh-dual-protocol https://github.com/KMX415/meshpoint.git /opt/meshpoint
+cd /opt/meshpoint
+```
+
+If you already have that checkout at `/opt/meshpoint`, start there. For a V2
+E22P-915M30S in the US, install and reboot:
 
 ```bash
 sudo bash scripts/install.sh --platform pimesh --board pimesh-v2 --band 915 --region US --protocol meshtastic
@@ -27,7 +41,21 @@ For V1 use `--board pimesh-v1`. Select the physical module band and deployment
 region: US/915, ANZ/915 or EU_868/868. The initial reboot enables SPI and the
 required GPIO configuration.
 
-Open `http://<pi-ip>:8080` to complete activation and administrator setup.
+After reboot, reconnect over SSH and run:
+
+```bash
+sudo meshpoint setup
+```
+
+Provide your activation/API key, device name and position, retain the deployment
+region selected during installation, and let the wizard start Meshpoint. The
+wizard recognizes the provisioned PiMesh backend. Activation is required before
+the dashboard starts on a fresh installation.
+
+Then open `http://<pi-ip>:8080`, create the dashboard administrator password on
+the first-run page, and sign in. In Configuration > Radio, confirm the selected
+protocol reports connected. Match its radio preset and channels to nearby peers
+before checking messages.
 
 ## Switching protocols and updating
 

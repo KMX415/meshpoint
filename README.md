@@ -206,6 +206,18 @@ OTG not confirmed on G295).
 
 > **Step-by-step:** [Bobcat Miner 300 guide](docs/BOBCAT-300.md) and [Hardware Matrix](docs/HARDWARE-MATRIX.md).
 
+### Option G: PiMesh-1W (experimental)
+
+The [MeshSmith PiMesh-1W](https://meshsmith.net/wiki/products/pimesh-1w) uses a
+single LoRa radio with either the Meshtastic or MeshCore Linux backend. Install
+both once, then switch in **Configuration > Radio** while retaining each
+protocol's settings and the normal Meshpoint UI. The HAT runs one protocol at a time.
+
+Use the [PiMesh setup guide](docs/PIMESH.md) for board, band, region and initial
+protocol selection. V2 at 915 MHz has been tested on Pi 4 / 64-bit Debian 13;
+V1, 868 MHz and full peer-assisted messaging parity remain unverified.
+PiMesh controls appear only on provisioned PiMesh installations.
+
 ### Optional: MeshCore USB Companion
 
 Add a Heltec V3/V4 or T-Beam running [MeshCore USB companion firmware](https://meshcore.io/flasher) to monitor MeshCore traffic alongside Meshtastic. Plug it into any USB port on the Pi -- the setup wizard auto-detects the device and configures its radio frequency for your region. You can also flash from the dashboard under Configuration → Firmware.
@@ -225,6 +237,9 @@ selection described in [PiMesh installation and protocol switching](docs/PIMESH.
 Both protocols are installed together; choose Meshtastic or MeshCore in the
 normal Configuration > Radio page afterward. PiMesh controls and its update
 picker entry appear only on provisioned PiMesh installations.
+
+The default install commands below are for SX1302/SX1303 gateways. PiMesh owners
+should follow the linked PiMesh guide instead.
 
 ```bash
 sudo apt update && sudo apt install -y git
@@ -356,6 +371,7 @@ Start with the doc that matches what you are trying to do.
 - **[Bobcat Miner 300](docs/BOBCAT-300.md):** Rockchip RK3566 + Armbian repurposing (manual SPI/GPIO)
 - **[WisMesh Node (experimental)](docs/plans/WISMESH-BRANCH.md):** RAK6421 HAT, meshtasticd, long-lived `feat/wismesh-hat` branch
 - **[Gateway ↔ Node migration](docs/MIGRATE-GATEWAY-TO-NODE.md):** switch between concentrator Gateway and WisMesh Node platforms
+- **[PiMesh-1W (experimental)](docs/PIMESH.md):** installation, activation, MT/MC switching, updates and diagnostics
 - **[Configuration Guide](docs/CONFIGURATION.md):** all config options, private channels, relay, upstream, MQTT, radio tuning
 - **[USB nodes](docs/USB-NODES.md):** Meshtastic USB nodes (second preset, up to four) and MeshCore USB alongside the concentrator
 - **[Radio Config Explained](docs/RADIO-CONFIG-EXPLAINED.md):** the "why" behind region, spreading factor, bandwidth, custom slots, Part 15 awareness

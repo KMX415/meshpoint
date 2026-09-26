@@ -1,5 +1,20 @@
 # Configuration Guide
 
+## PiMesh protocol selection (experimental)
+
+On a provisioned PiMesh-1W installation, **Configuration > Radio** selects
+Meshtastic or MeshCore. Switching reconnects the dashboard and keeps each
+protocol's identity, channels and radio settings. The HAT runs one protocol at
+a time; other installations do not expose this selector.
+
+**Settings > Updates** selects the software branch, not the radio protocol.
+First-time HAT provisioning requires the CLI installer. See the
+[PiMesh guide](PIMESH.md) for installation, activation and recovery.
+
+PiMesh daemon identities and configuration live outside Meshpoint's usual data
+directory. Back up those directories separately as described in the PiMesh guide;
+the dashboard backup alone does not capture the complete radio installation.
+
 ## v0.8.0 device-side permissions
 
 In the development build, source installation and Web Terminal default to disabled,
