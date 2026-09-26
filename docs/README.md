@@ -7,6 +7,7 @@ are unreleased; their presence here does not mean Stable contains them.
 | --- | --- |
 | Install or provision a device | [Onboarding](ONBOARDING.md) |
 | Install PiMesh-1W or switch MT/MC | [PiMesh guide](PIMESH.md) (experimental) |
+| Repurpose a Heltec HT-M2808 | [Community installation guide](HELTEC-M2808.md) |
 | Configure existing mesh radios | [Configuration](CONFIGURATION.md), [radio settings explained](RADIO-CONFIG-EXPLAINED.md) |
 | Add Meshtastic, MeshCore or RNode hardware | [USB nodes](USB-NODES.md), [hardware matrix](HARDWARE-MATRIX.md) |
 | Share the dashboard safely | [Dashboard access](DASHBOARD-ACCESS.md) |

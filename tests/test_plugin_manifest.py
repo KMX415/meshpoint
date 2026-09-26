@@ -81,6 +81,21 @@ class TestParseManifest(unittest.TestCase):
         self.assertEqual(m.source, "builtin")
         self.assertTrue(m.is_builtin)
 
+    def test_requires_validates_name_and_rejects_self_dependency(self):
+        folder = _write_plugin(self.root, "acars", _VALID + 'requires="radio"\n')
+        self.assertEqual(parse_manifest(folder).requires, "radio")
+        for invalid in ['"acars"', '"../radio"', 'true', '["radio"]', '""']:
+            (folder / "plugin.toml").write_text(_VALID + 'requires=' + invalid + '\n', encoding="utf-8")
+            with self.subTest(invalid=invalid), self.assertRaises(PluginManifestError):
+                parse_manifest(folder)
+
+    def test_requires_and_hook_are_mutually_exclusive(self):
+        folder = _write_plugin(self.root, "acars", 'name="acars"\nversion="1"\nmeshpoint_api=1\n'
+            'provides=["hook"]\nrequires="radio"\n[hook]\nhost="radio"\n'
+            '[frontend]\nscripts=["page.js"]\n', extra_files=["page.js"])
+        with self.assertRaises(PluginManifestError):
+            parse_manifest(folder)
+
     def test_valid_full(self) -> None:
         toml = _VALID + """
 [deps]

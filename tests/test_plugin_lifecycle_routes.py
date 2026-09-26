@@ -69,6 +69,58 @@ class TestPluginLifecycle(unittest.TestCase):
         self.assertEqual(self.client.delete("/api/plugins/sample").status_code, 409)
         self.assertTrue(self.folder.exists())
 
+    def test_inventory_includes_original_source_and_checkbox_persists(self):
+        self.login()
+        source = {"url": "https://github.com/example/plugins", "commit": "a" * 40}
+        self.runtime.config.plugins["sample"] = {"enabled": False, "source": source, "keep": 42}
+        response = self.client.put("/api/plugins/sample", json={"enabled": True})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["restart_required"])
+        row = self.client.get("/api/plugins").json()["plugins"][0]
+        self.assertEqual(row["source"], source)
+        self.assertTrue(row["enabled"])
+        self.assertEqual(self.runtime.config.plugins["sample"]["keep"], 42)
+
+    def dependent(self, name, requires):
+        folder = self.runtime.apps_dir / name
+        folder.mkdir()
+        (folder / "plugin.toml").write_text(f'name="{name}"\nversion="1"\nmeshpoint_api=1\n'
+            f'provides=["service"]\nrequires="{requires}"\n', encoding="utf-8")
+        self.runtime.discover()
+
+    def test_dependencies_require_enabled_host_and_cascade_transitively(self):
+        self.login()
+        self.dependent("child", "sample")
+        self.dependent("grandchild", "child")
+        self.assertEqual(self.client.put("/api/plugins/child", json={"enabled": True}).status_code, 409)
+        for name in ["sample", "child", "grandchild"]:
+            self.assertEqual(self.client.put("/api/plugins/" + name, json={"enabled": True}).status_code, 200)
+        row = next(p for p in self.client.get("/api/plugins").json()["plugins"] if p["id"] == "child")
+        self.assertEqual(row["dependency"], {"id": "sample", "enabled": True})
+        self.runtime.config.plugins["child"]["keep"] = "setting"
+        response = self.client.put("/api/plugins/sample", json={"enabled": False})
+        self.assertEqual(set(response.json()["also_disabled"]), {"child", "grandchild"})
+        self.assertTrue(all(not self.runtime.config.plugins[name]["enabled"] for name in ["sample", "child", "grandchild"]))
+        self.assertEqual(self.runtime.config.plugins["child"]["keep"], "setting")
+
+    def test_failed_cascade_save_preserves_effective_settings(self):
+        self.login()
+        self.dependent("child", "sample")
+        for name in ["sample", "child"]:
+            self.runtime.config.plugins[name] = {"enabled": True}
+        self.persist.side_effect = OSError("read only")
+        self.assertEqual(self.client.put("/api/plugins/sample", json={"enabled": False}).status_code, 500)
+        self.assertTrue(self.runtime.config.plugins["sample"]["enabled"])
+        self.assertTrue(self.runtime.config.plugins["child"]["enabled"])
+
+    def test_update_rejects_different_source_before_downloading(self):
+        self.runtime.config.plugins["sample"] = {"enabled": False, "source": {"url": "original"}}
+        with patch("src.plugins.update.installer.install_from_source") as download:
+            with self.assertRaisesRegex(ValueError, "original source"):
+                replace_disabled(self.runtime, {}, {"url": "different"}, {"id": "sample"}, self.persist)
+            download.assert_not_called()
+        self.assertEqual((self.folder / "page.js").read_text(encoding="utf-8"), "// declared")
+
     def test_assets_require_loaded_plugin_admin_and_declared_path(self):
         self.assertEqual(self.client.get("/api/plugin-ui/sample/page.js").status_code, 401)
         self.login()

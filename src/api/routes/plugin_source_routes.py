@@ -23,14 +23,16 @@ class InstallPlugin(BaseModel):
     id: str
 
 
+class SourceSettings(BaseModel):
+    enabled: StrictBool
+
+
 def build_router(runtime):
     router = APIRouter(prefix="/api/plugin-sources", tags=["plugins"])
     lock = runtime.mutation_lock
-    sources_enabled = runtime.config.plugin_sources_enabled is True
-
     def require_sources_enabled():
-        if not sources_enabled:
-            raise HTTPException(403, "Source installation is disabled. Set plugin_sources_enabled: true on the device and restart Meshpoint.")
+        if runtime.config.plugin_sources_enabled is not True:
+            raise HTTPException(403, "Plugin downloads are disabled. Enable Allow plugin downloads in Settings > Plugins.")
 
     def configured():
         return runtime.config.plugins.get("_sources", {}).get("repositories", [])
@@ -43,7 +45,19 @@ def build_router(runtime):
 
     @router.get("")
     async def list_sources(_claims=Depends(require_admin)):
-        return {"sources": configured(), "sources_enabled": sources_enabled}
+        return {"sources": configured(), "sources_enabled": runtime.config.plugin_sources_enabled is True}
+
+    @router.put("/settings")
+    async def settings(req: SourceSettings, claims=Depends(require_admin), audit=Depends(get_audit_writer)):
+        async with lock:
+            with audit.timed_action(user=claims.subject, action="plugin.source_settings",
+                                    params={"enabled": req.enabled}):
+                try:
+                    save_section_to_yaml("plugin_sources_enabled", req.enabled)
+                except OSError as exc:
+                    raise HTTPException(500, "Could not save download permission") from exc
+                runtime.config.plugin_sources_enabled = req.enabled
+        return {"saved": True, "sources_enabled": req.enabled, "restart_required": False}
 
     @router.post("")
     async def add_source(req: AddSource, claims=Depends(require_admin), audit=Depends(get_audit_writer)):
@@ -59,6 +73,7 @@ def build_router(runtime):
         except sources.PluginSourceError as exc:
             raise HTTPException(400, str(exc)) from exc
         async with lock:
+            require_sources_enabled()
             if any(s["url"] == url for s in configured()):
                 raise HTTPException(409, "Source already added")
             item = {"url": url, "ref": commit["sha"], "requested_ref": ref}
@@ -92,6 +107,7 @@ def build_router(runtime):
         if not req.trusted:
             raise HTTPException(400, "Confirm that you trust this source revision")
         async with lock:
+            require_sources_enabled()
             old = source_for(req.url)
             try:
                 ref = sources.normalise_ref(req.ref)
@@ -113,6 +129,7 @@ def build_router(runtime):
     async def update(req: InstallPlugin, claims=Depends(require_admin), audit=Depends(get_audit_writer)):
         require_sources_enabled()
         async with lock:
+            require_sources_enabled()
             source = source_for(req.source)
             state = runtime.states.get(req.id)
             if state is None or state.manifest is None:
@@ -145,6 +162,7 @@ def build_router(runtime):
         if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,38}", req.id):
             raise HTTPException(400, "Invalid plugin id")
         async with lock:
+            require_sources_enabled()
             try:
                 catalog = await asyncio.to_thread(sources.fetch_catalog, source["url"], source["ref"])
                 entry = next((e for e in catalog["plugins"] + catalog["themes"] if e["id"] == req.id), None)

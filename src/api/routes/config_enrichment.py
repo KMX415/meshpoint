@@ -38,6 +38,7 @@ def enrich_config_payload(
 
     token = (upstream.auth_token or "").strip()
     platform = device.platform or "gateway"
+    base["dashboard"] = {"map_tile_url": cfg.dashboard.map_tile_url}
     base["device"] = {
         "device_name": device.device_name,
         "platform": platform,

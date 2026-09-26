@@ -37,7 +37,8 @@ class TopbarMeshcoreChip {
         if (!expected) return;
 
         const radio = mc.radio || {};
-        const connected = Boolean(mc.connected);
+        // USB capture is independent of the native transmit service.
+        const connected = Boolean(mc.capture_connected ?? mc.connected);
         const showCompanion = this._dashboardReachable && connected;
 
         if (!this._dashboardReachable) {

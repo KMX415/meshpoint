@@ -2,11 +2,54 @@
 
 ### Unreleased
 
+#### Hardware support
+
+- Document the Pisces P100's community-reported GPIO 23 concentrator reset
+  override and link setup notes from the README. Physical verification is
+  pending; no automatic hardware configuration or GPS changes are included.
+
+- Add sicXnull's Heltec HT-M2808 installation guide from #138 and link it
+  from the README, hardware matrix and documentation index. TX/RX status
+  reflects the contributor's report.
+
+- Document Bobcat G285 as community-reported working in #137, with a separate
+  SPI1 and GPIO 125/122/149 recipe. Preserve the G295 procedure and distinguish
+  reported operation from pending TX/RX and restart verification.
+
+- Honor `RESET_GPIO` in the in-app concentrator reset fallback, matching valid
+  overrides used by the service reset script. Explicit arguments retain priority;
+  invalid nonempty overrides skip the fallback with a warning.
+- Document Einstein PD2EMC's COTX X3 findings: reset GPIO 22, button 23, LED 27,
+  manual service configuration and reported restart/transmission results. No
+  automatic board detection is added; physical validation of this port is pending.
+
+#### MeshCore positions
+
+- Preserve advertised coordinates from the USB companion's contact roster and
+  apply them to heard MeshCore nodes, including adverts that carry only a public
+  key (#136). Queue enriched nodes in the existing Meshradar heartbeat using the
+  cloud's expected position fields. Later adverts without coordinates retain the
+  saved position. Invalid or unset coordinate pairs do not erase known positions;
+  contact refreshes do not increase packet counts or change reception times.
+
 #### Dashboard fixes (v0.8.0 development)
 
-- Plugin source setup explains locked downloads above the module cards, provides
-  device setup steps and suggests the RC catalog. Permission-check failures are
-  distinguished from an intentional download lock.
+- The Meshtastic topbar indicator only appears when a concentrator or Meshtastic
+  serial capture source is configured.
+
+- Dashboard startup opens its live connection before initial data fetches and
+  clears the connecting indicator on handshake. Setup and role checks share one
+  identity request.
+
+- Plugins can declare service dependencies with `requires`. Enablement checks
+  dependencies, disabling a host also disables dependent plugins, and startup
+  loads hosts first while reporting missing or cyclic dependencies.
+
+- Plugin downloads can be enabled from an administrator checkbox without editing
+  YAML or restarting. Source presets, per-module source selection, maintainer
+  labels and installed-plugin checkboxes make setup available from the dashboard.
+  Updates retain the original source. Permission-check failures are distinguished
+  from an intentional download lock.
 - Sort the local node grid by packet count, highest first, with last-heard
   tie-breaking, favorites pinning and existing hop filters. The selection is
   remembered across reloads; missing and zero counts sort after positive counts.
@@ -38,7 +81,8 @@
   by default, including upgrades without explicit settings. Catalog browsing and
   installed-module management remain available. Terminal access requires
   `dashboard.web_terminal_enabled: true`; source downloads require
-  `plugin_sources_enabled: true`. Both require a service restart.
+  `plugin_sources_enabled: true`, saved by the dashboard checkbox immediately.
+  Only the terminal permission requires a service restart.
 
 - Optional plugin store with search, categories, hardware/dependency information,
   source trust and commit pinning, selected installs, enablement, update and removal.

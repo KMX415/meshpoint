@@ -52,6 +52,13 @@
 .store-card__details p { margin-top: 8px; }
 .store-card__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
 .store-card__actions button { flex: 1; }
+.store-card__maintainer { font-size: .75rem; color: var(--text-secondary); line-height: 1.6; margin-bottom: 12px; overflow-wrap: anywhere; }
+.store-card__source { margin-bottom: 16px; }
+.store-card__source select { width: 100%; min-width: 0; }
+.store-toggle { display: flex; align-items: center; gap: 10px; min-height: 44px; color: var(--text-primary); font-size: .9rem; cursor: pointer; }
+.store-toggle input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent-cyan); }
+.store-toggle input:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 3px; }
+.store-source-picker { grid-column: 1 / -1; }
 .plugin-store .store-install { border-color: var(--accent-cyan); background: color-mix(in srgb, var(--bg-card), var(--accent-cyan) 18%); }
 .store-empty { text-align: center; padding: 48px 20px; border: 1px dashed var(--border); border-radius: 14px; color: var(--text-secondary); }
 .plugin-store .store-sources { margin-top: 24px; display: block; }

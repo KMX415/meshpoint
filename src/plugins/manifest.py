@@ -173,6 +173,7 @@ class PluginManifest:
     # Set iff "hook" in provides.
     hook: HookSpec | None = None
     executables: tuple[str, ...] = ()
+    requires: str | None = None
 
     @property
     def setup_path(self) -> Path | None:
@@ -330,6 +331,12 @@ def parse_manifest(
 
     sidebar = _parse_sidebar(data.get("sidebar"), provides)
     hook = _parse_hook(data.get("hook"), provides)
+    requires = data.get("requires")
+    if requires is not None:
+        if not isinstance(requires, str) or not _SLUG_RE.fullmatch(requires):
+            raise PluginManifestError("requires", "'requires' must be a plugin name.")
+        if requires == name or hook is not None:
+            raise PluginManifestError("requires", "Declare one dependency: another plugin's name or hook.host.")
 
     return PluginManifest(
         name=name,
@@ -350,6 +357,7 @@ def parse_manifest(
         sidebar=sidebar,
         hook=hook,
         executables=tuple(executables),
+        requires=requires,
     )
 
 

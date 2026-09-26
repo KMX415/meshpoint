@@ -33,8 +33,9 @@ clearing the session. Confirmation dialogs return keyboard focus to their opener
 Tab cycles the action buttons, Enter activates the focused action, and Escape
 cancels.
 
-[Source installation](PLUGINS.md#install-and-enable) has a separate device-side
-opt-in. These controls do not restrict backup restore or sandbox trusted plugins.
+[Source installation](PLUGINS.md#install-and-enable) has a separate administrator
+checkbox in Settings > Plugins > Manage sources, which saves immediately.
+These controls do not restrict backup restore or sandbox trusted plugins.
 Review configuration and optional code in any archive before restoring it.
 
 ## Enable a Viewer login

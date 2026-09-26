@@ -18,11 +18,12 @@ class TestPluginRuntime(unittest.IsolatedAsyncioTestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def plugin(self, name, code, *, enabled=True, provides='"routes"'):
+    def plugin(self, name, code, *, enabled=True, provides='"routes"', requires=None):
         folder = self.root / name
         (folder / "backend").mkdir(parents=True)
         (folder / "plugin.toml").write_text(
-            f'name="{name}"\nversion="1"\nmeshpoint_api=1\nprovides=[{provides}]\n',
+            f'name="{name}"\nversion="1"\nmeshpoint_api=1\nprovides=[{provides}]\n'
+            + (f'requires="{requires}"\n' if requires else ''),
             encoding="utf-8",
         )
         (folder / "backend" / "__init__.py").write_text(code, encoding="utf-8")
@@ -49,6 +50,37 @@ class TestPluginRuntime(unittest.IsolatedAsyncioTestCase):
         self.plugin("disabled", 'raise AssertionError("must not import")', enabled=False)
         _, runtime = self.build()
         self.assertEqual(runtime.states["disabled"].status, "installed")
+
+    async def test_dependency_loads_before_alphabetically_earlier_consumer(self):
+        self.plugin("aa-page", 'def register(reg): pass', requires="zz-service")
+        self.plugin("zz-service", 'def register(reg): pass')
+        _, runtime = self.build()
+        self.assertEqual([state.name for state in runtime.load_order], ["zz-service", "aa-page"])
+        self.assertEqual(runtime.states["aa-page"].status, "loaded")
+
+    async def test_disabled_dependency_prevents_consumer_import(self):
+        self.plugin("consumer", 'raise AssertionError("must not import")', requires="host")
+        self.plugin("host", 'def register(reg): pass', enabled=False)
+        _, runtime = self.build()
+        self.assertEqual(runtime.states["consumer"].status, "setup needed")
+        self.assertIsNone(runtime.states["consumer"].registration)
+
+    async def test_missing_and_cyclic_dependencies_do_not_break_core(self):
+        self.plugin("missing", 'raise AssertionError()', requires="absent")
+        self.plugin("cycle-a", 'raise AssertionError()', requires="cycle-b")
+        self.plugin("cycle-b", 'raise AssertionError()', requires="cycle-a")
+        app, runtime = self.build()
+        self.assertTrue(all(state.status == "failed" for state in runtime.states.values()))
+        self.assertEqual(TestClient(app).get("/api/core").status_code, 200)
+
+    async def test_failed_host_service_prevents_dependent_service_start(self):
+        self.plugin("host", 'class Service:\n async def start(self): raise RuntimeError()\n'
+            ' async def stop(self): pass\ndef register(reg): reg.add_service("host", lambda ctx: Service())', provides='"service"')
+        self.plugin("consumer", 'def register(reg): pass', requires="host")
+        _, runtime = self.build()
+        await runtime.start(None, None)
+        self.assertEqual(runtime.states["consumer"].status, "failed")
+        self.assertIn("Dependency failed", runtime.states["consumer"].error)
 
     async def test_partial_registration_is_discarded(self):
         self.plugin("broken", """from fastapi import APIRouter

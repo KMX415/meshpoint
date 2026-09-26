@@ -155,6 +155,24 @@ class TestMeshcoreEventAdapter(unittest.TestCase):
         self.assertNotIn("latitude", pkt.decoded_payload)
         self.assertNotIn("longitude", pkt.decoded_payload)
 
+    def test_advertisement_keeps_valid_zero_coordinate(self):
+        for lat, lon in [(0, 12.5), (-12.5, 0)]:
+            with self.subTest(lat=lat, lon=lon):
+                packet = adapt_event(self._make_envelope("advertisement", {
+                    "public_key": "abcdef1234567890abcdef", "adv_lat": lat, "adv_lon": lon,
+                }))
+                self.assertEqual(packet.decoded_payload["latitude"], lat)
+                self.assertEqual(packet.decoded_payload["longitude"], lon)
+
+    def test_advertisement_rejects_invalid_position_pair(self):
+        for lat, lon in [(91, 20), (10, 181), (float("nan"), 20), (10, None)]:
+            with self.subTest(lat=lat, lon=lon):
+                packet = adapt_event(self._make_envelope("advertisement", {
+                    "public_key": "abcdef1234567890abcdef", "adv_lat": lat, "adv_lon": lon,
+                }))
+                self.assertNotIn("latitude", packet.decoded_payload)
+                self.assertNotIn("longitude", packet.decoded_payload)
+
     def test_raw_data(self):
         raw = self._make_envelope("raw_data", {
             "rssi": -85.0,

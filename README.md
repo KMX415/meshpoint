@@ -215,8 +215,24 @@ protocol's settings and the normal Meshpoint UI. The HAT runs one protocol at a 
 
 Use the [PiMesh setup guide](docs/PIMESH.md) for board, band, region and initial
 protocol selection. V2 at 915 MHz has been tested on Pi 4 / 64-bit Debian 13;
-V1, 868 MHz and full peer-assisted messaging parity remain unverified.
+Public/private channels and DMs passed bidirectional tests on both protocols;
+V1, 868 MHz and full feature parity remain unverified.
 PiMesh controls appear only on provisioned PiMesh installations.
+
+### Heltec HT-M2808 (community installation guide)
+
+sicXnull contributed a [Heltec HT-M2808 installation guide](docs/HELTEC-M2808.md)
+covering Debian Bookworm flashing, manual SPI/GPIO setup and troubleshooting.
+Meshtastic TX/RX is reported by the contributor in [PR #138](https://github.com/KMX415/meshpoint/pull/138);
+the setup has not been independently verified by Meshpoint maintainers.
+
+### Pisces P100 (community setup)
+
+Einstein PD2EMC reports working transmission and repeated service restarts
+on this Pi 4-based, PoE-powered outdoor miner with a manual **GPIO 23**
+concentrator reset override. See the
+[Pisces P100 setup notes](docs/HARDWARE-MATRIX.md#pisces-p100-community-setup).
+The report has not been independently verified by Meshpoint maintainers.
 
 ### Optional: MeshCore USB Companion
 
@@ -227,6 +243,28 @@ Add a Heltec V3/V4 or T-Beam running [MeshCore USB companion firmware](https://m
 A second Meshtastic radio (Seeed Xiao S3, Heltec, T-Beam, and similar) can listen on another preset or slot while the concentrator stays on LongFast. Dashboard: **Configuration → Serial**. Up to four USB nodes. See [USB nodes](docs/USB-NODES.md).
 
 > **Full step-by-step guide:** See the [Onboarding Guide](docs/ONBOARDING.md) for detailed instructions covering SD flashing, Chameleon eMMC recovery, assembly, installation, MeshCore setup, USB nodes, and troubleshooting for all hardware options.
+
+---
+
+## Hardware and accessory links
+
+These optional parts cover USB nodes, installation, and accessories. Choose the
+radio frequency, antenna connector, and board variant that match your setup.
+See the [Hardware Matrix](docs/HARDWARE-MATRIX.md) for supported configurations.
+
+| Item | Use |
+| --- | --- |
+| [Heltec WiFi LoRa 32 V3 development board](https://amzn.to/4h7rIrf) | Sold by AYWHP; includes an SX1262 radio, 0.96-inch OLED display, and antenna. Optional USB node with the appropriate firmware. |
+| [Heltec ESP32 LoRa 32 V4 development board](https://amzn.to/4gTLJmj) | ESP32-S3/SX1262 board with OLED display, 2MB PSRAM, and 16MB flash; optional USB node with the appropriate firmware. |
+| [Seeed Studio XIAO ESP32S3 + Wio-SX1262 Meshtastic kit](https://amzn.to/4AbTKKQ) | Pre-flashed Meshtastic node with 3D-printed case, 2dBi SMA antenna, and USB-C cable. |
+| [RAKwireless WisBlock Meshtastic Starter Kit, US915](https://amzn.to/3UK1Z0C) | Includes RAK19007 baseboard, RAK4631 core, LoRa/Bluetooth antennas, USB cable, and screws. Pre-flashed; battery and case are not included. |
+| [Right-angle USB-A to USB-C data cables, 2-pack](https://amzn.to/4hslGTf) | Short 10cm flat cables with up/down 90-degree connectors for tight USB-node installations. |
+| [Atolla powered 4-port USB 3.0 hub](https://amzn.to/4xqrQIi) | Four switched data ports, a separate charging port, and a supplied 5V/3A adapter. Connect radios to the data ports. |
+| [Lexar E-Series 64GB microSDXC card](https://amzn.to/46m9VaT) | UHS-I, A1-rated storage for microSD-based gateways; listed transfer speed up to 100MB/s. |
+| [Acer USB-A/USB-C SD and microSD reader](https://amzn.to/4yEY3gi) | USB 3.0 reader with separate SD/microSD slots and both host connector types for flashing installation cards. |
+| [Slinkdsco 915MHz whip antennas, red, 2 sets](https://amzn.to/4j64VOY) | 17cm SMA-male antennas for 902–928MHz, with 10cm U.FL-to-SMA-female pigtails. Match your radio's band and connector. |
+| [Waveshare Mini Base Board for Raspberry Pi CM4](https://amzn.to/4ircy2n) | Carrier board for CM4 Lite/eMMC modules, with a standard CM4 socket and 40-pin GPIO header. See the [Chameleon eMMC flashing guide](docs/SYNCROBIT-CHAMELEON.md). |
+| [VFAN USB GPS receiver with magnetic base](https://amzn.to/4AgqHpk) | UBX-G7020KT GNSS receiver with NMEA output and a 2m USB cable; see [GPS configuration](docs/CONFIGURATION.md#location-gps-source). |
 
 ---
 
@@ -369,6 +407,7 @@ Start with the doc that matches what you are trying to do.
 - **[Onboarding Guide](docs/ONBOARDING.md):** step-by-step from empty Pi to running Meshpoint
 - **[Hardware Matrix](docs/HARDWARE-MATRIX.md):** RAK V2 vs SenseCap M1 vs Chameleon vs Bobcat vs DIY, WisMesh Node (experimental), Meshtastic USB nodes, MeshCore companion radios, antennas, what's not supported
 - **[Bobcat Miner 300](docs/BOBCAT-300.md):** Rockchip RK3566 + Armbian repurposing (manual SPI/GPIO)
+- **[Heltec HT-M2808](docs/HELTEC-M2808.md):** Community-contributed Debian Bookworm installation guide (manual SPI/GPIO)
 - **[WisMesh Node (experimental)](docs/plans/WISMESH-BRANCH.md):** RAK6421 HAT, meshtasticd, long-lived `feat/wismesh-hat` branch
 - **[Gateway ↔ Node migration](docs/MIGRATE-GATEWAY-TO-NODE.md):** switch between concentrator Gateway and WisMesh Node platforms
 - **[PiMesh-1W (experimental)](docs/PIMESH.md):** installation, activation, MT/MC switching, updates and diagnostics
@@ -428,3 +467,7 @@ FM audio correction follows the US/EU starting profile where known and can be
 selected explicitly. P2000 is Netherlands-specific; DAB/DAB+ currently supports
 Band III only. See [receiver region settings](docs/PLUGINS.md#receiver-regions-and-local-channels)
 for persistent configuration and module limitations.
+
+---
+
+As an Amazon Associate I earn from qualifying purchases.

@@ -177,6 +177,7 @@ class DashboardConfig:
     port: int = 8080
     static_dir: str = "frontend"
     theme: str = "dark"
+    map_tile_url: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 
 
 @dataclass
@@ -558,11 +559,12 @@ def _get_local_yaml_path() -> Path:
     return _validated_config_path(raw)
 
 
-def save_section_to_yaml(section: str, values: dict) -> None:
+def save_section_to_yaml(section: str, values: dict | bool) -> None:
     """Merge values into a section of local.yaml without destroying other sections.
 
     Reads the existing file (if any), updates only the specified section,
     and writes back. Creates the file if it doesn't exist.
+    A boolean replaces a top-level permission flag instead of merging a mapping.
     """
     path = _get_local_yaml_path()
     existing: dict = {}
@@ -572,7 +574,7 @@ def save_section_to_yaml(section: str, values: dict) -> None:
 
     if section not in existing:
         existing[section] = {}
-    if isinstance(existing[section], dict):
+    if isinstance(existing[section], dict) and isinstance(values, dict):
         existing[section].update(values)
     else:
         existing[section] = values

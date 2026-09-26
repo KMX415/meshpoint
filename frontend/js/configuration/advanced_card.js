@@ -17,6 +17,24 @@ class AdvancedConfigCard {
             <div class="cfg-section" data-adv-root>
                 <article class="cfg-card">
                     <header class="cfg-card__head">
+                        <h3 class="cfg-card__title">Map tiles</h3>
+                        <p class="cfg-card__hint">Use OpenStreetMap or a compatible local tile server. Reload the dashboard after saving.</p>
+                    </header>
+                    <form class="cfg-form" data-map-form>
+                        <label class="cfg-field">
+                            <span class="cfg-field__label">Tile URL template</span>
+                            <input class="cfg-field__input" type="text" required maxlength="2048"
+                                   placeholder="https://tile.openstreetmap.org/{z}/{x}/{y}.png" data-map-url>
+                            <span class="cfg-field__hint">Include {z}, {x}, and {y}. Local plugin paths beginning with / are supported. Keep the OpenStreetMap attribution.</span>
+                        </label>
+                        <div class="cfg-card__actions">
+                            <button class="terminal-button terminal-button--primary" type="submit">Save map source</button>
+                        </div>
+                        <p class="cfg-status" data-map-status aria-live="polite"></p>
+                    </form>
+                </article>
+                <article class="cfg-card">
+                    <header class="cfg-card__head">
                         <h3 class="cfg-card__title">Storage</h3>
                         <p class="cfg-card__hint">Local SQLite retention on the SD card.</p>
                     </header>
@@ -70,6 +88,7 @@ class AdvancedConfigCard {
             </div>
         `;
         this._storageForm = this._root.querySelector('[data-storage-form]');
+        this._root.querySelector('[data-map-form]').addEventListener('submit', (e) => this._saveMap(e));
         this._radioAdvForm = this._root.querySelector('[data-radio-adv-form]');
         this._storageForm.addEventListener('submit', (e) => this._saveStorage(e));
         this._radioAdvForm.addEventListener('submit', (e) => this._saveRadioAdv(e));
@@ -86,6 +105,7 @@ class AdvancedConfigCard {
 
         const storage = config.storage || {};
         const radioAdv = config.radio_advanced || {};
+        this._setVal('[data-map-url]', config.dashboard?.map_tile_url || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png');
 
         this._setVal('[data-storage-max]', storage.max_packets_retained);
         this._setVal('[data-storage-telemetry-max]', storage.max_telemetry_retained);
@@ -116,6 +136,17 @@ class AdvancedConfigCard {
             ),
         });
         this._finish(status, result, 'Storage updated.');
+    }
+
+    async _saveMap(event) {
+        event.preventDefault();
+        const status = this._root.querySelector('[data-map-status]');
+        status.dataset.kind = 'pending';
+        status.textContent = 'Saving.';
+        const result = await this._api.put('/api/config/dashboard', {
+            map_tile_url: this._root.querySelector('[data-map-url]').value.trim(),
+        });
+        this._finish(status, result, 'Map source updated. Reload the dashboard to use it.');
     }
 
     async _saveRadioAdv(event) {

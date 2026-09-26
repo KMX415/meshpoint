@@ -8,6 +8,19 @@ class PluginCatalog {
         this.catalog = root.querySelector('[data-source-catalog]');
         this.sourcesPanel = root.querySelector('[data-store-source-panel]');
         this.sourcesEnabled = false;
+        this.sourceChoices = new Map();
+        this.sourceOrder = [];
+        this.sourcePresets = {
+            meshpoint: {label:'Meshpoint Official', url:'https://github.com/KMX415/meshpoint-plugins', ref:'main',
+                description:'Official Meshpoint plugin repository, maintained through reviewed pull requests. This catalog targets the v0.8.0 release candidate; hardware validation varies by module.'},
+            einstein: {label:'Einstein Experimental', url:'https://github.com/javastraat/meshpoint-plugins', ref:'main',
+                description:'Experimental and additional plugins and themes maintained independently by Einstein PD2EMC. These are separate from the official Meshpoint catalog.'},
+        };
+        this.permission = root.querySelector('[data-source-enabled]');
+        this.permission.addEventListener('change', () => this.setDownloads());
+        this.preset = root.querySelector('[data-source-preset]');
+        this.preset.addEventListener('change', () => this.selectPreset());
+        this.selectPreset();
         this.permissionNote = document.createElement('aside');
         this.permissionNote.className = 'store-source-access';
         this.permissionNote.setAttribute('role', 'status');
@@ -53,26 +66,59 @@ class PluginCatalog {
     showSources() {
         this.sourcesPanel.open = true;
         this.sourcesPanel.scrollIntoView({behavior:'smooth', block:'start'});
-        if (this.sourcesEnabled) this.sourcesPanel.querySelector('input').focus({preventScroll:true});
+        (this.sourcesEnabled ? this.preset : this.permission).focus({preventScroll:true});
+    }
+
+    selectPreset() {
+        const preset = this.sourcePresets[this.preset.value];
+        const form = this.root.querySelector('form');
+        form.elements.url.value = preset?.url || '';
+        form.elements.ref.value = preset?.ref || 'main';
+        form.elements.url.readOnly = Boolean(preset);
+        form.elements.trusted.checked = false;
+        this.root.querySelector('[data-source-description]').textContent = preset?.description
+            || 'Enter a GitHub repository that publishes a Meshpoint plugin catalog.';
+    }
+
+    sourceName(source) {
+        if (source?.url === 'https://github.com/KMX415/meshpoint') return 'Meshpoint legacy catalog';
+        return Object.values(this.sourcePresets).find(preset => preset.url === source?.url)?.label || source?.url || 'Source not recorded';
+    }
+
+    async setDownloads() {
+        const enabled = this.permission.checked;
+        this.permission.disabled = true;
+        this.status.textContent = 'Saving download permission...';
+        try {
+            const result = await this.request('/settings', {method:'PUT', headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({enabled})});
+            this.setSourceAccess(result.sources_enabled);
+            this.render();
+            this.status.textContent = enabled ? 'Downloads allowed. Choose a source below.' : 'Downloads disabled. Installed plugins are unchanged.';
+        } catch (error) {
+            this.setSourceAccess(this.sourceAccess);
+            this.status.textContent = error.message;
+        }
     }
 
     setSourceAccess(enabled) {
         this.sourcesEnabled = enabled === true;
         this.sourceAccess = enabled;
+        this.permission.checked = this.sourcesEnabled;
+        this.permission.disabled = typeof enabled !== 'boolean';
         const heading = document.createElement('h3');
         const explanation = document.createElement('p');
         heading.textContent = enabled === false ? 'Plugin downloads are locked' : enabled === null
             ? 'Checking download permission...' : 'Download permission could not be checked';
         explanation.textContent = enabled === false
-            ? 'This is the default on new and upgraded devices. Source fields, installs and updates stay disabled until the device owner enables downloads. You can still browse previews and manage installed plugins.'
+            ? 'Turn on Allow plugin downloads in Plugin sources to add a catalog and install modules. You can still manage installed plugins.'
             : enabled === null ? 'Source controls will stay disabled until Meshpoint confirms access.'
                 : 'Source controls are temporarily disabled. Refresh to retry before changing device settings.';
         this.permissionNote.replaceChildren(heading, explanation);
-        if (enabled === false) this.permissionNote.append(this.button('How to enable downloads', () => this.showSources()));
+        if (enabled === false) this.permissionNote.append(this.button('Manage download permission', () => this.showSources()));
         this.permissionNote.hidden = this.sourcesEnabled;
-        this.sourcesPanel.querySelector('[data-source-setup]').hidden = enabled !== false;
-        this.root.querySelector('[data-store-sources]').textContent = enabled === false ? 'Source setup' : 'Manage sources';
-        for (const control of this.root.querySelectorAll('form input, form button, [data-source-mutation]')) {
+        this.root.querySelector('[data-store-sources]').textContent = 'Manage sources';
+        for (const control of this.root.querySelectorAll('form input, form select, form button, [data-source-mutation]')) {
             control.disabled = !this.sourcesEnabled;
         }
     }
@@ -83,6 +129,7 @@ class PluginCatalog {
         this.status.textContent = 'Checking module sources...';
         try {
             const data = await this.request('');
+            this.sourceOrder = data.sources.map(source => source.url);
             this.setSourceAccess(data.sources_enabled);
             this.list.replaceChildren();
             if (!data.sources.length) {
@@ -95,7 +142,7 @@ class PluginCatalog {
             for (const source of data.sources) {
                 const row = document.createElement('div'); row.className = 'store-source';
                 const label = document.createElement('span');
-                label.textContent = `${source.url} · ${source.ref.slice(0, 8)}`;
+                label.textContent = `${this.sourceName(source)} · ${source.url} · ${source.ref.slice(0, 8)}`;
                 row.append(label, this.button('Reload catalog', () => this.browse(source)));
                 const repin = this.button('Update source revision', async () => {
                     if (!this.sourcesEnabled) return;
@@ -158,7 +205,19 @@ class PluginCatalog {
         const unknownInstalled = [...this.installedPlugins.values()]
             .filter(item => ![...remote, ...previews].some(entry => entry.id === item.id && entry.kind === 'app'))
             .map(item => ({...item, name:item.id, kind:'app', category:'Other'}));
-        return [...remote, ...previews, ...unknownInstalled].map(entry => ({
+        const groups = new Map();
+        for (const entry of remote) {
+            const key = `${entry.kind}:${entry.id}`;
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(entry);
+        }
+        const selected = [...groups].map(([key, choices]) => {
+            choices.sort((a, b) => this.sourceOrder.indexOf(a.source.url) - this.sourceOrder.indexOf(b.source.url));
+            const original = this.installedPlugins.get(choices[0].id)?.source?.url;
+            const requested = this.sourceChoices.get(key) || original;
+            return {...(choices.find(entry => entry.source.url === requested) || choices[0]), choices};
+        });
+        return [...selected, ...previews, ...unknownInstalled].map(entry => ({
             ...entry,
             installed: entry.kind === 'app' ? this.installedPlugins.has(entry.id) : entry.installed,
             runtime: entry.kind === 'app' ? this.installedPlugins.get(entry.id) : null,
@@ -204,24 +263,56 @@ class PluginCatalog {
             : 'Preview from this development build. No download source selected.';
         const author = document.createElement('p'); author.textContent = `By ${entry.author || (entry.id === 'p25' ? 'Meshpoint contributors' : null) || (window.MESHPOINT_MODULES.some(item => item.id === entry.id && entry.kind === 'app') ? 'Einstein PD2EMC' : 'Author not specified')}`;
         details.append(summary, hardware, source, author);
+        const maintainer = document.createElement('p');
+        maintainer.className = 'store-card__maintainer';
+        maintainer.textContent = entry.source ? `Updates & support: ${this.sourceName(entry.source)}`
+            : entry.runtime?.source ? `Installed from: ${this.sourceName(entry.runtime.source)}` : 'Choose a catalog for source and support details.';
+        card.append(top, category, title, description, maintainer);
+        if (entry.choices?.length > 1) {
+            const label = document.createElement('label'); label.className = 'cfg-field store-card__source';
+            const caption = document.createElement('span'); caption.textContent = 'Download source';
+            const select = document.createElement('select'); select.className = 'cfg-field__input';
+            for (const choice of entry.choices) {
+                const option = document.createElement('option'); option.value = choice.source.url;
+                option.textContent = `${this.sourceName(choice.source)} · v${choice.version}`;
+                select.append(option);
+            }
+            select.value = entry.source.url;
+            select.addEventListener('change', () => {
+                this.sourceChoices.set(`${entry.kind}:${entry.id}`, select.value);
+                this.render();
+                this.catalog.querySelector(`[data-module-id="${entry.id}"][data-module-kind="${entry.kind}"] select`)?.focus();
+            });
+            label.append(caption, select); card.append(label);
+        }
+        card.dataset.moduleId = entry.id;
+        card.dataset.moduleKind = entry.kind;
         const actions = document.createElement('div'); actions.className = 'store-card__actions';
         if (entry.installed && entry.kind === 'app') {
             actions.append(this.button('Manage', () => {
                 const target = document.getElementById('settings-plugins-panel').querySelector('[data-store-installed]');
                 target.scrollIntoView({behavior:'smooth', block:'start'});
-                const control = [...target.querySelectorAll('[data-plugin-id]')].find(item => item.dataset.pluginId === entry.id)?.querySelector('button');
+                const control = [...target.querySelectorAll('[data-plugin-id]')].find(item => item.dataset.pluginId === entry.id)?.querySelector('input[type="checkbox"]');
                 control?.focus({preventScroll:true});
             }));
         }
         if (entry.source) {
             const updating = entry.installed && entry.kind === 'app';
+            const originalSource = entry.runtime?.source?.url;
+            const canUpdate = !updating || (!entry.runtime.locked && originalSource === entry.source.url);
             const button = this.button(updating ? 'Update' : entry.installed ? 'Installed' : 'Install', () => this.install(entry, button, updating));
-            button.disabled = !this.sourcesEnabled || !entry.compatible || (entry.installed && !updating);
+            button.disabled = !this.sourcesEnabled || !entry.compatible || (entry.installed && !updating) || !canUpdate;
+            if (updating && !canUpdate) {
+                const note = document.createElement('p'); note.className = 'store-note';
+                note.textContent = entry.runtime.locked ? 'Bundled plugins update with Meshpoint.'
+                    : `Installed from ${this.sourceName(entry.runtime.source)}. Updates keep that source. To change source, disable, restart and uninstall the plugin first.`;
+                details.append(note);
+            }
             button.classList.add('store-install'); actions.append(button);
         } else if (!entry.installed) {
             actions.append(this.button(this.sourceAccess === false ? 'Set up downloads' : 'Choose source', () => this.showSources()));
         }
-        card.append(top, category, title, description, details, actions);
+        card.append(details, actions);
         return card;
     }
 

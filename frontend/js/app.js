@@ -34,9 +34,11 @@
 })();
 
 document.addEventListener('DOMContentLoaded', async () => {
-    if (await _redirectIfSetupRequired()) return;
-
     const identity = await _loadIdentity();
+    if (identity?.setup_required) {
+        location.replace('/setup');
+        return;
+    }
     window.installViewerAccess(identity);
     const pluginPages = await window.loadPluginPages(identity);
 
@@ -198,9 +200,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         else nodeMap.clearFocusLine();
     });
 
+    // Establish connection/status immediately. Hydrate the initial snapshot
+    // before subscribing the packet widgets so it cannot overwrite live data.
+    window.concentratorWS.connect();
     await _loadInitial(nodeMap, nodeCards, packetFeed);
-    await _updateStats();
-    _checkForUpdate();
 
     window.concentratorWS.on('packet', (packet) => {
         packetFeed.addPacket(packet);
@@ -209,7 +212,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         _incrementPacketCount();
     });
 
-    window.concentratorWS.connect();
+    await _updateStats();
+    _checkForUpdate();
 
     setInterval(() => {
         _refreshData(nodeMap, nodeCards, packetFeed);
@@ -510,21 +514,6 @@ function _resolveDeviceLabel(device) {
     const long = (device.long_name || '').trim();
     const fallback = (device.device_name || '').trim();
     return long || fallback || 'Meshpoint';
-}
-
-async function _redirectIfSetupRequired() {
-    try {
-        const res = await fetch('/api/identity', { credentials: 'same-origin' });
-        if (!res.ok) return false;
-        const data = await res.json();
-        if (data.setup_required) {
-            location.replace('/setup');
-            return true;
-        }
-    } catch (_) {
-        /* silent: the dashboard handles its own auth via 401 interception */
-    }
-    return false;
 }
 
 function _bootCommandPaletteAndKeymap(router) {

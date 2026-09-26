@@ -82,12 +82,17 @@ class TopbarController {
             this._meshcore.setDashboardReachable(true);
             this._serial.setDashboardReachable(true);
             const tx = cfg.transmit || {};
+            const pimesh = window.PlatformContext?.isPimesh(cfg);
+            const configured = (cfg.capture?.sources || []).some(
+                source => ['concentrator', 'serial', 'meshtasticd'].includes(source),
+            ) && !(pimesh && cfg.device.radio_protocol === 'meshcore');
             const isNode = window.PlatformContext
                 && window.PlatformContext.isNodePlatform(cfg);
             if (isNode) {
                 const md = window.PlatformContext.meshtasticdRuntime(cfg);
                 const mdc = window.PlatformContext.meshtasticdConfig(cfg);
                 this._meshtastic.setMeshtastic({
+                    configured,
                     shortName: md.short_name || tx.short_name,
                     radio: {
                         region: md.region || (cfg.radio && cfg.radio.region),
@@ -100,13 +105,12 @@ class TopbarController {
                 });
             } else {
                 this._meshtastic.setMeshtastic({
+                    configured,
                     shortName: tx.short_name,
                     radio: cfg.radio || null,
                 });
             }
             this._meshcore.setMeshcore(cfg.meshcore || null);
-            const pimesh = window.PlatformContext?.isPimesh(cfg);
-            this._root.querySelector('.topbar-meshtastic').hidden = Boolean(pimesh && cfg.device.radio_protocol === 'meshcore');
             if (pimesh && cfg.device.radio_protocol === 'meshtastic') {
                 this._root.querySelector('#topbar-meshcore-group').hidden = true;
             }

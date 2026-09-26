@@ -1307,6 +1307,8 @@ def _setup_message_interception(
         message_channel = 0
         api_channel = (packet.decoded_payload or {}).get("channel_index")
 
+        message_channel = 0
+
         if is_broadcast:
             if source in our_node_ids:
                 return
@@ -1593,6 +1595,7 @@ def _init_routes(
         bridge_status_provider=_bridge_accessor,
         channel_hash_resolver=channel_hash_resolver,
         serial_sources=_find_serial_sources(coord),
+        meshcore_sources=_find_meshcore_sources(coord),
     )
     mqtt_config_routes.init_routes(
         config=config,

@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from src.models.packet import Packet, PacketType, Protocol
+from src.models.meshcore_position import meshcore_position
 from src.models.signal import SignalMetrics
 
 logger = logging.getLogger(__name__)
@@ -152,11 +153,9 @@ def _build_advertisement(
     if name and not _looks_like_identifier(name, source_id, pubkey):
         decoded["long_name"] = name
         decoded["short_name"] = name[:4]
-    lat = payload.get("adv_lat")
-    lon = payload.get("adv_lon")
-    if lat and lon:
-        decoded["latitude"] = lat
-        decoded["longitude"] = lon
+    position = meshcore_position(payload.get("adv_lat"), payload.get("adv_lon"))
+    if position:
+        decoded["latitude"], decoded["longitude"] = position
     return Packet(
         packet_id=_generate_id(),
         source_id=source_id,

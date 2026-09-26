@@ -25,11 +25,16 @@ def build_router(runtime):
             live_error = next((getattr(service, "failure", "") for owner, service in runtime.live
                                if owner == state.name and getattr(service, "failure", "")), "")
             enabled = runtime.config.plugins.get(state.name, {}).get("enabled") is True
+            reference, host = runtime.dependency(state)
             rows.append({
                 "id": state.name,
                 "version": manifest.version if manifest else "",
                 "description": manifest.description if manifest else "",
                 "author": manifest.author if manifest else "",
+                "source": runtime.config.plugins.get(state.name, {}).get("source"),
+                "dependency": ({"id": host.name if host else reference,
+                                "enabled": bool(host and runtime.config.plugins.get(host.name, {}).get("enabled") is True)}
+                               if reference else None),
                 "provides": list(manifest.provides) if manifest else [],
                 "packages": list(manifest.apt) if manifest else [],
                 "dependencies": dependency_report(manifest) if manifest else None,
@@ -65,25 +70,41 @@ def build_router(runtime):
             raise HTTPException(404, "Plugin is not installed")
         if req.enabled and (state.manifest is None or state.status == "incompatible"):
             raise HTTPException(409, "Plugin is not compatible with this build")
-        if req.enabled and state.manifest.hook:
-            host = next((s for s in runtime.states.values() if s.manifest and s.manifest.sidebar
-                         and s.manifest.sidebar.route == state.manifest.hook.host), None)
-            if host is None or runtime.config.plugins.get(host.name, {}).get("enabled") is not True:
-                raise HTTPException(409, "Install and enable the host page first: " + state.manifest.hook.host)
-        existing = runtime.config.plugins.get(plugin_id, {})
-        updated = {**existing, "enabled": req.enabled}
         with audit.timed_action(user=claims.subject, action="plugin.configure",
                                 params={"id": plugin_id, "enabled": req.enabled}):
             async with runtime.mutation_lock:
                 if runtime.states.get(plugin_id) is not state:
                     raise HTTPException(409, "Plugin changed; refresh before trying again")
+                if req.enabled:
+                    try:
+                        chain = runtime.dependency_chain(state)
+                    except ValueError as exc:
+                        raise HTTPException(409, str(exc)) from exc
+                    for dependency in chain:
+                        if runtime.config.plugins.get(dependency.name, {}).get("enabled") is not True:
+                            raise HTTPException(409, "Enable dependency first: " + dependency.name)
                 updated = {**runtime.config.plugins.get(plugin_id, {}), "enabled": req.enabled}
+                changes = {plugin_id: updated}
+                if not req.enabled:
+                    # Follow direct edges repeatedly so hooks and requires both cascade.
+                    while True:
+                        additions = {}
+                        for dependent in runtime.states.values():
+                            _, target = runtime.dependency(dependent)
+                            settings = runtime.config.plugins.get(dependent.name, {})
+                            if (target and target.name in changes and dependent.name not in changes
+                                    and settings.get("enabled") is True):
+                                additions[dependent.name] = {**settings, "enabled": False}
+                        if not additions:
+                            break
+                        changes.update(additions)
                 try:
-                    save_section_to_yaml("plugins", {plugin_id: updated})
+                    save_section_to_yaml("plugins", changes)
                 except OSError as exc:
                     raise HTTPException(500, "Could not save plugin configuration") from exc
-                runtime.config.plugins[plugin_id] = updated
-        return {"saved": True, "restart_required": True}
+                runtime.config.plugins.update(changes)
+        return {"saved": True, "restart_required": True,
+                "also_disabled": [name for name in changes if name != plugin_id]}
 
     @router.delete("/{plugin_id}")
     async def uninstall(plugin_id: str, claims=Depends(require_admin), audit=Depends(get_audit_writer)):

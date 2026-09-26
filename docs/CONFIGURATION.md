@@ -18,17 +18,19 @@ the dashboard backup alone does not capture the complete radio installation.
 ## v0.8.0 device-side permissions
 
 In the development build, source installation and Web Terminal default to disabled,
-including on upgrades with no explicit settings. Merge only the permissions you
-want into `config/local.yaml` on the device, using unquoted YAML booleans, then
-restart Meshpoint:
+including on upgrades with no explicit settings. Administrators can change source
+installation immediately in **Settings > Plugins > Manage sources > Allow plugin
+downloads**. This saves `plugin_sources_enabled` automatically; no YAML edit is needed.
+
+Web Terminal still requires a device-side setting. Merge this into
+`config/local.yaml`, using an unquoted YAML boolean, then restart Meshpoint:
 
 ```yaml
-plugin_sources_enabled: true
 dashboard:
   web_terminal_enabled: true
 ```
 
-These permissions have no dashboard toggle. Existing installed modules remain
+Web Terminal has no dashboard toggle. Existing installed modules remain
 usable when source installation is locked. Terminal grants an administrator a
 full shell as the service account. See [plugins](PLUGINS.md#install-and-enable)
 and [dashboard access](DASHBOARD-ACCESS.md#device-side-permissions) for scope and
@@ -78,6 +80,20 @@ Reticulum identity material as trusted, private archives.
 Full walkthrough: [TROUBLESHOOTING.md](TROUBLESHOOTING.md#disaster-recovery-with-a-saved-backup-recommended). SSH-only restore: `sudo bash /opt/meshpoint/scripts/restore_finish.sh /path/to/backup.tar.gz`.
 
 ---
+
+## Dashboard map tiles
+
+In **Configuration > Advanced > Map tiles**, administrators can save an
+OpenStreetMap-compatible tile URL template. Include `{z}`, `{x}`, and `{y}`;
+HTTP(S) URLs and local paths such as `/api/offline-map/tiles/region/{z}/{x}/{y}.png`
+are accepted. The local tile service or plugin must already be installed and running.
+The default is `https://tile.openstreetmap.org/{z}/{x}/{y}.png`.
+
+Reload the dashboard after saving; a service restart is unnecessary. The setting
+is persisted as `dashboard.map_tile_url` and is also available to plugins through
+admin-only `PUT /api/config/dashboard`. The map retains OpenStreetMap attribution.
+This configures tile requests only; it does not make the entire dashboard available
+offline. The default layer initializes immediately while configuration loads.
 
 ## Radio
 
@@ -718,9 +734,31 @@ MQTT publishing uses two independent safety gates to prevent accidental exposure
 
 **Gate 1: Global kill switch.** MQTT is off by default. You must explicitly set `mqtt.enabled: true` to activate publishing. Nothing is ever sent to any MQTT broker unless you opt in.
 
-**Gate 2: Channel allowlist.** Only packets from channels listed in `publish_channels` are published. The default list contains only `LongFast` (the standard Meshtastic public channel). Private channels, custom PSK channels, and encrypted packets are never published unless you deliberately add that channel name to the list.
+**Gate 2: Channel allowlist.** Only broadcasts from channels listed in `publish_channels` are published. The default list contains `LongFast` and `MeshCore`. A custom Meshtastic channel must be explicitly allowlisted before its broadcasts can be published.
 
 Both gates must pass for any packet to leave the device via MQTT. Encrypted packets (those the Meshpoint could not decrypt) are always blocked regardless of channel configuration.
+
+Direct messages are always excluded, including decrypted Meshtastic PKI messages,
+legacy channel-encrypted direct messages, and MeshCore contact messages. Adding
+a channel to the allowlist does not grant permission to publish direct messages.
+Missing or unrecognized destinations are also excluded. Local message history
+and dashboard access are unchanged by these MQTT restrictions.
+Blocks appear in a rate-limited INFO log without message text or node IDs;
+runtime MQTT status includes `blocked_destination_count` since service startup.
+
+`mqtt.location_precision` applies before all captured-packet outputs: Meshtastic
+protobuf, JSON, MeshCore JSON, and retained Home Assistant state. `approximate`
+rounds coordinates to two decimal places and removes altitude and other location
+detail; `none` removes location fields and suppresses position-only protobuf
+messages. The original packet retains its coordinates for local use.
+
+With Home Assistant discovery enabled, when an eligible position packet has hidden or invalid coordinates, its retained
+Home Assistant position topic is cleared, even if `publish_json` is off. Existing
+retained positions for nodes that have not sent another eligible position packet
+need separate broker cleanup; changing precision cannot recall prior subscriber
+copies. Retained state also requires separate cleanup if Home Assistant discovery
+has been disabled. The explicitly enabled native MapReport uses its separate
+`map_report_position_precision` setting.
 
 This two-gate approach is informed by active community discussion around MQTT privacy, including the need for explicit opt-in controls ([meshtastic/firmware#5507](https://github.com/meshtastic/firmware/issues/5507)), concerns about private channel data leaking via MQTT gateways ([meshtastic/firmware#5404](https://github.com/meshtastic/firmware/issues/5404)), and the broader push for user-controlled MQTT publishing ([meshtastic/firmware#3549](https://github.com/meshtastic/firmware/issues/3549)).
 

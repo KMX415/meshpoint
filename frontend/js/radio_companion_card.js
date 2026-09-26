@@ -33,7 +33,12 @@ class RadioCompanionCard {
         const tx = (config && config.transmit) || {};
         const mc = (config && config.meshcore) || {};
         const transmitOff = !tx.enabled || mc.status_note === 'transmit_disabled';
-        const body = transmitOff
+        const captureConnected = Boolean(mc.capture_connected);
+        const body = captureConnected
+            ? (transmitOff
+                ? `USB capture is connected. Companion radio details require native TX and a service restart.`
+                : `USB capture is connected, but companion radio details are currently unavailable.`)
+            : transmitOff
             ? `Native TX is disabled under
                 <a class="r-config-link" href="#/configuration/transmit">Configuration → Transmit</a>.
                 Enable it and restart to show companion status here. USB capture may
@@ -43,9 +48,9 @@ class RadioCompanionCard {
         this._root.innerHTML = `
             <div class="r-card__header">
                 <h3 class="r-card__title">MeshCore Companion</h3>
-                <span class="status-lamp status-lamp--off">
+                <span class="status-lamp ${captureConnected ? 'status-lamp--ready' : 'status-lamp--off'}">
                     <span class="status-lamp__dot"></span>
-                    <span class="status-lamp__label">NONE</span>
+                    <span class="status-lamp__label">${captureConnected ? 'USB CONNECTED' : 'NONE'}</span>
                 </span>
             </div>
             <div class="companion-empty">${body}</div>

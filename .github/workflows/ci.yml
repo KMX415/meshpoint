@@ -8,7 +8,7 @@ on:
       - "feat/**"
       - "codex/pimesh-dual-protocol"
   pull_request:
-    branches: [main, feat/wismesh-hat]
+    branches: [main, feat/v0.8.0, feat/wismesh-hat]
 
 jobs:
   test:
@@ -32,6 +32,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+
+      - name: Frontend behavior tests
+        run: node --test tests/*.test.cjs tests/frontend/*.test.cjs
 
       - name: PiMesh UI recovery regressions
         run: node --test tests/test_pimesh_protocol_card.cjs

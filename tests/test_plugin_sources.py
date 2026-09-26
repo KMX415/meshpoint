@@ -96,6 +96,26 @@ class TestResolveCommit(unittest.TestCase):
             with self.assertRaises(PluginSourceError):
                 resolve_commit("https://github.com/o/r", "nope")
 
+    def test_large_import_resolves_with_a_single_page_without_raising_size_limit(self):
+        import io
+        from urllib.parse import parse_qs, urlsplit
+
+        def response(url, timeout):
+            query = parse_qs(urlsplit(url).query)
+            body = self._COMMIT_JSON if query.get("per_page") == ["1"] else b" " * (512 * 1024 + 1)
+            return io.BytesIO(body)
+
+        with mock.patch.object(_sources_mod, "open_github", side_effect=response):
+            for ref in ("main", "feat/v0.8.0", "v0.8.0-rc.1", "a" * 40):
+                with self.subTest(ref=ref):
+                    self.assertEqual(resolve_commit("https://github.com/o/r", ref)["short_sha"], "9abcdef")
+
+    def test_commit_response_size_limit_is_still_enforced(self):
+        import io
+        with mock.patch.object(_sources_mod, "open_github", return_value=io.BytesIO(b" " * (512 * 1024 + 1))):
+            with self.assertRaisesRegex(PluginSourceError, "larger than"):
+                resolve_commit("https://github.com/o/r", "main")
+
     def test_rejects_non_github(self) -> None:
         with self.assertRaises(PluginSourceError):
             resolve_commit("https://gitlab.com/o/r", "main")
