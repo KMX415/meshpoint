@@ -65,6 +65,7 @@ class ConfigurationPanel {
                 host.innerHTML = `
                     <div class="cfg-section">
                         <div data-cfg-pimesh></div>
+                        <div data-cfg-pimesh-behavior></div>
                         <div data-cfg-wismesh-hero></div>
                         <div data-cfg-radio></div>
                         <div data-cfg-nodeinfo-edit></div>
@@ -77,6 +78,9 @@ class ConfigurationPanel {
                     const protocolCard = new window.PimeshProtocolCard(api);
                     protocolCard.mount(host.querySelector('[data-cfg-pimesh]'));
                     this._cards.set('pimesh', protocolCard);
+                    const behaviorCard = new window.PimeshBehaviorCard(api);
+                    behaviorCard.mount(host.querySelector('[data-cfg-pimesh-behavior]'));
+                    this._cards.set('pimesh-behavior', behaviorCard);
                     const mt = this._config.device.radio_protocol === 'meshtastic';
                     const card = mt ? new window.WismeshRadioCard(api) : new window.MeshcoreConfigCard(api);
                     card.mount(host.querySelector('[data-cfg-radio]'));

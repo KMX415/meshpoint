@@ -359,10 +359,29 @@ class _BridgeWorker:
         if op == BridgeCommand.WRITE_LORA:
             self._write_lora(payload)
             return
+        if op in (BridgeCommand.READ_DEVICE, BridgeCommand.WRITE_DEVICE):
+            self._device(op, payload)
+            return
         if op in (BridgeCommand.READ_CHANNELS, BridgeCommand.WRITE_CHANNELS):
             self._channels(op, payload)
             return
         logger.warning("Unknown bridge command: %s", op)
+
+    def _device(self, op, payload):
+        from src.capture.meshtasticd_device import device_state, read_device, write_device
+
+        node = getattr(self._iface, "localNode", None)
+        if node is None:
+            self._resp_queue.put((BridgeResponse.ERROR, "Radio disconnected"))
+            return
+        try:
+            result = self._run_iface_op("device", lambda: (
+                device_state(read_device(node)) if op == BridgeCommand.READ_DEVICE
+                else write_device(node, payload["role"], payload["rebroadcast_mode"])))
+            self._resp_queue.put((BridgeResponse.OK, result))
+        except Exception:
+            self._resp_queue.put((BridgeResponse.ERROR,
+                "Device settings unconfirmed; radio may be restarting. Reload before retrying."))
 
     def _channels(self, op, payload):
         from src.capture.meshtasticd_channels import read_channels, write_channels

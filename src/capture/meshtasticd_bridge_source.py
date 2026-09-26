@@ -257,6 +257,10 @@ class MeshtasticdBridgeSource(CaptureSource):
     def request_write_lora(self, payload: dict) -> tuple[bool, dict | str | None]:
         return self._request(BridgeCommand.WRITE_LORA, payload)
 
+    def request_device(self, payload=None):
+        command = BridgeCommand.READ_DEVICE if payload is None else BridgeCommand.WRITE_DEVICE
+        return self._request(command, payload or {})
+
     def request_read_channels(self):
         return self._request(BridgeCommand.READ_CHANNELS, {})
 

@@ -16,6 +16,8 @@ class BridgeCommand(str, Enum):
     SEND_NODEINFO = "send_nodeinfo"
     READ_RADIO_STATE = "read_radio_state"
     WRITE_LORA = "write_lora"
+    READ_DEVICE = "read_device"
+    WRITE_DEVICE = "write_device"
     WRITE_OWNER = "write_owner"
     READ_CHANNELS = "read_channels"
     WRITE_CHANNELS = "write_channels"

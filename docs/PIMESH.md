@@ -108,6 +108,39 @@ MeshCore's application TX control blocks Meshpoint messages and adverts; native
 protocol acknowledgements remain managed by its daemon. Protocol-specific
 telemetry and advert behavior are retained.
 
+## Device roles and forwarding
+
+On provisioned PiMesh installations, **Configuration > Radio > Device behavior**
+lets an administrator change the active backend's behavior without reinstalling.
+These controls are hidden on concentrator and other non-PiMesh installations.
+
+For Meshtastic, the available roles are Client, Client mute, Client base, Router,
+Router late and Repeater. Client is the normal starting point; Client mute does
+not relay other devices' traffic. Infrastructure roles change relay scheduling
+and may affect telemetry and device information. The rebroadcast filter further
+limits eligible traffic. All skip decoding requires Repeater. Specialized tracker,
+sensor and deprecated roles are not offered; an existing unsupported role is
+displayed without silently changing it. Saving can briefly restart the radio.
+
+For MeshCore, the choices call the separate
+[openHop Repeater](https://github.com/openhop-dev/openhop_repeater) backend:
+
+| Mode | Behavior |
+| --- | --- |
+| Monitor | Receive and send local messages without repeating other devices. |
+| Forward | Repeat eligible MeshCore traffic and allow local messages. |
+| No TX | Receive only; block all backend transmissions, including acknowledgements. |
+
+Forwarding does not enable repeater advertisements or discovery; those remain
+separate openHop settings. No TX is stronger than Meshpoint's application TX
+toggle. A queued or accepted message is not evidence of a radio transmission.
+This UI calls openHop's mode API; it does not implement or copy its forwarding
+engine. These modes are not equivalent to every Meshtastic role.
+
+The UI confirms changes from a backend response. If a save is unconfirmed,
+wait for the radio to reconnect and choose **Reload behavior** before retrying.
+Each backend stores its own settings across protocol switches and service restarts.
+
 ## Messaging validation
 
 On PiMesh V2 (E22P-915M30S), bidirectional over-the-air tests against a Meshpoint

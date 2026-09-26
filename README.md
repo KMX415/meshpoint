@@ -225,7 +225,9 @@ Use the [PiMesh setup guide](docs/PIMESH.md) for board, band, region and initial
 protocol selection. V2 at 915 MHz has been tested on Pi 4 / 64-bit Debian 13.
 Public/private channels and DMs passed bidirectional tests on both protocols;
 V1, 868 MHz and full feature parity remain unverified.
-PiMesh controls appear only on provisioned PiMesh installations.
+PiMesh controls appear only on provisioned PiMesh installations. The same Radio
+page includes [device roles and forwarding modes](docs/PIMESH.md#device-roles-and-forwarding)
+for the active backend.
 
 ### Heltec HT-M2808 (community installation guide)
 
@@ -418,7 +420,7 @@ Start with the doc that matches what you are trying to do.
 - **[Heltec HT-M2808](docs/HELTEC-M2808.md):** Community-contributed Debian Bookworm installation guide (manual SPI/GPIO)
 - **[WisMesh Node (experimental)](docs/plans/WISMESH-BRANCH.md):** RAK6421 HAT, meshtasticd, long-lived `feat/wismesh-hat` branch
 - **[Gateway ↔ Node migration](docs/MIGRATE-GATEWAY-TO-NODE.md):** switch between concentrator Gateway and WisMesh Node platforms
-- **[PiMesh-1W (experimental)](docs/PIMESH.md):** installation, activation, MT/MC switching, updates and diagnostics
+- **[PiMesh-1W (experimental)](docs/PIMESH.md):** installation, activation, MT/MC switching, device roles, forwarding modes, updates and diagnostics
 - **[Configuration Guide](docs/CONFIGURATION.md):** all config options, private channels, relay, upstream, MQTT, radio tuning
 - **[USB nodes](docs/USB-NODES.md):** Meshtastic USB nodes (second preset, up to four) and MeshCore USB alongside the concentrator
 - **[Radio Config Explained](docs/RADIO-CONFIG-EXPLAINED.md):** the "why" behind region, spreading factor, bandwidth, custom slots, Part 15 awareness
