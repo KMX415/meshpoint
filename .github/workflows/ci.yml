@@ -37,4 +37,4 @@ jobs:
         run: node --test tests/*.test.cjs tests/frontend/*.test.cjs
 
       - name: PiMesh UI recovery regressions
-        run: node --test tests/test_pimesh_protocol_card.cjs
+        run: node --test tests/test_pimesh_protocol_card.cjs tests/test_pimesh_behavior_card.cjs

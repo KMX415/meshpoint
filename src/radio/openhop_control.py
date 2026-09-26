@@ -9,6 +9,47 @@ from pathlib import Path
 
 from src.radio.pimesh_supervisor import PROVISION, read_json
 
+MODES = ("monitor", "forward", "no_tx")
+
+
+async def _login():
+    credentials = json.loads(Path("config/openhop-auth.json").read_text())
+    auth = await asyncio.to_thread(_post, "/auth/login", {
+        "username": "admin", "password": credentials["password"], "client_id": "meshpoint",
+    })
+    token = auth.get("token") or auth.get("data", {}).get("token")
+    if not token:
+        raise RuntimeError("MeshCore daemon authentication failed")
+    return token
+
+
+def _read_mode(token):
+    request = urllib.request.Request("http://127.0.0.1:8000/api/stats",
+        headers={"Authorization": "Bearer " + token})
+    with urllib.request.urlopen(request, timeout=15) as response:
+        result = json.load(response)
+    mode = result.get("config", {}).get("repeater", {}).get("mode")
+    if mode not in MODES:
+        raise RuntimeError("MeshCore mode readback unavailable")
+    return {"mode": mode, "modes": list(MODES)}
+
+
+async def read_mode():
+    return await asyncio.to_thread(_read_mode, await _login())
+
+
+async def apply_mode(mode):
+    if mode not in MODES:
+        raise ValueError("Unsupported MeshCore mode")
+    token = await _login()
+    result = await asyncio.to_thread(_post, "/api/set_mode", {"mode": mode}, token)
+    if result.get("persisted") is not True:
+        raise RuntimeError("MeshCore mode persistence unconfirmed")
+    actual = await asyncio.to_thread(_read_mode, token)
+    if actual["mode"] != mode:
+        raise RuntimeError("MeshCore mode readback did not match")
+    return actual
+
 
 def _post(path, payload, token=""):
     headers = {"Content-Type": "application/json"}
