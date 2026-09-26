@@ -103,8 +103,16 @@ DEFAULT_CHANNELS: tuple[ReleaseChannel, ...] = (
 class ReleaseChannelRegistry:
     """Lookup helper around the channel tuple."""
 
-    def __init__(self, channels: Iterable[ReleaseChannel] = DEFAULT_CHANNELS) -> None:
+    def __init__(self, channels: Iterable[ReleaseChannel] = DEFAULT_CHANNELS, *, pimesh: bool = False) -> None:
         self._channels: tuple[ReleaseChannel, ...] = tuple(channels)
+        if pimesh:
+            self._channels = (*self._channels, ReleaseChannel(
+                id="pimesh",
+                label="Experimental: PiMesh (Meshtastic / MeshCore)",
+                branch="codex/pimesh-dual-protocol",
+                tier=TIER_EXPERIMENTAL,
+                description="PiMesh Linux radio support. Choose the active protocol in Configuration > Radio.",
+            ))
 
     def channels(self) -> tuple[ReleaseChannel, ...]:
         return self._channels

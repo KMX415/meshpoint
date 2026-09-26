@@ -6,8 +6,9 @@ on:
       - main
       # Sprint + feature branches (e.g. feat/v0.7.8) — validate before merge to main.
       - "feat/**"
+      - "codex/pimesh-dual-protocol"
   pull_request:
-    branches: [main, feat/v0.8.0]
+    branches: [main, feat/v0.8.0, feat/wismesh-hat]
 
 jobs:
   test:
@@ -34,3 +35,6 @@ jobs:
 
       - name: Frontend behavior tests
         run: node --test tests/*.test.cjs tests/frontend/*.test.cjs
+
+      - name: PiMesh UI recovery regressions
+        run: node --test tests/test_pimesh_protocol_card.cjs

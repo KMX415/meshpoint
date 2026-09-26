@@ -229,6 +229,26 @@ concentrators (not supported).
 
 ---
 
+## Experimental: PiMesh-1W
+
+The [MeshSmith PiMesh-1W product wiki](https://meshsmith.net/wiki/products/pimesh-1w)
+describes the HAT and its hardware revisions.
+
+| Capability | PiMesh-1W |
+|---|---|
+| Host tested | Raspberry Pi 4, 64-bit Debian 13 |
+| Hardware tested | V2 E22P-915M30S (915 MHz) |
+| Other provisioned profiles | V1 and V2 868 MHz; physical validation pending |
+| Radio path | Meshtastic via meshtasticd, or MeshCore via openHop |
+| Concurrent protocols on the HAT | One active protocol at a time |
+| Initial installation | Explicit `--platform pimesh`, board, band, region and protocol |
+| Later protocol switching | Configuration > Radio; no reinstall |
+| Validation limits | Peer-assisted channel/DM delivery and acknowledgement testing pending |
+
+See the [PiMesh setup guide](PIMESH.md) for supported board/band/region choices,
+activation, updates and recovery. PiMesh controls and the software update entry
+appear only after provisioning. A default gateway install does not configure this HAT.
+
 ## Experimental: WisMesh Node (RAK6421 HAT)
 
 Meshpoint **Node** platform for the [RAK Meshtastic Raspberry Pi HAT (RAK6421)](https://store.rakwireless.com/products/meshtastic-raspberry-pi-hat-rak6421): Pi 4 + **RAK6421** HAT + WisBlock **SX1262** (slot 1). RF is owned by **meshtasticd** (single-channel Meshtastic participant), not the SX1302 concentrator stack used elsewhere in this matrix.

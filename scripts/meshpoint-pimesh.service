@@ -1,0 +1,21 @@
+[Unit]
+Description=Meshpoint (PiMesh selectable protocol)
+After=network-online.target meshpoint-radio-boot.service
+Wants=network-online.target meshpoint-radio-boot.service
+
+[Service]
+Type=simple
+User=meshpoint
+Group=meshpoint
+WorkingDirectory=/opt/meshpoint
+ExecStart=/opt/meshpoint/venv/bin/python -m uvicorn src.api.server:create_app --factory --host 0.0.0.0 --port 8080
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+RuntimeDirectory=meshpoint-radio
+Environment=CONCENTRATOR_CONFIG=/opt/meshpoint/config/local.yaml
+Environment=PYTHONUNBUFFERED=1
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

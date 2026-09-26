@@ -31,6 +31,12 @@ RAK2287). That is what the rest of this guide covers. Install from **`main`**
 |------|----------|--------|-------|
 | **Gateway** (recommended) | SX1302/SX1303 concentrator | `main` | Continue below |
 | **Node** (experimental) | RAK6421 HAT + RAK13300/13302 | `feat/wismesh-hat` | [WisMesh Node guide](WISMESH-NODE.md) |
+| **PiMesh** (experimental) | MeshSmith PiMesh-1W V1/V2 | `codex/pimesh-dual-protocol` (development) | [PiMesh installation and switching](PIMESH.md) |
+
+**PiMesh:** Follow the PiMesh guide for explicit HAT provisioning and initial
+protocol selection. Both Meshtastic and MeshCore backends are installed, with
+one active at a time. Later switches use Configuration > Radio. The concentrator
+assembly and default install commands below are for gateways.
 
 ---
 
@@ -147,6 +153,10 @@ ssh pi@<your-pi-ip-address>
 Enter the password you set during imaging.
 
 ### Step 5: Clone and Install
+
+**PiMesh owners:** use the [PiMesh install commands](PIMESH.md#initial-installation)
+instead of the gateway commands below, including the activation wizard after
+reboot. Selecting a branch in Updates does not provision a fresh HAT.
 
 ```bash
 sudo apt update && sudo apt install -y git

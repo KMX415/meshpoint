@@ -77,9 +77,16 @@ class ChannelsConfigCard {
     }
 
     render(config) {
+        this._nativeRadio = window.PlatformContext?.isPimesh(config)
+            && config.device.radio_protocol === 'meshtastic';
+        if (this._nativeRadio) {
+            this._root.querySelector('.cfg-card__hint').textContent =
+                'Channels are saved on the PiMesh radio. Channel 0 is primary; up to seven secondary channels share the same radio preset. Keys use base64 encoding.';
+        }
         const channels = (config && config.channels) || [];
         this._channels = channels;
         this._renderRows();
+        if (config?.channels_error) this._setStatus('error', config.channels_error);
     }
 
     _renderRows() {
@@ -100,7 +107,7 @@ class ChannelsConfigCard {
         const enabled = ch.enabled !== false;
         const checked = enabled ? 'checked' : '';
         const lockedClass = isPrimary ? ' ch-table__row--locked' : '';
-        const pskCell = isPrimary
+        const pskCell = isPrimary && !this._nativeRadio
             ? `
                 <td class="ch-table__psk-cell">
                     <div class="ch-table__psk-inner">

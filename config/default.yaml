@@ -40,6 +40,11 @@ capture:
     serial_port: null
     baud_rate: 115200
     auto_detect: true
+  meshtasticd:
+    host: "127.0.0.1"
+    port: 4403
+    mac_address_source: "eth0"
+    preset: "lora-RAK6421-13302-slot1.yaml"
 
 storage:
   database_path: "data/concentrator.db"
@@ -54,6 +59,7 @@ dashboard:
 
 device:
   device_name: "Meshpoint"
+  platform: gateway   # gateway | node (WisMesh HAT + meshtasticd)
   latitude: 0.0
   longitude: 0.0
   altitude: 25

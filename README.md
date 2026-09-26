@@ -175,7 +175,7 @@ aarch64 Raspbian 13 (Trixie) with live Meshtastic RX/TX.
 
 ### Option E: WisMesh Node (RAK6421 HAT, experimental)
 
-The [RAK WisMesh Pi Node](https://store.rakwireless.com/products/wismesh-pi-node) is a Pi HAT with a **WisBlock SX1262** LoRa module (RAK13300 standard or **RAK13302 1W** with PA). Meshpoint drives RF through **meshtasticd** (Portduino), not the SX1302 concentrator path used by Options A–D.
+The [RAK WisMesh Pi Node](https://store.rakwireless.com/products/meshtastic-raspberry-pi-hat-rak6421) is a Pi HAT with a **WisBlock SX1262** LoRa module (RAK13300 standard or **RAK13302 1W** with PA). Meshpoint drives RF through **meshtasticd** (Portduino), not the SX1302 concentrator path used by Options A–D.
 
 **Status:** User-facing docs are on **`main`**. The installer, dashboard, and capture bridge stay on the long-lived **`feat/wismesh-hat`** branch (not merged into Stable). Gateway users should stay on **`main`**.
 
@@ -205,6 +205,19 @@ USB companion may need a **powered hub** (onboard micro-USB is for flashing;
 OTG not confirmed on G295).
 
 > **Step-by-step:** [Bobcat Miner 300 guide](docs/BOBCAT-300.md) and [Hardware Matrix](docs/HARDWARE-MATRIX.md).
+
+### Option G: PiMesh-1W (experimental)
+
+The [MeshSmith PiMesh-1W](https://meshsmith.net/wiki/products/pimesh-1w) uses a
+single LoRa radio with either the Meshtastic or MeshCore Linux backend. Install
+both once, then switch in **Configuration > Radio** while retaining each
+protocol's settings and the normal Meshpoint UI. The HAT runs one protocol at a time.
+
+Use the [PiMesh setup guide](docs/PIMESH.md) for board, band, region and initial
+protocol selection. V2 at 915 MHz has been tested on Pi 4 / 64-bit Debian 13;
+Public/private channels and DMs passed bidirectional tests on both protocols;
+V1, 868 MHz and full feature parity remain unverified.
+PiMesh controls appear only on provisioned PiMesh installations.
 
 ### Heltec HT-M2808 (community installation guide)
 
@@ -256,6 +269,15 @@ See the [Hardware Matrix](docs/HARDWARE-MATRIX.md) for supported configurations.
 ---
 
 ## Install
+
+For **PiMesh-1W V1/V2**, use the experimental PiMesh build and explicit hardware
+selection described in [PiMesh installation and protocol switching](docs/PIMESH.md).
+Both protocols are installed together; choose Meshtastic or MeshCore in the
+normal Configuration > Radio page afterward. PiMesh controls and its update
+picker entry appear only on provisioned PiMesh installations.
+
+The default install commands below are for SX1302/SX1303 gateways. PiMesh owners
+should follow the linked PiMesh guide instead.
 
 ```bash
 sudo apt update && sudo apt install -y git
@@ -388,6 +410,7 @@ Start with the doc that matches what you are trying to do.
 - **[Heltec HT-M2808](docs/HELTEC-M2808.md):** Community-contributed Debian Bookworm installation guide (manual SPI/GPIO)
 - **[WisMesh Node (experimental)](docs/plans/WISMESH-BRANCH.md):** RAK6421 HAT, meshtasticd, long-lived `feat/wismesh-hat` branch
 - **[Gateway ↔ Node migration](docs/MIGRATE-GATEWAY-TO-NODE.md):** switch between concentrator Gateway and WisMesh Node platforms
+- **[PiMesh-1W (experimental)](docs/PIMESH.md):** installation, activation, MT/MC switching, updates and diagnostics
 - **[Configuration Guide](docs/CONFIGURATION.md):** all config options, private channels, relay, upstream, MQTT, radio tuning
 - **[USB nodes](docs/USB-NODES.md):** Meshtastic USB nodes (second preset, up to four) and MeshCore USB alongside the concentrator
 - **[Radio Config Explained](docs/RADIO-CONFIG-EXPLAINED.md):** the "why" behind region, spreading factor, bandwidth, custom slots, Part 15 awareness

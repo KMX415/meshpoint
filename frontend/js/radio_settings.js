@@ -159,6 +159,15 @@ class RadioSettings {
     _renderShellMeta() {
         const meta = document.getElementById('r-shell-meta');
         if (!meta) return;
+        if (window.PlatformContext
+            && window.PlatformContext.isNodePlatform(this._config)) {
+            const md = window.PlatformContext.meshtasticdRuntime(this._config);
+            const yaml = window.PlatformContext.meshtasticdConfig(this._config);
+            const bridge = md.bridge_connected ? 'bridge ok' : 'bridge down';
+            const mod = yaml.module_badge || md.modem_preset || '--';
+            meta.textContent = `${bridge} · ${mod}`;
+            return;
+        }
         const radio = this._config.radio || {};
         const region = radio.region || '--';
         const freq = radio.frequency_mhz ? `${radio.frequency_mhz} MHz` : '';

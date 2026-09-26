@@ -208,6 +208,10 @@ class GpsConfigCard {
     }
 
     render(config) {
+        if (window.PlatformContext?.isPimesh(config)) {
+            this._root.querySelector('[data-mesh-position-fields] .cfg-field__hint').textContent =
+                'Coordinates are shared using the active protocol: Meshtastic position packets or MeshCore identity adverts.';
+        }
         const device = (config && config.device) || {};
         const location = (config && config.location) || {};
 

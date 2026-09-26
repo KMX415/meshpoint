@@ -15,6 +15,12 @@ class MeshcoreConfigCard {
         this._root = root;
         this._root.innerHTML = `
             <div class="cfg-section" data-mc-root>
+                <p class="cfg-callout" data-mc-node-callout hidden>
+                    Meshtastic RF uses the WisMesh HAT (meshtasticd). Enable a USB MeshCore
+                    companion here to capture MeshCore alongside Meshtastic. Plug-and-play
+                    USB autostart is off on Node: add <code>meshcore_usb</code> to capture
+                    sources explicitly.
+                </p>
                 <article class="cfg-card">
                     <header class="cfg-card__head">
                         <h3 class="cfg-card__title">USB capture source</h3>
@@ -74,6 +80,14 @@ class MeshcoreConfigCard {
     }
 
     render(config) {
+        const isNode = window.PlatformContext
+            && window.PlatformContext.isNodePlatform(config);
+        const callout = this._root.querySelector('[data-mc-node-callout]');
+        const pimesh = window.PlatformContext?.isPimesh(config);
+        if (callout) callout.hidden = !isNode || pimesh;
+        this._usbForm.closest('article').hidden = pimesh;
+        if (pimesh) this._root.querySelector('[data-mc-card] .cfg-card__hint').textContent = 'Channels and contacts for the PiMesh MeshCore companion. Settings are kept when you switch protocols.';
+
         const cap = config.capture || {};
         const mcUsb = cap.meshcore_usb || {};
         const sources = cap.sources || [];
@@ -93,7 +107,7 @@ class MeshcoreConfigCard {
             return;
         }
         this._renderOnline(mc);
-        if (this._radioSettings) this._radioSettings.render(mc);
+        if (this._radioSettings) this._radioSettings.render(mc, config);
     }
 
     async _saveUsbSource(event) {
@@ -123,6 +137,17 @@ class MeshcoreConfigCard {
     }
 
     _renderOffline(config) {
+        if (window.PlatformContext?.isPimesh(config)) {
+            const active = config.device.radio_protocol === 'meshcore';
+            this._body.innerHTML = `<div class="cfg-empty">
+                <div class="cfg-empty__title">${active ? 'MeshCore disconnected' : 'MeshCore inactive'}</div>
+                <p class="cfg-empty__body">${active
+                    ? 'Check the PiMesh radio status and retry the connection in Configuration → Radio.'
+                    : 'Select MeshCore in Configuration → Radio to use its saved channels and contacts.'}</p>
+                </div>`;
+            this._setStatus('', '');
+            return;
+        }
         const tx = (config && config.transmit) || {};
         const mc = (config && config.meshcore) || {};
         const transmitOff = !tx.enabled || mc.status_note === 'transmit_disabled';

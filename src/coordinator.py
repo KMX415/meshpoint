@@ -374,6 +374,10 @@ class PipelineCoordinator:
         # so Wave B multi-companion tags still hit the event adapter.
         if self._is_meshcore_usb_capture(raw.capture_source):
             packet = self._adapt_meshcore_usb(raw)
+        elif raw.meshtastic_api_packet is not None:
+            packet = self._router.decode_meshtastic_api(
+                raw.meshtastic_api_packet, signal=raw.signal
+            )
         else:
             packet = self._router.decode(
                 raw.payload,
