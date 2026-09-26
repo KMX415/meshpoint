@@ -7,8 +7,8 @@ Only one protocol runs on the HAT at a time.
 
 This support is experimental. PiMesh V2 E22P-915M30S has been tested on a Raspberry
 Pi 4 running 64-bit Debian 13. V1 and 868 MHz profiles have not been verified on
-physical hardware. Peer-assisted messaging and delivery acknowledgement testing
-is still required before claiming full feature parity.
+physical hardware. Bidirectional messaging and radio acknowledgements passed
+the tests described below; full feature parity remains unverified.
 
 ## Initial installation
 
@@ -17,7 +17,7 @@ whose physical band matches your region. Debian 13 / V2 915 MHz is the tested
 combination. Connect the appropriate antenna before powering the radio.
 
 PiMesh support is on the experimental `codex/pimesh-dual-protocol` branch, not
-Stable. Once that branch is published, a fresh device can obtain it with:
+Stable. A fresh device can obtain it with:
 
 ```bash
 sudo apt update && sudo apt install -y git
