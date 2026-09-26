@@ -19,7 +19,7 @@ upstream projects:
 | Protocol | Backend | Integration |
 | --- | --- | --- |
 | Meshtastic | [meshtasticd](https://github.com/meshtastic/firmware), from the Meshtastic project | A separate daemon, accessed through the Meshtastic TCP API. |
-| MeshCore | [openHop Repeater](https://github.com/openhop-dev/openhop_repeater) and [openHop Core](https://github.com/openhop-dev/openhop_core), by Rightup (Lloyd Newton) and contributors | A separate daemon with a local TCP companion interface used by Meshpoint. |
+| MeshCore | [openHop Repeater](https://github.com/openhop-dev/openhop_repeater) and [openHop Core](https://github.com/openhop-dev/openhop_core), by Rightup and contributors | A separate daemon with a local TCP companion interface used by Meshpoint. |
 
 openHop Core implements the MeshCore protocol in Python and drives the SPI radio.
 Credit for that backend belongs to the openHop authors; Meshpoint's PiMesh
