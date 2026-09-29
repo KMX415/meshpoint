@@ -79,6 +79,7 @@ from src.api.upstream_client import UpstreamClient
 from src.api.websocket_manager import WebSocketManager
 from src.config import AppConfig, load_config, validate_activation
 from src.coordinator import PipelineCoordinator
+from src.system_metrics import cpu_sampler
 from src.log_format import print_banner, print_packet, setup_logging
 from src.models.device_identity import DeviceIdentity, _stable_device_id
 from src.models.packet import Packet
@@ -151,7 +152,7 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     # force-nodeinfo can close over the live pipeline objects.
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    async def service_lifespan(app: FastAPI):
         global pipeline, upstream, nodeinfo_broadcaster
         global telemetry_broadcaster, position_broadcaster
         warn_if_stale_so_files()
@@ -295,6 +296,12 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
         await pipeline.stop()
         session_manager.shutdown()
         logger.info("Meshpoint stopped")
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        async with cpu_sampler.running():
+            async with service_lifespan(app):
+                yield
 
     app = FastAPI(
         title="Meshpoint",
@@ -1625,7 +1632,7 @@ def _init_dangerous_registry(
     coord: PipelineCoordinator,
     config: AppConfig,
 ) -> None:
-    """Compose the Settings → Dangerous registry now that the pipeline is live.
+    """Compose the Settings â†’ Dangerous registry now that the pipeline is live.
 
     Restart actions don't need pipeline state -- they go through
     ``systemctl`` -- but database / phantom / nodeinfo operations

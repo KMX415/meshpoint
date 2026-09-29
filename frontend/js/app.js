@@ -426,7 +426,7 @@ async function _updateStats() {
 
         if (metricsRes.ok) {
             const metrics = await metricsRes.json();
-            _setText('stat-cpu-val', `${metrics.cpu_percent}%`);
+            _setText('stat-cpu-val', metrics.cpu_percent == null ? 'N/A' : `${metrics.cpu_percent}%`);
             _setText('stat-ram-val', `${metrics.memory_percent}%`);
             _setText('stat-ram-sub', `${metrics.memory_used_mb} / ${metrics.memory_total_mb} MB`);
             _setText('stat-disk-val', `${metrics.disk_percent}%`);
