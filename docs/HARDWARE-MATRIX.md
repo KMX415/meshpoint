@@ -104,7 +104,7 @@ symlinks to `/dev/spidev0.0`).
 | **MeshCore USB** | Powered hub reported; OTG unconfirmed |
 | **Typical price (used)** | ~$15-40 |
 
-Models **G290** (SX1302) are expected to match; **G285** is untested in this
+Models **G290** (SX1302) are expected to match; **G285** has been community verified to be working.
 guide. Do not confuse with **Nebra Indoor Rock Pi 4** units that ship **SX1301**
 concentrators (not supported).
 
@@ -148,7 +148,7 @@ Full runbook: **[WisMesh Node guide](WISMESH-NODE.md)**. See also [Onboarding](O
 | x86 / x86_64 host | Not supported | aarch64 Raspberry Pi family only |
 | RAK7268 / RAK7268V2 (commercial gateway) | Not supported | These are LoRaWAN gateways with different firmware path; SX1302 is similar but the platform stack does not match |
 | Helium WHIP / Linxdot Indoor | Not validated | Same chip family as RAK V2 but the carrier varies; community testing welcome |
-| Bobcat Miner 300 (G285) | Not validated | G290/G295 community path documented; G285 untested |
+| Bobcat Miner 300 (G285) | G290/G295 community path documented; G285 community tested |
 | Nebra Indoor (Rock Pi 4 + SX1301) | Not supported | Daughter board uses SX1301, not SX1302/SX1303; different HAL |
 | Single-channel SX1276/SX1262 boards | Not for concentrator role | These are single-channel radios. They can run as a [MeshCore USB companion](#meshcore-usb-companion-radios), not as the main concentrator. |
 
