@@ -7,6 +7,8 @@ from pathlib import Path
 
 from fastapi import APIRouter
 
+from src.system_metrics import cpu_sampler
+
 router = APIRouter(prefix="/api/device", tags=["device"])
 
 
@@ -46,7 +48,7 @@ async def system_metrics():
     load_avg = _read_load_avg()
 
     return {
-        "cpu_percent": psutil.cpu_percent(interval=0.5),
+        "cpu_percent": cpu_sampler.value,
         "memory_percent": mem.percent,
         "memory_used_mb": round(mem.used / (1024 * 1024)),
         "memory_total_mb": round(mem.total / (1024 * 1024)),
