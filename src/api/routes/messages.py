@@ -357,3 +357,13 @@ async def _enrich_messages(messages: list[dict]) -> list[dict]:
         await _name_resolver.apply_to_message_dict(msg)
         for msg in messages
     ]
+
+
+@router.get("/{message_id}/heard-paths")
+async def get_heard_paths(message_id: int):
+    if _message_repo is None:
+        raise HTTPException(503, "Message storage not available")
+    result = await _message_repo.get_heard_paths(message_id)
+    if result is None:
+        raise HTTPException(404, "Sent MeshCore message not found")
+    return result

@@ -2,6 +2,12 @@
 
 ### Unreleased
 
+#### Heard paths
+
+- MeshCore heard-repeat popover with saved repeater paths, local RSSI/SNR,
+  best-effort repeater names, and keyboard/touch support.
+
+
 #### MeshCore message feedback
 
 - Show locally heard repeats for sent MeshCore channel messages and matching

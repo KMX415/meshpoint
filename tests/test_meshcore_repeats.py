@@ -136,3 +136,74 @@ class FeedbackTests(unittest.IsolatedAsyncioTestCase):
         rejected = await client.send_direct_message("aabbccddeeff", "hello")
         self.assertFalse(rejected.success)
         self.assertNotIn(rejected.packet_id, self.tracker.pending)
+
+    async def test_path_signal_bound_and_name_ambiguity(self):
+        item = self.tracker.begin(CHANNEL, "Bench", "hello", 100)
+        raw = frame(width=2)
+        raw.update(rssi=-96, snr=7.25)
+        await self.tracker.observe(raw)
+        row, _ = await self.bind(item)
+        for key, name in [("aaaa" + "11" * 30, "Hilltop"), ("aaaa" + "22" * 30, "Valley")]:
+            await self.db.execute(
+                "INSERT INTO nodes (node_id, protocol, long_name, last_heard, first_seen) VALUES (?, 'meshcore', ?, '', '')",
+                (key, name),
+            )
+        data = await self.repo.get_heard_paths(row)
+        self.assertTrue(data["recorded"])
+        observed = data["observations"][0]
+        self.assertEqual(observed["path"], ["aaaa"])
+        self.assertEqual((observed["rssi"], observed["snr"]), (-96, 7.25))
+        self.assertTrue(observed["hops"][0]["ambiguous"])
+        self.assertIsNone(observed["hops"][0]["name"])
+        for _ in range(35):
+            await self.tracker.observe(frame())
+        data = await self.repo.get_heard_paths(row)
+        self.assertEqual(data["count"], 36)
+        self.assertEqual(len(data["observations"]), 32)
+        await self.repo.update_meshcore_feedback(row, 1, "sent", [])
+        self.assertEqual(len((await self.repo.get_heard_paths(row))["observations"]), 32)
+        self.assertIsNone(await self.repo.get_heard_paths(99999))
+
+    async def test_missing_signal_old_message_and_unique_name(self):
+        old = await self.repo.save_sent("old", "broadcast:meshcore", "", "meshcore", heard_repeats=2)
+        self.assertFalse((await self.repo.get_heard_paths(old))["recorded"])
+        item = self.tracker.begin(CHANNEL, "Bench", "hello", 100)
+        row, _ = await self.bind(item)
+        await self.db.execute(
+            "INSERT INTO nodes (node_id, protocol, long_name, last_heard, first_seen) VALUES (?, 'meshcore', ?, '', '')",
+            ("aa" + "11" * 31, "Hilltop"),
+        )
+        await self.tracker.observe({**frame(), "rssi": float("nan"), "snr": True})
+        observed = (await self.repo.get_heard_paths(row))["observations"][0]
+        self.assertIsNone(observed["rssi"])
+        self.assertIsNone(observed["snr"])
+        self.assertEqual(observed["hops"][0]["name"], "Hilltop")
+
+    async def test_existing_database_migration_preserves_counts_and_is_idempotent(self):
+        row = await self.repo.save_sent("old", "broadcast:meshcore", "", "meshcore", heard_repeats=3)
+        await self.db.execute("ALTER TABLE messages DROP COLUMN heard_paths")
+        await self.db._run_migrations()
+        await self.db._run_migrations()
+        details = await self.repo.get_heard_paths(row)
+        self.assertEqual(details["count"], 3)
+        self.assertFalse(details["recorded"])
+
+    async def test_observations_survive_tracker_recreation(self):
+        item = self.tracker.begin(CHANNEL, "Bench", "hello", 100)
+        row, _ = await self.bind(item)
+        await self.tracker.observe({**frame(), "rssi": -104, "snr": -3})
+        self.tracker = MeshcoreHeardRepeats(self.repo, self.broadcast)
+        details = await MessageRepository(self.db).get_heard_paths(row)
+        self.assertEqual(details["observations"][0]["rssi"], -104)
+        self.assertEqual(details["count"], 1)
+
+    async def test_detail_endpoint_returns_saved_evidence_and_not_found(self):
+        from unittest.mock import patch
+        from fastapi import HTTPException
+        from src.api.routes import messages
+        row = await self.repo.save_sent("old", "broadcast:meshcore", "", "meshcore")
+        with patch.object(messages, "_message_repo", self.repo):
+            self.assertFalse((await messages.get_heard_paths(row))["recorded"])
+            with self.assertRaises(HTTPException) as error:
+                await messages.get_heard_paths(99999)
+            self.assertEqual(error.exception.status_code, 404)

@@ -594,6 +594,14 @@ MeshCore transmission uses the USB companion node: configure its serial port und
 
 ### MeshCore message feedback
 
+Hover over or tap **Heard N repeats** to see saved repeater paths in a small popover.
+RSSI and SNR are measured at your radio for each returning copy, not at every
+repeater. Names are best-effort matches against the local roster; unknown or
+ambiguous identifiers remain labeled. Up to the first 32 copies per message
+retain path details. Older messages may have a count without saved paths.
+Use Escape, the close button, or tap outside to dismiss the popover.
+
+
 The Messages view uses the same feedback path for serial/USB companions and
 PiMesh TCP companions. No additional installation or setting is required.
 
