@@ -55,6 +55,8 @@ class SendResult:
     timestamp: float = 0.0
     error: str = ""
     airtime_ms: int = 0
+    heard_repeats: int | None = None
+    status: str = "sent"
 
 
 class TxService:
@@ -855,7 +857,9 @@ class TxService:
         return SendResult(
             success=mc_result.success,
             protocol="meshcore",
-            packet_id=mc_result.event_type,
+            packet_id=mc_result.packet_id,
+            heard_repeats=mc_result.heard_repeats,
+            status=mc_result.status,
             timestamp=time.time(),
             error=mc_result.error,
         )

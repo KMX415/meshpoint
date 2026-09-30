@@ -2,6 +2,17 @@
 
 ### Unreleased
 
+#### MeshCore message feedback
+
+- Show locally heard repeats for sent MeshCore channel messages and matching
+  recipient delivery acknowledgements for DMs. Applies to USB/serial and PiMesh
+  TCP companions through the shared messaging path. Feedback updates live and
+  persists in history; early events are retained until the sent row is saved.
+- Give each MeshCore send its own message identifier instead of reusing the
+  companion event name. Unknown repeat counts remain absent. DM repeat counts
+  remain unsupported by the standard companion interface; see
+  [message feedback](CONFIGURATION.md#meshcore-message-feedback).
+
 #### Hardware support
 
 - Document the Pisces P100's community-reported GPIO 23 concentrator reset

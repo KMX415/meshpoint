@@ -160,7 +160,7 @@ class MessagingPanel {
 
             const result = await res.json();
             if (result.success) {
-                this._chat.updateMessageStatus(tempMsg.id, 'sent', result.packet_id);
+                this._chat.updateMessageStatus(tempMsg.id, result.status || 'sent', result.packet_id, result);
                 this._contacts.addOrUpdateConversation({
                     node_id: convo.node_id,
                     node_name: convo.node_name,
@@ -180,6 +180,9 @@ class MessagingPanel {
     }
 
     _setupWebSocket() {
+        window.concentratorWS.on('message_repeats', (data) => {
+            this._chat.updateMeshcoreFeedback(data);
+        });
         window.concentratorWS.on('message_received', (data) => {
             const isOverheard = data.direction === 'overheard';
 
