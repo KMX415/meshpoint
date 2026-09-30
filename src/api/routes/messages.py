@@ -94,16 +94,23 @@ async def send_message(
     )
     node_name = await _resolve_display_name(node_id, req.protocol)
 
+    row_id = None
+    feedback = {"heard_repeats": result.heard_repeats, "status": result.status}
     if result.success:
-        await _message_repo.save_sent(
+        row_id = await _message_repo.save_sent(
             text=req.text,
             node_id=node_id,
             node_name=node_name,
             protocol=req.protocol,
             channel=req.channel,
             packet_id=result.packet_id,
-            status="sent",
+            status=result.status,
+            heard_repeats=result.heard_repeats,
         )
+        if req.protocol == "meshcore" and _meshcore_tx and _meshcore_tx.repeat_tracker:
+            current = await _meshcore_tx.repeat_tracker.bind(result.packet_id, row_id, node_id)
+            if current is not None:
+                feedback = current
 
     return {
         "success": result.success,
@@ -112,6 +119,8 @@ async def send_message(
         "timestamp": result.timestamp,
         "airtime_ms": result.airtime_ms,
         "error": result.error,
+        "id": row_id,
+        **feedback,
     }
 
 

@@ -592,6 +592,32 @@ transmit:
 
 MeshCore transmission uses the USB companion node: configure its serial port under `capture.meshcore_usb` (see Capture Sources above). The companion handles encryption and RF timing; the Meshpoint sends serial commands.
 
+### MeshCore message feedback
+
+The Messages view uses the same feedback path for serial/USB companions and
+PiMesh TCP companions. No additional installation or setting is required.
+
+- Sent channel messages show **Heard N repeats** when their authenticated
+  radio echoes can be matched. This counts repeated copies heard by your own
+  radio, not unique repeaters, total network reach, or recipient delivery.
+- Sent DMs show **Sent · Delivery unconfirmed** until the companion reports
+  the matching recipient acknowledgement, then **Delivered**. This confirms
+  receipt, not that the recipient has read the message.
+- DM repeat counts are not available through the standard companion send
+  response: it exposes an acknowledgement token, not the outgoing encrypted
+  packet needed to match echoes reliably. Meshpoint does not infer counts
+  from unrelated traffic or treat an ACK as a repeat.
+
+Recorded feedback persists in message history. New observations are matched
+for up to 15 minutes while Meshpoint remains running (at most 128 recent sends).
+A service restart ends tracking for earlier sends but preserves their recorded
+feedback. Older messages and sends without tracking information omit the count;
+**Heard 0 repeats** means tracking was available but no repeated copy was heard.
+Lack of an echo or ACK does not prove that the message failed to arrive.
+
+Protocol references: [MeshCore companion interface](https://github.com/meshcore-dev/MeshCore/blob/main/examples/companion_radio/MyMesh.cpp)
+and [MeshCore Python SDK](https://github.com/meshcore-dev/meshcore_py).
+
 ---
 
 ## Upstream (Cloud)

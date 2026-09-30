@@ -85,7 +85,8 @@ CREATE TABLE IF NOT EXISTS messages (
     packet_id     TEXT,
     rssi          REAL,
     snr           REAL,
-    rx_count      INTEGER NOT NULL DEFAULT 1
+    rx_count      INTEGER NOT NULL DEFAULT 1,
+    heard_repeats INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_node ON messages(node_id);
@@ -146,6 +147,11 @@ class DatabaseManager:
                 "ALTER TABLE messages ADD COLUMN rx_count INTEGER NOT NULL DEFAULT 1"
             )
             logger.info("Migration: added rx_count column to messages table")
+
+        if msg_cols and "heard_repeats" not in msg_cols:
+            await self._connection.execute(
+                "ALTER TABLE messages ADD COLUMN heard_repeats INTEGER"
+            )
 
         await self._cleanup_cross_protocol_name_contamination()
         await self._cleanup_meshcore_placeholder_names()

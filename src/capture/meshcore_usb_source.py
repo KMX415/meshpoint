@@ -77,6 +77,8 @@ class MeshcoreUsbCaptureSource(CaptureSource):
         self._last_event_at: float = 0.0
         self._last_device_info: Optional[dict] = None
         self._on_connected_callback = None
+        self._rx_log_callback = None
+        self._ack_callback = None
         self._command_lock = asyncio.Lock()
         self._auto_fetch_lock = asyncio.Lock()
 
@@ -179,7 +181,17 @@ class MeshcoreUsbCaptureSource(CaptureSource):
                 event = await asyncio.wait_for(
                     self._queue.get(), timeout=1.0
                 )
+                if getattr(getattr(event, "type", None), "value", None) == "rx_log_data" and self._rx_log_callback:
+                    try:
+                        await self._rx_log_callback(event.payload)
+                    except Exception:
+                        logger.exception("MeshCore repeat observation failed")
                 raw = self._wrap_event(event)
+                if getattr(getattr(event, "type", None), "value", None) == "acknowledgement" and self._ack_callback:
+                    try:
+                        await self._ack_callback(event.payload)
+                    except Exception:
+                        logger.exception("MeshCore delivery observation failed")
                 if raw is not None:
                     yield raw
             except asyncio.TimeoutError:
@@ -225,6 +237,7 @@ class MeshcoreUsbCaptureSource(CaptureSource):
 
             for event_type in (
                 EventType.RX_LOG_DATA,
+                EventType.ACK,
                 EventType.RAW_DATA,
                 EventType.CONTACT_MSG_RECV,
                 EventType.CHANNEL_MSG_RECV,
@@ -532,6 +545,14 @@ class MeshcoreUsbCaptureSource(CaptureSource):
     def set_connected_callback(self, callback) -> None:
         """Register a coroutine called after every successful connection."""
         self._on_connected_callback = callback
+
+    def set_rx_log_callback(self, callback) -> None:
+        """Observe RF logs without replacing normal packet capture."""
+        self._rx_log_callback = callback
+
+    def set_ack_callback(self, callback) -> None:
+        """Observe recipient confirmations on both serial and TCP sources."""
+        self._ack_callback = callback
 
     def set_command_lock(self, lock: asyncio.Lock) -> None:
         """Share command serialization with the attached transmit client."""

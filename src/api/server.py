@@ -207,6 +207,13 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
                 asyncio.get_running_loop().create_task(
                     _send_meshcore_advert(meshcore_tx_ref, mc_source)
                 )
+        if meshcore_tx_ref and mc_source:
+            from src.transmit.meshcore_repeats import MeshcoreHeardRepeats
+
+            feedback = MeshcoreHeardRepeats(message_repo, ws_manager.broadcast)
+            meshcore_tx_ref.repeat_tracker = feedback
+            mc_source.set_rx_log_callback(feedback.observe)
+            mc_source.set_ack_callback(feedback.acknowledge)
         channel_hash_resolver = _setup_message_interception(
             pipeline, message_repo, config, meshcore_tx_ref, tx_service
         )

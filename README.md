@@ -56,6 +56,8 @@ Everything is managed from a browser dashboard: full chat with channels and DMs,
 
 **Full chat UI.** Conversations organized by channel and contact. Signal info (SNR, RSSI) on every received bubble. Duplicate badge shows how many times a relayed message was heard. Channel sidebar with LongFast, custom channels, and DM contacts. Message history persisted in SQLite.
 
+**MeshCore send feedback.** Sent channel messages show locally heard repeats; DMs show recipient-confirmed delivery. Works with USB/serial and PiMesh TCP companions. See [feedback behavior and limits](docs/CONFIGURATION.md#meshcore-message-feedback).
+
 **Radio configuration from the dashboard.** Change region, modem preset, frequency, TX power, and duty cycle without SSH. Add and remove channels with custom PSKs. Toggle TX enable/disable. All settings saved to `local.yaml` and survive restarts.
 
 **Node discovery.** Live node cards showing every node your Meshpoint has heard: name, ID, protocol, hardware model, signal strength, battery, and last seen. Click any node to open a detail drawer with signal history and direct message.
