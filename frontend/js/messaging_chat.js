@@ -17,6 +17,7 @@ class MessagingChat {
     }
 
     clearChat() {
+        this._closePaths?.();
         this._conversation = null;
         this._messages = [];
         this._allLoaded = false;
@@ -33,6 +34,7 @@ class MessagingChat {
     }
 
     setConversation(convo) {
+        this._closePaths?.();
         this._conversation = convo;
         this._messages = [];
         this._allLoaded = false;
@@ -112,7 +114,10 @@ class MessagingChat {
             bubble.dataset.msgId = msg.id;
             if (packetId) bubble.dataset.pktId = packetId;
             const meta = bubble.querySelector('.msg-bubble__meta');
-            if (meta) meta.innerHTML = this._buildMetaHtml(msg);
+            if (meta) {
+                if (this._pathAnchor && meta.contains(this._pathAnchor)) this._closePaths();
+                meta.innerHTML = this._buildMetaHtml(msg);
+            }
         }
     }
 
@@ -147,7 +152,7 @@ class MessagingChat {
         let repeat = '';
         if (msg.direction === 'sent' && msg.protocol === 'meshcore'
             && Number.isInteger(msg.heard_repeats) && msg.heard_repeats >= 0) {
-            repeat = ` · <span title="Repeated copies heard by this radio; not a delivery confirmation or unique repeater count">Heard ${msg.heard_repeats} repeat${msg.heard_repeats === 1 ? '' : 's'}</span>`;
+            repeat = ` · <button type="button" class="msg-heard" aria-haspopup="dialog" aria-expanded="false" aria-label="Heard ${msg.heard_repeats} repeat${msg.heard_repeats === 1 ? '' : 's'}. Show heard paths">Heard ${msg.heard_repeats} repeat${msg.heard_repeats === 1 ? '' : 's'}</button>`;
         }
         return `${time}${status ? ' · ' + this._esc(status) : ''}${repeat}${this._buildSignalHtml(msg)}`;
     }
@@ -326,6 +331,7 @@ class MessagingChat {
         this._sendBtn = this._container.querySelector('.msg-compose__send');
 
         this._renderEmptyState();
+        this._setupPaths();
 
         this._sendBtn.addEventListener('click', () => this._handleSend());
         this._input.addEventListener('keydown', (e) => {
@@ -353,6 +359,158 @@ class MessagingChat {
             if (!el || !window.nodeDrawer) return;
             window.nodeDrawer.open({ node_id: el.dataset.nodeId });
         });
+    }
+
+    _setupPaths() {
+        this._pathRequest = 0;
+        const trigger = e => e.target.closest?.('.msg-heard');
+        this._messagesEl.addEventListener('pointerover', e => {
+            const button = trigger(e);
+            if (e.pointerType === 'mouse' && button && button !== this._pathDismissed) {
+                clearTimeout(this._pathCloseTimer);
+                if (this._pathAnchor !== button) this._openPaths(button);
+            }
+        });
+        this._messagesEl.addEventListener('pointerout', e => {
+            const button = trigger(e);
+            if (button && !button.contains(e.relatedTarget)) {
+                if (this._pathDismissed === button) this._pathDismissed = null;
+                this._schedulePathClose();
+            }
+        });
+        this._messagesEl.addEventListener('focusin', e => {
+            const button = trigger(e);
+            if (button) this._openPaths(button);
+        });
+        this._messagesEl.addEventListener('focusout', e => {
+            if (trigger(e) && !this._pathPanel?.contains(e.relatedTarget)) this._schedulePathClose();
+        });
+        this._messagesEl.addEventListener('keydown', e => {
+            if (trigger(e) && this._pathPanel && e.key === 'Tab' && !e.shiftKey) {
+                e.preventDefault();
+                this._pathPanel.querySelector('button').focus();
+            }
+        });
+        this._messagesEl.addEventListener('click', e => {
+            const button = trigger(e);
+            if (!button) return;
+            if (this._pathAnchor === button && this._pathPinned) this._closePaths();
+            else { this._pathPinned = true; this._openPaths(button); }
+        });
+        document.addEventListener('pointerdown', e => {
+            if (!e.target.closest?.('.msg-heard, .msg-paths')) this._closePaths();
+        });
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && this._pathPanel) {
+                const anchor = this._pathAnchor;
+                this._closePaths();
+                // Avoid reopening through focusin when restoring focus.
+                if (anchor && document.activeElement !== anchor) {
+                    this._suppressPathFocus = true;
+                    anchor.focus();
+                    this._suppressPathFocus = false;
+                }
+            }
+        });
+        this._messagesEl.addEventListener('scroll', () => this._closePaths());
+        window.addEventListener('resize', () => this._closePaths());
+    }
+
+    _schedulePathClose() {
+        clearTimeout(this._pathCloseTimer);
+        this._pathCloseTimer = setTimeout(() => {
+            if (!this._pathPinned && !this._pathPanel?.matches(':hover')
+                && !this._pathPanel?.contains(document.activeElement)) this._closePaths();
+        }, 220);
+    }
+
+    _closePaths() {
+        clearTimeout(this._pathCloseTimer);
+        this._pathRequest = (this._pathRequest || 0) + 1;
+        if (this._pathAnchor) this._pathDismissed = this._pathAnchor;
+        this._pathAnchor?.setAttribute('aria-expanded', 'false');
+        this._pathAnchor?.removeAttribute('aria-controls');
+        this._pathPanel?.remove();
+        this._pathPanel = null;
+        this._pathAnchor = null;
+        this._pathPinned = false;
+    }
+
+    async _openPaths(button) {
+        if (this._suppressPathFocus) return;
+        clearTimeout(this._pathCloseTimer);
+        if (this._pathAnchor === button) return;
+        const pinned = this._pathPinned;
+        this._closePaths();
+        this._pathPinned = pinned;
+        const row = button.closest('[data-msg-id]');
+        if (!row) return;
+        const id = row.dataset.msgId;
+        const msg = this._messages.find(item => String(item.id) === id);
+        this._pathAnchor = button;
+        button.setAttribute('aria-expanded', 'true');
+        button.setAttribute('aria-controls', 'msg-heard-paths');
+        const panel = document.createElement('section');
+        panel.className = 'msg-paths';
+        panel.id = 'msg-heard-paths';
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-label', 'Heard paths');
+        panel.innerHTML = '<header class="msg-paths__header"><strong>Heard paths</strong><button type="button" class="msg-paths__close" aria-label="Close heard paths"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg></button></header><div class="msg-paths__body" aria-live="polite"><p class="msg-paths__empty">Loading saved paths…</p></div><footer>Signal received here · names matched locally.</footer>';
+        this._pathPanel = panel;
+        document.body.appendChild(panel);
+        panel.querySelector('.msg-paths__close').addEventListener('click', () => {
+            this._closePaths();
+            this._suppressPathFocus = true;
+            button.focus();
+            this._suppressPathFocus = false;
+        });
+        panel.addEventListener('pointerenter', () => clearTimeout(this._pathCloseTimer));
+        panel.addEventListener('pointerleave', () => this._schedulePathClose());
+        panel.addEventListener('focusout', e => {
+            if (!panel.contains(e.relatedTarget) && e.relatedTarget !== button) this._closePaths();
+        });
+        this._positionPaths();
+        const request = this._pathRequest;
+        try {
+            if (!msg?.packet_id) throw new Error('Message still saving');
+            const response = await fetch(`/api/messages/${encodeURIComponent(id)}/heard-paths`);
+            if (!response.ok) throw new Error('Unavailable');
+            const data = await response.json();
+            if (this._pathRequest !== request || !button.isConnected) return;
+            panel.querySelector('.msg-paths__body').innerHTML = this._pathsHtml(data);
+        } catch (_) {
+            if (this._pathRequest !== request) return;
+            panel.querySelector('.msg-paths__body').innerHTML = '<p class="msg-paths__empty">Paths unavailable. Close and reopen to retry.</p>';
+        }
+        if (this._pathRequest === request) this._positionPaths();
+    }
+
+    _positionPaths() {
+        if (!this._pathPanel || !this._pathAnchor) return;
+        const a = this._pathAnchor.getBoundingClientRect();
+        const panel = this._pathPanel;
+        const width = panel.offsetWidth;
+        const height = panel.offsetHeight;
+        panel.style.left = Math.max(12, Math.min(a.right - width, window.innerWidth - width - 12)) + 'px';
+        const above = a.top - height - 8;
+        panel.style.top = Math.max(12, Math.min(above >= 12 ? above : a.bottom + 8,
+            window.innerHeight - height - 12)) + 'px';
+    }
+
+    _pathsHtml(data) {
+        const observations = Array.isArray(data.observations) ? data.observations : [];
+        if (!observations.length) return `<p class="msg-paths__empty">${data.recorded
+            ? 'No repeated paths heard yet.' : 'Path details weren’t recorded for this message.'}</p>`;
+        const metric = (value, unit) => Number.isFinite(value) ? `${this._esc(String(value))} <small>${unit}</small>` : 'Unavailable';
+        const rows = observations.map(observation => {
+            const hops = (observation.hops || []).map(hop => {
+                const label = hop.name || (hop.ambiguous ? 'Ambiguous repeater' : 'Unknown repeater');
+                return `<li><span class="msg-paths__node">${this._esc(label)}</span><code>${this._esc(hop.id)}</code></li>`;
+            }).join('');
+            return `<li class="msg-paths__copy"><ol class="msg-paths__route" aria-label="Reported repeater path">${hops}<li class="msg-paths__here"><span class="msg-paths__node">Your radio</span></li></ol><dl class="msg-paths__signal"><div><dt>RSSI</dt><dd>${metric(observation.rssi, 'dBm')}</dd></div><div><dt>SNR</dt><dd>${metric(observation.snr, 'dB')}</dd></div></dl></li>`;
+        }).join('');
+        const count = Number.isInteger(data.count) ? data.count : observations.length;
+        return `<p class="msg-paths__summary">${count} heard ${count === 1 ? 'copy' : 'copies'}${observations.length < count ? ' · first ' + observations.length + ' saved' : ''}</p><ul class="msg-paths__copies">${rows}</ul>`;
     }
 
     async _loadOlderMessages() {

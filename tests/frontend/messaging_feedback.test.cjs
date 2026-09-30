@@ -68,3 +68,20 @@ test('feedback cache is bounded and unsafe status text is escaped', () => {
     assert.equal(view._feedback.size, 128);
     assert.doesNotMatch(view._buildMetaHtml(sent({ status: '<img onerror=bad>' })), /<img/);
 });
+
+
+test('path details handle unknown, ambiguous, missing signal and escaped names', () => {
+    const { view } = chat();
+    const html = view._pathsHtml({ count: 3, observations: [{
+        hops: [{ id: 'aa', name: '<img>', ambiguous: false }, { id: 'bb', ambiguous: true }, { id: 'cc' }],
+        rssi: -96, snr: null,
+    }] });
+    assert.doesNotMatch(html, /<img>/);
+    assert.match(html, /Ambiguous repeater/);
+    assert.match(html, /Unknown repeater/);
+    assert.match(html, /Your radio/);
+    assert.match(html, /Unavailable/);
+    assert.match(html, /first 1 saved/);
+    assert.match(view._pathsHtml({ recorded: false }), /weren.t recorded/);
+    assert.match(view._pathsHtml({ recorded: true }), /No repeated paths/);
+});

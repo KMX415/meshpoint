@@ -7,6 +7,7 @@ Only copies with a repeater path count. Counts are local observations, not ACKs.
 
 import asyncio
 import hashlib
+import math
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -25,6 +26,7 @@ class PendingRepeat:
     expected_ack: str = ""
     status: str = "sent"
     ack_floor: int = 0
+    observations: list = field(default_factory=list)
 
 
 class MeshcoreHeardRepeats:
@@ -148,12 +150,26 @@ class MeshcoreHeardRepeats:
                 if decoded.get("sender_timestamp") != item.timestamp or decoded.get("message") != item.message:
                     continue
                 item.count += 1
+                if len(item.observations) < 32:
+                    def signal(name):
+                        value = payload.get(name)
+                        if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
+                            return round(value, 2)
+                        return None
+                    item.observations.append({
+                        "path": [frame[i:i + width].hex() for i in range(offset + 1, body_start, width)],
+                        "received_at": time.time(),
+                        "rssi": signal("rssi"), "snr": signal("snr"),
+                    })
                 if item.row_id is not None:
                     await self._publish(item)
                 return
 
     async def _publish(self, item):
-        saved = await self.repository.update_meshcore_feedback(item.row_id, item.count, item.status)
+        saved = await self.repository.update_meshcore_feedback(
+            item.row_id, item.count, item.status,
+            item.observations if item.count is not None else None,
+        )
         if saved:
             await self.broadcast("message_repeats", {
                 "id": item.row_id, "packet_id": item.packet_id,
