@@ -209,8 +209,13 @@ class GpsConfigCard {
 
     render(config) {
         if (window.PlatformContext?.isPimesh(config)) {
+            const meshcore = config.device.radio_protocol === 'meshcore';
+            this._root.querySelector('[data-mesh-position-fields] legend').textContent =
+                meshcore ? 'MeshCore advertisement location' : 'Mesh position broadcasts';
             this._root.querySelector('[data-mesh-position-fields] .cfg-field__hint').textContent =
-                'Coordinates are shared using the active protocol: Meshtastic position packets or MeshCore identity adverts.';
+                meshcore
+                    ? 'Location used in MeshCore identity adverts. Change the advertisement interval in Configuration > MeshCore.'
+                    : 'Coordinates are shared in Meshtastic position packets.';
         }
         const device = (config && config.device) || {};
         const location = (config && config.location) || {};

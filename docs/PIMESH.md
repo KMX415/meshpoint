@@ -110,8 +110,9 @@ telemetry and advert behavior are retained.
 
 ## Device roles and forwarding
 
-On provisioned PiMesh installations, **Configuration > Radio > Device behavior**
-lets an administrator change the active backend's behavior without reinstalling.
+On provisioned PiMesh installations, **Device behavior** lives under
+**Configuration > Radio** for Meshtastic and **Configuration > MeshCore** for
+MeshCore. An administrator can change the active backend's behavior without reinstalling.
 These controls are hidden on concentrator and other non-PiMesh installations.
 
 For Meshtastic, the available roles are Client, Client mute, Client base, Router,
@@ -140,6 +141,21 @@ engine. These modes are not equivalent to every Meshtastic role.
 The UI confirms changes from a backend response. If a save is unconfirmed,
 wait for the radio to reconnect and choose **Reload behavior** before retrying.
 Each backend stores its own settings across protocol switches and service restarts.
+
+## MeshCore advertisements and settings
+
+With MeshCore active on PiMesh, **Configuration > MeshCore** is the single editor
+for channels, radio presets, TX power, the application TX toggle, device behavior
+and the **MeshCore advertisement interval**. Radio retains protocol switching;
+Radio, Channels and Transmit link to the MeshCore editor instead of duplicating it.
+
+Use 0 to pause scheduled adverts, or 5–1440 minutes for an active interval.
+The existing saved interval is retained. GPS controls the location used in adverts;
+it no longer shows a misleading position broadcast timer in PiMesh MeshCore mode.
+For compatibility, this still uses the existing `transmit.position.interval_minutes`
+setting and scheduler: switching to Meshtastic uses that same interval for position
+broadcasts. This UI change does not add a second timer or change radio behavior.
+USB companions and non-PiMesh installations keep their existing controls.
 
 ## Messaging validation
 
