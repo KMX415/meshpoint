@@ -49,7 +49,15 @@ def adapt_event(
         return None
 
     try:
-        return builder(payload, signal)
+        packet = builder(payload, signal)
+        receiver = envelope.get("receiver_settings")
+        if isinstance(receiver, dict) and receiver.get("source") == "receiver_self_info_at_capture":
+            packet.decoded_payload["meshcore_receiver"] = receiver
+        # Incoming event path length, never the contact's outgoing saved route.
+        path_len = payload.get("path_len")
+        if type(path_len) is int and 0 <= path_len <= 63:
+            packet.decoded_payload["meshcore_hops"] = path_len
+        return packet
     except Exception:
         logger.exception("adapt_event: builder failed for %s", event_type)
         return None
@@ -266,10 +274,10 @@ def _rf_signal_from_payload(
     return SignalMetrics(
         rssi=float(rssi) if rssi is not None else -120.0,
         snr=float(snr) if snr is not None else 0.0,
-        frequency_mhz=0.0,
-        spreading_factor=0,
-        bandwidth_khz=0.0,
-        coding_rate="N/A",
+        frequency_mhz=fallback.frequency_mhz if fallback else 0.0,
+        spreading_factor=fallback.spreading_factor if fallback else 0,
+        bandwidth_khz=fallback.bandwidth_khz if fallback else 0.0,
+        coding_rate=fallback.coding_rate if fallback else "N/A",
     )
 
 

@@ -81,7 +81,10 @@ class SimplePacketFeed {
         const rssiVal = this._displayRssi(rawRssi);
         const type = packet.packet_type || '--';
         const protocol = packet.protocol || 'meshtastic';
-        const hops = packet.hop_start > 0
+        const mcHops = packet.decoded_payload?.meshcore_hops;
+        const hops = protocol === 'meshcore'
+            ? (Number.isInteger(mcHops) && mcHops >= 0 && mcHops <= 63 ? String(mcHops) : '--')
+            : packet.hop_start > 0
             ? `${packet.hop_start - packet.hop_limit}/${packet.hop_start}`
             : '--';
         const freqMhz = sig.frequency_mhz || packet.frequency_mhz;
@@ -146,7 +149,7 @@ class SimplePacketFeed {
                 return parts.join(', ') || '--';
             }
             case 'nodeinfo':
-                return [p.long_name, p.short_name, p.hw_model].filter(Boolean).join(' ') || '--';
+                return [p.long_name, p.short_name, p.hw_model].filter(Boolean).join(' ') || (packet.protocol === 'meshcore' && p.advertisement ? 'Advertisement' : '--');
             case 'telemetry': {
                 const parts = [];
                 if (p.battery_level != null) {

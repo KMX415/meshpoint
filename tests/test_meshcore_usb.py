@@ -720,5 +720,124 @@ class TestMeshcoreUsbCaptureRouting(unittest.TestCase):
         )
 
 
+
+class TestIncomingMeshcorePathMetadata(unittest.TestCase):
+    def test_received_path_only(self):
+        for length, expected in [(0, 0), (3, 3), (63, 63), (255, None), (-1, None), (True, None), ("3", None)]:
+            with self.subTest(length=length):
+                packet = adapt_event(json.dumps({"event_type": "channel_message", "payload": {
+                    "text": "fixture", "path_len": length, "out_path_len": 5,
+                }}).encode())
+                self.assertEqual(packet.decoded_payload.get("meshcore_hops"), expected)
+                self.assertEqual(packet.hop_start, 0)
+                self.assertEqual(packet.hop_limit, 0)
+    def test_saved_outgoing_route_is_not_received_hops(self):
+        packet = adapt_event(json.dumps({"event_type": "advertisement", "payload": {
+            "public_key": "abcd", "out_path_len": 4,
+        }}).encode())
+        self.assertNotIn("meshcore_hops", packet.decoded_payload)
+
+
+class TestCapturedMeshcoreMetadata(unittest.TestCase):
+    def source(self):
+        from types import SimpleNamespace
+        from src.capture.meshcore_usb_source import MeshcoreUsbCaptureSource
+        source = MeshcoreUsbCaptureSource()
+        source._meshcore = SimpleNamespace(self_info={"radio_freq": 910.525, "radio_bw": 62.5, "radio_sf": 7, "radio_cr": 5})
+        return source
+
+    def event(self, kind, payload):
+        from types import SimpleNamespace
+        return SimpleNamespace(type=SimpleNamespace(value=kind), payload=payload)
+
+    def advert(self, key="11" * 32, count=2):
+        body = bytes.fromhex(key) + bytes(4 + 64) + b"\0"
+        return {"payload": (bytes([17, count]) + bytes(count) + body).hex(),
+                "adv_key": key, "recv_time": 1700000000, "rssi": -55, "snr": 8}
+
+    def test_snapshot_and_advert_hops_survive_storage(self):
+        from src.storage.packet_repository import PacketRepository
+        source = self.source()
+        self.assertIsNone(source._wrap_event(self.event("rx_log_data", self.advert())))
+        raw = source._wrap_event(self.event("advertisement", {"public_key": "11" * 32}))
+        packet = adapt_event(raw.payload, raw.signal)
+        self.assertEqual(packet.decoded_payload["meshcore_hops"], 2)
+        self.assertEqual(packet.signal.frequency_mhz, 910.525)
+        self.assertEqual(packet.signal.spreading_factor, 7)
+        self.assertEqual(packet.signal.bandwidth_khz, 62.5)
+        self.assertEqual(packet.signal.coding_rate, "4/5")
+        source._meshcore.self_info["radio_freq"] = 915
+        row = {**packet.to_dict(), **packet.signal.to_dict(), "decoded_payload": json.dumps(packet.decoded_payload)}
+        restored = PacketRepository._row_to_packet(row)
+        self.assertEqual(restored.signal.frequency_mhz, 910.525)
+        self.assertEqual(restored.signal.coding_rate, "4/5")
+        self.assertEqual(restored.decoded_payload["meshcore_receiver"]["coding_rate"], "4/5")
+        self.assertEqual(restored.decoded_payload["meshcore_hops"], 2)
+
+    def test_ambiguous_or_unrelated_logs_do_not_supply_hops(self):
+        for unrelated in (False, True):
+            source = self.source()
+            source._wrap_event(self.event("rx_log_data", self.advert()))
+            if not unrelated:source._wrap_event(self.event("rx_log_data", self.advert(count=3)))
+            raw = source._wrap_event(self.event("advertisement", {"public_key": ("22" if unrelated else "11") * 32}))
+            self.assertNotIn("meshcore_hops", adapt_event(raw.payload, raw.signal).decoded_payload)
+
+    def test_message_signal_does_not_discard_radio_snapshot(self):
+        source = self.source()
+        raw = source._wrap_event(self.event("channel_message", {"text": "fixture", "rssi": -70, "snr": 0, "path_len": 0}))
+        packet = adapt_event(raw.payload, raw.signal)
+        self.assertEqual(packet.signal.frequency_mhz, 910.525)
+        self.assertEqual(packet.signal.snr, 0)
+        self.assertEqual(packet.decoded_payload["meshcore_hops"], 0)
+
+    def test_malformed_advert_and_missing_settings(self):
+        from src.capture.meshcore_usb_source import _raw_advertisement, _receiver_settings
+        self.assertIsNone(_raw_advertisement({"payload": "11"}))
+        self.assertIsNone(_raw_advertisement({"payload": "gg"}))
+        self.assertIsNone(_receiver_settings({}))
+
+
+class TestMeshcoreQueueSnapshot(unittest.IsolatedAsyncioTestCase):
+    async def test_queue_uses_original_settings_even_if_cache_changes(self):
+        helper = TestCapturedMeshcoreMetadata()
+        source = helper.source()
+        source._running = True
+        event = helper.event("channel_message", {"text": "fixture", "path_len": 1})
+        await source._on_event(event)
+        source._meshcore.self_info["radio_freq"] = 915
+        raw = source._wrap_event(await source._queue.get())
+        self.assertEqual(raw.signal.frequency_mhz, 910.525)
+
+    async def test_unknown_snapshot_does_not_inherit_later_settings(self):
+        helper = TestCapturedMeshcoreMetadata()
+        source = helper.source()
+        info = source._meshcore.self_info
+        source._meshcore.self_info = {}
+        source._running = True
+        await source._on_event(helper.event("channel_message", {"text": "fixture"}))
+        source._meshcore.self_info = info
+        raw = source._wrap_event(await source._queue.get())
+        self.assertEqual(raw.signal.frequency_mhz, 0)
+
+
+class TestMeshcoreAdvertLimits(unittest.TestCase):
+    def test_expired_log_does_not_supply_hops(self):
+        from unittest.mock import patch
+        helper = TestCapturedMeshcoreMetadata()
+        source = helper.source()
+        with patch("src.capture.meshcore_usb_source.time.monotonic", return_value=100):
+            source._wrap_event(helper.event("rx_log_data", helper.advert()))
+        with patch("src.capture.meshcore_usb_source.time.monotonic", return_value=103):
+            raw = source._wrap_event(helper.event("advertisement", {"public_key": "11" * 32}))
+        self.assertNotIn("meshcore_hops", adapt_event(raw.payload, raw.signal).decoded_payload)
+
+    def test_direct_path_is_not_received_hops(self):
+        from src.capture.meshcore_usb_source import _raw_advertisement
+        payload = TestCapturedMeshcoreMetadata().advert()
+        raw = bytes.fromhex(payload["payload"])
+        payload["payload"] = (bytes([18]) + raw[1:]).hex()
+        self.assertNotIn("path_len", _raw_advertisement(payload))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,498 @@
+{
+  "source_revision": "48942ef275baba534f01a3b1aeadd8cfa5cb3620",
+  "details": {
+    "nodeinfo-0": {
+      "_rfRows": [
+        {
+          "key": "Frequency",
+          "val": "906.875 MHz"
+        },
+        {
+          "key": "Modem",
+          "val": "SF11 · BW250 · CR 4/8"
+        },
+        {
+          "key": "RSSI",
+          "val": "-80 dBm"
+        },
+        {
+          "key": "SNR",
+          "val": "0.0 dB"
+        }
+      ],
+      "_meshRows": [
+        {
+          "key": "From",
+          "val": "n/a (n/a)"
+        },
+        {
+          "key": "To",
+          "val": "n/a (n/a)"
+        },
+        {
+          "key": "Type",
+          "val": "nodeinfo"
+        },
+        {
+          "key": "Protocol",
+          "val": "meshtastic"
+        },
+        {
+          "key": "Hops",
+          "val": "n/a"
+        },
+        {
+          "key": "Want ACK",
+          "val": "No"
+        }
+      ],
+      "_payloadRows": [
+        {
+          "key": "Decrypt",
+          "val": "Success",
+          "valClass": "good"
+        },
+        {
+          "key": "Channel",
+          "val": "(unknown)"
+        },
+        {
+          "key": "JSON",
+          "expandable": true,
+          "full": "{\n  \"text\": \"fixture\"\n}",
+          "previewLen": 480
+        }
+      ]
+    },
+    "nodeinfo-7": {
+      "_rfRows": [
+        {
+          "key": "Frequency",
+          "val": "906.875 MHz"
+        },
+        {
+          "key": "Modem",
+          "val": "SF11 · BW250 · CR 4/8"
+        },
+        {
+          "key": "RSSI",
+          "val": "-80 dBm"
+        },
+        {
+          "key": "SNR",
+          "val": "0.0 dB"
+        }
+      ],
+      "_meshRows": [
+        {
+          "key": "From",
+          "val": "n/a (n/a)"
+        },
+        {
+          "key": "To",
+          "val": "n/a (n/a)"
+        },
+        {
+          "key": "Type",
+          "val": "nodeinfo"
+        },
+        {
+          "key": "Protocol",
+          "val": "meshtastic"
+        },
+        {
+          "key": "Hops",
+          "val": "2 hops taken (5 left of 7)"
+        },
+        {
+          "key": "Want ACK",
+          "val": "No"
+        }
+      ],
+      "_payloadRows": [
+        {
+          "key": "Decrypt",
+          "val": "Success",
+          "valClass": "good"
+        },
+        {
+          "key": "Channel",
+          "val": "(unknown)"
+        },
+        {
+          "key": "JSON",
+          "expandable": true,
+          "full": "{\n  \"text\": \"fixture\"\n}",
+          "previewLen": 480
+        }
+      ]
+    },
+    "text-0": {
+      "_rfRows": [
+        {
+          "key": "Frequency",
+          "val": "906.875 MHz"
+        },
+        {
+          "key": "Modem",
+          "val": "SF11 · BW250 · CR 4/8"
+        },
+        {
+          "key": "RSSI",
+          "val": "-80 dBm"
+        },
+        {
+          "key": "SNR",
+          "val": "0.0 dB"
+        }
+      ],
+      "_meshRows": [
+        {
+          "key": "From",
+          "val": "n/a (n/a)"
+        },
+        {
+          "key": "To",
+          "val": "n/a (n/a)"
+        },
+        {
+          "key": "Type",
+          "val": "text"
+        },
+        {
+          "key": "Protocol",
+          "val": "meshtastic"
+        },
+        {
+          "key": "Hops",
+          "val": "n/a"
+        },
+        {
+          "key": "Want ACK",
+          "val": "No"
+        }
+      ],
+      "_payloadRows": [
+        {
+          "key": "Decrypt",
+          "val": "Success",
+          "valClass": "good"
+        },
+        {
+          "key": "Channel",
+          "val": "(unknown)"
+        },
+        {
+          "key": "Content",
+          "val": "fixture"
+        }
+      ]
+    },
+    "text-7": {
+      "_rfRows": [
+        {
+          "key": "Frequency",
+          "val": "906.875 MHz"
+        },
+        {
+          "key": "Modem",
+          "val": "SF11 · BW250 · CR 4/8"
+        },
+        {
+          "key": "RSSI",
+          "val": "-80 dBm"
+        },
+        {
+          "key": "SNR",
+          "val": "0.0 dB"
+        }
+      ],
+      "_meshRows": [
+        {
+          "key": "From",
+          "val": "n/a (n/a)"
+        },
+        {
+          "key": "To",
+          "val": "n/a (n/a)"
+        },
+        {
+          "key": "Type",
+          "val": "text"
+        },
+        {
+          "key": "Protocol",
+          "val": "meshtastic"
+        },
+        {
+          "key": "Hops",
+          "val": "2 hops taken (5 left of 7)"
+        },
+        {
+          "key": "Want ACK",
+          "val": "No"
+        }
+      ],
+      "_payloadRows": [
+        {
+          "key": "Decrypt",
+          "val": "Success",
+          "valClass": "good"
+        },
+        {
+          "key": "Channel",
+          "val": "(unknown)"
+        },
+        {
+          "key": "Content",
+          "val": "fixture"
+        }
+      ]
+    },
+    "encrypted-0": {
+      "_rfRows": [
+        {
+          "key": "Frequency",
+          "val": "906.875 MHz"
+        },
+        {
+          "key": "Modem",
+          "val": "SF11 · BW250 · CR 4/8"
+        },
+        {
+          "key": "RSSI",
+          "val": "-80 dBm"
+        },
+        {
+          "key": "SNR",
+          "val": "0.0 dB"
+        }
+      ],
+      "_meshRows": [
+        {
+          "key": "From",
+          "val": "n/a (n/a)"
+        },
+        {
+          "key": "To",
+          "val": "n/a (n/a)"
+        },
+        {
+          "key": "Type",
+          "val": "encrypted"
+        },
+        {
+          "key": "Protocol",
+          "val": "meshtastic"
+        },
+        {
+          "key": "Hops",
+          "val": "n/a"
+        },
+        {
+          "key": "Want ACK",
+          "val": "No"
+        }
+      ],
+      "_payloadRows": [
+        {
+          "key": "Decrypt",
+          "val": "No matching key",
+          "valClass": "bad"
+        },
+        {
+          "key": "Channel",
+          "val": "(unknown)"
+        }
+      ]
+    },
+    "encrypted-7": {
+      "_rfRows": [
+        {
+          "key": "Frequency",
+          "val": "906.875 MHz"
+        },
+        {
+          "key": "Modem",
+          "val": "SF11 · BW250 · CR 4/8"
+        },
+        {
+          "key": "RSSI",
+          "val": "-80 dBm"
+        },
+        {
+          "key": "SNR",
+          "val": "0.0 dB"
+        }
+      ],
+      "_meshRows": [
+        {
+          "key": "From",
+          "val": "n/a (n/a)"
+        },
+        {
+          "key": "To",
+          "val": "n/a (n/a)"
+        },
+        {
+          "key": "Type",
+          "val": "encrypted"
+        },
+        {
+          "key": "Protocol",
+          "val": "meshtastic"
+        },
+        {
+          "key": "Hops",
+          "val": "2 hops taken (5 left of 7)"
+        },
+        {
+          "key": "Want ACK",
+          "val": "No"
+        }
+      ],
+      "_payloadRows": [
+        {
+          "key": "Decrypt",
+          "val": "No matching key",
+          "valClass": "bad"
+        },
+        {
+          "key": "Channel",
+          "val": "(unknown)"
+        }
+      ]
+    },
+    "telemetry-0": {
+      "_rfRows": [
+        {
+          "key": "Frequency",
+          "val": "906.875 MHz"
+        },
+        {
+          "key": "Modem",
+          "val": "SF11 · BW250 · CR 4/8"
+        },
+        {
+          "key": "RSSI",
+          "val": "-80 dBm"
+        },
+        {
+          "key": "SNR",
+          "val": "0.0 dB"
+        }
+      ],
+      "_meshRows": [
+        {
+          "key": "From",
+          "val": "n/a (n/a)"
+        },
+        {
+          "key": "To",
+          "val": "n/a (n/a)"
+        },
+        {
+          "key": "Type",
+          "val": "telemetry"
+        },
+        {
+          "key": "Protocol",
+          "val": "meshtastic"
+        },
+        {
+          "key": "Hops",
+          "val": "n/a"
+        },
+        {
+          "key": "Want ACK",
+          "val": "No"
+        }
+      ],
+      "_payloadRows": [
+        {
+          "key": "Decrypt",
+          "val": "Success",
+          "valClass": "good"
+        },
+        {
+          "key": "Channel",
+          "val": "(unknown)"
+        },
+        {
+          "key": "JSON",
+          "expandable": true,
+          "full": "{\n  \"text\": \"fixture\"\n}",
+          "previewLen": 480
+        }
+      ]
+    },
+    "telemetry-7": {
+      "_rfRows": [
+        {
+          "key": "Frequency",
+          "val": "906.875 MHz"
+        },
+        {
+          "key": "Modem",
+          "val": "SF11 · BW250 · CR 4/8"
+        },
+        {
+          "key": "RSSI",
+          "val": "-80 dBm"
+        },
+        {
+          "key": "SNR",
+          "val": "0.0 dB"
+        }
+      ],
+      "_meshRows": [
+        {
+          "key": "From",
+          "val": "n/a (n/a)"
+        },
+        {
+          "key": "To",
+          "val": "n/a (n/a)"
+        },
+        {
+          "key": "Type",
+          "val": "telemetry"
+        },
+        {
+          "key": "Protocol",
+          "val": "meshtastic"
+        },
+        {
+          "key": "Hops",
+          "val": "2 hops taken (5 left of 7)"
+        },
+        {
+          "key": "Want ACK",
+          "val": "No"
+        }
+      ],
+      "_payloadRows": [
+        {
+          "key": "Decrypt",
+          "val": "Success",
+          "valClass": "good"
+        },
+        {
+          "key": "Channel",
+          "val": "(unknown)"
+        },
+        {
+          "key": "JSON",
+          "expandable": true,
+          "full": "{\n  \"text\": \"fixture\"\n}",
+          "previewLen": 480
+        }
+      ]
+    }
+  },
+  "tables": {
+    "nodeinfo": "\n            <td>TIME</td>\n            <td class=\"protocol-meshtastic\">meshtastic</td>\n            <td class=\"td-source\">--</td>\n            <td>--</td>\n            <td class=\"type-nodeinfo\">nodeinfo</td>\n            <td class=\"rssi-good\">-80</td>\n            <td>0.0</td>\n            <td><span class=\"packet-chip packet-chip--unknown\">--</span></td>\n            <td class=\"td-freq\">906.9</td>\n            <td class=\"td-sf\">SF11</td>\n            <td>2/7</td>\n            <td class=\"packet-details-cell type-nodeinfo\">Fixture</td>\n        ",
+    "text": "\n            <td>TIME</td>\n            <td class=\"protocol-meshtastic\">meshtastic</td>\n            <td class=\"td-source\">--</td>\n            <td>--</td>\n            <td class=\"type-text\">text</td>\n            <td class=\"rssi-good\">-80</td>\n            <td>0.0</td>\n            <td><span class=\"packet-chip packet-chip--unknown\">--</span></td>\n            <td class=\"td-freq\">906.9</td>\n            <td class=\"td-sf\">SF11</td>\n            <td>2/7</td>\n            <td class=\"packet-details-cell type-text\">--</td>\n        ",
+    "telemetry": "\n            <td>TIME</td>\n            <td class=\"protocol-meshtastic\">meshtastic</td>\n            <td class=\"td-source\">--</td>\n            <td>--</td>\n            <td class=\"type-telemetry\">telemetry</td>\n            <td class=\"rssi-good\">-80</td>\n            <td>0.0</td>\n            <td><span class=\"packet-chip packet-chip--unknown\">--</span></td>\n            <td class=\"td-freq\">906.9</td>\n            <td class=\"td-sf\">SF11</td>\n            <td>2/7</td>\n            <td class=\"packet-details-cell type-telemetry\">--</td>\n        "
+  }
+}
