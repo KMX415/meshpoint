@@ -31,7 +31,7 @@ class ConfigurationPanel {
         await this._loadConfig();
         this._mountSection(section);
         this._renderAll();
-        if (section === 'radio') this._scrollToFocusTarget();
+        this._scrollToFocusTarget();
     }
 
     async _loadConfig() {
@@ -48,6 +48,8 @@ class ConfigurationPanel {
     _mountSection(section) {
         if (this._mounted.has(section)) return;
         const api = this._buildApi();
+        const pimeshMc = window.PlatformContext?.isPimesh(this._config)
+            && this._config.device.radio_protocol === 'meshcore';
 
         if (section === 'identity' && window.IdentityConfigCard) {
             const host = document.getElementById('cfg-identity-panel');
@@ -78,13 +80,17 @@ class ConfigurationPanel {
                     const protocolCard = new window.PimeshProtocolCard(api);
                     protocolCard.mount(host.querySelector('[data-cfg-pimesh]'));
                     this._cards.set('pimesh', protocolCard);
-                    const behaviorCard = new window.PimeshBehaviorCard(api);
-                    behaviorCard.mount(host.querySelector('[data-cfg-pimesh-behavior]'));
-                    this._cards.set('pimesh-behavior', behaviorCard);
                     const mt = this._config.device.radio_protocol === 'meshtastic';
-                    const card = mt ? new window.WismeshRadioCard(api) : new window.MeshcoreConfigCard(api);
-                    card.mount(host.querySelector('[data-cfg-radio]'));
-                    this._cards.set('pimesh-radio', card);
+                    if (mt) {
+                        const behaviorCard = new window.PimeshBehaviorCard(api);
+                        behaviorCard.mount(host.querySelector('[data-cfg-pimesh-behavior]'));
+                        this._cards.set('pimesh-behavior', behaviorCard);
+                        const card = new window.WismeshRadioCard(api);
+                        card.mount(host.querySelector('[data-cfg-radio]'));
+                        this._cards.set('pimesh-radio', card);
+                    } else {
+                        this._mountMeshcoreLink(host.querySelector('[data-cfg-radio]'));
+                    }
                 } else if (isNode && window.WismeshStatusCard) {
                     const hero = new window.WismeshStatusCard(api);
                     hero.mount(host.querySelector('[data-cfg-wismesh-hero]'));
@@ -139,9 +145,11 @@ class ConfigurationPanel {
                     quick.mount(quickMount);
                     this._cards.set('quick-deploy', quick);
                 }
-                if (window.ChannelsConfigCard) {
+                if (pimeshMc) {
+                    this._mountMeshcoreLink(host.querySelector('[data-channels-mount]'));
+                } else if (window.ChannelsConfigCard) {
                     const channelsMount = host.querySelector('[data-channels-mount]');
-                    const card = pimeshMc ? new window.MeshcoreConfigCard(api) : new window.ChannelsConfigCard(api);
+                    const card = new window.ChannelsConfigCard(api);
                     card.mount(channelsMount);
                     this._cards.set('channels', card);
                 }
@@ -149,10 +157,31 @@ class ConfigurationPanel {
         } else if (section === 'meshcore' && window.MeshcoreConfigCard) {
             const host = document.getElementById('cfg-meshcore-panel');
             if (host) {
-                host.innerHTML = '';
+                host.innerHTML = `<div class="cfg-section">
+                        <div data-cfg-meshcore-advert></div>
+                        <div data-cfg-meshcore-advert-status></div>
+                    </div>
+                    <div data-cfg-meshcore-main></div>
+                    <div class="cfg-section"><div data-cfg-meshcore-behavior></div></div>`;
                 const card = new window.MeshcoreConfigCard(api);
-                card.mount(host);
+                card.mount(host.querySelector('[data-cfg-meshcore-main]'));
                 this._cards.set('meshcore', card);
+                if (pimeshMc) {
+                    const behavior = new window.PimeshBehaviorCard(api);
+                    behavior.mount(host.querySelector('[data-cfg-meshcore-behavior]'));
+                    this._cards.set('pimesh-behavior', behavior);
+                    const advert = new window.PositionBroadcastCard(api, { meshcore: true });
+                    advert.mount(host.querySelector('[data-cfg-meshcore-advert]'));
+                    this._cards.set('meshcore-advert', advert);
+                    const status = new window.BroadcastStatusCard(api, {
+                        title: 'MeshCore advertisements',
+                        configKey: 'position',
+                        editRoute: '#/configuration/meshcore',
+                        scrollTarget: 'cfg-meshcore-advert-interval',
+                    });
+                    status.mount(host.querySelector('[data-cfg-meshcore-advert-status]'));
+                    this._cards.set('meshcore-advert-status', status);
+                }
             }
         } else if (section === 'serial' && window.SerialConfigCard) {
             const host = document.getElementById('cfg-serial-panel');
@@ -201,9 +230,7 @@ class ConfigurationPanel {
                 host.innerHTML = '';
                 if (window.PlatformContext?.isPimesh(this._config)
                     && this._config.device.radio_protocol === 'meshcore') {
-                    const card = new window.MeshcoreConfigCard(api);
-                    card.mount(host);
-                    this._cards.set('transmit', card);
+                    this._mountMeshcoreLink(host);
                 } else if (isNode && window.WismeshRadioCard) {
                     const card = new window.WismeshRadioCard(api);
                     card.mount(host);
@@ -235,12 +262,12 @@ class ConfigurationPanel {
                 const card = new window.GpsConfigCard(api);
                 card.mount(host.querySelector('[data-cfg-gps-main]'));
                 this._cards.set('gps', card);
-                if (window.PositionBroadcastCard) {
+                if (!pimeshMc && window.PositionBroadcastCard) {
                     const pos = new window.PositionBroadcastCard(api);
                     pos.mount(host.querySelector('[data-cfg-position-edit]'));
                     this._cards.set('position-edit', pos);
                 }
-                if (window.BroadcastStatusCard) {
+                if (!pimeshMc && window.BroadcastStatusCard) {
                     const posStatus = new window.BroadcastStatusCard(api, {
                         title: 'Position Broadcast',
                         configKey: 'position',
@@ -261,6 +288,12 @@ class ConfigurationPanel {
             }
         }
         this._mounted.add(section);
+    }
+
+    _mountMeshcoreLink(host) {
+        host.innerHTML = `<p class="cfg-callout">Manage MeshCore channels, radio settings,
+            transmit, device behavior and advertisements in
+            <a class="cfg-inline-link" href="#/configuration/meshcore">MeshCore settings</a>.</p>`;
     }
 
     _renderAll() {
