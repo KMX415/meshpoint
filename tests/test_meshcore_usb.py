@@ -778,7 +778,8 @@ class TestCapturedMeshcoreMetadata(unittest.TestCase):
         for unrelated in (False, True):
             source = self.source()
             source._wrap_event(self.event("rx_log_data", self.advert()))
-            if not unrelated:source._wrap_event(self.event("rx_log_data", self.advert(count=3)))
+            if not unrelated:
+                source._wrap_event(self.event("rx_log_data", self.advert(count=3)))
             raw = source._wrap_event(self.event("advertisement", {"public_key": ("22" if unrelated else "11") * 32}))
             self.assertNotIn("meshcore_hops", adapt_event(raw.payload, raw.signal).decoded_payload)
 
