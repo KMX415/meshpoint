@@ -90,6 +90,7 @@ class MeshtasticMqttFormatter:
         mesh_pkt.hop_start = packet.hop_start
         mesh_pkt.want_ack = packet.want_ack
         mesh_pkt.channel = 0
+        mesh_pkt.rx_time = int(packet.timestamp.timestamp())
 
         if packet.source_id and _is_hex(packet.source_id):
             setattr(mesh_pkt, 'from', int(packet.source_id, 16) & 0xFFFFFFFF)
@@ -128,6 +129,7 @@ class MeshtasticMqttFormatter:
         mesh_pkt.hop_start = packet.hop_start
         mesh_pkt.want_ack = packet.want_ack
         mesh_pkt.channel = packet.channel_hash
+        mesh_pkt.rx_time = int(packet.timestamp.timestamp())
 
         if packet.source_id and _is_hex(packet.source_id):
             setattr(mesh_pkt, 'from', int(packet.source_id, 16) & 0xFFFFFFFF)
