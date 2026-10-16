@@ -233,8 +233,8 @@ class PositionConfig:
     # ``static`` uses ``device.{latitude,longitude,altitude}`` (wizard pin).
     # ``live`` reads the active ``LocationSource`` (gpsd/uart) when a fix exists.
     coordinate_source: str = "static"
-    # Privacy when ``coordinate_source`` is ``live``: exact, approximate
-    # (~1.1 km rounding), or none (skip position on mesh). Ignored for static.
+    # Privacy for both coordinate sources: exact, approximate
+    # (two-decimal grid rounding), or none (skip position on mesh).
     location_precision: str = "approximate"
 
 

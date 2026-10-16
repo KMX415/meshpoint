@@ -103,7 +103,7 @@ transmit:
     # LoRa mesh POSITION packets (Meshtastic app map). Meshradar fleet pin
     # always uses device.latitude/longitude above, not live GPS.
     coordinate_source: "static"   # static | live (live needs gpsd/uart source)
-    location_precision: "approximate"  # exact | approximate | none (live only)
+    location_precision: "approximate"  # exact | approximate | none (both sources)
 
 web_auth:
   # First-run state: hashes are empty -> dashboard forces /setup.

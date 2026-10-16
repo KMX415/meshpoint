@@ -182,6 +182,25 @@ class TestUpdateGpsRoute(unittest.TestCase):
         self.assertEqual(self.config.device.latitude, 40.7128)
         self.assertEqual(self.config.device.longitude, -74.0060)
 
+    def test_registered_pin_privacy_persists_and_applies_without_restart(self):
+        from src.transmit.mesh_position_resolver import MeshPositionResolver
+        from src.config import PositionConfig
+        for precision, expected in (("none", None), ("exact", (40.7128, -74.006, None)),
+                                    ("approximate", (40.71, -74.01, None))):
+            with self.subTest(precision=precision):
+                response = self.client.put("/api/config/gps", json={
+                    "source": "static", "latitude": 40.7128, "longitude": -74.006,
+                    "mesh_coordinate_source": "static", "mesh_location_precision": precision,
+                })
+                self.assertEqual(response.status_code, 200)
+                self.assertFalse(response.json()["restart_required"])
+                saved = [call.args[1]["position"] for call in self._save_mock.call_args_list
+                         if call.args[0] == "transmit"][-1]
+                self.assertEqual(saved["location_precision"], precision)
+                self.config.transmit.position = PositionConfig(**saved)
+                self.assertEqual(MeshPositionResolver(self.config, MagicMock()).resolve(), expected)
+                self.assertEqual(self.config.device.latitude, 40.7128)
+
     def test_static_source_requires_lat_and_lon(self) -> None:
         response = self.client.put(
             "/api/config/gps",
