@@ -331,19 +331,22 @@ transmit:
     interval_minutes: 15
     startup_delay_seconds: 180
     coordinate_source: "static"       # static | live
-    location_precision: "approximate"  # exact | approximate | none (live only)
+    location_precision: "approximate"  # exact | approximate | none (both sources)
 ```
 
 | Setting | Values | Meaning |
 |---|---|---|
 | `coordinate_source` | `static` (default) | Broadcast the registered pin from `device.latitude/longitude`. |
 | | `live` | Broadcast the live gpsd/UART fix. Requires `location.source` other than `static`. |
-| `location_precision` | `approximate` (default for live) | Round to ~2 decimal places before POSITION TX (about **0.7 mi** / **1.1 km**; the dashboard label follows Settings → Meshpoint distance units). |
-| | `exact` | Full precision from the live fix. |
-| | `none` | Skip POSITION broadcasts when using live (privacy: no position on mesh). |
+| `location_precision` | `approximate` (default for both sources) | Round to ~2 decimal places before POSITION TX (about **0.7 mi** / **1.1 km**; the dashboard label follows Settings → Meshpoint distance units). |
+| | `exact` | Full precision from the selected coordinate source. |
+| | `none` | Skip POSITION broadcasts for either source (privacy: no position on mesh). |
 
-When `coordinate_source: static`, coordinates are sent at full wizard
-precision regardless of `location_precision`.
+Privacy applies equally to Registered pin and Live GPS. Approximate rounds
+latitude and longitude to two decimal places, not a random offset or a guaranteed
+minimum distance from the actual position. Saved registered coordinates remain
+unchanged. Existing `approximate` and `none` settings now also protect registered
+pin broadcasts; select `exact` explicitly if full precision is intended.
 
 ### Mesh telemetry broadcasts (LoRa / device health)
 
@@ -414,7 +417,7 @@ Three independent surfaces:
 | Surface | Config | Notes |
 |---|---|---|
 | **Meshradar cloud** | `device.latitude/longitude` | Always the registered pin. Live GPS never moves the fleet marker. |
-| **LoRa mesh (POSITION)** | `transmit.position.coordinate_source` + `location_precision` | Choose registered pin or live GPS; approximate / precise / hidden on live. |
+| **LoRa mesh (POSITION)** | `transmit.position.coordinate_source` + `location_precision` | Choose registered pin or live GPS; approximate / precise / hidden on either source. |
 | **MQTT** | `mqtt.location_precision` | Applies to position fields in MQTT publishes only (`exact` / `approximate` / `none`). |
 
 To run a mobile Meshpoint without leaking live coordinates on the mesh,
@@ -987,7 +990,7 @@ transmit:              # native messaging TX (Meshtastic via SX1302, MeshCore vi
   position:
     interval_minutes: 15
     coordinate_source: "static"      # static | live
-    location_precision: "approximate"  # exact | approximate | none (live only)
+    location_precision: "approximate"  # exact | approximate | none (both sources)
   telemetry:
     interval_minutes: 30
     startup_delay_seconds: 120

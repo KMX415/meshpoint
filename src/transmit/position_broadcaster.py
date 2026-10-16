@@ -101,6 +101,8 @@ class PositionBroadcaster:
             logger.exception("Position broadcaster loop crashed")
 
     async def _broadcast_once(self) -> None:
+        # Hidden/unavailable coordinates must still advance the attempt schedule.
+        self._schedule.mark_attempt()
         coords = self._coords_provider()
         if coords is None:
             logger.debug("Position broadcast skipped: no coordinates")

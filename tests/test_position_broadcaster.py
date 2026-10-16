@@ -42,6 +42,47 @@ class TestPositionBroadcaster(unittest.IsolatedAsyncioTestCase):
         await b.stop()
         self.assertGreaterEqual(tx.calls, 1)
 
+    async def test_hidden_registered_pin_never_calls_transmit(self):
+        from src.config import AppConfig
+        from src.transmit.mesh_position_resolver import MeshPositionResolver
+        from unittest.mock import MagicMock
+        config = AppConfig()
+        config.device.latitude, config.device.longitude = 40.7128, -74.006
+        config.transmit.position.location_precision = "none"
+        tx = _FakeTxService()
+        broadcaster = PositionBroadcaster(tx, coords_provider=MeshPositionResolver(config, MagicMock()).resolve)
+        await broadcaster._broadcast_once()
+        self.assertEqual(tx.calls, 0)
+
+    async def test_hidden_after_previous_send_yields_and_can_resume(self):
+        from datetime import datetime, timedelta, timezone
+        tx = _FakeTxService()
+        calls = 0
+        broadcaster = None
+        def coords():
+            nonlocal calls
+            calls += 1
+            # Bound a regression safely: the broken loop cannot starve the test forever.
+            if calls >= 5:
+                broadcaster._running = False
+            return None
+        broadcaster = PositionBroadcaster(tx, startup_delay_seconds=0, coords_provider=coords)
+        previous = datetime.now(timezone.utc) - timedelta(minutes=20)
+        broadcaster._schedule._last_sent_at = previous
+        await broadcaster.start()
+        try:
+            await asyncio.sleep(0.02)
+            self.assertEqual(calls, 1, "Hidden must wait instead of spinning when overdue")
+            self.assertEqual(tx.calls, 0)
+            self.assertEqual(broadcaster.last_sent_at, previous)
+            self.assertGreater(broadcaster.next_due_at, datetime.now(timezone.utc))
+            broadcaster._coords_provider = lambda: (40.71, -74.01, None)
+            await broadcaster._broadcast_once()
+            self.assertEqual(tx.calls, 1)
+            self.assertGreater(broadcaster.last_sent_at, previous)
+        finally:
+            await broadcaster.stop()
+
     async def test_skips_when_no_coords(self):
         tx = _FakeTxService(results=[_ok()])
         b = PositionBroadcaster(

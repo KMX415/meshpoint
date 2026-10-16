@@ -42,9 +42,44 @@ class TestMeshPositionResolver(unittest.TestCase):
         )
         return MeshPositionResolver(cfg, fake)
 
-    def test_static_mesh_uses_registered_pin_exact(self) -> None:
+    def test_static_mesh_defaults_to_approximate(self) -> None:
         result = self._resolver(mesh_source="static").resolve()
-        self.assertEqual(result, (40.7128, -74.0060, 25.0))
+        self.assertEqual(result, (40.71, -74.01, 25.0))
+
+    def test_both_sources_honor_all_privacy_modes_without_mutating_pin(self):
+        for source in ("static", "live"):
+            for precision, expected in (
+                ("approximate", (40.71, -74.01, 25.0)),
+                ("exact", (40.7128, -74.0060, 25.0)),
+                ("none", None),
+                ("invalid", (40.71, -74.01, 25.0)),
+            ):
+                with self.subTest(source=source, precision=precision):
+                    resolver = self._resolver(
+                        mesh_source=source, mesh_precision=precision,
+                        location_source="gpsd",
+                        fix=LocationFix(mode=3, latitude=40.7128,
+                                        longitude=-74.0060, altitude_m=25.0),
+                    )
+                    self.assertEqual(resolver.resolve(), expected)
+                    self.assertEqual(resolver._config.device.latitude, 40.7128)
+                    self.assertEqual(resolver._config.device.longitude, -74.0060)
+
+    def test_approximate_coordinates_survive_real_packet_encoding(self):
+        from src.decode.crypto_service import CryptoService
+        from src.decode.meshtastic_decoder import MeshtasticDecoder
+        from src.transmit.meshtastic_builder import MeshtasticPacketBuilder
+        crypto = CryptoService()
+        resolver = self._resolver()
+        lat, lon, alt = resolver.resolve()
+        packet = MeshtasticPacketBuilder(crypto).build_position(
+            source_id=0xDEADBEEF, packet_id=1,
+            latitude=lat, longitude=lon, altitude=alt,
+        )
+        decoded = MeshtasticDecoder(crypto).decode(packet)
+        self.assertTrue(decoded.decrypted)
+        self.assertAlmostEqual(decoded.decoded_payload["latitude"], 40.71, places=6)
+        self.assertAlmostEqual(decoded.decoded_payload["longitude"], -74.01, places=6)
 
     def test_live_mesh_uses_gps_fix_with_approximate_privacy(self) -> None:
         resolver = self._resolver(
