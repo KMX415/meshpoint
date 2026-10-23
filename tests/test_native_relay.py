@@ -3,8 +3,8 @@
 The native path is identity-preserving: TxService.send_raw_relay
 takes the original radio frame, decrements ``hop_limit`` (bits 0-2
 of byte 12 of the Meshtastic header), and pushes the bytes through
-the HAL with everything else intact — source_id, packet_id,
-channel_hash, encrypted body. Other Meshtastic nodes treat the
+the HAL with byte 15 updated for this transmitter. The source_id, packet_id,
+channel_hash and encrypted body stay intact. Other Meshtastic nodes treat the
 packet as a legitimate relay rather than a fresh broadcast from
 the Meshpoint.
 """
@@ -108,6 +108,16 @@ class TestNativeRelay(unittest.IsolatedAsyncioTestCase):
         # Packet ID is bytes 8-12.
         emitted_id = bytes(called_pkt.payload[8:12])
         self.assertEqual(emitted_id, original[8:12])
+
+    async def test_relay_node_identifies_current_transmitter(self):
+        svc = self._build_service()
+        original = bytearray(_build_packet_bytes())
+        original[15] = 0x74
+        result = await svc.send_raw_relay(bytes(original))
+        self.assertTrue(result.success)
+        emitted = bytes(svc._wrapper.send.call_args.args[0].payload)
+        self.assertEqual(emitted[15], svc.source_node_id & 255)
+        self.assertEqual(emitted[16:len(original)], original[16:])
 
     async def test_duty_cycle_block_prevents_send(self):
         svc = self._build_service()

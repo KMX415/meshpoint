@@ -261,6 +261,7 @@ def _decode_traceroute(payload: bytes) -> _Result:
         snr_back = list(rd.snr_back) if rd.snr_back else []
         return {
             "route": route,
+            "route_back": [format(node_id, "08x") for node_id in rd.route_back],
             "snr_towards": snr_towards,
             "snr_back": snr_back,
         }, PacketType.TRACEROUTE

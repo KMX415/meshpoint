@@ -20,6 +20,13 @@ class TestMeshtasticMeshParticipantBuilder(unittest.TestCase):
         self.source_id = 0xDEADBEEF
         self.dest_id = 0xCAFEBABE
 
+    def test_originated_header_identifies_transmitting_node(self):
+        raw = self.builder.build_nodeinfo(self.source_id, 123, "Header check", "HDR")
+        self.assertEqual(raw[15], self.source_id & 0xFF)
+        decoded = self.decoder.decode(raw)
+        self.assertTrue(decoded.decrypted)
+        self.assertEqual(decoded.source_id, f"{self.source_id:08x}")
+
     def test_nodeinfo_includes_public_key(self):
         packet = self.builder.build_nodeinfo(
             source_id=self.source_id,
@@ -66,6 +73,7 @@ class TestMeshtasticMeshParticipantBuilder(unittest.TestCase):
         self.assertEqual(decoded.packet_type.value, "traceroute")
         self.assertEqual(decoded.decoded_payload.get("request_id"), request_id)
         self.assertEqual(decoded.decoded_payload.get("snr_back"), [30])
+        self.assertEqual(decoded.decoded_payload.get("route_back"), [f"{self.dest_id:08x}"])
 
     def test_traceroute_reply_preserves_inbound_hops(self):
         from src.models.packet import Packet, PacketType, Protocol
