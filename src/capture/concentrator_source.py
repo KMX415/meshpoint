@@ -23,6 +23,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Semtech HAL receive coding-rate enum, independent of the TX configuration.
+_RX_CODING_RATES = {1: "4/5", 2: "4/6", 3: "4/7", 4: "4/8"}
+
 
 class ConcentratorCaptureSource(CaptureSource):
     """Captures LoRa packets via the RAK2287 SX1302 concentrator."""
@@ -135,6 +138,7 @@ class ConcentratorCaptureSource(CaptureSource):
                     frequency_mhz=pkt.frequency_hz / 1_000_000.0,
                     spreading_factor=pkt.spreading_factor,
                     bandwidth_khz=BW_MAP.get(pkt.bandwidth, 125.0),
+                    coding_rate=_RX_CODING_RATES.get(pkt.coderate, "Unknown"),
                     timestamp=datetime.now(timezone.utc),
                 )
 
