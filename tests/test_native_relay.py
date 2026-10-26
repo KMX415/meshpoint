@@ -119,6 +119,26 @@ class TestNativeRelay(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(emitted[15], svc.source_node_id & 255)
         self.assertEqual(emitted[16:len(original)], original[16:])
 
+    async def test_relay_changes_only_hop_limit_and_transmitter_across_whole_frame(self):
+        svc = self._build_service()
+        original = bytearray(_build_packet_bytes(hop_limit=5, hop_start=6))
+        original[12] |= 0x18  # Preserve both non-hop flag bits as well as hop_start.
+        original[14] = 0xA7  # A nonzero next-hop marker must survive forwarding.
+        original[15] = (svc.source_node_id + 1) & 0xFF
+        original[16:] = bytes(range(239))  # Exercise the complete maximum-size frame.
+        before = bytes(original)
+        expected = bytearray(before)
+        expected[12] = (before[12] & 0xF8) | 4
+        expected[15] = svc.source_node_id & 0xFF
+
+        result = await svc.send_raw_relay(before)
+
+        self.assertTrue(result.success)
+        packet = svc._wrapper.send.call_args.args[0]
+        emitted = bytes(packet.payload[:packet.size])
+        self.assertEqual(emitted, bytes(expected))
+        self.assertEqual(bytes(original), before)
+
     async def test_duty_cycle_block_prevents_send(self):
         svc = self._build_service()
         duty = MagicMock()
