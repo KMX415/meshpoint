@@ -468,7 +468,7 @@ class MeshtasticPacketBuilder:
         flags |= (hop_start & 0x07) << 5
 
         header = struct.pack("<III", dest, source_id, packet_id)
-        header += bytes([flags, channel_hash, 0x00, 0x00])
+        header += bytes([flags, channel_hash, 0x00, source_id & 0xFF])
         return header
 
 

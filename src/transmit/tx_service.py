@@ -735,8 +735,8 @@ class TxService:
 
         Identity-preserving relay: the original 16-byte radio header
         (source_id, packet_id, channel_hash, …) and encrypted body
-        are kept intact. Only ``hop_limit`` (bits 0-2 of the flags
-        byte at offset 12) is decremented. Other Meshtastic nodes
+        are kept intact. ``hop_limit`` (bits 0-2 of byte 12) is
+        decremented and byte 15 identifies this transmitter. Other Meshtastic nodes
         recognise the frame as a relay and apply their own dedup,
         rather than seeing a fresh broadcast originated by this
         Meshpoint.
@@ -771,6 +771,7 @@ class TxService:
         new_flags = (flags & ~0x07) | (hop_limit - 1)
         new_packet = bytearray(raw_radio_bytes)
         new_packet[12] = new_flags
+        new_packet[15] = self._source_node_id & 0xFF
         new_packet_bytes = bytes(new_packet)
 
         tx_pkt = self._build_hal_packet(new_packet_bytes)
