@@ -1,19 +1,48 @@
 # Bobcat Miner 300 G285: Armbian and Meshpoint Install
 
-Guide for repurposing a **Bobcat Miner 300 G285** as a Meshpoint. This follows
-the same install as [BOBCAT-300.md](BOBCAT-300.md)
-and replaces the steps that are specific to the **G295**.
+Image-specific community guide for a **Bobcat Miner 300 G285**. The
+[G295 guide](BOBCAT-300.md) describes a different board setup; do not combine
+its SPI5 overlay or GPIO 147 instructions with this procedure.
 
-**Status (October 2026):** one EU868 unit, serial prefix `285EU`, running
-`BobcatArmbian285.img.xz` release 1.0 (kernel `6.18.4-current-rockchip64`) and
-Meshpoint 0.7.9. After reboot the service comes up on its own. The concentrator
-reports chip version `0x10` and transmits a Meshtastic NodeInfo at 14 dBm on
-EU868. This is **not** plug-and-play. Do not copy the G295 SPI overlay or the
-G295 GPIO numbers onto this board.
+**Reported setup (October 2026):** one EU868 unit, serial prefix `285EU`,
+`BobcatArmbian285.img.xz` release 1.0, kernel `6.18.4-current-rockchip64`,
+and Meshpoint 0.7.9. The contributor reports automatic startup after reboot,
+chip version `0x10`, a successful NodeInfo transmit log, and decrypted RX/relay
+logs. Reception of that transmission on another node is **not yet confirmed**.
+These observations do not establish validation on the current RC or every G285.
 
-The G285 boots the community image from a **microSD card**. Leave the onboard
-eMMC alone: that is the original Helium firmware, and it is the copy you still
-have if the card is removed.
+This guide incorporates [Giulio Berti's contribution in #165](https://github.com/KMX415/meshpoint/pull/165).
+Earlier G285 SPI/GPIO guidance came from
+[the community report in #137](https://github.com/KMX415/meshpoint/issues/137)
+and is already included in RC commit `c7bf59f4`. The differences are tracked
+below rather than presenting two interchangeable recipes.
+
+## Pending contributor clarification
+
+- **Shutdown/reset:** #137 asserts GPIO 149 high before switching GPIO 125/122
+  off. #165 switches the power lines off without that reset assertion. The
+  script below preserves #165's reported sequence, **not a confirmed replacement**
+  for an existing working installation. Clean shutdown/power-on and repeated
+  service restart confirmation remain pending. Do not combine the two sequences.
+- **TX confirmation:** a successful local transmit log is reported; confirmation
+  from a separate receiving node remains pending. No end-to-end TX pass is claimed.
+
+These points are tracked in [the clarification request](https://github.com/KMX415/meshpoint/pull/165#issuecomment-6449035276).
+The reconciliation remains a draft pending that reply; it is not merge-ready.
+
+## Image scope and earlier guidance
+
+All boot-script, DTB, GPIO and kernel instructions below apply to the named
+image and reported `285EU` unit. Other images, regional variants and board
+revisions need verification; do not infer compatibility from the G285 name alone.
+The older #137 recipe added an `spi1` overlay and used `/dev/spidev1.0` directly.
+For this image, #165 instead reports hardware SPI1 already described in the DTB,
+with a conflicting `spi-gpio` node to disable. Do not add the older overlay on top
+of this procedure. Existing working #137 installations need not change recipes.
+
+The reported image boots from **microSD**. Leave the original eMMC untouched;
+do not use an eMMC flasher. Device names in the examples describe this image;
+verify them locally before any disk operation.
 
 ---
 
@@ -37,7 +66,7 @@ this board actually loads says `Bobcat 285`.
 
 | Item | Notes |
 |------|--------|
-| Bobcat Miner 300 | Serial starts with `285EU` (G285, EU868 radio). Another region prefix needs the same SPI/GPIO steps and the matching region in the wizard |
+| Bobcat Miner 300 | Serial starts with `285EU` (G285, EU868 radio). Other region prefixes and board revisions are unverified; do not assume identical SPI/GPIO wiring |
 | microSD | 16 GB or larger. 8 GB is too small for this image |
 | LoRa antenna | Connect it before enabling transmit |
 | Ethernet | Dashboard and the first SSH session. Wi-Fi is optional |
@@ -48,13 +77,12 @@ this board actually loads says `Bobcat 285`.
 ## Step 1: Flash Armbian to the microSD
 
 Use the G285 image from
-**[sicXnull/Bobcat-Armbian](https://github.com/sicXnull/Bobcat-Armbian)** release
-1.0:
+**[sicXnull/Bobcat-Armbian release 1.0](https://github.com/sicXnull/Bobcat-Armbian/releases/tag/1.0)**:
 
 - file: `BobcatArmbian285.img.xz`
 - sha256: `a75f1ca460f982ad435aa7fd8d94cb24192a64bdf855fc5610a0eb9f82195270`
 
-Check the checksum before writing. Do **not** flash `Bobcat29X_EMMC_Flasher`
+The checksum matches the release asset metadata. Check the downloaded file before writing. Do **not** flash `Bobcat29X_EMMC_Flasher`
 or any image whose name says it writes the eMMC.
 
 Write the decompressed image to the SD card (the example device is `sdX`;
@@ -190,9 +218,15 @@ sudo systemctl disable --now meshpoint
 
 ---
 
-## Step 6: SPI symlink, power, and reset
+## Step 6: SPI symlink, power, and reset (shutdown review pending)
 
-Edit `/opt/meshpoint/config/local.yaml` so capture points at the symlink the
+Back up the existing configuration and service drop-ins. Inspect
+`sudo systemctl cat meshpoint` and consolidate board-specific hooks before
+adding the drop-in below; a later `override.conf` can otherwise replace or
+append another power/reset sequence. Preserve unrelated custom settings.
+
+Merge the following fields into `/opt/meshpoint/config/local.yaml`, preserving
+other sources and settings, so capture points at the symlink the
 drop-in creates. GPIO does not belong in this file.
 
 ```yaml
@@ -255,6 +289,7 @@ case "$action" in
         echo in > /sys/class/gpio/gpio149/direction
         ;;
     stop)
+        # Reported #165 sequence; reset assertion is pending clarification.
         export_out 125
         export_out 122
         echo 0 > /sys/class/gpio/gpio125/value
@@ -352,8 +387,10 @@ sudo systemctl restart meshpoint
 
 Leave power at the default 14 dBm. EU868 duty cycle stays at the automatic 1%
 unless `transmit.max_duty_cycle_percent` is set. About a minute after restart
-the log should contain `NodeInfo broadcast OK`. The node name is whatever the
-wizard stored.
+the log should contain `NodeInfo broadcast OK`. This confirms the local send
+path, not delivery to another node. For end-to-end confirmation, record receipt
+on a separate Meshtastic node; that evidence is still pending for this report.
+The node name is whatever the wizard stored.
 
 ---
 
@@ -382,7 +419,9 @@ Re-check Step 3 after any reflash.
 
 | Area | Status |
 |------|--------|
-| Meshtastic concentrator TX/RX on G285 EU868 | Working on one board, October 2026 |
+| Concentrator startup and RX | Contributor reports one 285EU board on the pinned image / Meshpoint 0.7.9; not an RC-wide validation |
+| TX | Local NodeInfo success log reported; separate-node reception pending |
+| Shutdown/reset and repeated restarts | Sequence differs from #137; contributor clarification pending |
 | G295 steps (`spi5-m1`, GPIO 147, `/dev/spidev5.0`) | Do not use them on a G285 |
 | eMMC | Do not write it |
 | Kernel upgrade | Holds required. `apt full-upgrade` is not safe |
