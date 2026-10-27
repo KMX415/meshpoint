@@ -74,6 +74,55 @@ class NodeRepository:
             return None
         return self._row_to_node(row)
 
+    async def enrich_meshcore_contact(
+        self, public_key: str, name: str | None,
+        position: tuple[float, float] | None,
+    ) -> Optional[Node]:
+        """Update a heard node's contact metadata without inventing reception.
+
+        Return the saved node only when metadata changed. In particular, do
+        not advance last_heard or packet_count when refreshing a contact roster.
+        """
+        # Use the adapter's exact 12-character ID, never a shorter LIKE prefix.
+        # Credit: javastraat/meshpoint 52e1f56 (contact prefix isolation).
+        node_id = public_key.lower().lstrip("!")[:12]
+        row = await self._db.fetch_one(
+            "SELECT * FROM nodes WHERE protocol = 'meshcore' "
+            "AND LOWER(LTRIM(node_id, '!')) = ?", (node_id,),
+        )
+        if row is None:
+            return None
+        short_name = row["short_name"]
+        replace_short = not short_name or short_name.lower().lstrip("!") == node_id[:4]
+        new_short = name[:4] if name and replace_short else short_name
+        lat, lon = position if position else (row["latitude"], row["longitude"])
+        if (name or row["long_name"], new_short, lat, lon) == (
+            row["long_name"], short_name, row["latitude"], row["longitude"],
+        ):
+            return None
+        cursor = await self._db.execute(
+            """
+            UPDATE nodes
+            SET long_name = COALESCE(?, long_name),
+                short_name = CASE
+                    WHEN ? IS NOT NULL AND (
+                        short_name IS NULL OR short_name = ''
+                        OR LOWER(LTRIM(short_name, '!')) = ?
+                    ) THEN ? ELSE short_name END,
+                latitude = COALESCE(?, latitude),
+                longitude = COALESCE(?, longitude)
+            WHERE node_id = ? AND protocol = 'meshcore'
+            RETURNING *
+            """,
+            (name, name, node_id[:4], name[:4] if name else None,
+             position[0] if position else None, position[1] if position else None,
+             row["node_id"]),
+        )
+        saved = await cursor.fetchone()
+        await cursor.close()
+        await self._db.commit()
+        return self._row_to_node(dict(saved)) if saved else None
+
     async def get_all(self, limit: int = 500) -> list[Node]:
         rows = await self._db.fetch_all(
             "SELECT * FROM nodes ORDER BY last_heard DESC LIMIT ?", (limit,)
@@ -125,6 +174,8 @@ class NodeRepository:
                    p.hop_limit AS latest_hop_limit,
                    p.hop_start AS latest_hop_start,
                    p.capture_source AS latest_capture_source,
+                   p.spreading_factor AS latest_spreading_factor,
+                   p.bandwidth_khz AS latest_bandwidth_khz,
                    t.battery_level AS latest_battery,
                    t.voltage AS latest_voltage,
                    t.temperature AS latest_temperature,
@@ -135,6 +186,7 @@ class NodeRepository:
             LEFT JOIN (
                 SELECT source_id,
                        rssi, snr, hop_limit, hop_start, capture_source,
+                       spreading_factor, bandwidth_khz,
                        ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY timestamp DESC) AS rn
                 FROM packets
             ) p ON p.source_id = n.node_id AND p.rn = 1
@@ -160,6 +212,8 @@ class NodeRepository:
         d["latest_rssi"] = row.get("latest_rssi")
         d["latest_snr"] = row.get("latest_snr")
         d["latest_capture_source"] = row.get("latest_capture_source")
+        d["latest_spreading_factor"] = row.get("latest_spreading_factor")
+        d["latest_bandwidth_khz"] = row.get("latest_bandwidth_khz")
         d["latest_battery"] = row.get("latest_battery")
         d["latest_voltage"] = row.get("latest_voltage")
         d["latest_temperature"] = row.get("latest_temperature")

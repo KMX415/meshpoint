@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Meshpoint | Public view</title>
+    <link rel="icon" href="/assets/favicon.png">
+    <link rel="stylesheet" href="/css/public_view.css">
+    <script src="/js/public_view.js" defer></script>
+</head>
+<body>
+    <div class="public-shell">
+        <header>
+            <a class="brand" href="/">Meshpoint <span>Public view</span></a>
+            <a class="sign-in" href="/login">Admin sign in</a>
+        </header>
+        <main>
+            <p class="eyebrow">LOCAL MESH NETWORK</p>
+            <h1>Network overview</h1>
+            <p class="intro">A read-only snapshot shared by this Meshpoint’s administrator.</p>
+            <nav id="public-nav" aria-label="Public pages"></nav>
+            <section aria-labelledby="page-title">
+                <h2 id="page-title">Loading public view</h2>
+                <p id="page-description"></p>
+                <div id="public-metrics" class="metrics"></div>
+            </section>
+            <p id="public-status" role="status" aria-live="polite">Connecting…</p>
+            <noscript>Enable JavaScript to view current summaries.</noscript>
+        </main>
+        <footer>Read-only access · Updates every 15 seconds · <a href="/login">Sign in for the full dashboard</a></footer>
+    </div>
+</body>
+</html>

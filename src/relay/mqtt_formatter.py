@@ -11,7 +11,7 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 
-from src.models.packet import Packet, PacketType
+from src.models.packet import Packet, PacketType, Protocol
 from src.relay.channel_resolver import ChannelResolver
 from src.hal.location.privacy import LocationPrivacy as LocationRounder
 
@@ -90,14 +90,16 @@ class MeshtasticMqttFormatter:
         mesh_pkt.hop_start = packet.hop_start
         mesh_pkt.want_ack = packet.want_ack
         mesh_pkt.channel = 0
+        mesh_pkt.rx_time = int(packet.timestamp.timestamp())
 
         if packet.source_id and _is_hex(packet.source_id):
             setattr(mesh_pkt, 'from', int(packet.source_id, 16) & 0xFFFFFFFF)
         if packet.destination_id and _is_hex(packet.destination_id):
             mesh_pkt.to = int(packet.destination_id, 16) & 0xFFFFFFFF
 
-        if packet.signal:
+        if packet.signal and packet.signal.rssi is not None:
             mesh_pkt.rx_rssi = int(packet.signal.rssi)
+        if packet.signal and packet.signal.snr is not None:
             mesh_pkt.rx_snr = packet.signal.snr
 
         mesh_pkt.decoded.portnum = portnum
@@ -127,6 +129,7 @@ class MeshtasticMqttFormatter:
         mesh_pkt.hop_start = packet.hop_start
         mesh_pkt.want_ack = packet.want_ack
         mesh_pkt.channel = packet.channel_hash
+        mesh_pkt.rx_time = int(packet.timestamp.timestamp())
 
         if packet.source_id and _is_hex(packet.source_id):
             setattr(mesh_pkt, 'from', int(packet.source_id, 16) & 0xFFFFFFFF)
@@ -167,8 +170,9 @@ class MeshtasticMqttFormatter:
             "hop_limit": packet.hop_limit,
             "hop_start": packet.hop_start,
         }
-        if packet.signal:
+        if packet.signal and packet.signal.rssi is not None:
             result["rssi"] = packet.signal.rssi
+        if packet.signal and packet.signal.snr is not None:
             result["snr"] = packet.signal.snr
         if packet.decoded_payload:
             payload_copy = dict(packet.decoded_payload)
@@ -182,6 +186,8 @@ class MeshtasticMqttFormatter:
         return result
 
     def _resolve_channel(self, packet: Packet) -> str:
+        if packet.protocol == Protocol.MESHTASTIC and packet.remote_channel_name:
+            return packet.remote_channel_name
         return self._channel_resolver.resolve(
             packet.channel_hash, packet.protocol
         )
@@ -214,8 +220,9 @@ class MeshCoreMqttFormatter:
             "sender": self._gateway_id,
             "timestamp": int(packet.timestamp.timestamp()),
         }
-        if packet.signal:
+        if packet.signal and packet.signal.rssi is not None:
             payload["rssi"] = packet.signal.rssi
+        if packet.signal and packet.signal.snr is not None:
             payload["snr"] = packet.signal.snr
         if packet.decoded_payload:
             payload_copy = dict(packet.decoded_payload)

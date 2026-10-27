@@ -66,6 +66,11 @@ def cmd_version(_args: argparse.Namespace) -> None:
     print(f"  Meshpoint v{VERSION}")
 
 
+def cmd_migrate_platform(args: argparse.Namespace) -> None:
+    from src.cli.migrate_platform_command import run_migrate_platform
+    sys.exit(run_migrate_platform(args))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="meshpoint",
@@ -98,6 +103,9 @@ def main() -> None:
         help="Reset the dashboard admin password (invalidates open sessions)",
     )
 
+    from src.cli.migrate_platform_command import add_migrate_platform_parser
+    add_migrate_platform_parser(sub)
+
     sub.add_parser("version", help="Print version information")
 
     args = parser.parse_args()
@@ -115,6 +123,8 @@ def main() -> None:
     }
 
     handler = dispatch.get(args.command)
+    if handler is None and hasattr(args, "handler"):
+        handler = args.handler
     if handler:
         handler(args)
     else:

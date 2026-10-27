@@ -150,14 +150,20 @@ class GpsConfigCard {
                                 <span>Live GPS</span>
                             </label>
                         </div>
-                        <label class="cfg-field" data-mesh-precision-wrap hidden>
-                            <span class="cfg-field__label">Live GPS privacy</span>
+                        <label class="cfg-field" data-mesh-precision-wrap>
+                            <span class="cfg-field__label">Mesh position privacy</span>
                             <select class="cfg-field__input" data-mesh-precision>
                                 <option value="approximate" data-approximate-option>Approximate</option>
                                 <option value="exact">Precise</option>
                                 <option value="none">Hidden (no position on mesh)</option>
                             </select>
                         </label>
+                        <p class="cfg-field__hint">
+                            Applies to Registered pin and Live GPS broadcasts.
+                            Approximate rounds coordinates to a grid; it does not
+                            guarantee a minimum distance from your real position.
+                            MQTT and Meshradar use separate location settings.
+                        </p>
                     </fieldset>
 
                     <div class="cfg-card__actions">
@@ -208,6 +214,15 @@ class GpsConfigCard {
     }
 
     render(config) {
+        if (window.PlatformContext?.isPimesh(config)) {
+            const meshcore = config.device.radio_protocol === 'meshcore';
+            this._root.querySelector('[data-mesh-position-fields] legend').textContent =
+                meshcore ? 'MeshCore advertisement location' : 'Mesh position broadcasts';
+            this._root.querySelector('[data-mesh-position-fields] .cfg-field__hint').textContent =
+                meshcore
+                    ? 'Location used in MeshCore identity adverts. Change the advertisement interval in Configuration > MeshCore.'
+                    : 'Coordinates are shared in Meshtastic position packets.';
+        }
         const device = (config && config.device) || {};
         const location = (config && config.location) || {};
 
@@ -292,7 +307,7 @@ class GpsConfigCard {
             meshSource = 'static';
         }
         if (this._meshPrecisionWrap) {
-            this._meshPrecisionWrap.hidden = meshSource !== 'live';
+            this._meshPrecisionWrap.hidden = false;
         }
     }
 

@@ -12,15 +12,26 @@ import os
 import subprocess
 import time
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Literal, Optional
+
+from src.cli.hardware_probe import (
+    ConcentratorChip,
+    detect_wismesh_hat,
+    probe_concentrator_chip,
+)
 
 CARRIER_SENSECAP_M1 = "sensecap_m1"
 CARRIER_RAK = "rak"
+CARRIER_WISMESH = "wismesh"
 CARRIER_UNKNOWN = "unknown"
+
+PLATFORM_GATEWAY = "gateway"
+PLATFORM_NODE = "node"
 
 _HARDWARE_DESCRIPTIONS = {
     CARRIER_SENSECAP_M1: "SenseCap M1 (WM1303)",
     CARRIER_RAK: "RAK2287 + Raspberry Pi 4",
+    CARRIER_WISMESH: "WisMesh Pi HAT (RAK6421)",
     CARRIER_UNKNOWN: "SX1302/SX1303 + Raspberry Pi 4",
 }
 
@@ -42,8 +53,11 @@ class HardwareReport:
     serial_ports: list[str] = field(default_factory=list)
     meshcore_usb_candidates: list[str] = field(default_factory=list)
     gps: GpsProbeResult = field(default_factory=GpsProbeResult)
+    concentrator_chip: Optional[ConcentratorChip] = None
     concentrator_available: bool = False
     libloragw_installed: bool = False
+    wismesh_hat_detected: bool = False
+    platform: Literal["gateway", "node"] = PLATFORM_GATEWAY
     carrier_type: str = CARRIER_UNKNOWN
     hardware_description: str = _HARDWARE_DESCRIPTIONS[CARRIER_UNKNOWN]
 
@@ -55,13 +69,29 @@ def detect_all() -> HardwareReport:
     report.serial_ports = detect_serial_ports()
     report.meshcore_usb_candidates = detect_meshcore_usb_candidates()
     report.libloragw_installed = check_libloragw()
-    report.concentrator_available = (
-        len(report.spi_devices) > 0 and report.libloragw_installed
-    )
-    report.carrier_type = detect_carrier_board()
-    report.hardware_description = _HARDWARE_DESCRIPTIONS.get(
-        report.carrier_type, _HARDWARE_DESCRIPTIONS[CARRIER_UNKNOWN]
-    )
+    report.wismesh_hat_detected = detect_wismesh_hat()
+
+    if report.spi_devices and report.libloragw_installed:
+        report.concentrator_chip = probe_concentrator_chip(report.spi_devices[0])
+    report.concentrator_available = report.concentrator_chip is not None
+
+    if report.concentrator_available:
+        report.platform = PLATFORM_GATEWAY
+        report.carrier_type = detect_carrier_board()
+        report.hardware_description = _HARDWARE_DESCRIPTIONS.get(
+            report.carrier_type, _HARDWARE_DESCRIPTIONS[CARRIER_UNKNOWN]
+        )
+    elif report.wismesh_hat_detected:
+        report.platform = PLATFORM_NODE
+        report.carrier_type = CARRIER_WISMESH
+        report.hardware_description = _HARDWARE_DESCRIPTIONS[CARRIER_WISMESH]
+    else:
+        report.platform = PLATFORM_GATEWAY
+        report.carrier_type = detect_carrier_board()
+        report.hardware_description = _HARDWARE_DESCRIPTIONS.get(
+            report.carrier_type, _HARDWARE_DESCRIPTIONS[CARRIER_UNKNOWN]
+        )
+
     report.gps = probe_gps()
     return report
 
@@ -207,13 +237,23 @@ def print_report(report: HardwareReport) -> None:
     print("\n  Hardware Detection Results")
     print("  " + "=" * 40)
 
+    platform_label = "Gateway (concentrator)" if report.platform == PLATFORM_GATEWAY else "Node (meshtasticd)"
+    print(f"  Platform:        {platform_label}")
+
     if report.spi_devices:
         print(f"  SPI devices:     {', '.join(report.spi_devices)}")
     else:
         print("  SPI devices:     none found")
 
     print(f"  libloragw.so:    {'installed' if report.libloragw_installed else 'NOT found'}")
-    print(f"  Concentrator:    {'ready' if report.concentrator_available else 'not available'}")
+    if report.concentrator_chip:
+        print(f"  Concentrator:    {report.concentrator_chip.upper()} detected")
+    elif report.libloragw_installed and report.spi_devices:
+        print("  Concentrator:    SPI present but no SX1302/SX1303 response")
+    else:
+        print("  Concentrator:    not available")
+    if report.wismesh_hat_detected:
+        print("  WisMesh HAT:     RAK6421 detected")
     print(f"  Carrier board:   {report.hardware_description}")
 
     if report.serial_ports:

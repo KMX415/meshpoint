@@ -13,6 +13,8 @@ A **Meshpoint** is an edge device that:
   concentrator
 - **Sends and receives Meshtastic messages** directly from the browser dashboard (native TX via the concentrator)
 - Optionally monitors **MeshCore** traffic via a USB companion radio
+- Optionally adds extra **Meshtastic** USB nodes for a second preset or slot
+  (see [USB nodes](USB-NODES.md))
 - Decodes, stores, and visualizes packets on a real-time dashboard with full chat UI, node discovery, and radio configuration
 - Ships data upstream to the [Meshradar](https://meshradar.io) cloud platform for regional mesh intelligence
 
@@ -29,6 +31,13 @@ RAK2287). That is what the rest of this guide covers. Install from **`main`**
 |------|----------|--------|-------|
 | **Gateway** (recommended) | SX1302/SX1303 concentrator | `main` | Continue below |
 | **Node** (experimental) | RAK6421 HAT + RAK13300/13302 | `feat/wismesh-hat` | [WisMesh Node guide](WISMESH-NODE.md) |
+| **PiMesh** (experimental) | MeshSmith PiMesh-1W V1/V2 | `feat/v0.8.0` (RC) | [PiMesh installation and switching](PIMESH.md) |
+
+**PiMesh:** Follow the PiMesh guide for explicit HAT provisioning and initial
+protocol selection. The installer uses Meshtastic's meshtasticd and the openHop
+MeshCore backend; see [backend attribution](PIMESH.md#backends-and-attribution).
+Both are installed, with one active at a time. Later switches use Configuration > Radio. The concentrator
+assembly and default install commands below are for gateways.
 
 ---
 
@@ -49,6 +58,7 @@ flash (see [Syncrobit Chameleon guide](SYNCROBIT-CHAMELEON.md)).
 | **USB-C power supply** (5V 3A) | Power | Official Pi PSU recommended |
 | **LoRa antenna** (906 MHz) | RX + TX | 10 dBi gain recommended for US915 band |
 | **Ethernet cable or WiFi** | Network connectivity | Needed for cloud uplink |
+| **Optional: Meshtastic USB node** | Extra Meshtastic preset / slot | Xiao S3, Heltec, T-Beam with Meshtastic firmware. [USB nodes](USB-NODES.md) |
 | **Optional: MeshCore USB companion** | MeshCore traffic monitor | Heltec V3/V4 or T-Beam with [USB companion firmware](https://meshcore.io/flasher) |
 
 ### Supported Pre-Built Units
@@ -144,6 +154,10 @@ ssh pi@<your-pi-ip-address>
 Enter the password you set during imaging.
 
 ### Step 5: Clone and Install
+
+**PiMesh owners:** use the [PiMesh install commands](PIMESH.md#initial-installation)
+instead of the gateway commands below, including the activation wizard after
+reboot. Selecting a branch in Updates does not provision a fresh HAT.
 
 ```bash
 sudo apt update && sudo apt install -y git
@@ -291,7 +305,24 @@ The command auto-detects the USB port, stops the service, configures the radio, 
 | **Channels** | SF7-SF12 parallel (one RF plan) | 1 |
 | **Spreading factors** | SF7-SF12 all at once | Fixed (SF7 default) |
 | **Connection** | SPI (internal HAT) | USB serial |
-| **Configuration** | Dashboard Radio settings | Region preset via wizard |
+| **Configuration** | Dashboard Radio settings | Region preset via wizard or `meshpoint meshcore-radio` |
+
+---
+
+## Adding a Meshtastic USB radio
+
+Optional. A second Meshtastic radio (Seeed Xiao S3, Heltec, T-Beam, and
+similar boards already running Meshtastic firmware) can listen on another
+preset or slot while the concentrator stays on LongFast.
+
+Dashboard: **Configuration → Serial**. Enable serial capture, pin the
+port (prefer `/dev/serial/by-path/…`), save, restart, then set the node's
+modem preset on that same card. Up to four Meshtastic USB nodes.
+
+This is not MeshCore. When the MeshCore companion arrives, it is a
+separate USB device on **Configuration → MeshCore**. Pin both ports.
+
+Full steps: [USB nodes](USB-NODES.md).
 
 ---
 
@@ -347,6 +378,19 @@ The device also sends data to the Meshradar cloud platform. Your device operator
 ---
 
 ## Managing Your Meshpoint
+
+### Optional additions in v0.8.0 development
+
+Existing Meshtastic and MeshCore use does not require optional plugins, an SDR
+or an RNode. Once normal capture works, administrators can use **Settings >
+Plugins** to select individual apps and **Settings > Themes** to customize the
+appearance. Installing an app does not enable it or install its native tools.
+Follow [Plugins and themes](PLUGINS.md) for the full setup/restart sequence.
+
+For trusted observers, configure a Viewer login in **Settings > Auth**. For
+limited no-login access, the separate **Public view** form shares only selected
+aggregate summaries and is off by default. Follow [Dashboard access](DASHBOARD-ACCESS.md)
+and verify it in a signed-out browser before sharing the address.
 
 ### CLI Commands
 

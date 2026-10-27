@@ -1,8 +1,7 @@
-"""Download and flash official Meshtastic firmware via esptool.
+"""Download and flash official Meshtastic firmware (ESP + nRF).
 
-Fetches meshtastic/firmware GitHub releases, caches per-board
-``.factory.bin`` + littlefs, streams esptool write_flash as NDJSON.
-Credit: javastraat/meshpoint (firmware flash port).
+ESP boards use esptool ``.factory.bin``; nRF52840 boards use Adafruit
+serial DFU on ``-ota.zip``. Credit: javastraat/meshpoint (firmware flash port).
 """
 
 from __future__ import annotations
@@ -10,12 +9,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import tempfile
-import zipfile
 from pathlib import Path
 from typing import AsyncIterator, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -27,8 +24,10 @@ from src.api.firmware import (
     WRITE_FLASH_SUBCOMMAND,
     EspToolBinaryResolver,
     EspToolNdjsonStreamer,
-    GithubHttpClient,
 )
+from src.api.firmware.firmware_upload_store import FirmwareUploadStore
+from src.api.firmware.meshtastic_firmware_catalog import MeshtasticFirmwareAssetCatalog
+from src.api.firmware.nrf_flash_session import NrfFlashSession
 from src.config import AppConfig
 
 logger = logging.getLogger(__name__)
@@ -39,19 +38,11 @@ _config: Optional[AppConfig] = None
 _serial_sources: list = []
 
 _CACHE_DIR = Path(__file__).resolve().parents[3] / "data" / "meshtastic-firmware"
-_RELEASES_LATEST_URL = (
-    "https://api.github.com/repos/meshtastic/firmware/releases/latest"
-)
-_RELEASES_LIST_URL = (
-    "https://api.github.com/repos/meshtastic/firmware/releases?per_page=10"
-)
-_RELEASES_BY_TAG_URL = (
-    "https://api.github.com/repos/meshtastic/firmware/releases/tags/{tag}"
-)
-
-_http = GithubHttpClient()
+_catalog = MeshtasticFirmwareAssetCatalog(cache_dir=_CACHE_DIR)
+_uploads = FirmwareUploadStore(_CACHE_DIR / "uploads")
 _streamer = EspToolNdjsonStreamer()
 _esptool = EspToolBinaryResolver()
+_nrf = NrfFlashSession(streamer=_streamer)
 
 
 def init_routes(config: AppConfig, serial_sources=None) -> None:
@@ -61,7 +52,6 @@ def init_routes(config: AppConfig, serial_sources=None) -> None:
 
 
 def _resolve_serial_source(label: str):
-    """Match ``serial`` / ``serial_<label>`` capture sources."""
     name = f"serial_{label}" if label else "serial"
     for src in _serial_sources:
         if src.name == name:
@@ -77,7 +67,6 @@ def _ndjson(payload: dict) -> bytes:
 async def firmware_installed(
     _claims: SessionClaims = Depends(require_admin),
 ) -> dict:
-    """Firmware versions reported by configured Meshtastic USB serial sticks."""
     from src.capture.serial_firmware_info import SerialFirmwareInfoReader
 
     reader = SerialFirmwareInfoReader()
@@ -86,39 +75,23 @@ async def firmware_installed(
 
 
 def _resolve_release_sync(tag: str) -> dict:
-    if tag:
-        return _http.fetch_json_sync(_RELEASES_BY_TAG_URL.format(tag=tag))
-    return _http.fetch_json_sync(_RELEASES_LATEST_URL)
+    return _catalog.resolve_release_sync(tag)
 
 
 def _releases_sync(limit: int = 10) -> list[dict]:
-    releases = _http.fetch_json_sync(_RELEASES_LIST_URL)
-    if not isinstance(releases, list):
-        raise RuntimeError("Unexpected GitHub API response for Meshtastic releases")
-    return releases[:limit]
+    return _catalog.releases_sync(limit)
 
 
 def _manifest_from_release_sync(release: dict) -> dict:
-    assets = {a["name"]: a["browser_download_url"] for a in release.get("assets", [])}
-    manifest_name = next(
-        (n for n in assets if n.startswith("firmware-") and n.endswith(".json")),
-        None,
-    )
-    if not manifest_name:
-        raise RuntimeError("Could not find the firmware manifest in this release")
-    with tempfile.NamedTemporaryFile(suffix=".json") as tmp:
-        _http.download_to_sync(assets[manifest_name], Path(tmp.name))
-        return json.loads(Path(tmp.name).read_text())
+    return _catalog.manifest_from_release_sync(release)
 
 
 def _board_list_from_manifest_sync(manifest: dict) -> list[dict]:
-    boards = [
-        {"board": t["board"], "label": t["board"].replace("-", " ")}
-        for t in manifest.get("targets", [])
-        if t.get("board")
-    ]
-    boards.sort(key=lambda b: b["label"].casefold())
-    return boards
+    return _catalog.board_list_from_manifest_sync(manifest)
+
+
+def _ensure_board_firmware_cached_sync(board: str, tag: str = "") -> dict:
+    return _catalog.ensure_board_firmware_cached_sync(board, tag=tag)
 
 
 @router.get("/targets")
@@ -126,14 +99,13 @@ async def firmware_targets(
     tag: str = "",
     _claims: SessionClaims = Depends(require_admin),
 ) -> dict:
-    """Board choices for the flash pulldown (live from release manifest)."""
     loop = asyncio.get_running_loop()
     try:
-        release = await loop.run_in_executor(None, _resolve_release_sync, tag)
+        release = await loop.run_in_executor(None, _catalog.resolve_release_sync, tag)
         manifest = await loop.run_in_executor(
-            None, _manifest_from_release_sync, release,
+            None, _catalog.manifest_from_release_sync, release,
         )
-        boards = _board_list_from_manifest_sync(manifest)
+        boards = _catalog.board_list_from_manifest_sync(manifest)
     except Exception as exc:
         raise HTTPException(502, f"Could not fetch Meshtastic board list: {exc}")
     return {"boards": boards, "tag": release.get("tag_name", "")}
@@ -141,10 +113,9 @@ async def firmware_targets(
 
 @router.get("/releases")
 async def firmware_releases(_claims: SessionClaims = Depends(require_admin)) -> dict:
-    """Recent Meshtastic releases for the version pulldown, newest first."""
     loop = asyncio.get_running_loop()
     try:
-        releases = await loop.run_in_executor(None, _releases_sync, 10)
+        releases = await loop.run_in_executor(None, _catalog.releases_sync, 10)
     except Exception as exc:
         raise HTTPException(502, f"Could not fetch Meshtastic releases: {exc}")
     return {
@@ -155,84 +126,17 @@ async def firmware_releases(_claims: SessionClaims = Depends(require_admin)) -> 
     }
 
 
-def _cache_dir_for(board: str, version: str) -> Path:
-    return _CACHE_DIR / board / version
-
-
-def _ensure_board_firmware_cached_sync(board: str, tag: str = "") -> dict:
-    """Download (if needed) board factory + littlefs; return paths/offsets."""
-    release = _resolve_release_sync(tag)
-    manifest = _manifest_from_release_sync(release)
-    assets = {a["name"]: a["browser_download_url"] for a in release.get("assets", [])}
-
-    version = manifest.get("version") or release.get("tag_name", "").lstrip("v")
-    target = next(
-        (t for t in manifest.get("targets", []) if t.get("board") == board), None,
-    )
-    if target is None:
-        raise RuntimeError(
-            f"Board '{board}' not found in Meshtastic "
-            f"{release.get('tag_name', 'this release')}"
-        )
-    platform = target["platform"]
-
-    cache_dir = _cache_dir_for(board, version)
-    mt_json_path = cache_dir / f"firmware-{board}-{version}.mt.json"
-    factory_path = cache_dir / f"firmware-{board}-{version}.factory.bin"
-
-    if mt_json_path.exists() and factory_path.exists():
-        mt = json.loads(mt_json_path.read_text())
-    else:
-        zip_name = f"firmware-{platform}-{version}.zip"
-        if zip_name not in assets:
-            raise RuntimeError(f"Could not find {zip_name} in the latest release assets")
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile(suffix=".zip") as tmp_zip:
-            _http.download_to_sync(assets[zip_name], Path(tmp_zip.name))
-            with zipfile.ZipFile(tmp_zip.name) as zf:
-                names = set(zf.namelist())
-                mt_name = f"firmware-{board}-{version}.mt.json"
-                factory_name = f"firmware-{board}-{version}.factory.bin"
-                if mt_name not in names or factory_name not in names:
-                    raise RuntimeError(
-                        f"Expected files for '{board}' missing from {zip_name}",
-                    )
-                mt = json.loads(zf.read(mt_name))
-                mt_json_path.write_bytes(zf.read(mt_name))
-                factory_path.write_bytes(zf.read(factory_name))
-                mt_json_path.chmod(0o644)
-                factory_path.chmod(0o644)
-
-                spiffs_file = next(
-                    (
-                        f["name"]
-                        for f in mt.get("files", [])
-                        if f.get("part_name") == "spiffs"
-                    ),
-                    None,
-                )
-                if spiffs_file and spiffs_file in names:
-                    spiffs_path = cache_dir / spiffs_file
-                    spiffs_path.write_bytes(zf.read(spiffs_file))
-                    spiffs_path.chmod(0o644)
-
-    spiffs_file = next(
-        (f["name"] for f in mt.get("files", []) if f.get("part_name") == "spiffs"),
-        None,
-    )
-    littlefs_path = (cache_dir / spiffs_file) if spiffs_file else None
-    spiffs_part = next(
-        (p for p in mt.get("part", []) if p.get("name") == "spiffs"), None,
-    )
-    littlefs_offset = int(spiffs_part["offset"], 16) if spiffs_part else None
-
-    return {
-        "version": version,
-        "mcu": mt["mcu"],
-        "factory_bin": factory_path,
-        "littlefs_bin": littlefs_path if (littlefs_path and littlefs_path.exists()) else None,
-        "littlefs_offset": littlefs_offset,
-    }
+@router.post("/upload")
+async def firmware_upload(
+    file: UploadFile = File(...),
+    _claims: SessionClaims = Depends(require_admin),
+) -> dict:
+    data = await file.read()
+    try:
+        upload_id = _uploads.save(file.filename or "firmware.bin", data)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return {"upload_id": upload_id, "filename": file.filename}
 
 
 def _port_aliases(port: str) -> set[str]:
@@ -247,7 +151,6 @@ def _port_aliases(port: str) -> set[str]:
 
 
 def _match_serial_source(port: str):
-    """Resolve label + live capture source for ``port``."""
     label = ""
     source = None
     if _config is None:
@@ -263,12 +166,13 @@ def _match_serial_source(port: str):
     return label, source
 
 
-# Credit: javastraat/meshpoint 85fb576 — erase_all default False (plan flip)
 class FlashRequest(BaseModel):
     board: str
     port: str
     tag: str = ""
     erase_all: bool = False
+    upload_id: str = ""
+    flash_mode: str = ""
 
 
 @router.post("/flash/stream")
@@ -277,13 +181,7 @@ async def flash_meshtastic_stream(
     claims: SessionClaims = Depends(require_admin),
     audit: AuditLogWriter = Depends(get_audit_writer),
 ) -> StreamingResponse:
-    """Download Meshtastic firmware and flash ``port`` via esptool.
-
-    ``erase_all`` default False (keep settings / app-only). True erases all
-    and also writes littlefs when present.
-    Credit: javastraat/meshpoint 85fb576
-    """
-    if not req.board:
+    if not req.board and not req.upload_id:
         raise HTTPException(400, "No board selected")
 
     from src.hal.usb_classifier import list_serial_ports_with_stable_paths
@@ -312,39 +210,110 @@ async def flash_meshtastic_stream(
                 "port": port,
                 "tag": req.tag or "latest",
                 "erase_all": req.erase_all,
+                "upload_id": req.upload_id or None,
             },
         ) as ctx:
-            yield _ndjson({
-                "type": "line",
-                "stream": "stdout",
-                "text": (
-                    f"Fetching Meshtastic {req.tag or 'latest'} firmware for "
-                    f"{req.board.replace('-', ' ')}…"
-                ),
-            })
             loop = asyncio.get_running_loop()
-            try:
-                fw = await loop.run_in_executor(
-                    None, _ensure_board_firmware_cached_sync, req.board, req.tag,
-                )
-            except Exception as exc:
-                logger.exception("Meshtastic firmware fetch failed for %s", req.board)
-                yield _ndjson({"type": "line", "stream": "stderr", "text": str(exc)})
+            uploaded = _uploads.resolve(req.upload_id) if req.upload_id else None
+            fw = None
+            flash_method = "esptool"
+
+            if uploaded is not None:
+                flash_method = "nrf_dfu"
                 yield _ndjson({
-                    "type": "result",
-                    "result": {"returncode": -1, "success": False, "error": str(exc)},
+                    "type": "line",
+                    "stream": "stdout",
+                    "text": f"Using uploaded firmware {uploaded.name}.",
                 })
-                ctx.set_result("error")
+            else:
+                yield _ndjson({
+                    "type": "line",
+                    "stream": "stdout",
+                    "text": (
+                        f"Fetching Meshtastic {req.tag or 'latest'} for "
+                        f"{req.board.replace('-', ' ')}…"
+                    ),
+                })
+                try:
+                    fw = await loop.run_in_executor(
+                        None, _catalog.ensure_board_firmware_cached_sync,
+                        req.board, req.tag,
+                    )
+                except Exception as exc:
+                    logger.exception(
+                        "Meshtastic firmware fetch failed for %s", req.board,
+                    )
+                    yield _ndjson({
+                        "type": "line", "stream": "stderr", "text": str(exc),
+                    })
+                    yield _ndjson({
+                        "type": "result",
+                        "result": {
+                            "returncode": -1, "success": False, "error": str(exc),
+                        },
+                    })
+                    ctx.set_result("error")
+                    return
+                flash_method = fw["flash_method"]
+                yield _ndjson({
+                    "type": "line",
+                    "stream": "stdout",
+                    "text": (
+                        f"Using Meshtastic {fw['version']} "
+                        f"({fw.get('mcu')}, {flash_method})."
+                    ),
+                })
+
+            if flash_method == "nrf_dfu":
+                package = uploaded
+                mode = req.flash_mode or "dfu"
+                if package is None and fw is not None:
+                    if mode == "uf2":
+                        package = fw.get("uf2")
+                        if package is None:
+                            yield _ndjson({
+                                "type": "line",
+                                "stream": "stderr",
+                                "text": "No UF2 asset cached for this board.",
+                            })
+                            yield _ndjson({
+                                "type": "result",
+                                "result": {
+                                    "returncode": -1,
+                                    "success": False,
+                                    "error": "missing uf2",
+                                },
+                            })
+                            ctx.set_result("error")
+                            return
+                    else:
+                        package = fw["dfu_zip"]
+                elif package is not None and package.suffix.lower() == ".uf2":
+                    mode = "uf2"
+
+                async def _release():
+                    await source.stop()
+
+                async def _restore():
+                    await source.start()
+
+                success = False
+                async for chunk in _nrf.run(
+                    package=package,
+                    port=port,
+                    mode=mode,
+                    release_source=_release if source is not None else None,
+                    restore_source=_restore if source is not None else None,
+                    reconnect_sleep_s=5.0,
+                    source_name=source.name if source else "serial",
+                ):
+                    yield chunk
+                    event = json.loads(chunk)
+                    if event.get("type") == "result":
+                        success = bool((event.get("result") or {}).get("success"))
+                ctx.set_result("success" if success else "error")
                 return
 
-            yield _ndjson({
-                "type": "line",
-                "stream": "stdout",
-                "text": f"Using Meshtastic {fw['version']} ({fw['mcu']}).",
-            })
-
-            # Always stop a matched source before esptool — reconnect /
-            # half-open serial still races the port when connected=False.
             released = source is not None
             if released:
                 yield _ndjson({
@@ -370,24 +339,18 @@ async def flash_meshtastic_stream(
                 })
                 if released:
                     await source.start()
-                    yield _ndjson({
-                        "type": "line",
-                        "stream": "stdout",
-                        "text": (
-                            f"Flash aborted; {source.name} restored on {port}."
-                        ),
-                    })
                 ctx.set_result("error")
                 return
 
             write_flash_args = ["0x0", str(fw["factory_bin"])]
-            if req.erase_all and fw["littlefs_bin"] and fw["littlefs_offset"] is not None:
+            if (
+                req.erase_all
+                and fw["littlefs_bin"]
+                and fw["littlefs_offset"] is not None
+            ):
                 write_flash_args += [
                     hex(fw["littlefs_offset"]), str(fw["littlefs_bin"]),
                 ]
-
-            # Credit: javastraat/meshpoint 85fb576 — erase toggle.
-            # write_flash is esptool 4.x; write-flash is 5+ only.
             cmd = [
                 *_esptool.resolve_argv(),
                 "--chip", fw["mcu"], "--port", port, "--baud", "921600",
@@ -409,23 +372,10 @@ async def flash_meshtastic_stream(
                         "stream": "stderr",
                         "text": (
                             "Flash failed (esptool exited non-zero). "
-                            "Board firmware was not updated. Restoring "
-                            "USB capture on the previous build…"
+                            "Restoring USB capture…"
                         ),
                     })
                     await source.start()
-                    yield _ndjson({
-                        "type": "line",
-                        "stream": "stdout",
-                        "text": (
-                            f"{source.name} restored on {port}."
-                            if source.connected
-                            else (
-                                f"{source.name} did NOT come back -- "
-                                "a service restart may be needed."
-                            )
-                        ),
-                    })
                 else:
                     yield _ndjson({
                         "type": "line",
@@ -440,13 +390,9 @@ async def flash_meshtastic_stream(
                         "text": (
                             f"{source.name} reconnected on {port}."
                             if source.connected
-                            else (
-                                f"{source.name} did NOT reconnect -- "
-                                "a service restart may be needed."
-                            )
+                            else f"{source.name} did NOT reconnect."
                         ),
                     })
-
             ctx.set_result("success" if success else "error")
 
     return StreamingResponse(

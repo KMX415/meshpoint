@@ -28,7 +28,6 @@ class MeshPositionResolver:
             lat = fix.latitude
             lon = fix.longitude
             alt = fix.altitude_m
-            precision = pos_cfg.location_precision or "approximate"
         else:
             device = self._config.device
             if device.latitude is None or device.longitude is None:
@@ -36,8 +35,9 @@ class MeshPositionResolver:
             lat = device.latitude
             lon = device.longitude
             alt = device.altitude
-            precision = "exact"
 
+        # Apply the same outbound privacy policy to either coordinate source.
+        precision = pos_cfg.location_precision or "approximate"
         if precision not in VALID_LOCATION_PRECISION:
             precision = "approximate"
 

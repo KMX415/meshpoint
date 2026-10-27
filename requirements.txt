@@ -1,7 +1,7 @@
 fastapi>=0.110.0
 uvicorn[standard]>=0.29.0
 aiosqlite>=0.20.0
-meshtastic>=2.3.0
+meshtastic>=2.7.8
 pycryptodome>=3.20.0
 cryptography>=43.0.0
 protobuf>=4.25.0
@@ -14,3 +14,5 @@ paho-mqtt>=2.1.0
 bcrypt>=4.2.0
 PyJWT>=2.10.0
 esptool>=4.7.0,<5
+adafruit-nrfutil>=0.5.3.post16
+python-multipart>=0.0.9

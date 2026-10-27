@@ -66,7 +66,7 @@ class TerminalRenderer {
             macOptionIsMeta: true,
             allowProposedApi: true,
             convertEol: false,
-            theme: this._tokyoNightStorm(),
+            theme: this._palette(),
         });
 
         this._loadAddons();
@@ -239,6 +239,41 @@ class TerminalRenderer {
      * `git`, `journalctl`) render properly instead of falling back
      * to the xterm defaults' muddy primaries.
      */
+    // Adapted from javastraat: use resolved theme colors rather than a theme ID.
+    _palette() {
+        const probe = document.createElement('span');
+        probe.style.cssText = 'position:absolute;visibility:hidden;color:var(--term-text);background-color:var(--term-bg);border-color:var(--term-accent)';
+        this.hostEl.append(probe);
+        const style = getComputedStyle(probe);
+        const background = style.backgroundColor;
+        const foreground = style.color;
+        const cursor = style.borderTopColor;
+        probe.remove();
+        const rgb = background.match(/[\d.]+/g)?.slice(0, 3).map(Number);
+        const light = rgb && (rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722) > 128;
+        return {
+            ...(light ? this._tokyoNightDay() : this._tokyoNightStorm()),
+            background, foreground, cursor, cursorAccent: background,
+        };
+    }
+
+    refreshTheme() {
+        if (this.term) this.term.options.theme = this._palette();
+    }
+
+    // Light ANSI palette adapted from javastraat/meshpoint.
+    _tokyoNightDay() {
+        return {
+            selectionBackground: 'rgba(176, 106, 0, 0.22)',
+            selectionForeground: '#172033',
+            black: '#0f1320', red: '#c0392b', green: '#2f7d32', yellow: '#a6791f',
+            blue: '#2f5fd0', magenta: '#8b34a8', cyan: '#0e7a90', white: '#5a6473',
+            brightBlack: '#8a93a6', brightRed: '#d64541', brightGreen: '#3f9142',
+            brightYellow: '#b8860b', brightBlue: '#3b6fe0', brightMagenta: '#a248c0',
+            brightCyan: '#1592ab', brightWhite: '#1a2233',
+        };
+    }
+
     _tokyoNightStorm() {
         return {
             background: '#16181f',

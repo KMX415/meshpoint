@@ -1,6 +1,162 @@
 # Changelog
 
-### Unreleased
+### v0.8.0
+
+Optional apps and dashboard access controls, MeshCore feedback and positions,
+privacy corrections and recovery hardening. Upgrade through Settings > Updates
+or the documented installer flow so dependencies and migration hooks run.
+Optional SDR/P25 and PiMesh behavior remains experimental; DAPNET/Flock are
+outside this release. See the [release overview](plans/v0.8.0-release.md).
+
+#### Heard paths
+
+- MeshCore heard-repeat popover with saved repeater paths, local RSSI/SNR,
+  best-effort repeater names, and keyboard/touch support.
+
+
+#### MeshCore message feedback
+
+- Show locally heard repeats for sent MeshCore channel messages and matching
+  recipient delivery acknowledgements for DMs. Applies to USB/serial and PiMesh
+  TCP companions through the shared messaging path. Feedback updates live and
+  persists in history; early events are retained until the sent row is saved.
+- Give each MeshCore send its own message identifier instead of reusing the
+  companion event name. Unknown repeat counts remain absent. DM repeat counts
+  remain unsupported by the standard companion interface; see
+  [message feedback](CONFIGURATION.md#meshcore-message-feedback).
+
+#### Hardware support
+
+- Document the Pisces P100's community-reported GPIO 23 concentrator reset
+  override and link setup notes from the README. Physical verification is
+  pending; no automatic hardware configuration or GPS changes are included.
+
+- Add the Heltec HT-M2808 installation guide from #138 and link it
+  from the README, hardware matrix and documentation index. TX/RX status
+  reflects the contributor's report.
+
+- Document Bobcat G285 as community-reported working in #137, with a separate
+  SPI1 and GPIO 125/122/149 recipe. Preserve the G295 procedure and distinguish
+  reported operation from pending TX/RX and restart verification.
+
+- Honor `RESET_GPIO` in the in-app concentrator reset fallback, matching valid
+  overrides used by the service reset script. Explicit arguments retain priority;
+  invalid nonempty overrides skip the fallback with a warning.
+- Document community COTX X3 findings: reset GPIO 22, button 23, LED 27,
+  manual service configuration and reported restart/transmission results. No
+  automatic board detection is added; physical validation of this port is pending.
+
+#### MeshCore positions
+
+- Preserve advertised coordinates from the USB companion's contact roster and
+  apply them to heard MeshCore nodes, including adverts that carry only a public
+  key (#136). Queue enriched nodes in the existing Meshradar heartbeat using the
+  cloud's expected position fields. Later adverts without coordinates retain the
+  saved position. Invalid or unset coordinate pairs do not erase known positions;
+  contact refreshes do not increase packet counts or change reception times.
+
+#### Dashboard fixes
+
+- The Meshtastic topbar indicator only appears when a concentrator or Meshtastic
+  serial capture source is configured.
+
+- Dashboard startup opens its live connection before initial data fetches and
+  clears the connecting indicator on handshake. Setup and role checks share one
+  identity request.
+
+- Plugins can declare service dependencies with `requires`. Enablement checks
+  dependencies, disabling a host also disables dependent plugins, and startup
+  loads hosts first while reporting missing or cyclic dependencies.
+
+- Plugin downloads can be enabled from an administrator checkbox without editing
+  YAML or restarting. Source presets, per-module source selection, maintainer
+  labels and installed-plugin checkboxes make setup available from the dashboard.
+  Updates retain the original source. Permission-check failures are distinguished
+  from an intentional download lock.
+- Sort the local node grid by packet count, highest first, with last-heard
+  tie-breaking, favorites pinning and existing hop filters. The selection is
+  remembered across reloads; missing and zero counts sort after positive counts.
+- Stats range cards honor metric/imperial display preferences and update their
+  values and labels immediately when the preference changes.
+
+#### Optional apps, themes and dashboard access
+
+- Opt-in Reticulum interface discovery with operator contact drafts. RNode
+  contact publishing is separately enabled, uses a six-hour announce interval,
+  and omits location and network credentials. Automatic connections remain off.
+- MeshCore disconnect events and missing selected USB paths clear connection
+  status promptly. Failed or cancelled connection attempts clean up their
+  background event tasks; unavailable serial ports produce concise retry warnings.
+  CP210x USB connections release DTR after opening to avoid holding the boot
+  button and triggering companion CLI Rescue mode. Other USB types keep their
+  existing control-line behavior. Health queries share command serialization,
+  and restarting message fetching replaces its existing subscription.
+
+- Reticulum's RNode indicator now follows live radio connectivity. An unplugged
+  RNode shows offline even while the Reticulum service continues running;
+  unavailable interface telemetry is shown as unknown.
+
+- Terminal colors follow the active dashboard palette, including custom light
+  themes, and update without reconnecting. Confirmation dialogs restore focus
+  to their opener and support keyboard cancellation without confirming an action.
+
+- Device-side opt-ins for plugin source mutations and Web Terminal, both off
+  by default, including upgrades without explicit settings. Catalog browsing and
+  installed-module management remain available. Terminal access requires
+  `dashboard.web_terminal_enabled: true`; source downloads require
+  `plugin_sources_enabled: true`, saved by the dashboard checkbox immediately.
+  Only the terminal permission requires a service restart.
+
+- Optional plugin store with search, categories, hardware/dependency information,
+  source trust and commit pinning, selected installs, enablement, update and removal.
+  Apps install disabled; native tools are separately installed. Existing mesh
+  features do not require optional receiver packages.
+- Theme manager, custom palette editing and device defaults; a browser's chosen
+  theme takes precedence. Optional pages use shared styling and clearer layouts.
+- Reticulum/LXMF worker and daemon isolation, checksum-pinned private libraries,
+  messaging/contacts, NomadNet browsing/hosting, propagation and telemetry options.
+  External interfaces default off. Regional starting profiles preserve saved
+  settings. Physical two-RNode LXMF delivery passed; recovery/endurance and
+  external-network interoperability remain release checks.
+- Optional Radio, DAB+, ACARS, ADS-B, RTL433 and pager adapters. Local channel
+  selection is explicit where required; Netherlands presets are opt-in, P2000
+  is labeled Netherlands-specific, and DAB reception is Band III. Native receiver
+  hardware signoff remains pending. P25 is experimental; DAPNET remains unfinished.
+- Viewer shared-state writes are blocked server-side; configuration controls
+  are disabled, message actions hidden, and reads no longer mark conversations read.
+- Opt-in public Dashboard, Stats and Radio summaries with admin-selected pages
+  and an Admin sign-in link. Default off; private APIs and WebSocket remain gated.
+- Expanded setup, access, recovery and hardware documentation.
+
+The official plugin catalog is available. Check app-specific dependencies and
+compatibility before installation; see the
+[release scope](plans/v0.8.0-release.md). See [documentation](README.md).
+
+#### Reliability and permissions
+
+- Reap exited terminal children and close PTY descriptors after shell EOF;
+  repeated cleanup preserves already-reaped PIDs and reused descriptors (#166).
+- Apply Approximate and Hidden privacy settings to registered-pin mesh positions,
+  preserving saved coordinates and independent MQTT/cloud policies (#158).
+- Correct received-packet coding-rate display without changing transmission (#163).
+- Cover independently missing RSSI/SNR and valid zero SNR in MQTT protobuf and
+  JSON regression tests; no formatter behavior changes.
+
+- Backup restore rejects symbolic links, hard links, device entries and FIFOs
+  before extraction. Regular backups remain supported.
+- Expected upstream connection failures log concise warnings while retaining
+  reconnect backoff and buffered packets. Unexpected errors retain tracebacks.
+- Espressif USB nodes use group-based serial permissions on fresh installs.
+  Updates migrate the old bundled rule after ensuring `dialout` membership;
+  operator-customized rules are preserved.
+
+#### Capture
+
+- **Meshtastic USB reconnect after live drop.** Set Preset / region writes
+  reboot the node and drop USB. Serial now closes the dead handle and
+  reconnects. The top-bar serial pill and Configuration → Serial show
+  **REBOOTING** or **RECONNECTING** plus a retry countdown instead of a
+  silent red lamp.
 
 #### Dashboard
 
@@ -10,10 +166,29 @@
 
 #### Docs
 
+- **USB nodes guide.** `docs/USB-NODES.md` covers Meshtastic USB nodes
+  (Configuration → Serial, live preset, up to four devices) alongside a
+  concentrator, plus pinning ports when a MeshCore companion is also
+  attached. FAQ / Configuration / Onboarding / Hardware Matrix point at it.
 - **Bobcat 300 capture yaml.** Step 5 now uses `capture.concentrator_spi_device`
   instead of a nested `capture.concentrator` block that Meshpoint ignores.
   GPIO reset stays in the systemd drop-in. Fixes
   [#125](https://github.com/KMX415/meshpoint/issues/125).
+
+#### Firmware flash (nRF DFU)
+
+- **nRF boards on Configuration → Firmware.** MeshCore companions with
+  `.zip`/`.uf2` assets (e.g. Heltec T096) and Meshtastic `nrf52840` targets
+  (T114, RAK4631, …) flash via Adafruit serial DFU (`adafruit-nrfutil`,
+  1200-baud touch) instead of esptool. ESP boards keep the existing path.
+- **Progressive DFU UI.** Selecting an nRF board hides erase-all and shows a
+  DFU hint plus drag-drop for custom `.zip`/`.uf2`. ESP selections stay compact.
+- **RP2040 / RP2350 / STM32** targets are listed but disabled with a
+  “not flashable yet” hint until a later UF2-only wave.
+- **Dependency:** `adafruit-nrfutil` and `python-multipart` (firmware upload
+  FormData) pinned in `requirements.txt`; `install.sh` installs nrfutil into
+  the venv. Closes
+  [#124](https://github.com/KMX415/meshpoint/issues/124).
 
 ### v0.7.9 (August 2026)
 
@@ -246,7 +421,7 @@ Major dashboard release on `main` (merge `56d4f7c`). Builds on v0.7.3 auth: ever
 
 #### Relay and RF telemetry
 
-- **Native onboard relay (experimental).** Meshtastic packets can be re-broadcast through the onboard SX1302 with identity preserved (`hop_limit` decrements, sender and ciphertext unchanged). Decoder now retains `raw_app_payload` so the relay path is not silently empty. See [docs/CONFIGURATION.md#smart-relay](docs/CONFIGURATION.md#smart-relay).
+- **Native onboard relay (experimental).** Meshtastic packets can be re-broadcast through the onboard SX1302 with identity preserved (`hop_limit` decrements, sender and ciphertext unchanged). Decoder now retains `raw_app_payload` so the relay path is not silently empty. See [Configuration: smart relay](CONFIGURATION.md#smart-relay).
 - **Noise floor.** Sidebar telemetry uses a rolling minimum of `rssi - snr` (fixes endless "calibrating" on rural single-neighbour links). Optional SX1302 spectral scan when `radio.sx1261_spi_path` is set (off by default on RAK/SenseCap: SX1261 is not on a Pi-visible SPI bus). UI tooltips describe whether the readout is packet-derived or spectral-scan sourced.
 
 #### Sign-off polish and UX

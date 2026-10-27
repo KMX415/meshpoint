@@ -221,6 +221,8 @@ select.cfg-field__input option:checked {
     font-family: 'JetBrains Mono', Menlo, monospace;
     font-size: 13px;
     color: var(--brand-amber, #ffb84d);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
 .cfg-note {
@@ -605,6 +607,49 @@ select.cfg-field__input option:checked {
     font-size: 12px;
 }
 
+.cfg-firmware-nrf {
+    margin: 8px 0 4px;
+    max-width: 340px;
+}
+
+.cfg-firmware-nrf__hint {
+    margin: 0 0 8px;
+    font-size: 12px;
+    color: var(--text-secondary, #94a3b8);
+    line-height: 1.4;
+}
+
+.cfg-firmware-nrf__console {
+    margin: 0 0 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--accent-cyan, #22d3ee);
+    opacity: 0.9;
+}
+
+.cfg-firmware-nrf__drop {
+    border: 1px dashed var(--border-color, #334155);
+    border-radius: 6px;
+    padding: 16px 12px;
+    text-align: center;
+    cursor: pointer;
+    background: var(--bg-secondary, rgba(15, 23, 42, 0.4));
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cfg-firmware-nrf__drop:hover,
+.cfg-firmware-nrf__drop:focus-visible,
+.cfg-firmware-nrf__drop--active {
+    border-color: var(--accent-cyan, #22d3ee);
+    box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.25);
+    outline: none;
+}
+
+.cfg-firmware-nrf__drop-label {
+    font-size: 12px;
+    color: var(--text-secondary, #94a3b8);
+}
+
 .cfg-firmware-output {
     margin: 12px 0 0;
     padding: 10px 12px;
@@ -624,4 +669,50 @@ select.cfg-field__input option:checked {
     .cfg-firmware-field {
         max-width: none;
     }
+}
+
+.cfg-callout {
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(34, 211, 238, 0.25);
+    background: rgba(34, 211, 238, 0.06);
+    font-size: 13px;
+    line-height: 1.45;
+    color: rgba(243, 244, 246, 0.85);
+}
+
+.wismesh-hero__grid {
+    display: grid;
+    gap: 10px;
+}
+
+.wismesh-hero__pill {
+    display: inline-block;
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.wismesh-hero__pill--ok {
+    border-color: rgba(34, 211, 238, 0.45);
+    color: var(--accent-cyan, #22d3ee);
+}
+
+.wismesh-hero__pill--warn {
+    border-color: rgba(245, 158, 11, 0.45);
+    color: var(--accent-amber, #f59e0b);
+}
+
+.wismesh-hero__id-val {
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 14px;
+    color: var(--accent-cyan, #22d3ee);
+}
+
+.r-card--hidden-node {
+    display: none !important;
 }

@@ -16,6 +16,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import time
+from dataclasses import replace
 from typing import AsyncIterator, Optional
 
 from src.capture.base import CaptureSource
@@ -47,7 +50,16 @@ class MeshcoreUsbCaptureSource(CaptureSource):
         serial_port: Optional[str] = None,
         baud_rate: int = 115200,
         auto_detect: bool = True,
+        connection_type: str = "serial",
+        tcp_host: str = "127.0.0.1",
+        tcp_port: int = 5000,
     ):
+        if connection_type not in ("serial", "tcp"):
+            raise ValueError("Unknown MeshCore transport")
+        if connection_type == "tcp" and (not tcp_host or not 1 <= tcp_port <= 65535):
+            raise ValueError("Invalid MeshCore TCP endpoint")
+        self.connection_type = connection_type
+        self._tcp_host, self._tcp_port = tcp_host, tcp_port
         self._configured_port = serial_port
         self._baud_rate = baud_rate
         self._auto_detect = auto_detect
@@ -67,6 +79,11 @@ class MeshcoreUsbCaptureSource(CaptureSource):
         self._last_event_at: float = 0.0
         self._last_device_info: Optional[dict] = None
         self._on_connected_callback = None
+        self._rx_log_callback = None
+        self._recent_raw_adverts = {}
+        self._ack_callback = None
+        self._command_lock = asyncio.Lock()
+        self._auto_fetch_lock = asyncio.Lock()
 
     @property
     def name(self) -> str:
@@ -167,22 +184,49 @@ class MeshcoreUsbCaptureSource(CaptureSource):
                 event = await asyncio.wait_for(
                     self._queue.get(), timeout=1.0
                 )
+                if getattr(getattr(event, "type", None), "value", None) == "rx_log_data" and self._rx_log_callback:
+                    try:
+                        await self._rx_log_callback(event.payload)
+                    except Exception:
+                        logger.exception("MeshCore repeat observation failed")
                 raw = self._wrap_event(event)
+                if getattr(getattr(event, "type", None), "value", None) == "acknowledgement" and self._ack_callback:
+                    try:
+                        await self._ack_callback(event.payload)
+                    except Exception:
+                        logger.exception("MeshCore delivery observation failed")
                 if raw is not None:
                     yield raw
             except asyncio.TimeoutError:
+                self._check_usb_presence()
                 continue
+
+    def _check_usb_presence(self) -> None:
+        """Detect removed Linux USB nodes without probing or resetting the radio."""
+        if (self._connected and self._resolved_port
+                and self._resolved_port.startswith("/dev/")
+                and os.name == "posix" and not os.path.exists(self._resolved_port)):
+            self._trigger_reconnect("USB device removed")
 
     async def _connect(self, port: str) -> None:
         try:
             from meshcore import MeshCore, EventType
+            from src.capture.meshcore_serial import create_serial_connection
 
-            self._meshcore = await MeshCore.create_serial(
-                port,
-                self._baud_rate,
+            # Retain ownership before connecting: create_serial() can raise
+            # after starting its dispatcher without returning the instance.
+            if self.connection_type == "tcp":
+                from meshcore.tcp_cx import TCPConnection
+                connection = TCPConnection(self._tcp_host, self._tcp_port)
+            else:
+                connection = create_serial_connection(port, self._baud_rate)
+            self._meshcore = MeshCore(
+                connection,
                 default_timeout=_MESHCORE_COMMAND_TIMEOUT_SECONDS,
             )
-            if self._meshcore is None:
+            response = await self._meshcore.connect()
+            if response is None:
+                await self._disconnect()
                 logger.error(
                     "MeshCore companion handshake failed on %s. "
                     "Verify the device is running Companion USB firmware "
@@ -192,11 +236,11 @@ class MeshcoreUsbCaptureSource(CaptureSource):
                 self._connected = False
                 return
 
-            self._connected = True
             await self._cache_device_info_on_connect()
 
             for event_type in (
                 EventType.RX_LOG_DATA,
+                EventType.ACK,
                 EventType.RAW_DATA,
                 EventType.CONTACT_MSG_RECV,
                 EventType.CHANNEL_MSG_RECV,
@@ -208,6 +252,7 @@ class MeshcoreUsbCaptureSource(CaptureSource):
                 self._subscriptions.append(sub)
 
             await self._meshcore.start_auto_message_fetching()
+            self._connected = True
             logger.info(
                 "MeshCore USB source started on %s @ %d baud",
                 port, self._baud_rate,
@@ -217,7 +262,17 @@ class MeshcoreUsbCaptureSource(CaptureSource):
                     self._on_connected_callback(),
                     name="meshcore-on-connected",
                 )
+        except asyncio.CancelledError:
+            await self._disconnect()
+            raise
+        except OSError as exc:
+            await self._disconnect()
+            logger.warning(
+                "MeshCore USB unavailable on %s (%s); waiting for reconnect",
+                port, exc,
+            )
         except Exception:
+            await self._disconnect()
             logger.exception(
                 "Failed to start MeshCore USB source on %s", port
             )
@@ -225,6 +280,7 @@ class MeshcoreUsbCaptureSource(CaptureSource):
 
     async def _disconnect(self) -> None:
         self._connected = False
+        self._recent_raw_adverts.clear()
         if self._meshcore:
             for sub in self._subscriptions:
                 self._meshcore.unsubscribe(sub)
@@ -266,7 +322,7 @@ class MeshcoreUsbCaptureSource(CaptureSource):
                     return
 
                 attempt += 1
-                if attempt >= 2 and self._resolved_port:
+                if attempt >= 2 and self._resolved_port and self.connection_type == "serial":
                     from src.capture.meshcore_dtr import pulse_dtr_reset
 
                     await asyncio.to_thread(
@@ -414,12 +470,22 @@ class MeshcoreUsbCaptureSource(CaptureSource):
         try:
             from meshcore import EventType
 
-            result = await asyncio.wait_for(
-                self._meshcore.commands.send_device_query(),
-                timeout=_HEALTH_CHECK_TIMEOUT_SECONDS,
-            )
-            if result.type != EventType.ERROR:
+            async with self._command_lock:
+                mc = self._meshcore
+                if mc is None or not self._connected:
+                    return False
+                await mc.stop_auto_message_fetching()
+                try:
+                    result = await asyncio.wait_for(
+                        mc.commands.send_device_query(),
+                        timeout=_HEALTH_CHECK_TIMEOUT_SECONDS,
+                    )
+                finally:
+                    if self._meshcore is mc and self._connected:
+                        await self.restart_auto_fetching()
+            if result is not None and result.type != EventType.ERROR:
                 self._remember_device_info_event(result)
+                logger.info("MeshCore USB health probe responded")
                 return True
             return False
         except Exception:
@@ -428,10 +494,21 @@ class MeshcoreUsbCaptureSource(CaptureSource):
     async def _on_event(self, event) -> None:
         if not self._running:
             return
+        event_type = getattr(event, "type", None)
+        if (getattr(event_type, "name", "") == "DISCONNECTED"
+                or getattr(event_type, "value", event_type) == "disconnected"):
+            if self._connected:
+                self._trigger_reconnect("serial transport disconnected")
+            return
         # Any event from the device is proof the connection is alive.
         # The health check loop uses this to skip its active probe.
         self._last_event_at = asyncio.get_event_loop().time()
         try:
+            # Snapshot the receiver configuration when the event enters capture,
+            # not when a queued packet is later decoded or displayed.
+            event._meshpoint_receiver = _receiver_settings(
+                getattr(self._meshcore, "self_info", {}) or {}
+            )
             self._queue.put_nowait(event)
         except asyncio.QueueFull:
             logger.warning("MeshCore USB queue full, dropping event")
@@ -447,12 +524,37 @@ class MeshcoreUsbCaptureSource(CaptureSource):
             else str(event.type)
         )
 
+        receiver = getattr(event, "_meshpoint_receiver", _receiver_settings(
+            getattr(self._meshcore, "self_info", {}) or {}))
         signal = _extract_signal(payload_dict)
+        now = time.monotonic()
+        self._recent_raw_adverts = {
+            key: entries for key, entries in self._recent_raw_adverts.items()
+            if now - entries[-1][0] < 2
+        }
 
         if etype == "rx_log_data":
             if signal.rssi > -119.0:
                 self._last_rf_signal = signal
+            advert = _raw_advertisement(payload_dict)
+            if advert is None:
+                return None
+            key = advert["public_key"]
+            entries = self._recent_raw_adverts.setdefault(key, [])
+            entries.append((now, advert, signal, receiver))
+            # Two is enough to mark ambiguous; do not guess which repeat won.
+            self._recent_raw_adverts[key] = entries[-2:]
+            if len(self._recent_raw_adverts) > 128:
+                self._recent_raw_adverts.pop(next(iter(self._recent_raw_adverts)))
             return None
+        elif etype == "advertisement":
+            matches = self._recent_raw_adverts.pop(payload_dict.get("public_key"), [])
+            matches = [item for item in matches if now - item[0] < 2]
+            if len(matches) == 1:
+                _, advert, signal, receiver = matches[0]
+                payload_dict = {**payload_dict, **advert}
+            # Without one unambiguous full-key match, keep the key-only event
+            # and never infer its path from the last unrelated RF frame.
 
         safe_payload = _make_json_safe(payload_dict)
 
@@ -463,7 +565,13 @@ class MeshcoreUsbCaptureSource(CaptureSource):
                 signal = self._last_rf_signal
             self._last_rf_signal = None
 
+        if receiver:
+            signal = replace(signal, frequency_mhz=receiver["frequency_mhz"],
+                             spreading_factor=receiver["spreading_factor"],
+                             bandwidth_khz=receiver["bandwidth_khz"],
+                             coding_rate=receiver["coding_rate"])
         envelope = {
+            "receiver_settings": receiver,
             "event_type": etype,
             "payload": safe_payload,
         }
@@ -478,16 +586,36 @@ class MeshcoreUsbCaptureSource(CaptureSource):
         """Register a coroutine called after every successful connection."""
         self._on_connected_callback = callback
 
+    def set_rx_log_callback(self, callback) -> None:
+        """Observe RF logs without replacing normal packet capture."""
+        self._rx_log_callback = callback
+
+    def set_ack_callback(self, callback) -> None:
+        """Observe recipient confirmations on both serial and TCP sources."""
+        self._ack_callback = callback
+
+    def set_command_lock(self, lock: asyncio.Lock) -> None:
+        """Share command serialization with the attached transmit client."""
+        self._command_lock = lock
+
     async def restart_auto_fetching(self) -> None:
         """Re-enable auto message fetching after TX operations."""
-        if self._meshcore and self._connected:
-            try:
-                await self._meshcore.start_auto_message_fetching()
-                logger.info("MeshCore auto message fetching restarted")
-            except Exception:
-                logger.debug("Failed to restart auto fetching", exc_info=True)
+        async with self._auto_fetch_lock:
+            mc = self._meshcore
+            if mc and self._connected:
+                try:
+                    # The library's start method is not idempotent: each call
+                    # creates another subscription and loses the old handle.
+                    await mc.stop_auto_message_fetching()
+                    if self._meshcore is mc and self._connected:
+                        await mc.start_auto_message_fetching()
+                    logger.debug("MeshCore auto message fetching restarted")
+                except Exception:
+                    logger.debug("Failed to restart auto fetching", exc_info=True)
 
     async def _resolve_port(self) -> Optional[str]:
+        if self.connection_type == "tcp":
+            return f"tcp://{self._tcp_host}:{self._tcp_port}"
         if self._configured_port:
             return self._configured_port
         if not self._auto_detect:
@@ -522,3 +650,51 @@ def _make_json_safe(payload: dict) -> dict:
         else:
             safe[key] = val
     return safe
+
+
+def _receiver_settings(info):
+    """Validated cached SELF_INFO, provenance is configuration not RF measurement."""
+    try:
+        freq, bw = float(info["radio_freq"]), float(info["radio_bw"])
+        sf, cr = int(info["radio_sf"]), int(info["radio_cr"])
+        if not (0 < freq < 10000 and 0 < bw <= 2000 and 5 <= sf <= 12 and 5 <= cr <= 8):
+            return None
+        return {"frequency_mhz": freq, "bandwidth_khz": bw,
+                "spreading_factor": sf, "coding_rate": f"4/{cr}",
+                "source": "receiver_self_info_at_capture"}
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
+
+
+def _raw_advertisement(payload):
+    """Use a complete public advert frame itself; no last-packet correlation."""
+    try:
+        raw = bytes.fromhex(payload.get("payload", ""))
+        if len(raw) < 2 or len(raw) > 512:
+            return None
+        header = raw[0]
+        if (header >> 2) & 15 != 4 or header >> 6 != 0:
+            return None
+        route = header & 3
+        offset = 5 if route in (0, 3) else 1
+        path_byte = raw[offset]
+        count, size = path_byte & 63, (path_byte >> 6) + 1
+        body = raw[offset + 1 + count * size:]
+        if len(body) < 101:  # public key, timestamp, signature, flags
+            return None
+        key = body[:32].hex()
+        if payload.get("adv_key") != key:
+            return None
+        result = {"public_key": key, "timestamp": payload.get("recv_time"),
+                  "rf_metadata_source": "raw_advertisement",
+                  "rssi": payload.get("rssi"), "snr": payload.get("snr")}
+        # A flood advert path records traversed repeaters. A direct-route path
+        # may describe routing instructions and is not a received hop count.
+        if route in (0, 1):
+            result["path_len"] = count
+        for field in ("adv_name", "adv_lat", "adv_lon"):
+            if payload.get(field) is not None:
+                result[field] = payload[field]
+        return result
+    except (TypeError, ValueError, IndexError):
+        return None

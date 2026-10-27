@@ -79,6 +79,13 @@ def build_mqtt_runtime_status(
 def build_mqtt_status(mqtt: MqttConfig, device_name: str) -> dict:
     """Shape consumed by ``frontend/js/configuration/mqtt_card.js``."""
     gateway = _resolve_gateway_id(mqtt.gateway_id, device_name or "meshpoint")
+    meshtastic_channel = next(
+        (name for name in mqtt.publish_channels if name.lower() != "meshcore"),
+        None,
+    )
+    meshcore_allowed = any(
+        name.lower() == "meshcore" for name in mqtt.publish_channels
+    )
     return {
         "enabled": mqtt.enabled,
         "broker_host": mqtt.broker,
@@ -97,14 +104,17 @@ def build_mqtt_status(mqtt: MqttConfig, device_name: str) -> dict:
         "map_report_position_precision": mqtt.map_report_position_precision,
         "tls_enabled": mqtt.tls_enabled,
         "tls_ca_cert": mqtt.tls_ca_cert or "",
-        "topic_preview_meshtastic": _topic_example(
-            mqtt.topic_root, mqtt.region, "e", "LongFast", gateway
+        "topic_preview_meshtastic": (
+            _topic_example(mqtt.topic_root, mqtt.region, "e", meshtastic_channel, gateway)
+            if meshtastic_channel else ""
         ),
-        "topic_preview_meshcore": _topic_example(
-            mqtt.topic_root, mqtt.region, "c", "MeshCore", gateway
+        "topic_preview_meshcore": (
+            _topic_example(mqtt.topic_root, mqtt.region, "c", "MeshCore", gateway)
+            if meshcore_allowed else ""
         ),
-        "topic_preview_json": _topic_example(
-            mqtt.topic_root, mqtt.region, "json", "LongFast", gateway
+        "topic_preview_json": (
+            _topic_example(mqtt.topic_root, mqtt.region, "json", meshtastic_channel, gateway)
+            if meshtastic_channel else ""
         ),
     }
 

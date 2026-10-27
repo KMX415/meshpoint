@@ -109,8 +109,11 @@ class ConcentratorWebSocket {
                 ? 'status-dot status-dot--connected'
                 : 'status-dot status-dot--disconnected';
         }
-        if (sidebarText && !connected) {
-            sidebarText.textContent = 'reconnecting...';
+        if (sidebarText) {
+            if (!connected) sidebarText.textContent = 'reconnecting...';
+            else if (['connecting...', 'reconnecting...'].includes(sidebarText.textContent)) {
+                sidebarText.textContent = 'online';
+            }
         }
     }
 }

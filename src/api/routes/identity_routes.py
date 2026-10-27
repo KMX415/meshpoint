@@ -33,6 +33,7 @@ router = APIRouter(prefix="/api", tags=["identity"])
 
 _identity: DeviceIdentity | None = None
 _auth_service: AuthService | None = None
+_terminal_enabled = False
 
 
 _ADMIN_SECTIONS: tuple[str, ...] = (
@@ -52,6 +53,8 @@ _ADMIN_SECTIONS: tuple[str, ...] = (
     "configuration.advanced",
     "settings",
     "settings.updates",
+    "settings.themes",
+    "settings.plugins",
     "settings.auth",
     "settings.dangerous",
 )
@@ -70,11 +73,13 @@ _VIEWER_SECTIONS: tuple[str, ...] = (
 )
 
 
-def init_routes(identity: DeviceIdentity, auth_service: AuthService) -> None:
+def init_routes(identity: DeviceIdentity, auth_service: AuthService, *, terminal_enabled: bool = False) -> None:
     """Bind device identity + auth service used by the handler."""
     global _identity, _auth_service
     _identity = identity
     _auth_service = auth_service
+    global _terminal_enabled
+    _terminal_enabled = terminal_enabled is True
 
 
 def reset_routes() -> None:
@@ -82,11 +87,13 @@ def reset_routes() -> None:
     global _identity, _auth_service
     _identity = None
     _auth_service = None
+    global _terminal_enabled
+    _terminal_enabled = False
 
 
 def _sections_for(role: str) -> list[str]:
     if role == ROLE_ADMIN:
-        return list(_ADMIN_SECTIONS)
+        return [section for section in _ADMIN_SECTIONS if section != "terminal" or _terminal_enabled]
     if role == ROLE_VIEWER:
         return list(_VIEWER_SECTIONS)
     return []

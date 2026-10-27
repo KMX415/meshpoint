@@ -1,11 +1,9 @@
 """Enrich MeshCore node rows from the companion device's contact list.
 
 The MeshCore companion (USB-attached firmware on a Heltec/T-Echo/etc.)
-keeps a friendly-name -> public-key map for every node it has heard.
-We can pull that list and use it to populate ``long_name`` on
-``nodes`` rows that only have a public-key prefix as their identifier
-(captured from over-the-air adverts whose payload didn't carry the
-name in a field we recognise).
+keeps names and advertised coordinates in its contact roster. Enrich heard
+nodes from that roster when advert push events carry only a public key, and
+queue the saved node for the existing upstream heartbeat.
 
 Two entry points:
 * ``setup_meshcore_contact_enrichment`` — register a packet callback
@@ -28,6 +26,7 @@ import logging
 import time
 
 from src.models.packet import Packet, Protocol
+from src.models.meshcore_position import meshcore_position
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +60,7 @@ _throttle = _SyncThrottle(_SYNC_THROTTLE_SECONDS)
 
 def setup_meshcore_contact_enrichment(coord, meshcore_tx=None) -> None:
     """Register a throttled packet callback that re-syncs MeshCore contact
-    names whenever a MeshCore packet flows through the pipeline.
+    names and positions whenever a MeshCore packet flows through the pipeline.
 
     Safe to call when ``meshcore_tx`` is None (Meshtastic-only installs):
     the callback is simply not registered.
@@ -151,38 +150,23 @@ async def sync_meshcore_contacts_to_nodes(
         return 0
 
     for contact in contacts:
-        pk = str(contact.get("public_key", "")).lower().lstrip("!")
-        name = str(contact.get("name", "")).strip()
-        if not pk or not name or _is_hex_identifier(name):
+        pk = str(contact.get("public_key") or "").lower().lstrip("!")
+        name = str(contact.get("name") or "").strip()
+        if not pk:
             continue
-        # Exact 12-char node_id only (same truncation as meshcore_event_adapter).
-        # Short-prefix LIKE matches used to overwrite unrelated nodes that
-        # shared an 8/10-char prefix (javastraat/meshpoint 52e1f56).
-        node_id_prefix = pk[:12] if len(pk) >= 12 else pk
-        short_name = name[:4]
-        cursor = await coord.node_repo._db.execute(
-            """
-            UPDATE nodes
-            SET long_name = ?,
-                short_name = CASE
-                    WHEN short_name IS NULL
-                      OR short_name = ''
-                      OR LOWER(LTRIM(short_name, '!')) = LOWER(SUBSTR(LTRIM(node_id, '!'), 1, 4))
-                        THEN ?
-                    ELSE short_name
-                END
-            WHERE protocol = 'meshcore'
-              AND LOWER(LTRIM(node_id, '!')) = ?
-            """,
-            (name, short_name, node_id_prefix),
-        )
-        if cursor.rowcount:
-            updated += cursor.rowcount
+        if not name or _is_hex_identifier(name):
+            name = None
+        position = meshcore_position(contact.get("adv_lat"), contact.get("adv_lon"))
+        if name is None and position is None:
+            continue
+        node = await coord.node_repo.enrich_meshcore_contact(pk, name, position)
+        if node is not None:
+            coord.stats_reporter.record_node(node.to_dict())
+            updated += 1
 
     if updated:
-        await coord.node_repo._db.commit()
         logger.info(
-            "MeshCore contact names applied to %d node row(s)", updated,
+            "MeshCore contact metadata applied to %d node row(s)", updated,
         )
     return updated
 

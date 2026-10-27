@@ -1,15 +1,19 @@
 /** Configuration → GPS — position broadcast interval editor. */
 
 class PositionBroadcastCard {
-    constructor(api) {
+    constructor(api, { meshcore = false } = {}) {
+        // PiMesh's existing scheduler sends MeshCore identity adverts. Retain
+        // its persisted interval and API while presenting the protocol's terms.
         this._inner = new window.BroadcastIntervalCard(api, {
-            title: 'Position broadcast interval',
-            hint: 'How often this Meshpoint sends POSITION packets on the mesh '
+            title: meshcore ? 'MeshCore advertisement interval' : 'Position broadcast interval',
+            hint: meshcore
+                ? 'How often PiMesh announces its MeshCore identity. Advertisements include the configured location. Set 0 to pause scheduled advertisements; manual adverts remain available.'
+                : 'How often this Meshpoint sends POSITION packets on the mesh '
                 + '(Meshtastic app map). Separate from NodeInfo identity broadcasts.',
-            saveLabel: 'Save position interval',
+            saveLabel: meshcore ? 'Save advertisement interval' : 'Save position interval',
             putUrl: '/api/config/position',
             configKey: 'position',
-            cardId: 'cfg-position-interval',
+            cardId: meshcore ? 'cfg-meshcore-advert-interval' : 'cfg-position-interval',
         });
     }
 

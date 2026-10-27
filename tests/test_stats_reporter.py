@@ -1,6 +1,7 @@
 """Tests for src/analytics/stats_reporter.py."""
 
 import unittest
+from unittest.mock import patch
 
 from src.analytics.stats_reporter import StatsReporter
 
@@ -226,10 +227,13 @@ class TestPacketsPerMinute(unittest.TestCase):
         self.assertEqual(reporter.packets_per_minute, 0.0)
 
     def test_positive_after_packets(self):
-        reporter = StatsReporter()
-        for _ in range(10):
-            reporter.record_packet("meshtastic", "text", -90.0, 5.0, 3, 3)
-        self.assertGreater(reporter.packets_per_minute, 0)
+        # Fast Windows runs can record every packet within one clock tick.
+        with patch('src.analytics.stats_reporter.time.monotonic', return_value=100.0) as clock:
+            reporter = StatsReporter()
+            for _ in range(10):
+                reporter.record_packet("meshtastic", "text", -90.0, 5.0, 3, 3)
+            clock.return_value = 110.0
+            self.assertEqual(reporter.packets_per_minute, 60.0)
 
 
 if __name__ == "__main__":

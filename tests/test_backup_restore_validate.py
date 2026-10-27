@@ -17,6 +17,7 @@ def _build_archive(
     *,
     files: dict[str, bytes],
     manifest: BackupManifest,
+    extra_members: tuple[tarfile.TarInfo, ...] = (),
     bundle_name: str = "meshpoint-backup-test0001-20260611T120000Z",
 ) -> bytes:
     buffer = io.BytesIO()
@@ -29,6 +30,8 @@ def _build_archive(
             info = tarfile.TarInfo(name=f"{bundle_name}/{rel_path}")
             info.size = len(payload)
             tar.addfile(info, io.BytesIO(payload))
+        for member in extra_members:
+            tar.addfile(member)
     return buffer.getvalue()
 
 
@@ -105,6 +108,35 @@ class TestBackupRestoreValidate(unittest.TestCase):
         )
         with self.assertRaises(RestoreValidationError):
             self.service.validate_archive_bytes(payload)
+
+    def test_rejects_special_members(self) -> None:
+        bundle = "meshpoint-backup-test0001-20260611T120000Z"
+        for kind in (tarfile.SYMTYPE, tarfile.LNKTYPE, tarfile.FIFOTYPE,
+                     tarfile.CHRTYPE, tarfile.BLKTYPE):
+            with self.subTest(kind=kind):
+                member = tarfile.TarInfo(name=f"{bundle}/data/special")
+                member.type = kind
+                member.linkname = f"{bundle}/config/local.yaml"
+                payload = _build_archive(
+                    manifest=self._valid_manifest(),
+                    files={"config/local.yaml": b"device:\n  device_id: abc\n"},
+                    extra_members=(member,),
+                )
+                with self.assertRaisesRegex(RestoreValidationError, "non-regular-file"):
+                    self.service.validate_archive_bytes(payload)
+
+    def test_accepts_directory_members(self) -> None:
+        directory = tarfile.TarInfo(
+            name="meshpoint-backup-test0001-20260611T120000Z/data"
+        )
+        directory.type = tarfile.DIRTYPE
+        payload = _build_archive(
+            manifest=self._valid_manifest(),
+            files={"config/local.yaml": b"device:\n  device_id: abc\n"},
+            extra_members=(directory,),
+        )
+        restored = self.service.validate_archive_bytes(payload)
+        self.assertEqual(restored.device_id, "abc")
 
 
 if __name__ == "__main__":

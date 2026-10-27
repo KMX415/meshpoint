@@ -13,6 +13,8 @@
 # ── Service management ────────────────────────────────────────────────
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/systemctl status meshpoint *
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart meshpoint
+meshpoint ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart meshtasticd
+meshpoint ALL=(ALL) NOPASSWD: /usr/bin/systemctl is-active meshtasticd
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop meshpoint
 meshpoint ALL=(ALL) NOPASSWD: /usr/bin/systemctl daemon-reload
 

@@ -1,5 +1,35 @@
 # Common Errors
 
+## v0.8.0 development additions
+
+### Public page unavailable, or Viewer cannot edit
+
+Public summaries are off by default and only selected pages are exposed. Save
+the setting as administrator, then test in a signed-out window. Disabling access
+returns visitors to login. Viewer configuration controls are intentionally
+disabled and sending/deleting is blocked. [Access guide](DASHBOARD-ACCESS.md).
+
+### Plugin dependency missing, receiver busy, or update requires restart
+
+The manager installs selected code, not native OS packages. Enablement requires
+a restart and receivers start only when requested. Stop the active SDR decoder
+before using another; disable and restart before update/removal. See
+[plugin setup](PLUGINS.md) and [development troubleshooting](TROUBLESHOOTING.md#v080-development-checks).
+
+### Backup rejected for an unsupported archive member
+
+Restore now rejects symlinks, hard links, devices and FIFOs before extraction.
+Use a fresh archive produced by Meshpoint, and do not bypass the validator.
+An accepted archive still needs a recovery test, particularly for optional-app
+data. See [backup and restore](CONFIGURATION.md#backup-and-restore).
+
+### USB permission denied after the Espressif rule migration
+
+The bundled rule uses `0660` and `dialout`, preserving customized rules. Confirm
+the service account's group membership, the resolved port's permissions and
+that no flasher/monitor owns the port. A new service process is needed after
+group changes. See [USB permissions](USB-NODES.md#serial-permissions-after-an-update).
+
 Searchable catalog of error messages, their cause, and the fix. Use Ctrl+F /
 Cmd+F to find your message. For longer diagnostic flows see
 [Troubleshooting](TROUBLESHOOTING.md). For configuration syntax see
@@ -271,16 +301,38 @@ sudo systemctl restart meshpoint
 ```
 
 Or re-run `sudo /opt/meshpoint/scripts/install.sh` (always ensures
-`esptool>=4.7.0,<5` in the venv).
+`esptool>=4.7.0,<5` and `adafruit-nrfutil` in the venv).
 
 Then open **Configuration → Firmware**, pick board/port from the dropdowns,
 and flash again. Leave **Erase everything** unchecked for in-place upgrades
-of the same stack.
+of the same stack (ESP only; nRF boards use DFU and hide that toggle).
 
 If the UI said "reconnected" but **Installed** still shows the old companion
 version, the flash failed (often missing esptool or the old `write-flash`
 verb on esptool 4.7). Current firmware uses `write_flash` and only reports
 reconnect after a successful esptool exit.
+
+### Configuration → Firmware: nRF flash asks for BOOT button / DFU fails
+
+**Cause:** Healthy nRF boards (MeshCore T096-class companions, Meshtastic
+T114 / RAK4631, etc.) enter DFU when Meshpoint opens the USB serial port at
+1200 baud (`adafruit-nrfutil --touch 1200`). No unplug or BOOT press is
+needed for that happy path. If touch fails (hung app, wrong bootloader, or
+`adafruit-nrfutil` missing), the stream reports recovery steps.
+
+**Fix (remote / happy path):**
+
+```bash
+sudo /opt/meshpoint/venv/bin/pip install -r /opt/meshpoint/requirements.txt
+sudo systemctl restart meshpoint
+```
+
+Then flash again from Configuration → Firmware with the nRF board selected.
+The DFU panel text should say DFU enters over USB automatically.
+
+**Fix (on-site recovery only):** Double-press RESET so a UF2 drive appears
+and retry (or drop a `.uf2` onto the DFU panel if the volume is mounted on
+the Pi), or hold BOOT/PROG while plugging USB, then Flash again.
 
 ### `error: externally-managed-environment`
 
@@ -857,6 +909,9 @@ the other browser will get bumped.
 
 ## Meshtastic USB serial
 
+Setup (add a USB node, second preset, multiple devices, MeshCore alongside):
+[USB nodes](USB-NODES.md).
+
 ### Serial port open failed but the dashboard and concentrator still work
 
 **Cause:** The Meshtastic USB capture source could not open its configured
@@ -886,6 +941,20 @@ Meshtastic capture try to open a GPS port that `gpsd` often already holds.
 an amber warning. Prefer `/dev/serial/by-path/…` for the Meshtastic radio.
 Leave GPS for Configuration → GPS / `gpsd`. After correcting the pin, save
 and restart.
+
+### Serial shows connected after Set Preset but no USB packets
+
+**Cause:** Changing Region or modem preset writes LoRa config on the node,
+which reboots the radio and drops USB CDC. Older firmware left the dead
+serial handle in place, so the dashboard still looked connected.
+
+**Fix:** On the v0.8.0 RC, Meshpoint closes that handle and reconnects.
+The top-bar USB pill and Configuration → Serial show **REBOOTING** (after
+Set Preset / region) or **RECONNECTING** (after an unplug) plus a retry
+countdown. Look for `serial link dropped` then `Serial capture recovered`
+in `journalctl`. If reconnect never recovers (busy port, unplugged node),
+confirm the by-path pin, then `sudo systemctl restart meshpoint` as a
+last resort.
 
 ---
 
@@ -942,16 +1011,20 @@ time. Auto-detect cannot reliably pick the MeshCore one, especially with
 mixed Heltec V4 firmwares (see
 [Hardware Matrix > Heltec V3 vs V4 USB enumeration gotcha](HARDWARE-MATRIX.md#heltec-v3-vs-v4-usb-enumeration-gotcha)).
 
-**Fix:** Pin the port explicitly:
+**Fix:** Pin both USB radios. Prefer `/dev/serial/by-path/…` from
+**Configuration → Serial** and **Configuration → MeshCore**. Yaml:
 
 ```yaml
 capture:
+  serial:
+    - serial_port: "/dev/serial/by-path/..."
+      label: "mf"
   meshcore_usb:
     auto_detect: false
-    serial_port: "/dev/ttyACM0"
+    serial_port: "/dev/serial/by-path/..."
 ```
 
-Then `sudo systemctl restart meshpoint`.
+Then `sudo systemctl restart meshpoint`. Full steps: [USB nodes](USB-NODES.md).
 
 ### `MeshCore companion handshake failed` in the logs
 

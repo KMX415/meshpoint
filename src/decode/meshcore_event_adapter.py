@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from src.models.packet import Packet, PacketType, Protocol
+from src.models.meshcore_position import meshcore_position
 from src.models.signal import SignalMetrics
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,15 @@ def adapt_event(
         return None
 
     try:
-        return builder(payload, signal)
+        packet = builder(payload, signal)
+        receiver = envelope.get("receiver_settings")
+        if isinstance(receiver, dict) and receiver.get("source") == "receiver_self_info_at_capture":
+            packet.decoded_payload["meshcore_receiver"] = receiver
+        # Incoming event path length, never the contact's outgoing saved route.
+        path_len = payload.get("path_len")
+        if type(path_len) is int and 0 <= path_len <= 63:
+            packet.decoded_payload["meshcore_hops"] = path_len
+        return packet
     except Exception:
         logger.exception("adapt_event: builder failed for %s", event_type)
         return None
@@ -152,11 +161,9 @@ def _build_advertisement(
     if name and not _looks_like_identifier(name, source_id, pubkey):
         decoded["long_name"] = name
         decoded["short_name"] = name[:4]
-    lat = payload.get("adv_lat")
-    lon = payload.get("adv_lon")
-    if lat and lon:
-        decoded["latitude"] = lat
-        decoded["longitude"] = lon
+    position = meshcore_position(payload.get("adv_lat"), payload.get("adv_lon"))
+    if position:
+        decoded["latitude"], decoded["longitude"] = position
     return Packet(
         packet_id=_generate_id(),
         source_id=source_id,
@@ -267,10 +274,10 @@ def _rf_signal_from_payload(
     return SignalMetrics(
         rssi=float(rssi) if rssi is not None else -120.0,
         snr=float(snr) if snr is not None else 0.0,
-        frequency_mhz=0.0,
-        spreading_factor=0,
-        bandwidth_khz=0.0,
-        coding_rate="N/A",
+        frequency_mhz=fallback.frequency_mhz if fallback else 0.0,
+        spreading_factor=fallback.spreading_factor if fallback else 0,
+        bandwidth_khz=fallback.bandwidth_khz if fallback else 0.0,
+        coding_rate=fallback.coding_rate if fallback else "N/A",
     )
 
 

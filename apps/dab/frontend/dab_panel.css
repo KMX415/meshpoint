@@ -1,0 +1,324 @@
+/* ── DAB+ tab: channel picker, ensemble readout, station list ────── */
+
+/* .lsn-tabbar's own padding is sized for the page-level tabbar (sits at
+   the content area's edge); override it here since this is nested inside
+   a panel that already has its own padding. */
+.dab-chantabs {
+    padding: 0 0 12px;
+    flex-wrap: wrap;
+}
+
+.dab-chantab-content {
+    min-height: 40px;
+}
+
+.dab-manual {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.dab-manual__select {
+    background: var(--overlay-weak);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: inherit;
+    font: inherit;
+    padding: 6px 10px;
+}
+
+.dab-stations {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Shown when browsing a channel tab that isn't the one actually tuned --
+   viewing is safe (no side effect); Scan is the one explicit action that
+   interrupts the current station. */
+.dab-scan-prompt {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 4px 0;
+    margin-bottom: 8px;
+}
+
+.dab-scan-note {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.dab-chan-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 8px;
+}
+
+.dab-chanhint {
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 8px 0 0;
+}
+
+.dab-station-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.dab-station-row__text {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+}
+
+.dab-station-row__playing {
+    border-color: var(--accent-green);
+    color: var(--accent-green);
+}
+
+/* Known-from-last-scan station shown while welle-cli is still decoding --
+   a placeholder, not yet actionable, so it reads as "coming soon" rather
+   than a real, clickable row. */
+.dab-station-row--pending {
+    opacity: 0.5;
+}
+
+/* ── DAB+ Config tab ──────────────────────────────────── */
+
+.dabcfg-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.dabcfg-hint {
+    color: var(--text-muted);
+    font-size: 12.5px;
+    margin-bottom: 14px;
+    line-height: 1.5;
+}
+
+.dabcfg-hint code {
+    background: var(--overlay-med);
+    padding: 1px 5px;
+    border-radius: 4px;
+}
+
+.dabcfg-empty {
+    color: var(--text-muted);
+    padding: 12px 0;   /* horizontal inset comes from .lsn-panel-body */
+}
+
+.dabcfg-meta {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-bottom: 10px;
+}
+
+.dabcfg-row {
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.dabcfg-row__top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.dabcfg-row__chan {
+    font-family: var(--font-mono);
+    color: var(--accent-green);
+    flex-shrink: 0;
+    width: 3em;
+}
+
+.dabcfg-row__name {
+    flex: 1;
+    min-width: 10em;
+    font-size: 13px;
+}
+
+.dabcfg-row__input {
+    width: 100%;
+    background: var(--overlay-weak);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    padding: 4px 8px;
+    font-size: 13px;
+}
+
+.dabcfg-row__badge {
+    color: var(--text-muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 4px;
+}
+
+.dabcfg-row__meta {
+    color: var(--text-muted);
+    font-size: 11.5px;
+    flex-shrink: 0;
+}
+
+.dabcfg-row__actions {
+    flex-shrink: 0;
+    display: flex;
+    gap: 6px;
+}
+
+.dabcfg-row__stations {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+/* ── DAB+ Config tab: run-scan panel ─────────────────────── */
+
+.dabcfg-scan-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+/* Sits directly below the scan action buttons (or the advanced panel) --
+   needs its own vertical gap so it doesn't butt up against them. */
+.dabcfg-scan-output-toggle {
+    margin-top: 12px;
+}
+
+.dabcfg-scan-advanced {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+.dabcfg-scan-channels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.dabcfg-scan-band {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 10px;
+    background: var(--overlay-weak);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    min-width: 4.5em;
+}
+
+.dabcfg-scan-band__label {
+    font-family: var(--font-mono);
+    color: var(--text-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+
+.dabcfg-scan-chan {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+}
+
+.dabcfg-scan-options {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.dabcfg-scan-option {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.dabcfg-scan-option__input {
+    width: 6em;
+    background: var(--overlay-weak);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    padding: 4px 8px;
+    font-size: 13px;
+}
+
+.dabcfg-scan-option--checkbox {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Same monospace dark-panel look as Configuration's .cfg-firmware-output
+   (firmware-flash cards) -- kept as its own dabcfg-scoped class rather
+   than reused directly, matching this page's own dabcfg-* naming, but
+   visually identical. */
+.dabcfg-scan-output {
+    margin: 12px 0 0;
+    padding: 10px 12px;
+    max-height: 260px;
+    overflow: auto;
+    background: var(--overlay-weak);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* ── RTL-SDR page hook (dab_rtlsdr_hook.js) -- a small status card, not a
+   full tab, so its own tiny block rather than reusing the .dab-* rules
+   above (those are all sized/shaped for the Listener page's tabbed layout). */
+.dab-rtlsdr-hook {
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--overlay-weak);
+}
+
+.dab-rtlsdr-hook h3 {
+    margin: 0 0 6px;
+    font-size: 14px;
+    color: var(--accent-green);
+}
+
+.dab-rtlsdr-hook p {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+}

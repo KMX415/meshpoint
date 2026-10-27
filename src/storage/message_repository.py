@@ -7,6 +7,7 @@ MeshCore messages.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -37,6 +38,7 @@ class Message:
     rssi: float | None = None
     snr: float | None = None
     rx_count: int = 1
+    heard_repeats: int | None = None
 
     def to_dict(self) -> dict:
         d = {
@@ -51,6 +53,7 @@ class Message:
             "status": self.status,
             "packet_id": self.packet_id,
             "rx_count": self.rx_count,
+            "heard_repeats": self.heard_repeats,
         }
         if self.rssi is not None:
             d["rssi"] = round(self.rssi, 1)
@@ -98,19 +101,66 @@ class MessageRepository:
         channel: int = 0,
         packet_id: str = "",
         status: str = "sent",
+        heard_repeats: int | None = None,
     ) -> int:
         """Record an outbound message. Returns the row ID."""
         now = datetime.now(timezone.utc).isoformat()
         cursor = await self._db.execute(
             """INSERT INTO messages
                (direction, text, node_id, node_name, protocol,
-                channel, timestamp, status, packet_id)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                channel, timestamp, status, packet_id, heard_repeats)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             ("sent", text, node_id, node_name, protocol,
-             channel, now, status, packet_id),
+             channel, now, status, packet_id, heard_repeats),
         )
         await self._db.commit()
         return cursor.lastrowid
+
+    async def update_meshcore_feedback(
+        self, row_id: int, count: int | None, status: str,
+        observations: list | None = None,
+    ) -> bool:
+        """Persist monotonic TX observations; never change incoming/read state."""
+        cursor = await self._db.execute(
+            """UPDATE messages SET
+               heard_repeats = CASE WHEN ? IS NULL THEN heard_repeats
+                   ELSE MAX(COALESCE(heard_repeats, 0), ?) END,
+               status = CASE WHEN ? = 'delivered' THEN 'delivered' ELSE status END,
+               heard_paths = CASE WHEN ? IS NOT NULL AND ? >= COALESCE(heard_repeats, 0)
+                   THEN ? ELSE heard_paths END
+               WHERE id = ? AND direction = 'sent' AND protocol = 'meshcore'""",
+            (count, count, status, 1 if observations is not None else None, count,
+             json.dumps(observations[:32], allow_nan=False) if observations is not None else None, row_id),
+        )
+        await self._db.commit()
+        return cursor.rowcount > 0
+
+    async def get_heard_paths(self, row_id: int) -> dict | None:
+        """Read saved observations and resolve local roster prefixes without radio I/O."""
+        row = await self._db.fetch_one(
+            "SELECT heard_repeats, heard_paths FROM messages WHERE id = ? "
+            "AND direction = 'sent' AND protocol = 'meshcore'", (row_id,)
+        )
+        if not row:
+            return None
+        observations = json.loads(row["heard_paths"]) if row.get("heard_paths") else []
+        nodes = await self._db.fetch_all(
+            "SELECT node_id, public_key, long_name, short_name FROM nodes WHERE protocol = 'meshcore'"
+        ) if observations else []
+        roster = {}
+        for node in nodes:
+            key = (node.get("public_key") or node["node_id"]).lower().removeprefix("mc:").lstrip("!")
+            if len(key) >= 12 and all(c in "0123456789abcdef" for c in key):
+                roster[key] = node.get("long_name") or node.get("short_name")
+        for observation in observations:
+            hops = []
+            for prefix in observation["path"]:
+                matches = [name for key, name in roster.items() if key.startswith(prefix)]
+                hops.append({"id": prefix, "name": matches[0] if len(matches) == 1 else None,
+                             "ambiguous": len(matches) > 1})
+            observation["hops"] = hops
+        return {"count": row["heard_repeats"], "observations": observations,
+                "recorded": row.get("heard_paths") is not None}
 
     async def save_received(
         self,
@@ -289,6 +339,7 @@ class MessageRepository:
             rssi=row.get("rssi"),
             snr=row.get("snr"),
             rx_count=row.get("rx_count") or 1,
+            heard_repeats=row.get("heard_repeats"),
         )
 
 

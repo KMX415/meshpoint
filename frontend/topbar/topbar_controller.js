@@ -13,6 +13,7 @@ class TopbarController {
         this._root = rootEl;
         this._ws = dashboardWs;
         this._refreshTimer = null;
+        this._refreshMs = 10_000;
         this._meshtastic = new TopbarMeshtasticChip(
             rootEl.querySelector('.topbar-meshtastic'),
         );
@@ -31,8 +32,9 @@ class TopbarController {
     init() {
         this._wireWebSocket();
         this._refreshConfig();
+        this._refreshMs = 10_000;
         this._refreshTimer = setInterval(
-            () => this._refreshConfig(), 10_000,
+            () => this._refreshConfig(), this._refreshMs,
         );
     }
 
@@ -80,12 +82,40 @@ class TopbarController {
             this._meshcore.setDashboardReachable(true);
             this._serial.setDashboardReachable(true);
             const tx = cfg.transmit || {};
-            this._meshtastic.setMeshtastic({
-                shortName: tx.short_name,
-                radio: cfg.radio || null,
-            });
+            const pimesh = window.PlatformContext?.isPimesh(cfg);
+            const configured = (cfg.capture?.sources || []).some(
+                source => ['concentrator', 'serial', 'meshtasticd'].includes(source),
+            ) && !(pimesh && cfg.device.radio_protocol === 'meshcore');
+            const isNode = window.PlatformContext
+                && window.PlatformContext.isNodePlatform(cfg);
+            if (isNode) {
+                const md = window.PlatformContext.meshtasticdRuntime(cfg);
+                const mdc = window.PlatformContext.meshtasticdConfig(cfg);
+                this._meshtastic.setMeshtastic({
+                    configured,
+                    shortName: md.short_name || tx.short_name,
+                    radio: {
+                        region: md.region || (cfg.radio && cfg.radio.region),
+                        frequency_mhz: md.frequency_mhz || (cfg.radio && cfg.radio.frequency_mhz),
+                        current_preset: cfg.radio && cfg.radio.current_preset,
+                        modem_preset: md.modem_preset,
+                        module_badge: mdc.module_badge,
+                    },
+                    nodePlatform: true,
+                });
+            } else {
+                this._meshtastic.setMeshtastic({
+                    configured,
+                    shortName: tx.short_name,
+                    radio: cfg.radio || null,
+                });
+            }
             this._meshcore.setMeshcore(cfg.meshcore || null);
+            if (pimesh && cfg.device.radio_protocol === 'meshtastic') {
+                this._root.querySelector('#topbar-meshcore-group').hidden = true;
+            }
             this._serial.setSerial(cfg.serial || []);
+            this._syncPollCadence(cfg.serial || []);
             document.dispatchEvent(
                 new CustomEvent('meshpoint:configUpdated', { detail: cfg }),
             );
@@ -93,6 +123,19 @@ class TopbarController {
             this._meshcore.setDashboardReachable(false);
             this._serial.setDashboardReachable(false);
         }
+    }
+
+    _syncPollCadence(serialDevices) {
+        const busy = (serialDevices || []).some(
+            (d) => d && (d.reconnecting || d.link_phase),
+        );
+        const ms = busy ? 1000 : 10_000;
+        if (ms === this._refreshMs) return;
+        this._refreshMs = ms;
+        if (this._refreshTimer) clearInterval(this._refreshTimer);
+        this._refreshTimer = setInterval(
+            () => this._refreshConfig(), this._refreshMs,
+        );
     }
 
     registerAction(spec) {

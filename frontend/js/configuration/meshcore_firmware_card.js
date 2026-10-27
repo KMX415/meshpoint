@@ -1,16 +1,3 @@
-/**
- * Configuration → Firmware page: MeshCore card.
- *
- * Standalone home for "flash a spare board" actions -- previously each
- * protocol's own Configuration page carried its own firmware-flash card
- * buried among that protocol's actual settings, even though flashing a
- * board is a different kind of action (prep new/spare hardware) than
- * configuring an already-assigned companion. This is the first (and
- * top) card here, moved from meshcore_card.js, drives
- * src/api/routes/meshcore_firmware_routes.py. Meshtastic's card sits
- * below it (meshtastic_firmware_card.js, moved from serial_card.js),
- * Credit: javastraat/meshpoint 85fb576 (erase default OFF).
- */
 
 class MeshcoreFirmwareConfigCard {
     constructor(api) {
@@ -70,6 +57,7 @@ class MeshcoreFirmwareConfigCard {
                         <input type="checkbox" data-mc-erase-all>
                         <span class="cfg-field__label">Erase everything (wipes board settings)</span>
                     </label>
+                    <div data-mc-nrf-host hidden></div>
                     <div class="cfg-card__actions">
                         <button class="terminal-button terminal-button--primary"
                                 type="button" data-mc-firmware-flash>
@@ -98,7 +86,10 @@ class MeshcoreFirmwareConfigCard {
         this._root.querySelector('[data-mc-firmware-flavor]')
             .addEventListener('change', () => this._loadMcFirmwareTargets());
         this._root.querySelector('[data-mc-firmware-board]')
-            .addEventListener('change', () => this._updateFlashButtonState());
+            .addEventListener('change', () => {
+                this._syncMcFlashMethodUi();
+                this._updateFlashButtonState();
+            });
         this._root.querySelector('[data-mc-rescan-releases]')
             .addEventListener('click', (e) => this._rescanReleases(e.currentTarget));
         this._root.querySelector('[data-mc-rescan-usb]')
@@ -164,14 +155,7 @@ class MeshcoreFirmwareConfigCard {
         return base;
     }
 
-    /** Maps every currently-configured serial_port value (across MeshCore
-     * companions, Serial devices, and POCSAG companions -- one shared USB
-     * pool, so a port pinned by any of them is "in use" from a flash
-     * card's perspective) to a human label, for the "already used by ..."
-     * hint in the device picker. Same logic as meshcore_card.js's own
-     * copy -- duplicated rather than shared, this file is otherwise
-     * independent of that one. */
-    _buildPortUsageMap(config) {
+        _buildPortUsageMap(config) {
         const usage = {};
         const cap = (config && config.capture) || {};
         const mcList = Array.isArray(cap.meshcore_usb)
@@ -183,27 +167,17 @@ class MeshcoreFirmwareConfigCard {
         (Array.isArray(cap.serial) ? cap.serial : []).forEach((d) => {
             if (d.serial_port) usage[d.serial_port] = d.label ? `Serial ${d.label}` : 'Serial';
         });
-                return usage;
+        return usage;
     }
 
-    /** Live USB-serial enumeration for the device picker (same endpoint
-     * meshcore_card.js's own companion port datalist uses). Re-fetched
-     * whenever this page is mounted -- unlike meshcore_card.js's copy,
-     * there's no periodic dashboard-poll render() driving this page to
-     * naturally pick up newly-plugged devices, so the "↻ Rescan USB"
-     * button below is what covers a device plugged in after landing on
-     * this page instead of needing a full reload. */
-    async _refreshSerialPortsList() {
+        async _refreshSerialPortsList() {
         const result = await this._api.get('/api/config/serial-ports');
         const ports = (result && Array.isArray(result.ports)) ? result.ports : [];
         this._enumeratedPorts = ports;
         this._renderMcFirmwareDevicePicker();
     }
 
-    /** "↻ Rescan USB" click handler -- same button/behavior as
-     * meshcore_card.js's own copy (disable + "Scanning…" while in
-     * flight), just re-running this page's own fetch instead. */
-    async _rescanUsb(button) {
+        async _rescanUsb(button) {
         const original = button.textContent;
         button.disabled = true;
         button.textContent = 'Scanning…';
@@ -215,9 +189,7 @@ class MeshcoreFirmwareConfigCard {
         }
     }
 
-    /** Native <datalist>-truncation-avoiding label, identical to
-     * meshcore_card.js's own _portOptionLabel. */
-    _portOptionLabel(p, usage) {
+        _portOptionLabel(p, usage) {
         const devName = (p.device || '').split('/').pop();
         const chip = (p.description || '')
             .replace(/^Silicon Labs\s+/i, '')
@@ -230,12 +202,7 @@ class MeshcoreFirmwareConfigCard {
         return parts.filter(Boolean).join(' — ');
     }
 
-    /** Board choices for the Board dropdown, derived live from whichever
-     * release+flavor is currently selected. Re-fetches on every
-     * Version/Flavor change (USB vs BLE board sets differ). Plain
-     * ``<select>`` (not datalist) so mobile and desktop both pick the
-     * exact asset id (e.g. Heltec_v3) without case/underscore typos. */
-    async _loadMcFirmwareTargets() {
+        async _loadMcFirmwareTargets() {
         const select = this._root.querySelector('[data-mc-firmware-board]');
         if (!select) return;
 
@@ -255,23 +222,73 @@ class MeshcoreFirmwareConfigCard {
         } else {
             select.innerHTML = [
                 '<option value="">Select a board…</option>',
-                ...boards.map((b) => (
-                    `<option value="${this._esc(b.board)}">${this._esc(b.label)}</option>`
-                )),
+                ...boards.map((b) => {
+                    const method = b.flash_method || 'esptool';
+                    const disabled = method === 'unsupported' ? ' disabled' : '';
+                    const suffix = method === 'nrf_dfu' ? ' (nRF DFU)'
+                        : method === 'unsupported' ? ' (not flashable yet)' : '';
+                    return (
+                        `<option value="${this._esc(b.board)}" data-flash-method="${this._esc(method)}"${disabled}>`
+                        + `${this._esc(b.label)}${suffix}</option>`
+                    );
+                }),
             ].join('');
             if (previous && boards.some((b) => b.board === previous)) {
                 select.value = previous;
             }
         }
+        this._syncMcFlashMethodUi();
         this._updateFlashButtonState();
     }
 
-    /** Flash is only enabled once BOTH a real board and a real device are
-     * selected -- board and device availability are checked by two
-     * independent async loads (targets vs. serial-ports), so this is the
-     * one place that reconciles them instead of each overwriting the
-     * other's disabled/title state. */
-    _updateFlashButtonState() {
+    _selectedFlashMethod() {
+        const select = this._root?.querySelector('[data-mc-firmware-board]');
+        const opt = select?.selectedOptions?.[0];
+        return opt?.dataset?.flashMethod || 'esptool';
+    }
+
+    _syncMcFlashMethodUi() {
+        const method = this._selectedFlashMethod();
+        const eraseWrap = this._root.querySelector('[data-mc-erase-all-wrap]');
+        const host = this._root.querySelector('[data-mc-nrf-host]');
+        const hint = this._root.querySelector('.cfg-card__hint');
+        if (method === 'nrf_dfu') {
+            if (eraseWrap) eraseWrap.hidden = true;
+            if (hint) {
+                hint.textContent = (
+                    'Flash official companion firmware (nRF: Adafruit DFU over USB).'
+                );
+            }
+            if (host && window.FirmwareNrfPanel) {
+                if (!this._nrfPanel) {
+                    this._nrfPanel = new window.FirmwareNrfPanel({
+                        uploadUrl: '/api/config/meshcore/firmware/upload',
+                        onFlashWithUpload: (opts) => this._flashMeshcoreFirmware(opts),
+                        appendOutput: (t) => this._appendMcFirmwareOutput(t),
+                        setStatus: (kind, text) => {
+                            const status = this._root.querySelector('[data-mc-firmware-status]');
+                            if (!status) return;
+                            status.dataset.kind = kind;
+                            status.textContent = text;
+                        },
+                    });
+                }
+                this._nrfPanel.mount(host);
+            }
+        } else {
+            if (eraseWrap) eraseWrap.hidden = false;
+            if (hint) {
+                hint.textContent = (
+                    'Flash official companion firmware from GitHub. '
+                    + 'Leave erase off for upgrades; turn it on for a blank board.'
+                );
+            }
+            if (this._nrfPanel) this._nrfPanel.unmount();
+            if (host) host.hidden = true;
+        }
+    }
+
+        _updateFlashButtonState() {
         const flashBtn = this._root.querySelector('[data-mc-firmware-flash]');
         if (!flashBtn) return;
         const boardInput = this._root.querySelector('[data-mc-firmware-board]');
@@ -290,25 +307,12 @@ class MeshcoreFirmwareConfigCard {
         }
     }
 
-    /** Looks up a board's friendly label from the last-loaded list, for
-     * the confirm-modal/status text -- falls back to a lightly cleaned
-     * version of the raw value if it's somehow not in that list (e.g. a
-     * stale value left over from before a Version/Flavor change). */
-    _boardLabel(board) {
+        _boardLabel(board) {
         const match = (this._boards || []).find((b) => b.board === board);
         return match ? match.label : board.replace(/_/g, ' ');
     }
 
-    /** Populates the "Device to flash" pulldown from every currently
-     * enumerated USB-serial device -- deliberately NOT limited to
-     * already-configured companions, so a spare board (or a friend's,
-     * just passing through) can be flashed without adding-then-removing
-     * a permanent companion entry first. Options carry the same "used
-     * by ..." hint as meshcore_card.js's own companion port field. The
-     * selected value is a stable_path, re-validated against the live
-     * enumeration server-side -- never trusted as a raw path from the
-     * browser. */
-    _renderMcFirmwareDevicePicker() {
+        _renderMcFirmwareDevicePicker() {
         const select = this._root.querySelector('[data-mc-firmware-device]');
         if (!select) return;
 
@@ -329,14 +333,7 @@ class MeshcoreFirmwareConfigCard {
         this._updateFlashButtonState();
     }
 
-    /** Version pulldown for the MeshCore firmware card, from the last 10
-     * companion- tagged releases (GET .../releases), newest first.
-     * "Latest" (empty tag, the default) covers routine flashing; this
-     * is for the deliberate case -- pinning an older or specific
-     * version, e.g. to match what another companion is already
-     * running. Fetched once at mount; the "↻ Refresh" button below
-     * covers a release published while already on this page. */
-    async _loadMcFirmwareReleases() {
+        async _loadMcFirmwareReleases() {
         const select = this._root.querySelector('[data-mc-firmware-tag]');
         if (!select) return;
         const result = await this._api.get('/api/config/meshcore/firmware/releases');
@@ -350,13 +347,7 @@ class MeshcoreFirmwareConfigCard {
         if (previous && releases.some((r) => r.tag === previous)) select.value = previous;
     }
 
-    /** "↻ Refresh" click handler for Version -- re-checks GitHub for a
-     * newly-published release (a one-time fetch at mount otherwise, per
-     * _loadMcFirmwareReleases' own doc comment). Also re-runs the Board
-     * fetch: if "Latest" is selected and a new release just landed, the
-     * board list fetched at mount time is for the now-stale "latest",
-     * not the one this just found. */
-    async _rescanReleases(button) {
+        async _rescanReleases(button) {
         const original = button.textContent;
         button.disabled = true;
         button.textContent = 'Checking…';
@@ -383,7 +374,7 @@ class MeshcoreFirmwareConfigCard {
         pre.scrollTop = pre.scrollHeight;
     }
 
-    async _flashMeshcoreFirmware() {
+    async _flashMeshcoreFirmware(uploadOpts) {
         const boardInput = this._root.querySelector('[data-mc-firmware-board]');
         const deviceSelect = this._root.querySelector('[data-mc-firmware-device]');
         const tagSelect = this._root.querySelector('[data-mc-firmware-tag]');
@@ -391,36 +382,50 @@ class MeshcoreFirmwareConfigCard {
         const eraseAllInput = this._root.querySelector('[data-mc-erase-all]');
         const board = (boardInput?.value || '').trim();
         const port = deviceSelect?.value;
-        const eraseAll = eraseAllInput ? eraseAllInput.checked : false;
-        if (!board || !port) return;
+        const method = this._selectedFlashMethod();
+        const eraseAll = method === 'esptool' && eraseAllInput
+            ? eraseAllInput.checked : false;
+        const uploadId = uploadOpts?.upload_id || '';
+        const flashMode = uploadOpts?.flash_mode || '';
+        if ((!board && !uploadId) || !port) return;
 
         const status = this._root.querySelector('[data-mc-firmware-status]');
-        if (!(this._boards || []).some((b) => b.board === board)) {
+        if (board && !(this._boards || []).some((b) => b.board === board)) {
             if (status) {
                 status.dataset.kind = 'error';
                 status.textContent = 'Pick a board from the list.';
             }
             return;
         }
+        if (method === 'unsupported') {
+            if (status) {
+                status.dataset.kind = 'error';
+                status.textContent = 'This board is not flashable from Meshpoint yet.';
+            }
+            return;
+        }
 
-        const boardLabel = this._boardLabel(board);
+        const boardLabel = board ? this._boardLabel(board) : 'uploaded image';
         const deviceLabel = deviceSelect.options[deviceSelect.selectedIndex]?.text || port;
         const tag = tagSelect?.value || '';
         const flavor = flavorSelect?.value || 'usb';
         const flavorLabel = flavor === 'ble' ? 'BLE' : 'USB';
 
-        const ok = await window.confirmModal({
-            label: 'Flash MeshCore firmware',
-            description: eraseAll
-                ? `Erase the ENTIRE flash on "${deviceLabel}" and write official MeshCore `
-                    + `companion firmware (${flavorLabel}, ${tag || 'latest'}) for ${boardLabel}? `
-                    + 'This replaces whatever is currently on the board -- not reversible from here.'
-                : `Write official MeshCore companion firmware (${flavorLabel}, ${tag || 'latest'}) `
-                    + `for ${boardLabel} to "${deviceLabel}", keeping its existing identity, `
-                    + 'contacts, and channels? Only do this for a board already running MeshCore '
-                    + '-- on anything else, the result is unpredictable.',
-        });
-        if (!ok) return;
+        if (!uploadId) {
+            const ok = await window.confirmModal({
+                label: 'Flash MeshCore firmware',
+                description: method === 'nrf_dfu'
+                    ? `Write MeshCore companion firmware (${flavorLabel}, ${tag || 'latest'}) `
+                        + `for ${boardLabel} to "${deviceLabel}" via USB DFU? `
+                        + 'Enters DFU automatically (no unplug).'
+                    : eraseAll
+                        ? `Erase the ENTIRE flash on "${deviceLabel}" and write official MeshCore `
+                            + `companion firmware (${flavorLabel}, ${tag || 'latest'}) for ${boardLabel}?`
+                        : `Write official MeshCore companion firmware (${flavorLabel}, ${tag || 'latest'}) `
+                            + `for ${boardLabel} to "${deviceLabel}", keeping existing identity?`,
+            });
+            if (!ok) return;
+        }
 
         const flashBtn = this._root.querySelector('[data-mc-firmware-flash]');
         const outputPre = this._root.querySelector('[data-mc-firmware-output]');
@@ -429,13 +434,25 @@ class MeshcoreFirmwareConfigCard {
         status.dataset.kind = 'pending';
         status.textContent = `Flashing ${deviceLabel}…`;
         if (outputPre) outputPre.textContent = '';
-        this._appendMcFirmwareOutput(`# Flashing ${boardLabel} (${flavorLabel}, ${tag || 'latest'}) onto ${port}…`);
+        this._appendMcFirmwareOutput(
+            `# Flashing ${boardLabel} (${flavorLabel}, ${tag || 'latest'}, ${method}) onto ${port}…`,
+        );
+        if (this._nrfPanel && method === 'nrf_dfu') {
+            this._nrfPanel.setConsole('meshpoint:dfu$ flash --touch 1200');
+        }
 
         let finalResult = null;
         try {
+            const body = {
+                board, port, tag, flavor, erase_all: eraseAll,
+            };
+            if (uploadId) {
+                body.upload_id = uploadId;
+                body.flash_mode = flashMode || 'dfu';
+            }
             finalResult = await window.UpdateStreamClient.postNdjson(
                 '/api/config/meshcore/firmware/flash/stream',
-                { board, port, tag, flavor, erase_all: eraseAll },
+                body,
                 (event) => {
                     if (event.type === 'started' && Array.isArray(event.cmd)) {
                         this._appendMcFirmwareOutput(`$ ${event.cmd.join(' ')}`);

@@ -21,6 +21,14 @@ class StatsTab {
         this._rendered = false;
         this._statusStrip = null;
         this._fetchedAt = null;
+        this._rangeData = null;
+        if (window.MeshpointDisplayUnits) {
+            window.MeshpointDisplayUnits.onChange(() => {
+                if (this._rendered && this._rangeData) {
+                    this._updateRange(...this._rangeData);
+                }
+            });
+        }
     }
 
     async refresh() {
@@ -138,7 +146,7 @@ class StatsTab {
                         <div class="stats-range-card__desc">Received directly by this Meshpoint (0 hops)</div>
                         <div class="stats-range-card__value">
                             <span id="ss-direct-mi" class="stats-range-card__miles">--</span>
-                            <span class="stats-range-card__unit">mi</span>
+                            <span id="ss-direct-unit" class="stats-range-card__unit"></span>
                         </div>
                         <div id="ss-direct-detail" class="stats-range-card__detail"></div>
                         <div class="stats-range-bar"><div id="ss-direct-bar" class="stats-range-bar__fill"></div></div>
@@ -148,7 +156,7 @@ class StatsTab {
                         <div class="stats-range-card__desc">Relayed through other nodes across the mesh</div>
                         <div class="stats-range-card__value">
                             <span id="ss-mesh-mi" class="stats-range-card__miles">--</span>
-                            <span class="stats-range-card__unit">mi</span>
+                            <span id="ss-mesh-unit" class="stats-range-card__unit"></span>
                         </div>
                         <div id="ss-mesh-detail" class="stats-range-card__detail"></div>
                         <div class="stats-range-bar"><div id="ss-mesh-bar" class="stats-range-bar__fill stats-range-bar__fill--mesh"></div></div>
@@ -313,9 +321,11 @@ class StatsTab {
     }
 
     _updateRange(live, farthestMesh) {
+        this._rangeData = [live, farthestMesh];
         const fd = live.farthest_direct;
+        this._setRangeDistance('ss-direct', fd?.miles);
+        this._setRangeDistance('ss-mesh', farthestMesh?.miles);
         if (fd && fd.miles > 0) {
-            this._setText('ss-direct-mi', fd.miles.toFixed(1));
             const detail = [];
             if (fd.rssi) detail.push(`${fd.rssi} dBm`);
             if (fd.node_id) detail.push(fd.node_id);
@@ -325,11 +335,22 @@ class StatsTab {
         }
 
         if (farthestMesh && farthestMesh.miles > 0) {
-            this._setText('ss-mesh-mi', farthestMesh.miles.toFixed(1));
             this._setText('ss-mesh-detail', farthestMesh.node_name || farthestMesh.node_id || '');
             const bar = document.getElementById('ss-mesh-bar');
             if (bar) bar.style.width = `${Math.min(100, (farthestMesh.miles / 300) * 100)}%`;
         }
+    }
+
+    _setRangeDistance(prefix, miles) {
+        const distance = Number(miles);
+        const units = window.MeshpointDisplayUnits;
+        const valid = miles != null && Number.isFinite(distance) && distance > 0;
+        const formatted = valid
+            ? (units ? units.formatDistanceKm(distance / 0.621371) : `${distance.toFixed(1)} mi`)
+            : `-- ${units?.getPrefs().distance === 'metric' ? 'km' : 'mi'}`;
+        const split = formatted.lastIndexOf(' ');
+        this._setText(`${prefix}-mi`, formatted.slice(0, split));
+        this._setText(`${prefix}-unit`, formatted.slice(split + 1));
     }
 
     _updateProtocol(protocols) {

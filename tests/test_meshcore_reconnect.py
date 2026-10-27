@@ -15,6 +15,206 @@ from src.transmit.meshcore_tx_client import MeshCoreTxClient, SendResult
 class TestReconnectReentrancyGuard(unittest.IsolatedAsyncioTestCase):
     """_reconnect_in_progress serializes health vs timeout reconnects."""
 
+    def test_serial_open_releases_boot_line_without_global_library_patch(self):
+        from types import SimpleNamespace
+        from src.capture.meshcore_serial import create_serial_connection
+
+        class BaseConnection:
+            def __init__(self, port, baudrate, cx_dly):
+                self.port, self.baudrate, self.cx_dly = port, baudrate, cx_dly
+
+            class MCSerialClientProtocol:
+                def connection_made(self, transport):
+                    transport.serial.rts = False
+                    transport.base_called = True
+
+        with patch.dict("sys.modules", {
+            "meshcore.serial_cx": SimpleNamespace(SerialConnection=BaseConnection),
+        }):
+            for port in ["/dev/ttyACM7", "/dev/serial/by-id/selected-node", "COM12"]:
+                with patch("serial.tools.list_ports.comports", return_value=[
+                    SimpleNamespace(device=port, vid=0x10C4, pid=0xEA60),
+                ]):
+                    connection = create_serial_connection(port, 115200)
+                transport = SimpleNamespace(serial=SimpleNamespace(rts=True, dtr=True))
+                connection.MCSerialClientProtocol().connection_made(transport)
+                self.assertTrue(transport.base_called)
+                self.assertFalse(transport.serial.rts)
+                self.assertFalse(transport.serial.dtr)
+                self.assertEqual(connection.port, port)
+            original = SimpleNamespace(serial=SimpleNamespace(rts=True, dtr=True))
+            BaseConnection.MCSerialClientProtocol().connection_made(original)
+            self.assertTrue(original.serial.dtr)
+            with patch("serial.tools.list_ports.comports", return_value=[
+                SimpleNamespace(device="COM12", vid=0x303A, pid=0x1001),
+            ]):
+                native = create_serial_connection("COM12", 115200)
+            self.assertIs(type(native), BaseConnection)
+
+    async def test_repeated_fetch_restarts_keep_one_subscription(self):
+        from src.capture.meshcore_usb_source import MeshcoreUsbCaptureSource
+        source = MeshcoreUsbCaptureSource()
+        source._connected = True
+        subscriptions = 1
+
+        async def stop():
+            nonlocal subscriptions
+            subscriptions = 0
+            await asyncio.sleep(0)
+
+        async def start():
+            nonlocal subscriptions
+            subscriptions += 1
+            self.assertEqual(subscriptions, 1)
+
+        source._meshcore = MagicMock()
+        source._meshcore.stop_auto_message_fetching = AsyncMock(side_effect=stop)
+        source._meshcore.start_auto_message_fetching = AsyncMock(side_effect=start)
+        await asyncio.gather(*(source.restart_auto_fetching() for _ in range(4)))
+        self.assertEqual(subscriptions, 1)
+
+    async def test_health_waits_for_tx_and_pauses_fetching(self):
+        from types import SimpleNamespace
+        from src.capture.meshcore_usb_source import MeshcoreUsbCaptureSource
+        source = MeshcoreUsbCaptureSource()
+        source._connected = True
+        source._meshcore = MagicMock()
+        mc = source._meshcore
+        order = []
+
+        async def stop():
+            order.append("stop")
+
+        async def query():
+            self.assertTrue(source._command_lock.locked())
+            self.assertEqual(order[-1], "stop")
+            order.append("query")
+            return SimpleNamespace(type="info")
+
+        async def start():
+            order.append("start")
+
+        mc.stop_auto_message_fetching = AsyncMock(side_effect=stop)
+        mc.start_auto_message_fetching = AsyncMock(side_effect=start)
+        mc.commands.send_device_query = AsyncMock(side_effect=query)
+        client = MeshCoreTxClient()
+        client.set_source(source)
+        self.assertIs(source._command_lock, client._cmd_lock)
+        with patch.dict("sys.modules", {"meshcore": SimpleNamespace(
+            EventType=SimpleNamespace(ERROR="error", DEVICE_INFO="info"),
+        )}):
+            async with client._cmd_lock:
+                task = asyncio.create_task(source._check_health())
+                await asyncio.sleep(0)
+                mc.commands.send_device_query.assert_not_awaited()
+            self.assertTrue(await task)
+        self.assertEqual(order, ["stop", "query", "stop", "start"])
+
+    async def test_failed_connects_clean_up_owned_dispatcher_tasks(self):
+        from types import SimpleNamespace
+        from src.capture.meshcore_usb_source import MeshcoreUsbCaptureSource
+
+        tasks = []
+        instances = []
+
+        class FailedConnection:
+            def __init__(self, *args, **kwargs):
+                self.task = None
+                self.stop_auto_message_fetching = AsyncMock()
+                instances.append(self)
+
+            async def connect(self):
+                self.task = asyncio.create_task(asyncio.Event().wait())
+                tasks.append(self.task)
+                await asyncio.sleep(0)
+                raise OSError(5, "Input/output error")
+
+            async def disconnect(self):
+                self.task.cancel()
+                try:
+                    await self.task
+                except asyncio.CancelledError:
+                    pass
+
+        source = MeshcoreUsbCaptureSource()
+        with patch.dict("sys.modules", {
+            "meshcore": SimpleNamespace(MeshCore=FailedConnection, EventType=MagicMock()),
+            "src.capture.meshcore_serial": SimpleNamespace(create_serial_connection=MagicMock()),
+        }):
+            for port in ["/dev/ttyACM7", "/dev/serial/by-id/another-radio", "COM12"]:
+                with self.assertLogs("src.capture.meshcore_usb_source", level="WARNING") as logs:
+                    await source._connect(port)
+                self.assertFalse(source.connected)
+                self.assertIsNone(source._meshcore)
+                self.assertTrue(tasks[-1].done())
+                self.assertIsNone(logs.records[-1].exc_info)
+        self.assertEqual(len(instances), 3)
+
+    async def test_cancelled_handshake_cleans_up_and_propagates_cancellation(self):
+        from types import SimpleNamespace
+        from src.capture.meshcore_usb_source import MeshcoreUsbCaptureSource
+
+        instance = MagicMock()
+        instance.connect = AsyncMock(side_effect=asyncio.CancelledError)
+        instance.stop_auto_message_fetching = AsyncMock()
+        instance.disconnect = AsyncMock()
+        source = MeshcoreUsbCaptureSource()
+        with patch.dict("sys.modules", {
+            "meshcore": SimpleNamespace(MeshCore=MagicMock(return_value=instance), EventType=MagicMock()),
+            "src.capture.meshcore_serial": SimpleNamespace(create_serial_connection=MagicMock()),
+        }):
+            with self.assertRaises(asyncio.CancelledError):
+                await source._connect("/dev/serial/by-path/selected-radio")
+        instance.disconnect.assert_awaited_once()
+        self.assertFalse(source.connected)
+        self.assertIsNone(source._meshcore)
+
+    async def test_disconnect_event_marks_offline_without_counting_as_activity(self):
+        from types import SimpleNamespace
+        from src.capture.meshcore_usb_source import MeshcoreUsbCaptureSource
+        source = MeshcoreUsbCaptureSource()
+        source._running = source._connected = True
+        source._last_event_at = 123.0
+        source._reconnect_until_connected = AsyncMock()
+        event = SimpleNamespace(type=SimpleNamespace(name="DISCONNECTED", value="disconnected"))
+        await source._on_event(event)
+        await source._on_event(event)
+        self.assertFalse(source.connected)
+        self.assertEqual(source._last_event_at, 123.0)
+        self.assertTrue(source._queue.empty())
+        await source._reconnect_task
+        source._reconnect_until_connected.assert_awaited_once()
+
+    async def test_missing_usb_node_starts_recovery_without_active_probe(self):
+        from src.capture.meshcore_usb_source import MeshcoreUsbCaptureSource
+        source = MeshcoreUsbCaptureSource()
+        source._running = source._connected = True
+        source._resolved_port = "/dev/serial/by-path/test-companion"
+        source._reconnect_until_connected = AsyncMock()
+        source._check_health = AsyncMock()
+        with patch("src.capture.meshcore_usb_source.os.name", "posix"), patch(
+            "src.capture.meshcore_usb_source.os.path.exists", return_value=False,
+        ):
+            source._check_usb_presence()
+            source._check_usb_presence()
+        self.assertFalse(source.connected)
+        await source._reconnect_task
+        source._reconnect_until_connected.assert_awaited_once()
+        source._check_health.assert_not_awaited()
+
+    async def test_existing_device_is_not_reset_by_presence_check(self):
+        from src.capture.meshcore_usb_source import MeshcoreUsbCaptureSource
+        source = MeshcoreUsbCaptureSource()
+        source._connected = True
+        source._resolved_port = "/dev/test-companion"
+        source._trigger_reconnect = MagicMock()
+        with patch("src.capture.meshcore_usb_source.os.name", "posix"), patch(
+            "src.capture.meshcore_usb_source.os.path.exists", return_value=True,
+        ):
+            source._check_usb_presence()
+        self.assertTrue(source.connected)
+        source._trigger_reconnect.assert_not_called()
+
     async def test_reconnect_no_ops_while_already_in_progress(self):
         from src.capture.meshcore_usb_source import MeshcoreUsbCaptureSource
 

@@ -55,6 +55,8 @@ class SendResult:
     timestamp: float = 0.0
     error: str = ""
     airtime_ms: int = 0
+    heard_repeats: int | None = None
+    status: str = "sent"
 
 
 class TxService:
@@ -67,6 +69,7 @@ class TxService:
         channel_plan=None,
         transmit_config=None,
         meshcore_tx=None,
+        meshtasticd_tx=None,
         duty_tracker: Optional[DutyCycleTracker] = None,
         radio_config=None,
         primary_channel_name: str = "",
@@ -80,6 +83,7 @@ class TxService:
         self._channel_plan = channel_plan
         self._config = transmit_config
         self._meshcore_tx = meshcore_tx
+        self._meshtasticd_tx = meshtasticd_tx
         self._duty = duty_tracker
         self._radio_config = radio_config
         self._primary_channel_name = primary_channel_name
@@ -99,11 +103,11 @@ class TxService:
 
     @property
     def meshtastic_enabled(self) -> bool:
-        return (
-            self._config is not None
-            and self._config.enabled
-            and self._wrapper is not None
-        )
+        if self._meshtasticd_tx is not None and self._meshtasticd_tx.connected:
+            return True
+        if self._config is None or not self._config.enabled:
+            return False
+        return self._wrapper is not None
 
     @property
     def meshcore_enabled(self) -> bool:
@@ -111,6 +115,11 @@ class TxService:
 
     @property
     def source_node_id(self) -> int:
+        if self._meshtasticd_tx is not None:
+            source = getattr(self._meshtasticd_tx, '_source', None)
+            node_hex = getattr(source, 'local_node_id_hex', None)
+            if isinstance(node_hex, str) and node_hex:
+                return int(node_hex, 16)
         return self._source_node_id
 
     def set_telemetry_reply_providers(
@@ -189,6 +198,11 @@ class TxService:
                 success=False,
                 protocol="meshtastic",
                 error="Meshtastic TX not available",
+            )
+
+        if self._meshtasticd_tx is not None:
+            return await self._meshtasticd_tx.send_nodeinfo(
+                long_name, short_name, hw_model=hw_model
             )
 
         builder = self._get_builder()
@@ -323,6 +337,11 @@ class TxService:
                 success=False,
                 protocol="meshtastic",
                 error="Meshtastic TX not available",
+            )
+
+        if self._meshtasticd_tx is not None:
+            return await self._meshtasticd_tx.send_text(
+                text, destination, channel, want_ack
             )
 
         builder = self._get_builder()
@@ -838,7 +857,9 @@ class TxService:
         return SendResult(
             success=mc_result.success,
             protocol="meshcore",
-            packet_id=mc_result.event_type,
+            packet_id=mc_result.packet_id,
+            heard_repeats=mc_result.heard_repeats,
+            status=mc_result.status,
             timestamp=time.time(),
             error=mc_result.error,
         )

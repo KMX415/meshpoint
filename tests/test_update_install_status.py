@@ -77,8 +77,8 @@ class TestMatchChannelForBranch(unittest.TestCase):
         self.assertEqual(info["active_channel_id"], "stable")
 
     def test_rc_branch_maps_to_rc_channel(self) -> None:
-        info = match_channel_for_branch(ReleaseChannelRegistry(), "feat/v0.8.0")
-        self.assertEqual(info["active_channel_id"], "rc-080")
+        info = match_channel_for_branch(ReleaseChannelRegistry(), "feat/v0.8.1")
+        self.assertEqual(info["active_channel_id"], "rc-081")
 
     def test_wismesh_branch_maps_to_experimental_channel(self) -> None:
         info = match_channel_for_branch(ReleaseChannelRegistry(), "feat/wismesh-hat")
@@ -89,7 +89,7 @@ class TestMatchChannelForBranch(unittest.TestCase):
         info = suggest_active_channel_for_install(
             ReleaseChannelRegistry(), "main", local_version="0.7.5",
         )
-        self.assertEqual(info["active_channel_id"], "rc-080")
+        self.assertEqual(info["active_channel_id"], "rc-081")
 
     def test_unknown_branch_maps_to_custom(self) -> None:
         info = match_channel_for_branch(ReleaseChannelRegistry(), "feat/other")
@@ -125,7 +125,7 @@ class TestBuildInstallStatusPayload(unittest.TestCase):
         self.assertIsNone(payload["active_channel_id"])
 
     def test_payload_includes_branch_and_channel(self) -> None:
-        runner = _FakeGitRunner(branch="feat/v0.8.0")
+        runner = _FakeGitRunner(branch="feat/v0.8.1")
         with mock.patch(
             "src.api.update.install_status.fetch_remote_version_sync",
             return_value="0.7.3.1",
@@ -140,9 +140,9 @@ class TestBuildInstallStatusPayload(unittest.TestCase):
                     runner=runner,
                     use_sudo=False,
                 )
-        self.assertEqual(payload["install_branch"], "feat/v0.8.0")
-        self.assertEqual(payload["active_channel_id"], "rc-080")
-        self.assertEqual(payload["remote_branch"], "feat/v0.8.0")
+        self.assertEqual(payload["install_branch"], "feat/v0.8.1")
+        self.assertEqual(payload["active_channel_id"], "rc-081")
+        self.assertEqual(payload["remote_branch"], "feat/v0.8.1")
         self.assertFalse(payload["update_available"])
 
     def test_main_on_074_payload_defaults_picker_to_next_rc(self) -> None:
@@ -162,7 +162,7 @@ class TestBuildInstallStatusPayload(unittest.TestCase):
                     use_sudo=False,
                 )
         self.assertEqual(payload["install_branch"], "main")
-        self.assertEqual(payload["active_channel_id"], "rc-080")
+        self.assertEqual(payload["active_channel_id"], "rc-081")
 
     def test_sync_reports_commits_behind(self) -> None:
         runner = _FakeGitRunner(behind=12)
@@ -180,11 +180,11 @@ class TestBuildInstallStatusPayload(unittest.TestCase):
                     runner=runner,
                     use_sudo=False,
                     sync_remote=True,
-                    channel_id="rc-080",
+                    channel_id="rc-081",
                 )
         self.assertEqual(payload["commits_behind"], 12)
         self.assertEqual(payload["commits_ahead"], 0)
-        self.assertEqual(payload["compare_branch"], "feat/v0.8.0")
+        self.assertEqual(payload["compare_branch"], "feat/v0.8.1")
         self.assertTrue(payload["update_available"])
         self.assertIsNotNone(payload["checked_at"])
         self.assertEqual(len(payload["incoming_commits"]), 10)
@@ -217,7 +217,7 @@ class TestBuildInstallStatusPayload(unittest.TestCase):
                     runner=runner,
                     use_sudo=False,
                     sync_remote=True,
-                    channel_id="rc-080",
+                    channel_id="rc-081",
                 )
         self.assertEqual(payload["commits_behind"], 0)
         self.assertEqual(payload["incoming_commits"], [])
@@ -228,7 +228,7 @@ class TestListIncomingCommits(unittest.TestCase):
         runner = _FakeGitRunner(behind=5)
         commits = list_incoming_commits(
             "/opt/meshpoint",
-            "feat/v0.8.0",
+            "feat/v0.8.1",
             runner=runner,
             use_sudo=False,
             limit=3,
@@ -243,7 +243,7 @@ class TestListBranchCommits(unittest.TestCase):
         runner = _FakeGitRunner()
         commits = list_branch_commits(
             "/opt/meshpoint",
-            "origin/feat/v0.8.0",
+            "origin/feat/v0.8.1",
             runner=runner,
             use_sudo=False,
             limit=3,

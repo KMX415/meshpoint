@@ -85,6 +85,25 @@ class MeshcoreChannelSync:
             )
         return device_slots
 
+    async def verify(self, channel_keys: dict) -> None:
+        """Require readback of every configured and cleared slot before a UI save succeeds."""
+        from meshcore import EventType
+
+        slots = await self._probe_slots(EventType, MESHCORE_MAX_DEVICE_SLOTS)
+        if len(channel_keys) > MESHCORE_MAX_USER_CHANNELS:
+            raise ValueError('Too many MeshCore channels')
+        desired = list(channel_keys.items())
+        for index in range(1, MESHCORE_MAX_DEVICE_SLOTS):
+            if index not in slots:
+                raise RuntimeError('MeshCore channel readback incomplete')
+            name, secret = slots[index]
+            if index <= len(desired):
+                expected_name, expected_key = desired[index - 1]
+                if name != expected_name or secret != bytes.fromhex(expected_key):
+                    raise RuntimeError('MeshCore channel readback did not match')
+            elif name:
+                raise RuntimeError('MeshCore channel deletion did not persist')
+
     async def _write_desired(
         self,
         desired: list[tuple[str, str]],

@@ -1,0 +1,61 @@
+/* ACARS rows: wider callsign/tail column, dim message label, and an
+   indented pretty-print block for libacars-decoded standard messages.
+   .pager-row / .pager-row__* base styles come from the core PagerPanel;
+   only the acars-specific bits live here. */
+.pager-row--acars .pager-row__proto {
+    width: 12em;
+    color: var(--accent-cyan);
+}
+
+.pager-row--acars .acars-label {
+    color: var(--text-muted);
+    font-size: 0.85em;
+}
+
+.pager-row__decoded {
+    margin: 0.35rem 0 0;
+    padding: 0.4rem 0.6rem;
+    background: var(--overlay-weak);
+    border-left: 2px solid var(--accent-cyan);
+    border-radius: 4px;
+    font-size: 0.8em;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.acars-summary {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.4rem;
+}
+
+.acars-kind {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    padding: 1px 6px;
+    border-radius: 999px;
+    color: var(--accent-cyan);
+    border: 1px solid var(--accent-cyan);
+}
+
+.acars-coord {
+    color: var(--accent-green);
+    text-decoration: none;
+}
+.acars-coord:hover { text-decoration: underline; }
+
+.acars-raw {
+    margin-top: 0.25rem;
+    font-size: 0.85em;
+}
+.acars-raw summary {
+    cursor: pointer;
+    color: var(--text-muted);
+    list-style: none;
+}
+.acars-raw summary::-webkit-details-marker { display: none; }
+.acars-raw summary::before { content: '▸ '; }
+.acars-raw[open] summary::before { content: '▾ '; }

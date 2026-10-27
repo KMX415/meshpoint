@@ -150,14 +150,26 @@ class PacketDetailModal {
         const freq = sig.frequency_mhz != null ? sig.frequency_mhz : packet.frequency_mhz;
         const sf = sig.spreading_factor != null ? sig.spreading_factor : packet.spreading_factor;
         const bw = sig.bandwidth_khz != null ? sig.bandwidth_khz : packet.bandwidth_khz;
-        const cr = sig.coding_rate || packet.coding_rate;
+        const receiver = packet.protocol === 'meshcore' ? packet.decoded_payload?.meshcore_receiver : null;
+        const cr = receiver?.coding_rate || sig.coding_rate || packet.coding_rate;
 
+        // Companion events do not report per-packet modem parameters. In
+        // historical rows zero placeholders also acquired a default coding rate.
+        if (packet.protocol === 'meshcore' && !(Number(freq) > 0)) {
+            return [
+                { key: 'Frequency', val: 'Not reported' },
+                { key: 'Modem', val: 'Not reported' },
+                { key: 'RSSI', val: rssi != null ? `${Number(rssi).toFixed(0)} dBm` : 'n/a' },
+                { key: 'SNR', val: snr != null ? `${Number(snr).toFixed(1)} dB` : 'n/a' },
+            ];
+        }
         const modemParts = [];
         if (sf != null) modemParts.push(`SF${sf}`);
         if (bw != null) modemParts.push(`BW${Number(bw)}`);
         if (cr) modemParts.push(`CR ${cr}`);
 
         return [
+            ...(receiver ? [{ key: 'RF source', val: 'Receiver settings at capture' }] : []),
             { key: 'Frequency', val: freq != null ? `${Number(freq).toFixed(3)} MHz` : 'n/a' },
             { key: 'Modem', val: modemParts.length ? modemParts.join(' · ') : 'n/a' },
             {
@@ -176,7 +188,10 @@ class PacketDetailModal {
         const hopsTaken = packet.hop_count != null
             ? packet.hop_count
             : (packet.hop_start > 0 ? packet.hop_start - packet.hop_limit : null);
-        const hopLabel = packet.hop_start > 0
+        const mcHops = packet.decoded_payload?.meshcore_hops;
+        const hopLabel = packet.protocol === 'meshcore'
+            ? (Number.isInteger(mcHops) && mcHops >= 0 && mcHops <= 63 ? `${mcHops} hops` : 'Not reported')
+            : packet.hop_start > 0
             ? `${hopsTaken != null ? hopsTaken : '?' } hop${hopsTaken === 1 ? '' : 's'} taken (${packet.hop_limit} left of ${packet.hop_start})`
             : 'n/a';
 
@@ -216,6 +231,12 @@ class PacketDetailModal {
     _payloadRows(packet) {
         const p = packet.decoded_payload;
         const type = packet.packet_type || 'unknown';
+        if (packet.protocol === 'meshcore' && type === 'nodeinfo' && p?.advertisement) {
+            return [
+                { key: 'Content', val: p.long_name || 'MeshCore advertisement' },
+                { key: 'Decode', val: 'Advertisement received' },
+            ];
+        }
         const decrypted = packet.decrypted !== false && type !== 'encrypted';
 
         if (!decrypted || type === 'encrypted') {

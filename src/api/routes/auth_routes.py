@@ -36,7 +36,7 @@ from src.api.auth.auth_service import (
 from src.api.auth.dependencies import (
     SESSION_COOKIE_NAME,
     require_admin,
-    require_auth,
+    require_session,
 )
 from src.api.auth.jwt_session import SessionClaims
 
@@ -192,7 +192,7 @@ async def change_password(
     payload: ChangePasswordRequest,
     request: Request,
     response: Response,
-    claims: SessionClaims = Depends(require_auth),
+    claims: SessionClaims = Depends(require_session),
     audit: AuditLogWriter = Depends(get_audit_writer),
 ) -> dict:
     """Rotate the caller's password (admin or viewer).

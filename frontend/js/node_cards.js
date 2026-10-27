@@ -6,7 +6,7 @@
 class NodeCards {
     /** Match Meshtastic-style "recently heard" (not cloud device heartbeat at 15 min). */
     static ONLINE_THRESHOLD_MS = 2 * 60 * 60 * 1000;
-    static SORT_KEYS = new Set(['last_heard', 'signal', 'hops', 'name']);
+    static SORT_KEYS = new Set(['last_heard', 'signal', 'hops', 'packets', 'name']);
     static FILTER_KEYS = new Set(['all', 'direct', 'relayed']);
     static SORT_STORAGE_KEY = 'meshpoint.nodeCards.sortBy';
     static FILTER_STORAGE_KEY = 'meshpoint.nodeCards.filter';
@@ -37,6 +37,7 @@ class NodeCards {
         if (window.MeshpointNodeFavorites) {
             window.MeshpointNodeFavorites.onChange(() => this._render());
         }
+        document.addEventListener('meshpoint:radioView', () => this._render());
     }
 
     _loadSavedSort() {
@@ -134,17 +135,25 @@ class NodeCards {
 
     loadNodes(nodes) {
         this._nodes = nodes;
+        if (window.MeshpointRadioViewFilter) {
+            MeshpointRadioViewFilter.noteNodes(nodes);
+        }
         this._render();
     }
 
     updateFromPacket(packet) {
         if (!packet.source_id) return;
+        const sig = packet.signal || {};
+        const sf = sig.spreading_factor ?? packet.spreading_factor;
+        const bw = sig.bandwidth_khz ?? packet.bandwidth_khz;
         const idx = this._nodes.findIndex(n => n.node_id === packet.source_id);
         if (idx >= 0) {
             const n = this._nodes[idx];
             n.last_heard = new Date().toISOString();
             if (packet.rssi != null) n.latest_rssi = packet.rssi;
             if (packet.snr != null) n.latest_snr = packet.snr;
+            if (sf != null) n.latest_spreading_factor = sf;
+            if (bw != null) n.latest_bandwidth_khz = bw;
             if (packet.decoded_payload?.long_name) {
                 n.long_name = packet.decoded_payload.long_name;
             }
@@ -159,6 +168,8 @@ class NodeCards {
                 last_heard: new Date().toISOString(),
                 latest_rssi: packet.rssi,
                 latest_snr: packet.snr,
+                latest_spreading_factor: sf,
+                latest_bandwidth_khz: bw,
             });
         }
         this._render();
@@ -205,9 +216,13 @@ class NodeCards {
     }
 
     _applyFilter(nodes) {
-        const filtered = window.MeshpointNodeCardsSort
+        let filtered = window.MeshpointNodeCardsSort
             ? window.MeshpointNodeCardsSort.applyFilter(nodes, this._filter)
             : nodes;
+        if (window.MeshpointRadioViewFilter) {
+            const key = MeshpointRadioViewFilter.current();
+            filtered = filtered.filter((n) => MeshpointRadioViewFilter.matchesNode(n, key));
+        }
         if (this._favoritesOnly && window.MeshpointNodeFavorites) {
             const favs = new Set(window.MeshpointNodeFavorites.list());
             return filtered.filter((n) => favs.has(n.node_id));

@@ -12,6 +12,8 @@ import logging
 import time
 from typing import Any, Optional
 
+from src.models.meshcore_position import meshcore_position
+
 logger = logging.getLogger(__name__)
 
 # Hot paths (Messages tab name resolve, contact picker) must not hammer
@@ -82,7 +84,7 @@ class MeshcoreContactParser:
 
         ``None`` (library timeout) and ERROR events become ``[]`` with
         a warning. Valid payloads become ``{index, name, public_key,
-        last_seen}`` rows.
+        last_seen, adv_lat, adv_lon}`` rows.
         """
         if result is None:
             logger.warning(
@@ -129,12 +131,15 @@ class MeshcoreContactParser:
             try:
                 name = entry.get("adv_name") or entry.get("name") or ""
                 pk = entry.get("public_key", "")
-                if name and pk:
+                if pk:
+                    position = meshcore_position(entry.get("adv_lat"), entry.get("adv_lon"))
                     contacts.append({
                         "index": i,
                         "name": name,
                         "public_key": pk,
                         "last_seen": entry.get("lastmod", 0),
+                        "adv_lat": position[0] if position else None,
+                        "adv_lon": position[1] if position else None,
                     })
             except Exception:
                 logger.debug(

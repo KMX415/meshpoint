@@ -125,8 +125,10 @@ class SX1302Wrapper:
         """Toggle the concentrator reset pins (required before lgw_start).
 
         Different carrier boards route SX1302 reset to different GPIOs
-        (pin 17 or 25). Both are toggled by default since asserting
-        reset on an unconnected pin is harmless.
+        (17/25 by default; 22 on the community-tested COTX X3).
+        RESET_GPIO selects space-separated pins, matching the systemd reset
+        script. Explicit gpio_pins take precedence. An invalid nonempty
+        override skips this fallback rather than toggling other pins.
         Delegated to systemd ExecStartPre for root access;
         this method is a best-effort fallback via pinctrl subprocess.
 
@@ -138,7 +140,19 @@ class SX1302Wrapper:
         import time
 
         if gpio_pins is None:
-            gpio_pins = [17, 25]
+            override = os.environ.get("RESET_GPIO")
+            if override:
+                tokens = override.split()
+                if not tokens or any(not token.isascii() or not token.isdecimal() for token in tokens):
+                    logger.warning("Invalid RESET_GPIO; skipping in-app reset")
+                    return
+                try:
+                    gpio_pins = [int(token) for token in tokens]
+                except ValueError:
+                    logger.warning("Invalid RESET_GPIO; skipping in-app reset")
+                    return
+            else:
+                gpio_pins = [17, 25]
 
         hold = float(os.environ.get("CONCENTRATOR_RESET_HOLD_SEC", "0.1"))
 
