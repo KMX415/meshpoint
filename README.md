@@ -13,7 +13,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/KMX415/meshpoint?style=flat&color=yellow)](https://github.com/KMX415/meshpoint/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/KMX415/meshpoint)](https://github.com/KMX415/meshpoint/issues)
 [![Last commit](https://img.shields.io/github/last-commit/KMX415/meshpoint)](https://github.com/KMX415/meshpoint/commits/main)
-[![Version](https://img.shields.io/badge/version-0.7.9-orange.svg)](docs/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.0-orange.svg)](docs/CHANGELOG.md)
 
 ### Meshradar Cloud Dashboard
 ![Meshradar Cloud Dashboard](Meshradar414.png)
@@ -84,7 +84,7 @@ Everything is managed from a browser dashboard: full chat with channels and DMs,
 
 ---
 
-## Dashboard access (v0.8.0 development)
+## Dashboard access (v0.8.0)
 
 Web Terminal now requires the device-side `dashboard.web_terminal_enabled: true`
 opt-in and a restart, including on upgrades. It remains admin-only. See
@@ -97,13 +97,13 @@ optional modules, recovery and validation guides.
 
 **Optional public view.** In **Settings > Auth > Public view**, choose which summaries to share, enable public viewing, then save. It is off by default. Signed-out visitors see only the selected Dashboard (node counts), Stats (packet counts, rate and signal averages) or Radio (configured region, frequency, bandwidth and spreading factor) pages, with an **Admin sign in** link. Anyone who can reach the dashboard address can see these summaries. Messages, node identities/locations, keys and other configuration remain behind login. Summaries refresh every 15 seconds; removing a page or disabling public viewing blocks new requests immediately. Signed-in users keep their normal dashboard.
 
-## Optional plugins and themes (v0.8.0 development)
+## Optional plugins and themes (v0.8.0)
 
-Source downloads require `plugin_sources_enabled: true` in `config/local.yaml`
-and a restart. With downloads locked, catalog browsing and installed-module
-management remain available. See [setup instructions](docs/PLUGINS.md#install-and-enable).
+An administrator can enable source downloads with the checkbox in Settings >
+Plugins; it saves `plugin_sources_enabled` immediately without a restart.
+With downloads locked, catalog browsing and installed-module management remain available. See [setup instructions](docs/PLUGINS.md#install-and-enable).
 
-The `feat/v0.8.0` branch is adding optional applications without expanding the default radio installation. If you only use Meshtastic or MeshCore, keep using the existing dashboard and USB nodes. You do not need an SDR, Reticulum, or any of the optional decoder packages.
+Meshpoint v0.8.0 adds optional applications without expanding the default radio installation. If you only use Meshtastic or MeshCore, keep using the existing dashboard and USB nodes. You do not need an SDR, Reticulum, or any of the optional decoder packages.
 
 **Settings > Plugins** provides source catalogs, selected downloads, dependency reporting, enable/disable controls, and removal. Apps install disabled. Enabling an app requires a Meshpoint restart; receiver hardware remains idle until you press Start on its page. Catalog revisions are pinned to a commit, and app updates are separate from core updates.
 
@@ -115,13 +115,18 @@ The `feat/v0.8.0` branch is adding optional applications without expanding the d
 | RTL433 | Compatible wireless sensor reception | Separate SDR and `rtl_433` |
 | P2000, Pagers and POCSAG | Pager reception and message views | Separate SDR and decoding tools |
 | Reticulum / LXMF | Messaging, contacts, NomadNet pages, propagation and telemetry | Separate optional libraries and worker; interfaces off by default |
-| DAPNET | Dedicated serial capture and packet history | Pipeline integration still in progress |
+| DAPNET | Deferred; not part of the supported release scope | Pipeline integration remains unfinished |
 
 **Settings > Themes** provides the built-in palettes, a custom color editor, a device default, and catalog themes. Themes require no optional radio packages.
 
-The receiver packages are staged in this branch's catalog source, with mocked-process checks and hardware validation still pending. They are not enabled by cloning or updating Meshpoint. Reticulum has an explicit dependency-install button using verified libraries in a separate directory. Native receiver dependencies are reported for operator setup; downloaded installers never run as root. See the [Plugin and Theme Guide](docs/PLUGINS.md) for installation, hardware sharing, updates, removal, and current limitations.
+The official catalog is available. Check app-specific dependencies and compatibility before installation. SDR/P25 features remain experimental. They are not enabled by cloning or updating Meshpoint. Reticulum has an explicit dependency-install button using verified libraries in a separate directory. Native receiver dependencies are reported for operator setup; downloaded installers never run as root. See the [Plugin and Theme Guide](docs/PLUGINS.md) for installation, hardware sharing, updates, removal, and current limitations.
 
 ---
+
+Reticulum cold-start, long-running reliability and external-network interoperability
+need further validation. PiMesh stays experimental. DAPNET and Flock are not
+supported in this release. See the [release overview](docs/plans/v0.8.0-release.md)
+for known limitations.
 
 ## Hardware
 
@@ -366,7 +371,7 @@ FastAPI server on port 8080:
 | `POST /api/messages/send` | Send a Meshtastic or MeshCore message |
 | `GET /api/messages/conversations` | Message history by conversation |
 | `WS /ws` | Real-time packet + message stream |
-| `GET /api/plugins` | Optional app inventory and dependency checks (admin, v0.8.0 development) |
+| `GET /api/plugins` | Optional app inventory and dependency checks (admin, v0.8.0) |
 | `PUT /api/plugins/{id}` | Enable or disable an optional app for the next restart (admin) |
 | `DELETE /api/plugins/{id}` | Uninstall a disabled, unloaded app (admin) |
 | `GET /api/plugin-sources/catalog` | Browse a configured, pinned catalog (admin) |
@@ -376,7 +381,7 @@ FastAPI server on port 8080:
 
 ## Updating
 
-**Optional apps on the v0.8.0 development branch:** core updates and plugin updates are separate. Disable and restart before replacing or removing an installed app. Updating a catalog pin does not update or enable its apps. Uninstall retains configuration, separately stored data, and shared native dependencies. See [plugin lifecycle details](docs/PLUGINS.md#updates-and-removal). Keep RC devices on the feature branch until release testing is complete; the stable commands below switch to `main`.
+**Optional apps in v0.8.0:** core updates and plugin updates are separate. Disable and restart before replacing or removing an installed app. Updating a catalog pin does not update or enable its apps. Uninstall retains configuration, separately stored data, and shared native dependencies. See [plugin lifecycle details](docs/PLUGINS.md#updates-and-removal). After the v0.8.0 release is published, select Stable to use the released build; the next RC track is v0.8.1. The stable commands below switch to `main`.
 
 Use this block whether you are on v0.6.x, v0.7.3, or already current. `install.sh` is idempotent on existing installs: it refreshes the venv (`pip install -r requirements.txt`), removes stale pre-v0.7.0 `.so` binaries if any remain, updates sudoers and the systemd unit, and does **not** require a reboot on upgrade.
 

@@ -64,7 +64,7 @@ device:
   longitude: 0.0
   altitude: 25
   hardware_description: "RAK2287 + Raspberry Pi 4"
-  firmware_version: "0.7.9"
+  firmware_version: "0.8.0"
 
 relay:
   enabled: false

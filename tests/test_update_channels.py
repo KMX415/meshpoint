@@ -54,10 +54,10 @@ class TestReleaseChannelRegistry(unittest.TestCase):
         self.assertIsNone(ReleaseChannelRegistry().resolve_branch("custom"))
 
     def test_find_returns_rc_channel(self) -> None:
-        match = ReleaseChannelRegistry().find("rc-080")
+        match = ReleaseChannelRegistry().find("rc-081")
         self.assertIsNotNone(match)
         self.assertEqual(match.tier, "rc")
-        self.assertEqual(match.branch, "feat/v0.8.0")
+        self.assertEqual(match.branch, "feat/v0.8.1")
 
     def test_find_returns_wismesh_experimental_channel(self) -> None:
         match = ReleaseChannelRegistry().find("wismesh-node")
@@ -70,12 +70,14 @@ class TestReleaseChannelRegistry(unittest.TestCase):
         self.assertEqual(registry.resolve_branch("wismesh-node"), "feat/wismesh-hat")
 
     def test_normalize_channel_id_remaps_retired_rc(self) -> None:
-        self.assertEqual(normalize_channel_id("rc-074"), "rc-080")
-        self.assertEqual(normalize_channel_id("rc-075"), "rc-080")
-        self.assertEqual(normalize_channel_id("rc-076"), "rc-080")
-        self.assertEqual(normalize_channel_id("rc-077"), "rc-080")
-        self.assertEqual(normalize_channel_id("rc-078"), "rc-080")
-        self.assertEqual(normalize_channel_id("rc-079"), "rc-080")
+        self.assertEqual(normalize_channel_id("rc-074"), "rc-081")
+        self.assertEqual(normalize_channel_id("rc-075"), "rc-081")
+        self.assertEqual(normalize_channel_id("rc-076"), "rc-081")
+        self.assertEqual(normalize_channel_id("rc-077"), "rc-081")
+        self.assertEqual(normalize_channel_id("rc-078"), "rc-081")
+        self.assertEqual(normalize_channel_id("rc-079"), "rc-081")
+        self.assertEqual(normalize_channel_id("rc-080"), "rc-081")
+        self.assertEqual(ReleaseChannelRegistry().resolve_branch("rc-080"), "feat/v0.8.1")
         self.assertEqual(normalize_channel_id("stable"), "stable")
 
 

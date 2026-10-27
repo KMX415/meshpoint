@@ -35,6 +35,7 @@ CHANNEL_ID_ALIASES: dict[str, str] = {
     "rc-077": "rc-078",
     "rc-078": "rc-079",
     "rc-079": "rc-080",
+    "rc-080": "rc-081",
 }
 
 
@@ -73,11 +74,11 @@ DEFAULT_CHANNELS: tuple[ReleaseChannel, ...] = (
         description="Latest tagged release. Recommended for production gateways.",
     ),
     ReleaseChannel(
-        id="rc-080",
-        label="Release candidate (v0.8.0)",
-        branch="feat/v0.8.0",
+        id="rc-081",
+        label="Release candidate (v0.8.1)",
+        branch="feat/v0.8.1",
         tier=TIER_RC,
-        description="Sprint branch for v0.8.0. Expect rough edges.",
+        description="Sprint branch for v0.8.1. Expect rough edges.",
     ),
     ReleaseChannel(
         id="wismesh-node",

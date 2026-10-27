@@ -1,6 +1,12 @@
 # Changelog
 
-### Unreleased
+### v0.8.0
+
+Optional apps and dashboard access controls, MeshCore feedback and positions,
+privacy corrections and recovery hardening. Upgrade through Settings > Updates
+or the documented installer flow so dependencies and migration hooks run.
+Optional SDR/P25 and PiMesh behavior remains experimental; DAPNET/Flock are
+outside this release. See the [release overview](plans/v0.8.0-release.md).
 
 #### Heard paths
 
@@ -25,7 +31,7 @@
   override and link setup notes from the README. Physical verification is
   pending; no automatic hardware configuration or GPS changes are included.
 
-- Add sicXnull's Heltec HT-M2808 installation guide from #138 and link it
+- Add the Heltec HT-M2808 installation guide from #138 and link it
   from the README, hardware matrix and documentation index. TX/RX status
   reflects the contributor's report.
 
@@ -36,7 +42,7 @@
 - Honor `RESET_GPIO` in the in-app concentrator reset fallback, matching valid
   overrides used by the service reset script. Explicit arguments retain priority;
   invalid nonempty overrides skip the fallback with a warning.
-- Document Einstein PD2EMC's COTX X3 findings: reset GPIO 22, button 23, LED 27,
+- Document community COTX X3 findings: reset GPIO 22, button 23, LED 27,
   manual service configuration and reported restart/transmission results. No
   automatic board detection is added; physical validation of this port is pending.
 
@@ -49,7 +55,7 @@
   saved position. Invalid or unset coordinate pairs do not erase known positions;
   contact refreshes do not increase packet counts or change reception times.
 
-#### Dashboard fixes (v0.8.0 development)
+#### Dashboard fixes
 
 - The Meshtastic topbar indicator only appears when a concentrator or Meshtastic
   serial capture source is configured.
@@ -73,7 +79,7 @@
 - Stats range cards honor metric/imperial display preferences and update their
   values and labels immediately when the preference changes.
 
-#### Optional apps, themes and dashboard access (v0.8.0 development)
+#### Optional apps, themes and dashboard access
 
 - Opt-in Reticulum interface discovery with operator contact drafts. RNode
   contact publishing is separately enabled, uses a six-hour announce interval,
@@ -122,11 +128,19 @@
   and an Admin sign-in link. Default off; private APIs and WebSocket remain gated.
 - Expanded setup, access, recovery and hardware documentation.
 
-These entries describe unreleased branch work, not a shipped version or a
-published plugin catalog. See [documentation](README.md) and the
-[release overview](plans/v0.8.0-release.md).
+The official plugin catalog is available. Check app-specific dependencies and
+compatibility before installation; see the
+[release scope](plans/v0.8.0-release.md). See [documentation](README.md).
 
 #### Reliability and permissions
+
+- Reap exited terminal children and close PTY descriptors after shell EOF;
+  repeated cleanup preserves already-reaped PIDs and reused descriptors (#166).
+- Apply Approximate and Hidden privacy settings to registered-pin mesh positions,
+  preserving saved coordinates and independent MQTT/cloud policies (#158).
+- Correct received-packet coding-rate display without changing transmission (#163).
+- Cover independently missing RSSI/SNR and valid zero SNR in MQTT protobuf and
+  JSON regression tests; no formatter behavior changes.
 
 - Backup restore rejects symbolic links, hard links, device entries and FIFOs
   before extraction. Regular backups remain supported.
