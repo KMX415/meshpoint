@@ -56,6 +56,8 @@ class PtySession:
         self._pid = pid
         self._shell = shell
         self._closed = False
+        self._child_reaped = False
+        self._fd_closed = False
 
     @classmethod
     def spawn(
@@ -153,47 +155,50 @@ class PtySession:
         except OSError:
             logger.debug("PTY resize ioctl failed", exc_info=True)
 
-    def terminate(self, *, grace_seconds: float = 0.5) -> None:
-        """Send SIGTERM, then SIGKILL after ``grace_seconds``."""
-        if self._closed:
-            return
-        try:
-            os.kill(self._pid, signal.SIGTERM)
-        except (ProcessLookupError, OSError):
-            pass
-        deadline = grace_seconds
-        # ``waitpid`` with WNOHANG polled in 50 ms increments avoids
-        # importing asyncio here (this class is sync on purpose).
-        import time as _time
-        while deadline > 0:
+    def _poll_child(self) -> bool:
+        """Reap an exited child once; never signal a PID after losing ownership."""
+        if not self._child_reaped:
             try:
                 pid, _status = os.waitpid(self._pid, os.WNOHANG)
-                if pid != 0:
-                    break
+                self._child_reaped = pid != 0
             except ChildProcessError:
-                break
-            _time.sleep(0.05)
-            deadline -= 0.05
-        else:
-            try:
-                os.kill(self._pid, signal.SIGKILL)
-            except (ProcessLookupError, OSError):
-                pass
-            try:
-                os.waitpid(self._pid, 0)
-            except ChildProcessError:
-                pass
-        try:
-            os.close(self._master_fd)
-        except OSError:
-            pass
+                self._child_reaped = True
+        return self._child_reaped
+
+    def terminate(self, *, grace_seconds: float = 0.5) -> None:
+        """Reap the child and close the PTY, including after read-side EOF."""
+        import time as _time
+
         self._closed = True
+        try:
+            if not self._poll_child():
+                try:
+                    os.kill(self._pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                deadline = _time.monotonic() + max(0.0, grace_seconds)
+                while not self._poll_child():
+                    remaining = deadline - _time.monotonic()
+                    if remaining <= 0:
+                        try:
+                            os.kill(self._pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                        try:
+                            os.waitpid(self._pid, 0)
+                        except ChildProcessError:
+                            pass
+                        self._child_reaped = True
+                        break
+                    _time.sleep(min(0.05, remaining))
+        finally:
+            if not self._fd_closed:
+                # Mark before close: retrying a close can affect a reused descriptor.
+                self._fd_closed = True
+                try:
+                    os.close(self._master_fd)
+                except OSError:
+                    pass
 
     def is_alive(self) -> bool:
-        if self._closed:
-            return False
-        try:
-            pid, _status = os.waitpid(self._pid, os.WNOHANG)
-            return pid == 0
-        except ChildProcessError:
-            return False
+        return not self._poll_child() and not self._closed
