@@ -165,7 +165,7 @@ to v0.7.4+ reported smooth when `install.sh` skips `apt-get upgrade`. MeshCore
 USB companion may need a **powered hub** (onboard micro-USB is for flashing;
 OTG not confirmed on G295).
 
-> **Step-by-step:** [Bobcat Miner 300 guide](docs/BOBCAT-300.md) and [Hardware Matrix](docs/HARDWARE-MATRIX.md).
+> **Step-by-step:** [Bobcat Miner 300 guide](docs/BOBCAT-300.md) (G295) and [Hardware Matrix](docs/HARDWARE-MATRIX.md). A **G285** does not use `spi5-m1` or GPIO 147; follow the [Bobcat G285 guide](docs/BOBCAT-G285.md).
 
 ### Optional: MeshCore USB Companion
 
@@ -297,7 +297,8 @@ Start with the doc that matches what you are trying to do.
 **Setup and configuration**
 - **[Onboarding Guide](docs/ONBOARDING.md):** step-by-step from empty Pi to running Meshpoint
 - **[Hardware Matrix](docs/HARDWARE-MATRIX.md):** RAK V2 vs SenseCap M1 vs Chameleon vs Bobcat vs DIY, WisMesh Node (experimental), MeshCore companion radios, antennas, what's not supported
-- **[Bobcat Miner 300](docs/BOBCAT-300.md):** Rockchip RK3566 + Armbian repurposing (manual SPI/GPIO)
+- **[Bobcat Miner 300](docs/BOBCAT-300.md):** Rockchip RK3566 + Armbian repurposing (manual SPI/GPIO, G295)
+- **[Bobcat Miner 300 G285](docs/BOBCAT-G285.md):** same host, microSD boot, hardware SPI `/dev/spidev1.0`
 - **[WisMesh Node (experimental)](docs/plans/WISMESH-BRANCH.md):** RAK6421 HAT, meshtasticd, long-lived `feat/wismesh-hat` branch
 - **[Gateway ↔ Node migration](docs/MIGRATE-GATEWAY-TO-NODE.md):** switch between concentrator Gateway and WisMesh Node platforms
 - **[Configuration Guide](docs/CONFIGURATION.md):** all config options, private channels, relay, upstream, MQTT, radio tuning

@@ -8,7 +8,7 @@ you flash community **Armbian** and apply the SPI/GPIO configuration below.
 **Status (July 2026):** Community-validated on model **G295** (2 GB RAM, 64 GB
 eMMC). Meshtastic TX/RX confirmed; MeshCore companion via a **powered USB hub**
 reported working. Model **G290** (also SX1302, 2 GB / 64 GB) is expected to
-follow the same path; **G285** is untested here. This is **not** plug-and-play
+follow the same path. **G285** is a different board: do not add `spi5-m1` or use GPIO 147. Follow [BOBCAT-G285.md](BOBCAT-G285.md). This is **not** plug-and-play
 like a RAK Hotspot V2: expect manual `local.yaml`, systemd overrides, and
 kernel pin holds.
 
@@ -242,7 +242,7 @@ is stable. See [Hardware Matrix > MeshCore USB](HARDWARE-MATRIX.md#meshcore-usb-
 | Meshtastic concentrator TX/RX | Validated (bench / limited RF environment) |
 | Long-range / multi-hop soak | More field testing welcome |
 | MeshCore on-board USB OTG | Use powered hub; native OTG not confirmed |
-| G285 hardware | Untested |
+| G285 hardware | Different SPI bus and GPIO map. See [BOBCAT-G285.md](BOBCAT-G285.md) |
 | `install.sh` without edits | Not supported (kernel upgrade risk) |
 | Bluetooth / Meshtastic phone app | Not used; use the Meshpoint web dashboard |
 
