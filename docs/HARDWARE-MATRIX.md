@@ -221,9 +221,11 @@ symlinks to `/dev/spidev0.0`).
 Model **G290** remains unvalidated; similarity to G295 is not confirmation.
 **G285** is [community-reported working in #137](https://github.com/KMX415/meshpoint/issues/137)
 with **`spi1` / `/dev/spidev1.0`**, power enables **125/122**, and reset **149**
-(Linux sysfs GPIO numbers). Use the [separate G285 recipe](BOBCAT-300.md#g285-specific-procedure-community-report),
-not the G295 GPIO 147/SPI5 setup. Individual reception, transmission, cold-boot
-and repeated-restart checks remain pending for G285.
+(Linux sysfs GPIO numbers). Use the [image-specific G285 guide](BOBCAT-G285.md),
+not the G295 GPIO 147/SPI5 setup. #165 adds pinned-image startup after reboot,
+RX and local TX-log observations. Shutdown/reset, repeated service restarts,
+and separate-node TX confirmation remain pending; these reports do not
+establish reliability across all G285 variants.
 Do not confuse with **Nebra Indoor Rock Pi 4** units that ship **SX1301**
 concentrators (not supported).
 

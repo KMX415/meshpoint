@@ -206,7 +206,7 @@ to v0.7.4+ reported smooth when `install.sh` skips `apt-get upgrade`. MeshCore
 USB companion may need a **powered hub** (onboard micro-USB is for flashing;
 OTG not confirmed on G295).
 
-> **Step-by-step:** [Bobcat Miner 300 guide](docs/BOBCAT-300.md) and [Hardware Matrix](docs/HARDWARE-MATRIX.md).
+> **Step-by-step:** [G295 guide](docs/BOBCAT-300.md), [image-specific G285 guide](docs/BOBCAT-G285.md) and [Hardware Matrix](docs/HARDWARE-MATRIX.md). G285 uses a different SPI/GPIO path; its guide records pending shutdown/reset and external TX confirmation.
 
 ### Option G: PiMesh-1W (experimental)
 
@@ -418,7 +418,8 @@ Start with the doc that matches what you are trying to do.
 **Setup and configuration**
 - **[Onboarding Guide](docs/ONBOARDING.md):** step-by-step from empty Pi to running Meshpoint
 - **[Hardware Matrix](docs/HARDWARE-MATRIX.md):** RAK V2 vs SenseCap M1 vs Chameleon vs Bobcat vs DIY, WisMesh Node (experimental), Meshtastic USB nodes, MeshCore companion radios, antennas, what's not supported
-- **[Bobcat Miner 300](docs/BOBCAT-300.md):** Rockchip RK3566 + Armbian repurposing (manual SPI/GPIO)
+- **[Bobcat Miner 300](docs/BOBCAT-300.md):** G295 Rockchip RK3566 + Armbian repurposing (manual SPI/GPIO)
+- **[Bobcat Miner 300 G285](docs/BOBCAT-G285.md):** image-specific microSD/SPI1 guide, with pending hardware clarifications
 - **[Heltec HT-M2808](docs/HELTEC-M2808.md):** Community-contributed Debian Bookworm installation guide (manual SPI/GPIO)
 - **[WisMesh Node (experimental)](docs/plans/WISMESH-BRANCH.md):** RAK6421 HAT, meshtasticd, long-lived `feat/wismesh-hat` branch
 - **[Gateway ↔ Node migration](docs/MIGRATE-GATEWAY-TO-NODE.md):** switch between concentrator Gateway and WisMesh Node platforms
