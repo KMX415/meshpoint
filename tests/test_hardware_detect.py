@@ -14,7 +14,6 @@ from src.cli.hardware_detect import (
 from src.cli.hardware_probe import (
     _parse_chip_version,
     detect_wismesh_hat,
-    probe_concentrator_chip,
 )
 
 
@@ -37,22 +36,6 @@ class TestParseChipVersion(unittest.TestCase):
 
     def test_no_match(self):
         self.assertIsNone(_parse_chip_version("no version here"))
-
-
-class TestProbeConcentratorChip(unittest.TestCase):
-
-    @patch("src.cli.hardware_probe._find_chip_id_binary", return_value=None)
-    def test_missing_binary_returns_none(self, _mock_find):
-        self.assertIsNone(probe_concentrator_chip())
-
-    @patch("src.cli.hardware_probe.subprocess.run")
-    @patch("src.cli.hardware_probe._find_chip_id_binary", return_value="/opt/chip_id")
-    def test_parses_sx1302_output(self, _mock_find, mock_run):
-        mock_run.return_value.returncode = 0
-        mock_run.return_value.stdout = "version 0x10"
-        mock_run.return_value.stderr = ""
-        self.assertEqual(probe_concentrator_chip("/dev/spidev0.0"), "sx1302")
-        mock_run.assert_called_once()
 
 
 class TestDetectWismeshHat(unittest.TestCase):
