@@ -79,6 +79,8 @@ class TxService:
         serial_sources: Optional[list] = None,
     ):
         self._wrapper = wrapper
+        self._native_tx_lock = asyncio.Lock()
+        self._native_send_tasks = set()
         self._crypto = crypto
         self._channel_plan = channel_plan
         self._config = transmit_config
@@ -268,10 +270,8 @@ class TxService:
                 airtime_ms=airtime_ms,
             )
 
-        result_code = await asyncio.to_thread(self._wrapper.send, tx_pkt)
+        result_code = await self._send_native(tx_pkt, airtime_ms)
         if result_code == 0:
-            if self._duty:
-                self._duty.record_tx(airtime_ms)
             return SendResult(
                 success=True,
                 protocol="meshtastic",
@@ -283,7 +283,7 @@ class TxService:
             success=False,
             protocol="meshtastic",
             packet_id=f"{packet_id:08x}",
-            error=f"lgw_send returned {result_code}",
+            error=self._native_send_error(result_code),
         )
 
     async def _send_meshtastic(
@@ -408,21 +408,9 @@ class TxService:
                 airtime_ms=airtime_ms,
             )
 
-        pre_status = await asyncio.to_thread(self._wrapper.get_tx_status, 0)
-        logger.info("TX status before send: %d", pre_status)
-
-        result_code = await asyncio.to_thread(self._wrapper.send, tx_pkt)
+        result_code = await self._send_native(tx_pkt, airtime_ms)
 
         if result_code == 0:
-            for delay in (0.05, 0.1, 0.5, 1.0):
-                await asyncio.sleep(delay)
-                st = await asyncio.to_thread(self._wrapper.get_tx_status, 0)
-                logger.info("TX status after %.0fms: %d (2=FREE 3=SCHED 4=EMIT)", delay * 1000, st)
-                if st == 2:
-                    break
-
-            if self._duty:
-                self._duty.record_tx(airtime_ms)
             return SendResult(
                 success=True,
                 protocol="meshtastic",
@@ -434,7 +422,7 @@ class TxService:
             success=False,
             protocol="meshtastic",
             packet_id=f"{packet_id:08x}",
-            error=f"lgw_send returned {result_code}",
+            error=self._native_send_error(result_code),
         )
 
     async def send_routing_ack(self, original) -> SendResult:
@@ -713,6 +701,35 @@ class TxService:
 
         return await self._send_built_packet(packet_bytes, packet_id, label="position")
 
+    @staticmethod
+    def _native_send_error(code: int) -> str:
+        if code == -2:
+            return "Duty cycle limit reached"
+        return f"Native transmission failed or did not complete (HAL code {code})"
+
+    async def _send_native(self, packet, airtime_ms: int) -> int:
+        async def transmit():
+            async with self._native_tx_lock:
+                # Recheck after queueing: another sender may consume the budget.
+                if self._duty and not self._duty.check_budget(airtime_ms):
+                    return -2
+                try:
+                    code = await asyncio.to_thread(self._wrapper.send, packet)
+                except Exception:
+                    logger.exception("Native send failed")
+                    code = -1
+                # Failed completion can still have occupied airtime. Reserve it
+                # conservatively; a retry must not reset the duty-cycle budget.
+                if self._duty:
+                    self._duty.record_tx(airtime_ms)
+                return code
+
+        task = asyncio.create_task(transmit())
+        self._native_send_tasks.add(task)
+        task.add_done_callback(self._native_send_tasks.discard)
+        # HTTP cancellation must not release TX ownership or skip accounting.
+        return await asyncio.shield(task)
+
     async def _send_built_packet(
         self, packet_bytes: bytes, packet_id: int, *, label: str
     ) -> SendResult:
@@ -728,10 +745,8 @@ class TxService:
                 airtime_ms=airtime_ms,
             )
 
-        result_code = await asyncio.to_thread(self._wrapper.send, tx_pkt)
+        result_code = await self._send_native(tx_pkt, airtime_ms)
         if result_code == 0:
-            if self._duty:
-                self._duty.record_tx(airtime_ms)
             logger.info("TX %s OK: id=%08x airtime=%dms", label, packet_id, airtime_ms)
             return SendResult(
                 success=True,
@@ -744,21 +759,16 @@ class TxService:
             success=False,
             protocol="meshtastic",
             packet_id=f"{packet_id:08x}",
-            error=f"lgw_send returned {result_code}",
+            error=self._native_send_error(result_code),
         )
 
     async def send_raw_relay(
         self, raw_radio_bytes: bytes
     ) -> SendResult:
-        """Re-broadcast a captured Meshtastic radio frame verbatim.
+        """Forward a Meshtastic frame with one fewer hop remaining.
 
-        Identity-preserving relay: the original 16-byte radio header
-        (source_id, packet_id, channel_hash, …) and encrypted body
-        are kept intact. Only ``hop_limit`` (bits 0-2 of the flags
-        byte at offset 12) is decremented. Other Meshtastic nodes
-        recognise the frame as a relay and apply their own dedup,
-        rather than seeing a fresh broadcast originated by this
-        Meshpoint.
+        Stamp this node as the latest relay while preserving the source,
+        packet ID, channel, next hop and encrypted payload.
 
         Used by RelayManager when the onboard SX1302 is available;
         replaces the legacy USB-companion ``MeshtasticTransmitter``
@@ -790,6 +800,7 @@ class TxService:
         new_flags = (flags & ~0x07) | (hop_limit - 1)
         new_packet = bytearray(raw_radio_bytes)
         new_packet[12] = new_flags
+        new_packet[15] = self.source_node_id & 0xFF
         new_packet_bytes = bytes(new_packet)
 
         tx_pkt = self._build_hal_packet(new_packet_bytes)
@@ -808,12 +819,8 @@ class TxService:
             hop_limit, hop_limit - 1, len(new_packet_bytes), airtime_ms,
         )
 
-        result_code = await asyncio.to_thread(
-            self._wrapper.send, tx_pkt
-        )
+        result_code = await self._send_native(tx_pkt, airtime_ms)
         if result_code == 0:
-            if self._duty:
-                self._duty.record_tx(airtime_ms)
             return SendResult(
                 success=True,
                 protocol="meshtastic",
@@ -824,7 +831,7 @@ class TxService:
         return SendResult(
             success=False,
             protocol="meshtastic",
-            error=f"lgw_send returned {result_code}",
+            error=self._native_send_error(result_code),
             airtime_ms=airtime_ms,
         )
 

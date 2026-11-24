@@ -1,13 +1,4 @@
-"""Tests for the native onboard SX1302 relay path.
-
-The native path is identity-preserving: TxService.send_raw_relay
-takes the original radio frame, decrements ``hop_limit`` (bits 0-2
-of byte 12 of the Meshtastic header), and pushes the bytes through
-the HAL with everything else intact — source_id, packet_id,
-channel_hash, encrypted body. Other Meshtastic nodes treat the
-packet as a legitimate relay rather than a fresh broadcast from
-the Meshpoint.
-"""
+"""Tests for native relay filtering, header updates and dispatch."""
 from __future__ import annotations
 
 import unittest
@@ -81,6 +72,19 @@ class TestNativeRelay(unittest.IsolatedAsyncioTestCase):
         # hop_start must NOT change so receivers know the original
         # source distance.
         self.assertEqual(new_hop_start, 3)
+
+    async def test_stamps_last_relayer_and_preserves_remaining_frame(self):
+        svc = self._build_service()
+        svc._source_node_id = 0x01020342
+        for previous_relay in (0, 0x70):
+            with self.subTest(previous_relay=previous_relay):
+                frame = bytearray(_build_packet_bytes())
+                frame[12:16] = bytes([0x7B, 0x08, 0xA5, previous_relay])
+                result = await svc.send_raw_relay(bytes(frame))
+                self.assertTrue(result.success)
+                sent = svc._wrapper.send.call_args.args[0]
+                expected = frame[:12] + bytes([0x7A, 0x08, 0xA5, 0x42]) + frame[16:]
+                self.assertEqual(bytes(sent.payload[:sent.size]), expected)
 
     async def test_zero_hops_packet_is_refused(self):
         svc = self._build_service()
@@ -171,6 +175,22 @@ class TestRelayManagerAsyncDispatch(unittest.IsolatedAsyncioTestCase):
         )
         await manager._relay(packet)
         self.assertEqual(len(sync_calls), 1)
+
+    async def test_own_broadcast_skipped_but_foreign_source_with_same_low_byte_relays(self):
+        from unittest.mock import AsyncMock
+        from src.relay.relay_manager import RelayManager
+
+        manager = RelayManager(enabled=True, burst_size=1)
+        manager.set_local_node_id("c0ffee42")
+        transmit = AsyncMock()
+        manager.set_transmit_function(transmit)
+        for source in ("C0FFEE42", "11223342"):
+            packet = Packet(packet_id="ab", source_id=source, destination_id="ffffffff",
+                            protocol=Protocol.MESHTASTIC, packet_type=PacketType.NODEINFO,
+                            hop_limit=2)
+            await manager.process_packet(packet)
+        transmit.assert_awaited_once()
+        self.assertEqual(transmit.await_args.args[0].source_id, "11223342")
 
     def test_skips_relay_for_unicast_to_local_node(self):
         from src.relay.relay_manager import RelayManager

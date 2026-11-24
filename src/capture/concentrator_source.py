@@ -52,6 +52,7 @@ class ConcentratorCaptureSource(CaptureSource):
         self._syncword = syncword
         self._running = False
         self._restart_lock = asyncio.Lock()
+        self._restarting = False
 
     @staticmethod
     def _resolve_channel_plan(
@@ -108,21 +109,35 @@ class ConcentratorCaptureSource(CaptureSource):
         )
 
     async def stop(self) -> None:
-        self._running = False
-        self._wrapper.stop()
-        logger.info("Concentrator capture stopped")
+        async with self._restart_lock:
+            self._running = False
+            self._wrapper.stop()
+            logger.info("Concentrator capture stopped")
 
     async def restart_pipeline(self) -> None:
         """Stop RX, reset the SX1302, and restart without restarting meshpoint."""
         async with self._restart_lock:
+            self._restarting = True
             self._running = False
-            await asyncio.sleep(0.15)
-            self._wrapper.stop()
-            await self.start()
+            try:
+                # Keep the coordinator's existing iterator alive, but prevent
+                # receive calls while the HAL is stopped/reconfigured.
+                await asyncio.sleep(0.15)
+                self._wrapper.stop()
+                await self.start()
+            except BaseException:
+                self._running = False
+                self._wrapper.stop()
+                raise
+            finally:
+                self._restarting = False
 
     async def packets(self) -> AsyncIterator[RawCapture]:
         poll_count = 0
-        while self._running:
+        while self._running or self._restarting:
+            if self._restarting:
+                await asyncio.sleep(self._poll_interval)
+                continue
             raw_packets = self._wrapper.receive()
             poll_count += 1
             if poll_count == 1 or poll_count % 50000 == 0:
