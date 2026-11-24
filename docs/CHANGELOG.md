@@ -8,6 +8,13 @@ or the documented installer flow so dependencies and migration hooks run.
 Optional SDR/P25 and PiMesh behavior remains experimental; DAPNET/Flock are
 outside this release. See the [release overview](plans/v0.8.0-release.md).
 
+#### SX1302 reception, transmission and relay
+
+- Set and verify the 16-symbol Meshtastic receive preamble on each service-modem startup. Existing installs get the correction without rebuilding the HAL (#179).
+- Resume reception after using **Restart concentrator** in the dashboard (#176).
+- Queue concurrent native transmissions and wait for the radio to finish before sending the next packet (#181).
+- Skip rebroadcasts of the Meshpoint's own packets and stamp forwarded Meshtastic frames with the current relay's identity (#175, #182).
+
 #### Heard paths
 
 - MeshCore heard-repeat popover with saved repeater paths, local RSSI/SNR,
