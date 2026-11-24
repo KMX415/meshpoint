@@ -60,9 +60,6 @@ class TransmitConfigCard {
         this._dutyEl = this._root.querySelector('[data-tx-duty]');
         this._relayEnable = this._root.querySelector('[data-tx-relay-enable]');
         this._relayRate = this._root.querySelector('[data-tx-relay-rate]');
-        this._relayBurst = this._root.querySelector('[data-tx-relay-burst]');
-        this._relayMinRssi = this._root.querySelector('[data-tx-relay-min-rssi]');
-        this._relayMaxRssi = this._root.querySelector('[data-tx-relay-max-rssi]');
         this._statusEl = this._root.querySelector('[data-tx-status]');
         this._form.addEventListener('submit', (e) => this._onSubmit(e));
     }
@@ -75,16 +72,6 @@ class TransmitConfigCard {
         if (this._relayEnable) this._relayEnable.checked = !!(tx.relay && tx.relay.enabled);
         if (this._relayRate && tx.relay && tx.relay.max_relay_per_minute != null) {
             this._relayRate.value = tx.relay.max_relay_per_minute;
-        }
-        const relayFull = config.relay || tx.relay || {};
-        if (this._relayBurst && relayFull.burst_size != null) {
-            this._relayBurst.value = relayFull.burst_size;
-        }
-        if (this._relayMinRssi && relayFull.min_relay_rssi != null) {
-            this._relayMinRssi.value = relayFull.min_relay_rssi;
-        }
-        if (this._relayMaxRssi && relayFull.max_relay_rssi != null) {
-            this._relayMaxRssi.value = relayFull.max_relay_rssi;
         }
     }
 
@@ -107,22 +94,17 @@ class TransmitConfigCard {
             relay,
         };
         this._setStatus('pending', 'Saving…');
-        const txResult = await this._api.put('/api/config/transmit', payload);
+        let txResult;
+        try {
+            txResult = await this._api.put('/api/config/transmit', payload);
+        } catch (_error) {
+            this._setStatus('error', 'Transmit save failed.');
+            return;
+        }
         if (!txResult) {
             this._setStatus('error', 'Transmit save failed.');
             return;
         }
-
-        const relayFilter = await this._api.put('/api/config/relay', {
-            burst_size: Number(this._relayBurst.value),
-            min_relay_rssi: Number(this._relayMinRssi.value),
-            max_relay_rssi: Number(this._relayMaxRssi.value),
-        });
-        if (!relayFilter) {
-            this._setStatus('error', 'Relay filter save failed.');
-            return;
-        }
-
         this._setStatus('success', 'Saved.');
         this._api.signalRestart('Transmit settings updated.');
     }
