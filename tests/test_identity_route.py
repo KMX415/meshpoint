@@ -30,7 +30,7 @@ _SECRET = "identity-test-secret-" + "k" * 16
 
 
 def _build_client(
-    *, with_password: bool = False
+    *, with_password: bool = False, terminal_enabled: bool = True
 ) -> tuple[TestClient, WebAuthConfig, JwtSessionService]:
     cfg = WebAuthConfig()
     if with_password:
@@ -55,13 +55,20 @@ def _build_client(
         hardware_description="RAK2287 + Raspberry Pi 4",
         firmware_version="0.7.3-test",
     )
-    identity_routes.init_routes(identity, auth_service)
+    identity_routes.init_routes(identity, auth_service, terminal_enabled=terminal_enabled)
     app = FastAPI()
     app.include_router(identity_routes.router)
     return TestClient(app), cfg, jwt_service
 
 
 class TestIdentityEndpoint(unittest.TestCase):
+    def test_disabled_terminal_is_not_in_admin_sidebar(self) -> None:
+        client, _, jwt = _build_client(with_password=True, terminal_enabled=False)
+        client.cookies.set("meshpoint_session", jwt.issue("admin", "admin"))
+        sections = client.get("/api/identity").json()["available_sections"]
+        self.assertNotIn("terminal", sections)
+        self.assertIn("settings.plugins", sections)
+
     def tearDown(self) -> None:
         identity_routes.reset_routes()
         auth_deps.reset_auth()

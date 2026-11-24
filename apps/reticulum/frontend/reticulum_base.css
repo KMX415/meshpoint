@@ -1,0 +1,458 @@
+/* LoRaWAN monitoring panel */
+
+/* Every section reusing this file's panel/table layout needs its own
+ * scroll context. The parent .section has overflow:hidden : promote
+ * them to scroll containers. */
+.section[data-section="lorawan"],
+.section[data-section="dapnet"],
+.section[data-section="meshtastic"],
+.section[data-section="meshcore"],
+.section[data-section="reticulum"] {
+    overflow-y: auto;
+}
+
+
+.lw-panel__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px clamp(16px, 3vw, 32px) 12px;
+}
+
+.lw-panel__title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.lw-panel__actions {
+    display: flex;
+    gap: 8px;
+}
+
+.lw-panel__limit {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 400;
+    margin-left: 8px;
+}
+
+.lw-link-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-size: 11px;
+    color: var(--accent-cyan);
+    cursor: pointer;
+}
+.lw-link-btn:hover { text-decoration: underline; }
+
+.lw-search-wrap[hidden] { display: none; }
+
+.lw-search-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 8px;
+}
+
+.lw-search-wrap .lw-panel__limit { margin-left: 0; }
+
+.lw-search {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.2rem 1.4rem 0.2rem 0.5rem;
+    font-size: 0.7rem;
+    outline: none;
+    width: 120px;
+}
+
+.lw-search:focus { border-color: var(--accent-cyan); }
+
+.lw-search:-webkit-autofill,
+.lw-search:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 1000px var(--bg-primary) inset;
+    -webkit-text-fill-color: var(--text-primary);
+}
+
+.lw-search-clear {
+    position: absolute;
+    right: 0.3rem;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+
+.lw-search-clear:hover { color: var(--text-primary); }
+
+/* ── Stat cards ─────────────────────────────────────── */
+
+.lw-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 4px clamp(16px, 3vw, 32px) 16px;
+}
+
+.lw-stats .stat-card {
+    min-width: 130px;
+    flex: 1;
+}
+
+/* ── Section wrapper ─────────────────────────────────── */
+
+.lw-section {
+    padding: 0 clamp(16px, 3vw, 32px) 20px;
+}
+
+/* ── Table shared ────────────────────────────────────── */
+
+.lw-table-wrap {
+    overflow-x: auto;
+}
+
+.lw-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    table-layout: fixed;
+}
+
+.lw-table th {
+    padding: 9px 12px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--hairline);
+    white-space: nowrap;
+    text-align: left;
+}
+
+.lw-table th.lw-r { text-align: right; }
+
+.lw-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--hairline);
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.lw-table tbody tr:last-child td { border-bottom: none; }
+
+.lw-table tbody tr:hover {
+    background: var(--overlay-weak);
+}
+
+/* ── Column widths : devices table ──────────────────── */
+
+.lw-table--devices col.col-id     { width: 140px; }
+.lw-table--devices col.col-type   { width: 76px;  }
+.lw-table--devices col.col-frames { width: 64px;  }
+.lw-table--devices col.col-time   { width: 88px;  }
+.lw-table--devices col.col-rssi   { width: 92px;  }
+.lw-table--devices col.col-snr    { width: 80px;  }
+.lw-table--devices col.col-freq   { width: 84px;  }
+.lw-table--devices col.col-sf     { width: 52px;  }
+
+/* ── Column widths : packets table ──────────────────── */
+
+.lw-table--packets col.col-time   { width: 80px;  }
+.lw-table--packets col.col-type   { width: 76px;  }
+.lw-table--packets col.col-dev    { width: 130px; }
+.lw-table--packets col.col-rssi   { width: 92px;  }
+.lw-table--packets col.col-snr    { width: 80px;  }
+.lw-table--packets col.col-freq   { width: 84px;  }
+.lw-table--packets col.col-sf     { width: 52px;  }
+.lw-table--packets col.col-fport  { width: 60px;  }
+.lw-table--packets col.col-fcnt   { width: 60px;  }
+
+/* ── DAPNET tables ───────────────────────────────────
+ * Page text (FT8/PSK-reporter-style pages can run 80+ chars) used to
+ * get a wrapping auto-layout column here so long pages weren't
+ * silently truncated -- but on a narrow mobile viewport, the text
+ * column has so little room left after the other fixed columns that
+ * word-break wrapped it one word (sometimes one character) per line,
+ * unreadable. Now that a row click opens the same full-detail popup
+ * Meshtastic/MeshCore rows already have, truncating the inline preview
+ * is no longer a real loss -- reverted to the same fixed table-layout
+ * + single-line ellipsis every other .lw-table already uses. */
+.lw-table--dapnet-packets col.col-time { width: 90px; }
+/* 76px (LoRaWAN's own col-type width, sized for "Join"/"Data"/"Rejoin")
+ * was too narrow for DAPNET's own longer type words -- "Numeric" and
+ * especially "Activation" would overflow the badge pill and get clipped
+ * by the shared .lw-table td's text-overflow: ellipsis, showing what
+ * looked like a stray dot next to the badge instead of a real "…". */
+.lw-table--dapnet-packets col.col-type { width: 100px; }
+.lw-table--dapnet-packets col.col-dev  { width: 90px; }
+/* Pager's Inbox/Outbox tables (pager_dashboard_panel.js) reuse this same
+ * table class for their From/To capcode columns, unlike DAPNET's own
+ * packets table which only ever used col-dev for a single capcode column
+ * -- col-id had no width rule scoped to THIS table class (only to
+ * .lw-table--dapnet-capcodes below, a different table), so under
+ * table-layout: fixed the two undefined-width From/To columns threw off
+ * the whole row's column math and squeezed the fixed-width Time column
+ * down far enough to truncate ("Aug 3, 1…" instead of "Aug 3, 18:51"). */
+.lw-table--dapnet-packets col.col-id   { width: 90px; }
+
+.lw-table--dapnet-capcodes col.col-time   { width: 90px; }
+.lw-table--dapnet-capcodes col.col-id     { width: 90px; }
+.lw-table--dapnet-capcodes col.col-type   { width: 100px; }
+.lw-table--dapnet-capcodes col.col-frames { width: 64px; }
+
+/* col-text had no explicit width -- under table-layout: fixed it was
+ * meant to take whatever's left of the table's own 100%-of-container
+ * width after the columns above. On the capcodes table those alone (2x
+ * time + id + type + frames = 434px) already exceed a mobile viewport's
+ * width, leaving zero/negative "leftover" for col-text -- the column
+ * rendered with a header but no visible content at all, not even
+ * truncated, on a real phone. A first attempt at fixing this used
+ * min-width instead of width -- looked right in a quick check, but
+ * still failed live on the actual phone: table-layout: fixed's column-
+ * sizing algorithm only ever consults a column's `width` (via <col> or
+ * the first row's cells), never `min-width`, so browsers being spec-
+ * strict about that ignored it entirely and kept collapsing the column.
+ * Plain `width` is what the OTHER fixed columns above already use and
+ * is guaranteed to participate in that algorithm -- combined with
+ * .lw-table-wrap's existing overflow-x: auto, once the explicit column
+ * widths sum past the viewport the table grows past 100% and scrolls,
+ * same as the other fixed columns already do. */
+.lw-table--dapnet-packets col.col-text,
+.lw-table--dapnet-capcodes col.col-text {
+    width: 160px;
+}
+
+/* ── Cell types ─────────────────────────────────────── */
+
+.lw-id {
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 12px;
+    color: var(--brand-amber);
+    letter-spacing: 0.3px;
+}
+
+.lw-time {
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.lw-num {
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 12px;
+    text-align: right;
+    color: var(--text-primary);
+}
+
+.lw-signal {
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 12px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.lw-signal--good { color: var(--accent-green); }
+.lw-signal--ok   { color: var(--brand-amber); }
+.lw-signal--weak { color: var(--accent-red); }
+
+/* ── Type badges ─────────────────────────────────────── */
+
+.lw-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    background: var(--overlay-med);
+    color: var(--text-secondary);
+}
+
+.lw-badge--join   { background: rgba(68, 211, 154, 0.15); color: var(--accent-green); }
+.lw-badge--data   { background: rgba(34, 211, 238, 0.15); color: var(--accent-cyan); }
+.lw-badge--rejoin { background: rgba(255, 184, 77, 0.15);  color: var(--brand-amber); }
+
+/* Overrides the type color above when a packet couldn't be decrypted
+   (no session key for that DevAddr yet, or root keys not configured) --
+   red is the "needs attention" signal across this dashboard, same idea
+   as the RSSI danger color in _rssiClass(). */
+.lw-badge--undecrypted { background: rgba(248, 113, 113, 0.15); color: var(--accent-red); }
+
+/* ── Column widths : MeshCore nodes table ───────────── */
+
+.lw-table--mc-nodes col.col-id   { width: 110px; }
+.lw-table--mc-nodes col.col-name { width: 200px; }
+.lw-table--mc-nodes col.col-role { width: 100px; }
+.lw-table--mc-nodes col.col-rssi { width: 92px;  }
+.lw-table--mc-nodes col.col-snr  { width: 80px;  }
+.lw-table--mc-nodes col.col-dist { width: 80px;  }
+.lw-table--mc-nodes col.col-pkts { width: 72px;  }
+.lw-table--mc-nodes col.col-time { width: 88px;  }
+
+/* ── Column widths : MeshCore packets table ──────────── */
+
+.lw-table--mc-packets col.col-time { width: 80px;  }
+.lw-table--mc-packets col.col-type { width: 90px;  }
+.lw-table--mc-packets col.col-src  { width: 120px; }
+.lw-table--mc-packets col.col-dst  { width: 120px; }
+.lw-table--mc-packets col.col-rssi { width: 92px;  }
+.lw-table--mc-packets col.col-snr  { width: 80px;  }
+.lw-table--mc-packets col.col-freq { width: 68px;  }
+.lw-table--mc-packets col.col-sf   { width: 52px;  }
+.lw-table--mc-packets col.col-hops { width: 56px;  }
+
+/* ── Column widths : Meshtastic nodes table ─────────── */
+
+.lw-table--mt-nodes col.col-id   { width: 110px; }
+.lw-table--mt-nodes col.col-name { width: 160px; }
+.lw-table--mt-nodes col.col-hw   { width: 130px; }
+.lw-table--mt-nodes col.col-role { width: 100px; }
+.lw-table--mt-nodes col.col-rssi { width: 92px;  }
+.lw-table--mt-nodes col.col-snr  { width: 80px;  }
+.lw-table--mt-nodes col.col-hops { width: 56px;  }
+.lw-table--mt-nodes col.col-dist { width: 80px;  }
+.lw-table--mt-nodes col.col-pkts { width: 72px;  }
+.lw-table--mt-nodes col.col-time { width: 88px;  }
+
+/* ── Column widths : Meshtastic packets table ────────── */
+
+.lw-table--mt-packets col.col-time { width: 80px;  }
+.lw-table--mt-packets col.col-type { width: 90px;  }
+.lw-table--mt-packets col.col-src  { width: 110px; }
+.lw-table--mt-packets col.col-dst  { width: 110px; }
+.lw-table--mt-packets col.col-rssi { width: 92px;  }
+.lw-table--mt-packets col.col-snr  { width: 80px;  }
+.lw-table--mt-packets col.col-freq { width: 68px;  }
+.lw-table--mt-packets col.col-sf   { width: 52px;  }
+.lw-table--mt-packets col.col-hops { width: 56px;  }
+
+/* ── Meshtastic-specific cell styles ─────────────────── */
+
+.mt-name {
+    font-size: 13px;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mt-hw {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mt-hw-tag {
+    font-family: 'JetBrains Mono', Menlo, monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.mt-role-tag {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    background: var(--overlay-med);
+    color: var(--text-muted);
+}
+
+/* ── Meshtastic type badges ───────────────────────────── */
+
+.mt-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    background: var(--overlay-med);
+    color: var(--text-secondary);
+}
+
+.mt-badge--text        { background: rgba(34, 211, 238, 0.15); color: var(--accent-cyan); }
+.mt-badge--position    { background: rgba(68, 211, 154, 0.15); color: var(--accent-green); }
+.mt-badge--telemetry   { background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); }
+.mt-badge--nodeinfo    { background: rgba(255, 184, 77, 0.15);  color: var(--brand-amber); }
+.mt-badge--encrypted   { background: rgba(239, 68, 68, 0.12);  color: var(--accent-red); }
+.mt-badge--routing     { background: rgba(99, 102, 241, 0.15); color: var(--accent-blue); }
+.mt-badge--traceroute  { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); }
+.mt-badge--neighborinfo { background: rgba(16, 185, 129, 0.12); color: var(--accent-green); }
+
+/* ── Empty state ─────────────────────────────────────── */
+
+.lw-empty {
+    text-align: center;
+    padding: 32px 24px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.mc-contact-row,
+.mt-node-row,
+.lw-device-row {
+    cursor: pointer;
+}
+
+.mc-contact-row:hover,
+.mt-node-row:hover,
+.lw-device-row:hover {
+    background: var(--overlay-weak);
+}
+
+/* ── Packets | Contacts view tabs (W10 pilot : shared by all three
+   protocol pages so the rollout reuses these classes verbatim) ───── */
+
+.panel__header--tabs {
+    gap: 10px;
+}
+
+.lw-tabs {
+    display: inline-flex;
+    gap: 4px;
+}
+
+.lw-tab {
+    font: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    padding: 3px 10px;
+    cursor: pointer;
+}
+
+.lw-tab:hover {
+    color: var(--text-primary);
+}
+
+.lw-tab--active {
+    color: var(--accent-cyan);
+    background: rgba(34, 211, 238, 0.08);
+    border-color: rgba(34, 211, 238, 0.35);
+}
+
+/* Packet rows open the shared packet-detail modal on click. */
+.lw-pkt-row {
+    cursor: pointer;
+}
+
+.lw-pkt-row:hover {
+    background: var(--overlay-weak);
+}

@@ -1,0 +1,6 @@
+.viewer-access-notice { margin:12px 20px; padding:10px 14px; border:1px solid var(--border, #485565); border-radius:8px; color:var(--text-secondary, #aab8c5); font-size:12px; }
+.viewer-read-only .msg-compose,
+.viewer-read-only .msg-convo__delete,
+.viewer-read-only #msg-new-btn,
+.viewer-read-only #r-ni-send-now { display:none !important; }
+.viewer-read-only [data-section^="configuration/"] :is(input,select,textarea,button) { cursor:default; }

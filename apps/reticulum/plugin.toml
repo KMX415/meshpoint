@@ -1,0 +1,32 @@
+name = "reticulum"
+version = "1.0.0"
+meshpoint_api = 1
+provides = ["service", "routes", "sidebar", "topbar"]
+locked = false
+
+[deps]
+
+
+
+[frontend]
+scripts = [
+    "frontend/reticulum_micron.js",
+    "frontend/reticulum_detail_panels.js",
+    "frontend/reticulum_panel.js",
+    "frontend/reticulum_settings_tab.js",
+    "frontend/reticulum_nomad.js",
+    "frontend/reticulum_node_pages_tab.js",
+    "frontend/reticulum_topbar_chip.js",
+]
+styles = ["frontend/reticulum_base.css", "frontend/reticulum.css"]
+
+[sidebar]
+route = "reticulum"
+label = "Reticulum"
+category = "networks"
+icon = "reticulum"
+
+[meta]
+description = "Native Reticulum/LXMF messaging -- meshpoint's own LXMF delivery destination on the local rnsd shared instance, the peer roster built from announces, the Reticulum page (Peers/Messages/Send/Settings) and a compact topbar pill."
+homepage = "https://reticulum.network"
+author = "Einstein PD2EMC"

@@ -54,14 +54,14 @@
     .dashboard__feed { height: 180px; }
     .stat-card { min-width: 88px; padding: 0.3rem 0.5rem; }
     .stat-card__value { font-size: 1rem; }
-    .packet-table th:nth-child(8),
-    .packet-table td:nth-child(8),
     .packet-table th:nth-child(9),
     .packet-table td:nth-child(9),
     .packet-table th:nth-child(10),
     .packet-table td:nth-child(10),
     .packet-table th:nth-child(11),
-    .packet-table td:nth-child(11) { display: none; }
+    .packet-table td:nth-child(11),
+    .packet-table th:nth-child(12),
+    .packet-table td:nth-child(12) { display: none; }
 }
 
 @media (max-width: 640px) {

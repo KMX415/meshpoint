@@ -1,5 +1,5 @@
 /**
- * Live Modem / Other settings for one Meshtastic USB stick.
+ * Live Modem / Other settings for one Meshtastic USB node.
  * Credit: javastraat/meshpoint 9bfbe56 / 9e06352 / 4a6055c / ec0c410
  */
 
@@ -65,7 +65,7 @@ class SerialRadioControls {
             `<option value="${value}" ${value === btMode ? 'selected' : ''}>${text}</option>`
         )).join('');
         const unsetHint = (!region || region === 'UNSET')
-            ? `<p class="cfg-field__hint">Region is UNSET: stick will not TX until set.</p>`
+            ? `<p class="cfg-field__hint">Region is UNSET: node will not TX until set.</p>`
             : '';
 
         return `
@@ -73,7 +73,7 @@ class SerialRadioControls {
                 <header class="cfg-card__head">
                     <h3 class="cfg-card__title">Modem settings</h3>
                     <p class="cfg-card__hint">
-                        Region and modem preset for this stick, over its live serial connection.
+                        Region and modem preset for this node, over its live serial connection.
                     </p>
                 </header>
                 <div class="cfg-form">
@@ -105,7 +105,7 @@ class SerialRadioControls {
                 <header class="cfg-card__head">
                     <h3 class="cfg-card__title">Other settings</h3>
                     <p class="cfg-card__hint">
-                        Stick NodeInfo / telemetry cadence and Bluetooth. Device NVS only.
+                        NodeInfo / telemetry cadence and Bluetooth for this USB node. Device NVS only.
                     </p>
                 </header>
                 <div class="cfg-form">
@@ -235,9 +235,9 @@ class SerialRadioControls {
         status.textContent = 'Setting region…';
         const result = await this._api.put('/api/config/serial/region', { label, region });
         if (result && result.success) {
-            status.dataset.kind = 'success';
-            status.textContent = `Region set to ${result.region}.`;
-            this._api.toast(`Serial region → ${result.region}`);
+            status.dataset.kind = 'pending';
+            status.textContent = 'Node rebooting onto the new region. USB reconnects shortly.';
+            this._api.toast('Serial node rebooting. USB will reconnect.');
             await this._api.refresh();
         } else {
             status.dataset.kind = 'error';
@@ -262,9 +262,9 @@ class SerialRadioControls {
             label, modem_preset,
         });
         if (result && result.success) {
-            status.dataset.kind = 'success';
-            status.textContent = `Preset set to ${result.modem_preset}.`;
-            this._api.toast(`Serial preset → ${result.modem_preset}`);
+            status.dataset.kind = 'pending';
+            status.textContent = 'Node rebooting onto the new preset. USB reconnects shortly.';
+            this._api.toast('Serial node rebooting. USB will reconnect.');
             await this._api.refresh();
         } else {
             status.dataset.kind = 'error';
@@ -322,9 +322,9 @@ class SerialRadioControls {
         status.textContent = 'Setting Bluetooth…';
         const result = await this._api.put('/api/config/serial/bluetooth', body);
         if (result && result.success) {
-            status.dataset.kind = 'success';
-            status.textContent = 'Bluetooth updated.';
-            this._api.toast('Serial Bluetooth updated');
+            status.dataset.kind = 'pending';
+            status.textContent = 'Node rebooting. USB reconnects shortly.';
+            this._api.toast('Serial node rebooting. USB will reconnect.');
             await this._api.refresh();
         } else {
             status.dataset.kind = 'error';

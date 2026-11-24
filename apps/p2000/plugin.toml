@@ -1,0 +1,21 @@
+name = "p2000"
+version = "1.0.0"
+meshpoint_api = 1
+provides = ["listener", "routes", "hook"]
+locked = false
+
+[deps]
+executables = ["rtl_fm", "multimon-ng"]
+
+
+
+[frontend]
+scripts = ["frontend/p2000_panel.js"]
+
+[hook]
+host = "rtlsdr"
+
+[meta]
+description = "Dutch emergency dispatch (P2000, FLEX on 169.65 MHz) decoding via rtl_fm + multimon-ng"
+homepage = "https://github.com/EliasOenal/multimon-ng"
+author = "Einstein PD2EMC"

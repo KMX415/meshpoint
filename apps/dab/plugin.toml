@@ -1,0 +1,23 @@
+name = "dab"
+version = "1.0.0"
+meshpoint_api = 1
+provides = ["listener", "routes", "hook"]
+locked = false
+
+[deps]
+executables = ["welle-cli", "curl"]
+apt = ["welle.io"]
+
+
+
+[frontend]
+scripts = ["frontend/dab_panel.js", "frontend/dab_config_panel.js"]
+styles = ["frontend/dab_panel.css"]
+
+[hook]
+host = "rtlsdr"
+
+[meta]
+description = "DAB/DAB+ digital radio via welle-cli -- channel scan, live tuning/playback, and per-channel display names"
+homepage = "https://github.com/AlbrechtL/welle.io"
+author = "Einstein PD2EMC"

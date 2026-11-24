@@ -1,10 +1,40 @@
 # FAQ
 
 Quick answers to questions that come up often. For setup walkthroughs see
-[Onboarding](ONBOARDING.md), for error catalogs see [Common Errors](COMMON-ERRORS.md),
+[Onboarding](ONBOARDING.md), for USB radios see [USB nodes](USB-NODES.md),
+for error catalogs see [Common Errors](COMMON-ERRORS.md),
 and for config syntax see [Configuration](CONFIGURATION.md).
 
 ---
+
+For a full guide index, see [Documentation](README.md).
+
+## Do I need the optional plugins for Meshtastic or MeshCore?
+
+No. The v0.8.0 development managers let you choose apps without installing all
+radio decoders. Existing mesh features stay available without SDR or Reticulum
+dependencies. See [Plugins and themes](PLUGINS.md).
+
+## Can I offer a genuinely read-only dashboard?
+
+The v0.8.0 development build prevents Viewer shared-state writes and makes the
+UI read-only. Viewer still sees conversations and is for trusted observers.
+The separate public view is off by default and shares only selected node/packet
+counts, signal averages and configured radio parameters without login. See
+[Dashboard access](DASHBOARD-ACCESS.md) for setup and the exact field list.
+
+## Are P25, DAPNET and Flock detection ready?
+
+P25 has local draft code and a catalog entry but lacks native/hardware signoff.
+DAPNET integration is pending. Flock camera detection is not implemented.
+Neither a store preview nor a process starting establishes working reception.
+
+## Has Reticulum been tested over a real radio?
+
+Yes: bidirectional LXMF delivery was verified with separate Heltec V3/V4 RNodes
+on official firmware 1.86. Reconnect/reboot endurance and external network
+interoperability remain release checks. Outbound `sent` currently means queued,
+not a persisted delivery receipt. See [Reticulum](../apps/reticulum/README.md).
 
 ## What is a Meshpoint?
 
@@ -112,16 +142,30 @@ the old SD card first if you want it gone for good.
 
 ## Can I listen to multiple modem presets (LongFast, MediumFast, etc.) at once?
 
-**No, not today.** Pick **one** modem preset in **Configuration → Radio**
-(region, frequency, bandwidth, spreading factor). The SX1302 runs eight
-demod chains on **that** channel plan so you still hear nodes using
-different spreading factors (SF7-SF12) on the same frequency and bandwidth.
+**Not on one concentrator.** Pick **one** modem preset in
+**Configuration → Radio**. The SX1302 runs eight demod chains on **that**
+channel plan, so you still hear nodes using different spreading factors
+(SF7-SF12) on the same frequency and bandwidth.
 
-A Meshtastic **preset** is not just SF: it is frequency plus bandwidth plus
-spreading factor (LongFast, MediumFast, ShortFast, and so on). You cannot
-monitor multiple presets or multiple frequencies on one concentrator at the
-same time. Multi-preset / multi-frequency capture is on the roadmap and is
-limited by concentrator hardware, not missing UI.
+A Meshtastic **preset** is frequency plus bandwidth plus spreading factor,
+not SF alone. You cannot put LongFast and MediumFast on two different
+slots on the same concentrator. That multi-preset IF work is backlog.
+
+**USB workaround:** attach a Meshtastic USB node and set **its** preset
+on **Configuration → Serial**. Leave the concentrator on LongFast. Full
+steps: [USB nodes](USB-NODES.md).
+
+If your local MediumFast mesh is the same freq/slot as LongFast (both
+usually BW 250), the concentrator already hears SF9 and you may not need
+the extra node.
+
+---
+
+## How do I add a USB Meshtastic or MeshCore radio?
+
+[USB nodes](USB-NODES.md). Meshtastic USB nodes: **Configuration → Serial**.
+MeshCore companions: **Configuration → MeshCore**. Pin both ports when
+two USB radios are plugged in.
 
 ---
 

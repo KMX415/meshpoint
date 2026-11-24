@@ -1,0 +1,25 @@
+name = "rtlsdr"
+version = "0.1.0"
+meshpoint_api = 1
+provides = ["sidebar"]
+locked = false
+
+[deps]
+executables = []
+
+
+
+[frontend]
+scripts = ["frontend/pager_panel.js", "frontend/rtlsdr_panel.js"]
+styles = ["frontend/receiver_shared.css", "frontend/rtlsdr_panel.css"]
+
+[sidebar]
+route = "rtlsdr"
+label = "RTL-SDR"
+category = "radio"
+icon = "usb"
+
+[meta]
+description = "The RTL-SDR host page -- every RTL-SDR plugin (Radio, DAB+, P2000, Pagers, POCSAG, RTL433, ADS-B, ACARS) hooks its own tab into this page via the 'hook' seam instead of owning a page of its own."
+homepage = "https://github.com/KMX415/meshpoint"
+author = "Einstein PD2EMC"

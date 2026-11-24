@@ -46,6 +46,8 @@ class RawCapture:
     # serial): portnum (int) + inner payload (bytes). Header-only
     # ``payload`` has no ciphertext left to decrypt.
     pre_decoded: Optional[dict] = None
+    # Pre-parsed meshtastic-python receive dict (meshtasticd / TCP path).
+    meshtastic_api_packet: Optional[dict[str, Any]] = None
 
 
 @dataclass

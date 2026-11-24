@@ -1,0 +1,13 @@
+# Upstream meshtastic/firmware bin/config.d/lora-pimesh-1w-v2.yaml
+# Boot config must include gpio=26=op,dh.
+Lora:
+  Module: sx1262
+  # GPIO8 is owned by the kernel SPI controller. Use hardware CE0;
+  # claiming it again as a GPIO aborts libgpiod on current Raspberry Pi OS.
+  IRQ: 6
+  Reset: 18
+  Busy: 5
+  DIO2_AS_RF_SWITCH: true
+  DIO3_TCXO_VOLTAGE: true
+  SX126X_MAX_POWER: 22
+  spidev: spidev0.0

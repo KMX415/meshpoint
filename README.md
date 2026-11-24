@@ -13,7 +13,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/KMX415/meshpoint?style=flat&color=yellow)](https://github.com/KMX415/meshpoint/stargazers)
 [![GitHub issues](https://img.shields.io/github/issues/KMX415/meshpoint)](https://github.com/KMX415/meshpoint/issues)
 [![Last commit](https://img.shields.io/github/last-commit/KMX415/meshpoint)](https://github.com/KMX415/meshpoint/commits/main)
-[![Version](https://img.shields.io/badge/version-0.7.9-orange.svg)](docs/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.0-orange.svg)](docs/CHANGELOG.md)
 
 ### Meshradar Cloud Dashboard
 ![Meshradar Cloud Dashboard](Meshradar414.png)
@@ -56,6 +56,8 @@ Everything is managed from a browser dashboard: full chat with channels and DMs,
 
 **Full chat UI.** Conversations organized by channel and contact. Signal info (SNR, RSSI) on every received bubble. Duplicate badge shows how many times a relayed message was heard. Channel sidebar with LongFast, custom channels, and DM contacts. Message history persisted in SQLite.
 
+**MeshCore send feedback.** Sent channel messages show locally heard repeats; DMs show recipient-confirmed delivery. Works with USB/serial and PiMesh TCP companions. See [feedback behavior and limits](docs/CONFIGURATION.md#meshcore-message-feedback).
+
 **Radio configuration from the dashboard.** Change region, modem preset, frequency, TX power, and duty cycle without SSH. Add and remove channels with custom PSKs. Toggle TX enable/disable. All settings saved to `local.yaml` and survive restarts.
 
 **Node discovery.** Live node cards showing every node your Meshpoint has heard: name, ID, protocol, hardware model, signal strength, battery, and last seen. Click any node to open a detail drawer with signal history and direct message.
@@ -81,6 +83,50 @@ Everything is managed from a browser dashboard: full chat with channels and DMs,
 **Auto-detect hardware.** RAK Hotspot V2, SenseCap M1, and Syncrobit Chameleon (SX1302) supported; carrier board may show as generic SX1302/Pi during setup. **Bobcat Miner 300** (Rockchip RK3566 + SX1302 on Armbian) is community-validated with manual SPI/GPIO setup. **WisMesh Node** (RAK6421 Pi HAT + WisBlock SX1262, experimental) stays on its own branch `feat/wismesh-hat` (Settings → Updates → Experimental); docs are on `main`, gateway installs stay on Stable. MeshCore USB companions auto-detected on `/dev/ttyUSB*` and `/dev/ttyACM*`.
 
 ---
+
+## Dashboard access (v0.8.0)
+
+Web Terminal now requires the device-side `dashboard.web_terminal_enabled: true`
+opt-in and a restart, including on upgrades. It remains admin-only. See
+[device-side permissions](docs/DASHBOARD-ACCESS.md#device-side-permissions).
+
+See the [documentation index](docs/README.md) for setup, access, hardware,
+optional modules, recovery and validation guides.
+
+**Read-only Viewer access.** Enable a Viewer login in **Settings > Auth** for trusted observers. Viewers can read the dashboard, messages and permitted configuration pages, but cannot send, delete, change configuration or mark shared conversations as read. Configuration editors are disabled and message actions are hidden. Settings and Terminal remain administrator-only. A Viewer can still change their own login password.
+
+**Optional public view.** In **Settings > Auth > Public view**, choose which summaries to share, enable public viewing, then save. It is off by default. Signed-out visitors see only the selected Dashboard (node counts), Stats (packet counts, rate and signal averages) or Radio (configured region, frequency, bandwidth and spreading factor) pages, with an **Admin sign in** link. Anyone who can reach the dashboard address can see these summaries. Messages, node identities/locations, keys and other configuration remain behind login. Summaries refresh every 15 seconds; removing a page or disabling public viewing blocks new requests immediately. Signed-in users keep their normal dashboard.
+
+## Optional plugins and themes (v0.8.0)
+
+An administrator can enable source downloads with the checkbox in Settings >
+Plugins; it saves `plugin_sources_enabled` immediately without a restart.
+With downloads locked, catalog browsing and installed-module management remain available. See [setup instructions](docs/PLUGINS.md#install-and-enable).
+
+Meshpoint v0.8.0 adds optional applications without expanding the default radio installation. If you only use Meshtastic or MeshCore, keep using the existing dashboard and USB nodes. You do not need an SDR, Reticulum, or any of the optional decoder packages.
+
+**Settings > Plugins** provides source catalogs, selected downloads, dependency reporting, enable/disable controls, and removal. Apps install disabled. Enabling an app requires a Meshpoint restart; receiver hardware remains idle until you press Start on its page. Catalog revisions are pinned to a commit, and app updates are separate from core updates.
+
+| Optional family | What it adds | Installation impact |
+| --- | --- | --- |
+| RTL-SDR host | A page containing selected receiver tabs | No decoder installed automatically |
+| Radio and DAB+ | Analogue and digital broadcast listening | Separate SDR and native audio tools |
+| ACARS and ADS-B | Aircraft data and position reception | Separate SDR and selected decoder |
+| RTL433 | Compatible wireless sensor reception | Separate SDR and `rtl_433` |
+| P2000, Pagers and POCSAG | Pager reception and message views | Separate SDR and decoding tools |
+| Reticulum / LXMF | Messaging, contacts, NomadNet pages, propagation and telemetry | Separate optional libraries and worker; interfaces off by default |
+| DAPNET | Deferred; not part of the supported release scope | Pipeline integration remains unfinished |
+
+**Settings > Themes** provides the built-in palettes, a custom color editor, a device default, and catalog themes. Themes require no optional radio packages.
+
+The official catalog is available. Check app-specific dependencies and compatibility before installation. SDR/P25 features remain experimental. They are not enabled by cloning or updating Meshpoint. Reticulum has an explicit dependency-install button using verified libraries in a separate directory. Native receiver dependencies are reported for operator setup; downloaded installers never run as root. See the [Plugin and Theme Guide](docs/PLUGINS.md) for installation, hardware sharing, updates, removal, and current limitations.
+
+---
+
+Reticulum cold-start, long-running reliability and external-network interoperability
+need further validation. PiMesh stays experimental. DAPNET and Flock are not
+supported in this release. See the [release overview](docs/plans/v0.8.0-release.md)
+for known limitations.
 
 ## Hardware
 
@@ -136,7 +182,7 @@ aarch64 Raspbian 13 (Trixie) with live Meshtastic RX/TX.
 
 ### Option E: WisMesh Node (RAK6421 HAT, experimental)
 
-The [RAK WisMesh Pi Node](https://store.rakwireless.com/products/wismesh-pi-node) is a Pi HAT with a **WisBlock SX1262** LoRa module (RAK13300 standard or **RAK13302 1W** with PA). Meshpoint drives RF through **meshtasticd** (Portduino), not the SX1302 concentrator path used by Options A–D.
+The [RAK WisMesh Pi Node](https://store.rakwireless.com/products/meshtastic-raspberry-pi-hat-rak6421) is a Pi HAT with a **WisBlock SX1262** LoRa module (RAK13300 standard or **RAK13302 1W** with PA). Meshpoint drives RF through **meshtasticd** (Portduino), not the SX1302 concentrator path used by Options A–D.
 
 **Status:** User-facing docs are on **`main`**. The installer, dashboard, and capture bridge stay on the long-lived **`feat/wismesh-hat`** branch (not merged into Stable). Gateway users should stay on **`main`**.
 
@@ -167,15 +213,82 @@ OTG not confirmed on G295).
 
 > **Step-by-step:** [Bobcat Miner 300 guide](docs/BOBCAT-300.md) and [Hardware Matrix](docs/HARDWARE-MATRIX.md).
 
+### Option G: PiMesh-1W (experimental)
+
+The [MeshSmith PiMesh-1W](https://meshsmith.net/wiki/products/pimesh-1w) uses a
+single LoRa radio with either the Meshtastic or MeshCore Linux backend. Install
+both once, then switch in **Configuration > Radio** while retaining each
+protocol's settings and the normal Meshpoint UI. The HAT runs one protocol at a time.
+
+Meshtastic radio operation is provided by [meshtasticd](https://github.com/meshtastic/firmware).
+MeshCore radio operation is provided by [openHop Repeater](https://github.com/openhop-dev/openhop_repeater)
+and [openHop Core](https://github.com/openhop-dev/openhop_core), developed by
+Rightup and contributors. Meshpoint integrates these upstream
+backends with its dashboard, installation and protocol-switching controls.
+See [backend architecture and attribution](docs/PIMESH.md#backends-and-attribution)
+for versions, licenses and the local compatibility patch.
+
+Use the [PiMesh setup guide](docs/PIMESH.md) for board, band, region and initial
+protocol selection. V2 at 915 MHz has been tested on Pi 4 / 64-bit Debian 13.
+Public/private channels and DMs passed bidirectional tests on both protocols;
+V1, 868 MHz and full feature parity remain unverified.
+PiMesh controls appear only on provisioned PiMesh installations. The same Radio
+page includes [device roles and forwarding modes](docs/PIMESH.md#device-roles-and-forwarding)
+for the active backend.
+
+### Heltec HT-M2808 (community installation guide)
+
+sicXnull contributed a [Heltec HT-M2808 installation guide](docs/HELTEC-M2808.md)
+covering Debian Bookworm flashing, manual SPI/GPIO setup and troubleshooting.
+Meshtastic TX/RX is reported by the contributor in [PR #138](https://github.com/KMX415/meshpoint/pull/138);
+the setup has not been independently verified by Meshpoint maintainers.
+
+### Pisces P100 (community setup)
+
+Einstein PD2EMC reports working transmission and repeated service restarts
+on this Pi 4-based, PoE-powered outdoor miner with a manual **GPIO 23**
+concentrator reset override. See the
+[Pisces P100 setup notes](docs/HARDWARE-MATRIX.md#pisces-p100-community-setup).
+The report has not been independently verified by Meshpoint maintainers.
+
 ### Optional: MeshCore USB Companion
 
 Add a Heltec V3/V4 or T-Beam running [MeshCore USB companion firmware](https://meshcore.io/flasher) to monitor MeshCore traffic alongside Meshtastic. Plug it into any USB port on the Pi -- the setup wizard auto-detects the device and configures its radio frequency for your region. You can also flash from the dashboard under Configuration → Firmware.
 
-> **Full step-by-step guide:** See the [Onboarding Guide](docs/ONBOARDING.md) for detailed instructions covering SD flashing, Chameleon eMMC recovery, assembly, installation, MeshCore setup, and troubleshooting for all hardware options.
+### Optional: Meshtastic USB node
+
+A second Meshtastic radio (Seeed Xiao S3, Heltec, T-Beam, and similar) can listen on another preset or slot while the concentrator stays on LongFast. Dashboard: **Configuration → Serial**. Up to four USB nodes. See [USB nodes](docs/USB-NODES.md).
+
+> **Full step-by-step guide:** See the [Onboarding Guide](docs/ONBOARDING.md) for detailed instructions covering SD flashing, Chameleon eMMC recovery, assembly, installation, MeshCore setup, USB nodes, and troubleshooting for all hardware options.
+
+---
+
+## Hardware and accessory links
+
+These optional parts cover USB nodes, installation, and accessories. Choose the
+radio frequency, antenna connector, and board variant that match your setup.
+See the [Hardware Matrix](docs/HARDWARE-MATRIX.md) for supported configurations.
+
+| Item | Use |
+| --- | --- |
+| [Heltec WiFi LoRa 32 V3 development board](https://amzn.to/4h7rIrf) | Sold by AYWHP; includes an SX1262 radio, 0.96-inch OLED display, and antenna. Optional USB node with the appropriate firmware. |
+| [Heltec ESP32 LoRa 32 V4 development board](https://amzn.to/4gTLJmj) | ESP32-S3/SX1262 board with OLED display, 2MB PSRAM, and 16MB flash; optional USB node with the appropriate firmware. |
+| [Seeed Studio XIAO ESP32S3 + Wio-SX1262 Meshtastic kit](https://amzn.to/4AbTKKQ) | Pre-flashed Meshtastic node with 3D-printed case, 2dBi SMA antenna, and USB-C cable. |
+| [RAKwireless WisBlock Meshtastic Starter Kit, US915](https://amzn.to/3UK1Z0C) | Includes RAK19007 baseboard, RAK4631 core, LoRa/Bluetooth antennas, USB cable, and screws. Pre-flashed; battery and case are not included. |
+| [Right-angle USB-A to USB-C data cables, 2-pack](https://amzn.to/4hslGTf) | Short 10cm flat cables with up/down 90-degree connectors for tight USB-node installations. |
+| [Atolla powered 4-port USB 3.0 hub](https://amzn.to/4xqrQIi) | Four switched data ports, a separate charging port, and a supplied 5V/3A adapter. Connect radios to the data ports. |
+| [Lexar E-Series 64GB microSDXC card](https://amzn.to/46m9VaT) | UHS-I, A1-rated storage for microSD-based gateways; listed transfer speed up to 100MB/s. |
+| [Acer USB-A/USB-C SD and microSD reader](https://amzn.to/4yEY3gi) | USB 3.0 reader with separate SD/microSD slots and both host connector types for flashing installation cards. |
+| [Slinkdsco 915MHz whip antennas, red, 2 sets](https://amzn.to/4j64VOY) | 17cm SMA-male antennas for 902–928MHz, with 10cm U.FL-to-SMA-female pigtails. Match your radio's band and connector. |
+| [Waveshare Mini Base Board for Raspberry Pi CM4](https://amzn.to/4ircy2n) | Carrier board for CM4 Lite/eMMC modules, with a standard CM4 socket and 40-pin GPIO header. See the [Chameleon eMMC flashing guide](docs/SYNCROBIT-CHAMELEON.md). |
+| [VFAN USB GPS receiver with magnetic base](https://amzn.to/4AgqHpk) | UBX-G7020KT GNSS receiver with NMEA output and a 2m USB cable; see [GPS configuration](docs/CONFIGURATION.md#location-gps-source). |
 
 ---
 
 ## Install
+
+The standard installation is for **SX1302/SX1303 concentrator gateways**, including
+repurposed Helium miners such as the RAK V2 and SenseCAP M1.
 
 ```bash
 sudo apt update && sudo apt install -y git
@@ -193,6 +306,12 @@ meshpoint status        # verify everything is running
 Open `http://<pi-ip>:8080` for the local dashboard. On first visit (and after upgrading from v0.7.2 or earlier) you'll be prompted to set an admin password at `/setup` (8-character minimum). After that, all dashboard access requires sign-in. If you forget the password, recover via SSH with `sudo meshpoint reset-password` -- the command prompts interactively, rotates the JWT secret, and invalidates any open browser sessions.
 
 > **First time?** The [Onboarding Guide](docs/ONBOARDING.md) walks through everything from flashing the SD card to verifying your first captured packets.
+
+### Other hardware
+
+For a **PiMesh-1W V1/V2**, follow the experimental [PiMesh setup guide](docs/PIMESH.md)
+for its hardware-specific install commands and Meshtastic/MeshCore switching.
+For a **RAK6421 WisMesh HAT**, follow the [WisMesh Node guide](docs/WISMESH-NODE.md).
 
 ---
 
@@ -252,10 +371,17 @@ FastAPI server on port 8080:
 | `POST /api/messages/send` | Send a Meshtastic or MeshCore message |
 | `GET /api/messages/conversations` | Message history by conversation |
 | `WS /ws` | Real-time packet + message stream |
+| `GET /api/plugins` | Optional app inventory and dependency checks (admin, v0.8.0) |
+| `PUT /api/plugins/{id}` | Enable or disable an optional app for the next restart (admin) |
+| `DELETE /api/plugins/{id}` | Uninstall a disabled, unloaded app (admin) |
+| `GET /api/plugin-sources/catalog` | Browse a configured, pinned catalog (admin) |
+| `GET /api/themes` | Available palettes and the device default |
 
 ---
 
 ## Updating
+
+**Optional apps in v0.8.0:** core updates and plugin updates are separate. Disable and restart before replacing or removing an installed app. Updating a catalog pin does not update or enable its apps. Uninstall retains configuration, separately stored data, and shared native dependencies. See [plugin lifecycle details](docs/PLUGINS.md#updates-and-removal). After the v0.8.0 release is published, select Stable to use the released build; the next RC track is v0.8.1. The stable commands below switch to `main`.
 
 Use this block whether you are on v0.6.x, v0.7.3, or already current. `install.sh` is idempotent on existing installs: it refreshes the venv (`pip install -r requirements.txt`), removes stale pre-v0.7.0 `.so` binaries if any remain, updates sudoers and the systemd unit, and does **not** require a reboot on upgrade.
 
@@ -296,11 +422,14 @@ Start with the doc that matches what you are trying to do.
 
 **Setup and configuration**
 - **[Onboarding Guide](docs/ONBOARDING.md):** step-by-step from empty Pi to running Meshpoint
-- **[Hardware Matrix](docs/HARDWARE-MATRIX.md):** RAK V2 vs SenseCap M1 vs Chameleon vs Bobcat vs DIY, WisMesh Node (experimental), MeshCore companion radios, antennas, what's not supported
+- **[Hardware Matrix](docs/HARDWARE-MATRIX.md):** RAK V2 vs SenseCap M1 vs Chameleon vs Bobcat vs DIY, WisMesh Node (experimental), Meshtastic USB nodes, MeshCore companion radios, antennas, what's not supported
 - **[Bobcat Miner 300](docs/BOBCAT-300.md):** Rockchip RK3566 + Armbian repurposing (manual SPI/GPIO)
+- **[Heltec HT-M2808](docs/HELTEC-M2808.md):** Community-contributed Debian Bookworm installation guide (manual SPI/GPIO)
 - **[WisMesh Node (experimental)](docs/plans/WISMESH-BRANCH.md):** RAK6421 HAT, meshtasticd, long-lived `feat/wismesh-hat` branch
 - **[Gateway ↔ Node migration](docs/MIGRATE-GATEWAY-TO-NODE.md):** switch between concentrator Gateway and WisMesh Node platforms
+- **[PiMesh-1W (experimental)](docs/PIMESH.md):** installation, activation, MT/MC switching, device roles, forwarding modes, updates and diagnostics
 - **[Configuration Guide](docs/CONFIGURATION.md):** all config options, private channels, relay, upstream, MQTT, radio tuning
+- **[USB nodes](docs/USB-NODES.md):** Meshtastic USB nodes (second preset, up to four) and MeshCore USB alongside the concentrator
 - **[Radio Config Explained](docs/RADIO-CONFIG-EXPLAINED.md):** the "why" behind region, spreading factor, bandwidth, custom slots, Part 15 awareness
 - **[MQTT and Meshradar](docs/MQTT-AND-MESHRADAR.md):** the two cloud paths side-by-side, what data flows where, privacy posture
 - **[Home Assistant cookbook](docs/HOME-ASSISTANT-COOKBOOK.md):** copy-paste REST sensors, alerts, and broadcast automations for LAN integrations
@@ -339,8 +468,26 @@ AI-assisted contributions are allowed, but contributors should review and unders
 
 ## License
 
-AGPL-3.0: see [LICENSE](LICENSE). All source code, including HAL bindings, protocol decoders, and packet builders, is published in this repository under the same license.
+Meshpoint is licensed under AGPL-3.0: see [LICENSE](LICENSE). Separately installed
+upstream backends and third-party dependencies retain their own licenses and
+copyright notices. In particular, the PiMesh MeshCore backend uses MIT-licensed
+openHop Repeater and openHop Core; see the [PiMesh attribution](docs/PIMESH.md#backends-and-attribution).
 
 ---
 
 *Built for the mesh community by [Meshradar](https://meshradar.io).*
+
+
+### Optional receiver regions
+
+Optional radio modules do not choose local pager or aircraft channels for you.
+Pagers, POCSAG, RTL433 and ACARS require explicit receive frequencies. Radio
+starts with manual tuning; Netherlands examples are an opt-in preset library.
+FM audio correction follows the US/EU starting profile where known and can be
+selected explicitly. P2000 is Netherlands-specific; DAB/DAB+ currently supports
+Band III only. See [receiver region settings](docs/PLUGINS.md#receiver-regions-and-local-channels)
+for persistent configuration and module limitations.
+
+---
+
+As an Amazon Associate I earn from qualifying purchases.

@@ -20,6 +20,9 @@ Meshpoint brand rules:
 - The platform is **Meshradar**: one word, capital M. Never
   "Mesh Radar", "MeshRadar", or "mesh radar".
 - Plurals are **Meshpoints** and **Meshradars**.
+- USB Meshtastic and MeshCore radios are **nodes**, never **sticks**.
+  Say "USB node", "Meshtastic USB node", or "MeshCore companion".
+  GPS dongles may still be called USB sticks.
 - Code identifiers (CSS class names, JS variables, config keys) keep
   existing project conventions (`top-bar`, `meshpoint`, `mesh_point`).
   The branding rule applies to prose, docs, UI strings, and
@@ -462,3 +465,22 @@ conversation early.
   rules.
 - `CONTRIBUTING.md`: general PR workflow, branch names, testing
   notes.
+
+## Optional pages and access states (v0.8.0 development)
+
+Use the dashboard's existing typography, surface, border and text tokens in
+optional modules; scope module overrides so they do not recolor core pages.
+Validate each supported theme and keyboard focus state. Store cards should
+identify purpose, hardware, dependencies and actual installation state; do not
+make a catalog preview look like an installed or hardware-validated receiver.
+
+Reticulum uses a clear identity header, compact statistics, labeled tabs and
+view introductions. Preserve hidden panels and avoid letting long settings
+forms collapse the statistics strip. Keep empty-state instructions appropriate
+to the user's role. Viewer must not see prompts to send or edit; local filters
+and navigation remain usable. The server is the authorization boundary.
+
+The separate public summary shell has explicit page navigation, read-only
+metrics, unavailable/error states and an Admin sign-in link. Do not add private
+data, hidden dashboard state or the full WebSocket feed to that shell. See
+[Dashboard access](DASHBOARD-ACCESS.md).

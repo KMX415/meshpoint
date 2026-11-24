@@ -28,8 +28,18 @@ class TopbarSerialChip {
         list.forEach((dev) => this._group.appendChild(this._buildBadge(dev)));
     }
 
+    _linkPhase(dev) {
+        if (!this._dashboardReachable || (dev && dev.connected)) return null;
+        const phase = (dev && dev.link_phase) || (dev && dev.reconnecting ? 'reconnecting' : null);
+        if (!phase) return null;
+        const n = Number(dev.retry_in_s) || 0;
+        const word = phase === 'rebooting' ? 'REBOOTING' : 'RECONNECTING';
+        return n > 0 ? `${word} ${n}s` : word;
+    }
+
     _buildBadge(dev) {
         const reachable = this._dashboardReachable;
+        const phaseLabel = this._linkPhase(dev);
         const connected = reachable && Boolean(dev.connected);
         const ownId = this._shortNodeId(dev.own_node_id_hex);
         const callText = !reachable ? '----' : (ownId || '----');
@@ -38,13 +48,20 @@ class TopbarSerialChip {
         root.className = 'topbar-serial';
         if (!reachable) {
             root.classList.add('topbar-serial--reconnecting');
+        } else if (phaseLabel) {
+            const cls = (dev.link_phase === 'rebooting')
+                ? 'topbar-serial--rebooting'
+                : 'topbar-serial--reconnecting';
+            root.classList.add(cls);
         } else if (!connected) {
             root.classList.add('topbar-serial--offline');
         }
+        const stateWord = !reachable
+            ? 'reconnecting'
+            : (connected ? 'connected' : (phaseLabel || 'offline'));
         root.setAttribute(
             'aria-label',
-            `Meshtastic USB ${ownId || 'device'} `
-                + `${!reachable ? 'reconnecting' : (connected ? 'connected' : 'offline')}`,
+            `Meshtastic USB ${ownId || 'device'} ${stateWord}`,
         );
 
         const brand = document.createElement('span');
@@ -52,7 +69,13 @@ class TopbarSerialChip {
         brand.textContent = 'Meshtastic';
         root.appendChild(brand);
 
-        const lampState = !reachable ? 'reconnecting' : (connected ? 'online' : 'offline');
+        const lampState = !reachable
+            ? 'reconnecting'
+            : (connected
+                ? 'online'
+                : (phaseLabel
+                    ? (dev.link_phase === 'rebooting' ? 'rebooting' : 'reconnecting')
+                    : 'offline'));
         const lamp = document.createElement('span');
         lamp.className = `topbar-serial__lamp topbar-serial__lamp--${lampState}`;
         lamp.setAttribute('role', 'status');
@@ -88,7 +111,12 @@ class TopbarSerialChip {
 
         const preset = document.createElement('span');
         preset.className = 'topbar-serial__preset';
-        preset.textContent = this._formatPreset(reachable ? dev.modem_preset : null);
+        if (phaseLabel) {
+            preset.classList.add('topbar-serial__preset--phase');
+            preset.textContent = phaseLabel;
+        } else {
+            preset.textContent = this._formatPreset(reachable ? dev.modem_preset : null);
+        }
         root.appendChild(preset);
 
         return root;

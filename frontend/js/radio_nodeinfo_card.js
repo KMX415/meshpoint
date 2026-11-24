@@ -72,6 +72,7 @@ class RadioNodeInfoCard {
     }
 
     async _sendNow() {
+        if (window.meshpointReadOnly) return;
         const sendBtn = this._root.querySelector('#r-ni-send-now');
         if (sendBtn) sendBtn.disabled = true;
         try {

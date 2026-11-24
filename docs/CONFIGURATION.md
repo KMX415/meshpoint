@@ -1,5 +1,41 @@
 # Configuration Guide
 
+## PiMesh protocol selection (experimental)
+
+On a provisioned PiMesh-1W installation, **Configuration > Radio** selects
+Meshtastic or MeshCore. Switching reconnects the dashboard and keeps each
+protocol's identity, channels and radio settings. The HAT runs one protocol at
+a time; other installations do not expose this selector.
+
+**Settings > Updates** selects the software branch, not the radio protocol.
+First-time HAT provisioning requires the CLI installer. See the
+[PiMesh guide](PIMESH.md) for installation, activation and recovery.
+
+PiMesh daemon identities and configuration live outside Meshpoint's usual data
+directory. Back up those directories separately as described in the PiMesh guide;
+the dashboard backup alone does not capture the complete radio installation.
+
+## v0.8.0 device-side permissions
+
+In the development build, source installation and Web Terminal default to disabled,
+including on upgrades with no explicit settings. Administrators can change source
+installation immediately in **Settings > Plugins > Manage sources > Allow plugin
+downloads**. This saves `plugin_sources_enabled` automatically; no YAML edit is needed.
+
+Web Terminal still requires a device-side setting. Merge this into
+`config/local.yaml`, using an unquoted YAML boolean, then restart Meshpoint:
+
+```yaml
+dashboard:
+  web_terminal_enabled: true
+```
+
+Web Terminal has no dashboard toggle. Existing installed modules remain
+usable when source installation is locked. Terminal grants an administrator a
+full shell as the service account. See [plugins](PLUGINS.md#install-and-enable)
+and [dashboard access](DASHBOARD-ACCESS.md#device-side-permissions) for scope and
+backup-restore considerations. Merge with any existing `dashboard` mapping.
+
 All settings live in `config/default.yaml` with user overrides in `config/local.yaml`. The service merges both files at startup: anything in `local.yaml` overrides the default. You only need to add the settings you want to change.
 
 Edit your local config:
@@ -11,6 +47,21 @@ sudo nano /opt/meshpoint/config/local.yaml
 Restart after any config change: `sudo systemctl restart meshpoint`
 
 ### Backup and restore
+
+**v0.8.0 development:** Restore validation rejects symbolic links, hard links,
+device entries and FIFOs before extraction. Use a backup produced by Meshpoint;
+do not remove validation to accept a hand-edited archive. Regular file and
+directory members remain supported.
+
+The backup includes regular files under the configured database's parent data
+directory, including installed plugin/theme files and Reticulum data when stored
+there. Native tools installed elsewhere on the OS are not included. Only the
+main database receives a live SQLite snapshot; other plugin databases are
+copied as files. For a consistent optional-app backup, disable the app and
+restart Meshpoint before downloading the archive, then re-enable it afterward.
+The saved backup reflects that disabled state. Verify optional app recovery on
+a test device before relying on it. Treat backups containing plugin code and
+Reticulum identity material as trusted, private archives.
 
 **Download backup (healthy Pi):** **Settings → System → Download backup** writes a timestamped `.tar.gz` to your browser. Save it on your PC or NAS, not only on the Pi. The archive is not encrypted and contains API keys, channel PSKs, PKI private material, and your full local database.
 
@@ -30,7 +81,28 @@ Full walkthrough: [TROUBLESHOOTING.md](TROUBLESHOOTING.md#disaster-recovery-with
 
 ---
 
+## Dashboard map tiles
+
+In **Configuration > Advanced > Map tiles**, administrators can save an
+OpenStreetMap-compatible tile URL template. Include `{z}`, `{x}`, and `{y}`;
+HTTP(S) URLs and local paths such as `/api/offline-map/tiles/region/{z}/{x}/{y}.png`
+are accepted. The local tile service or plugin must already be installed and running.
+The default is `https://tile.openstreetmap.org/{z}/{x}/{y}.png`.
+
+Reload the dashboard after saving; a service restart is unnecessary. The setting
+is persisted as `dashboard.map_tile_url` and is also available to plugins through
+admin-only `PUT /api/config/dashboard`. The map retains OpenStreetMap attribution.
+This configures tile requests only; it does not make the entire dashboard available
+offline. The default layer initializes immediately while configuration loads.
+
 ## Radio
+
+For dashboard roles and opt-in public summaries, see
+[Dashboard access](DASHBOARD-ACCESS.md). Public-view changes apply immediately;
+the general restart guidance above does not apply to those access controls.
+For optional app configuration, dependency setup, enable/restart requirements,
+and themes, see [Plugins and themes](PLUGINS.md). Reticulum uses separate radio
+settings; see [regional profiles](RETICULUM-REGIONS.md).
 
 ```yaml
 radio:
@@ -116,7 +188,8 @@ sets a single frequency, bandwidth, and default spreading factor for TX. The
 concentrator still demodulates **SF7-SF12 in parallel on that frequency**, so
 you can hear nodes using different spreading factors on the same channel plan.
 You cannot listen to multiple modem presets or multiple frequencies at once on
-one concentrator (multi-preset IF chains are backlog).
+one concentrator (multi-preset IF chains are backlog). A Meshtastic USB node
+can sit on a second preset while the concentrator stays put: [USB nodes](USB-NODES.md).
 
 ### Custom presets (Configuration → Radio)
 
@@ -160,12 +233,23 @@ See the [Onboarding Guide](ONBOARDING.md#changing-meshcore-radio-frequency) for 
 ## Firmware flash (Configuration → Firmware)
 
 Flash official **Meshtastic** or **MeshCore** companion firmware to a USB-serial
-board from the dashboard (GitHub release → board → port → esptool stream).
-Admin session required. Needs `esptool` in the Meshpoint venv via
-`requirements.txt` / `scripts/install.sh` (do not use the Debian system
-package). **Erase everything** defaults off so
-same-stack upgrades keep identity/settings; enable it for blank boards or
-stack swaps. See `docs/COMMON-ERRORS.md` if flash fails with esptool missing.
+board from the dashboard (GitHub release → board → port → flash stream).
+Admin session required.
+
+- **ESP32 family:** `esptool` `write_flash` of merged/factory binaries. Needs
+  `esptool` in the Meshpoint venv via `requirements.txt` / `scripts/install.sh`
+  (do not use the Debian system package). **Erase everything** defaults off so
+  same-stack upgrades keep identity/settings; enable it for blank boards or
+  stack swaps.
+- **nRF52840 family:** Adafruit serial DFU of the release `.zip` / `-ota.zip`
+  via `adafruit-nrfutil` with 1200-baud touch (enters DFU over USB without
+  unplug). Selecting an nRF board shows a DFU panel and optional drag-drop for
+  a custom `.zip` or `.uf2`. UF2 volume copy is recovery when a bootloader
+  drive is already mounted. Needs `adafruit-nrfutil` in the venv.
+- **RP2040 / RP2350 / STM32:** listed but not flashable from Meshpoint yet.
+
+See `docs/COMMON-ERRORS.md` if flash fails with esptool / nrfutil missing or
+asks for a BOOT button (touch failed; on-site recovery).
 
 ## Capture Sources
 
@@ -173,28 +257,35 @@ stack swaps. See `docs/COMMON-ERRORS.md` if flash fails with esptool missing.
 capture:
   sources:
     - concentrator             # SX1302/SX1303 LoRa concentrator (RAK2287, etc.)
-    - meshcore_usb             # optional MeshCore USB companion node
-    # - serial                 # optional plain Meshtastic USB node as a capture source
+    - meshcore_usb             # optional MeshCore USB companion
+    # - serial                 # optional Meshtastic USB node(s), alongside concentrator or instead of it
     # - mock                   # optional synthetic packets for development
+  serial:                      # dashboard: Configuration → Serial (up to 4 USB nodes)
+    - serial_port: "/dev/serial/by-path/..."
+      serial_baud: 115200
+      label: "mf"
   concentrator_spi_device: "/dev/spidev0.0"  # Bobcat 300: "/dev/spidev5.0"
   meshcore_usb:
     auto_detect: true          # scans /dev/ttyUSB* and /dev/ttyACM*
-    serial_port: null          # or set explicitly: "/dev/ttyACM0"
+    serial_port: null          # pin this when more than one USB radio is attached
     baud_rate: 115200
 ```
 
-The setup wizard configures sources automatically. To add or remove a MeshCore companion later, edit `sources` and restart.
+The setup wizard configures sources automatically. To add or remove USB
+radios later, use the dashboard (preferred) or edit `sources` and restart.
 
 **Available source types:**
 
 | Source | Purpose |
 |---|---|
 | `concentrator` | SX1302/SX1303 LoRa concentrator (RAK2287, RAK7248, SenseCap M1) |
-| `meshcore_usb` | MeshCore USB companion node (Heltec V4, T-Beam, RAK4631 with MeshCore firmware) |
-| `serial` | Plain Meshtastic node over USB serial. Used when you don't have a concentrator. |
+| `meshcore_usb` | MeshCore USB companion (Heltec V4, T-Beam, RAK4631 with MeshCore firmware) |
+| `serial` | Meshtastic USB node(s). Works with a concentrator (second preset / band) or as the only Meshtastic source. Dashboard: **Configuration → Serial**. |
 | `mock` | Synthetic packet generator for development. Not for production. |
 
-When running both Meshtastic concentrator capture and a MeshCore USB companion, pin `meshcore_usb.serial_port` explicitly. Auto-detect can grab the wrong device when multiple Espressif boards are attached.
+When more than one USB radio is attached, pin each port (Serial list and
+`meshcore_usb.serial_port`). Auto-detect can grab the wrong Espressif
+board. How-to: [USB nodes](USB-NODES.md).
 
 ---
 
@@ -240,19 +331,22 @@ transmit:
     interval_minutes: 15
     startup_delay_seconds: 180
     coordinate_source: "static"       # static | live
-    location_precision: "approximate"  # exact | approximate | none (live only)
+    location_precision: "approximate"  # exact | approximate | none (both sources)
 ```
 
 | Setting | Values | Meaning |
 |---|---|---|
 | `coordinate_source` | `static` (default) | Broadcast the registered pin from `device.latitude/longitude`. |
 | | `live` | Broadcast the live gpsd/UART fix. Requires `location.source` other than `static`. |
-| `location_precision` | `approximate` (default for live) | Round to ~2 decimal places before POSITION TX (about **0.7 mi** / **1.1 km**; the dashboard label follows Settings → Meshpoint distance units). |
-| | `exact` | Full precision from the live fix. |
-| | `none` | Skip POSITION broadcasts when using live (privacy: no position on mesh). |
+| `location_precision` | `approximate` (default for both sources) | Round to ~2 decimal places before POSITION TX (about **0.7 mi** / **1.1 km**; the dashboard label follows Settings → Meshpoint distance units). |
+| | `exact` | Full precision from the selected coordinate source. |
+| | `none` | Skip POSITION broadcasts for either source (privacy: no position on mesh). |
 
-When `coordinate_source: static`, coordinates are sent at full wizard
-precision regardless of `location_precision`.
+Privacy applies equally to Registered pin and Live GPS. Approximate rounds
+latitude and longitude to two decimal places, not a random offset or a guaranteed
+minimum distance from the actual position. Saved registered coordinates remain
+unchanged. Existing `approximate` and `none` settings now also protect registered
+pin broadcasts; select `exact` explicitly if full precision is intended.
 
 ### Mesh telemetry broadcasts (LoRa / device health)
 
@@ -323,7 +417,7 @@ Three independent surfaces:
 | Surface | Config | Notes |
 |---|---|---|
 | **Meshradar cloud** | `device.latitude/longitude` | Always the registered pin. Live GPS never moves the fleet marker. |
-| **LoRa mesh (POSITION)** | `transmit.position.coordinate_source` + `location_precision` | Choose registered pin or live GPS; approximate / precise / hidden on live. |
+| **LoRa mesh (POSITION)** | `transmit.position.coordinate_source` + `location_precision` | Choose registered pin or live GPS; approximate / precise / hidden on either source. |
 | **MQTT** | `mqtt.location_precision` | Applies to position fields in MQTT publishes only (`exact` / `approximate` / `none`). |
 
 To run a mobile Meshpoint without leaking live coordinates on the mesh,
@@ -500,6 +594,40 @@ transmit:
 **`hop_limit`**: initial hop count on outgoing Meshtastic messages. 3 is typical; higher values mean more relays and more airtime.
 
 MeshCore transmission uses the USB companion node: configure its serial port under `capture.meshcore_usb` (see Capture Sources above). The companion handles encryption and RF timing; the Meshpoint sends serial commands.
+
+### MeshCore message feedback
+
+Hover over or tap **Heard N repeats** to see saved repeater paths in a small popover.
+RSSI and SNR are measured at your radio for each returning copy, not at every
+repeater. Names are best-effort matches against the local roster; unknown or
+ambiguous identifiers remain labeled. Up to the first 32 copies per message
+retain path details. Older messages may have a count without saved paths.
+Use Escape, the close button, or tap outside to dismiss the popover.
+
+
+The Messages view uses the same feedback path for serial/USB companions and
+PiMesh TCP companions. No additional installation or setting is required.
+
+- Sent channel messages show **Heard N repeats** when their authenticated
+  radio echoes can be matched. This counts repeated copies heard by your own
+  radio, not unique repeaters, total network reach, or recipient delivery.
+- Sent DMs show **Sent · Delivery unconfirmed** until the companion reports
+  the matching recipient acknowledgement, then **Delivered**. This confirms
+  receipt, not that the recipient has read the message.
+- DM repeat counts are not available through the standard companion send
+  response: it exposes an acknowledgement token, not the outgoing encrypted
+  packet needed to match echoes reliably. Meshpoint does not infer counts
+  from unrelated traffic or treat an ACK as a repeat.
+
+Recorded feedback persists in message history. New observations are matched
+for up to 15 minutes while Meshpoint remains running (at most 128 recent sends).
+A service restart ends tracking for earlier sends but preserves their recorded
+feedback. Older messages and sends without tracking information omit the count;
+**Heard 0 repeats** means tracking was available but no repeated copy was heard.
+Lack of an echo or ACK does not prove that the message failed to arrive.
+
+Protocol references: [MeshCore companion interface](https://github.com/meshcore-dev/MeshCore/blob/main/examples/companion_radio/MyMesh.cpp)
+and [MeshCore Python SDK](https://github.com/meshcore-dev/meshcore_py).
 
 ---
 
@@ -834,9 +962,14 @@ capture:               # what packet sources to read from
   sources:
     - concentrator
     - meshcore_usb
+    # - serial                 # Meshtastic USB node(s); see docs/USB-NODES.md
+  # serial:
+  #   - serial_port: "/dev/serial/by-path/..."
+  #     serial_baud: 115200
+  #     label: "mf"
   meshcore_usb:
     auto_detect: true
-    serial_port: null
+    serial_port: null          # pin when a second USB radio is attached
     baud_rate: 115200
 
 location:              # GPS / location source
@@ -857,7 +990,7 @@ transmit:              # native messaging TX (Meshtastic via SX1302, MeshCore vi
   position:
     interval_minutes: 15
     coordinate_source: "static"      # static | live
-    location_precision: "approximate"  # exact | approximate | none (live only)
+    location_precision: "approximate"  # exact | approximate | none (both sources)
   telemetry:
     interval_minutes: 30
     startup_delay_seconds: 120

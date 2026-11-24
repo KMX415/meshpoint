@@ -34,13 +34,18 @@
 })();
 
 document.addEventListener('DOMContentLoaded', async () => {
-    if (await _redirectIfSetupRequired()) return;
-
     const identity = await _loadIdentity();
+    if (identity?.setup_required) {
+        location.replace('/setup');
+        return;
+    }
+    window.installViewerAccess(identity);
+    const pluginPages = await window.loadPluginPages(identity);
 
     const router = new Router({
         defaultRoute: 'dashboard',
         allowedRoutes: [
+            ...pluginPages.map(page => page.routeId),
             'dashboard', 'stats', 'rf', 'messages', 'radio', 'terminal',
             'configuration/identity', 'configuration/radio',
             'configuration/channels', 'configuration/transmit',
@@ -49,7 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             'configuration/meshcore',
             'configuration/serial',
             'configuration/firmware',
-            'settings/updates', 'settings/auth', 'settings/dangerous',
+            'settings/updates', 'settings/auth', 'settings/dangerous', 'settings/themes', 'settings/plugins',
         ],
     });
     const sidebar = new SidebarController({ router, identity });
@@ -76,6 +81,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.sinceLineController = sinceCtrl;
     }
 
+    for (const {routeId, panel} of pluginPages) {
+        let visible = false;
+        router.onRouteChange(route => {
+            const next = route === routeId;
+            if (next === visible) return;
+            visible = next;
+            if (next) panel?.show?.();
+            else panel?.hide?.();
+        });
+    }
     router.start();
 
     const logoFrame = document.getElementById('sidebar-logo-frame');
@@ -90,6 +105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const topbar = new TopbarController(topbarRoot, window.concentratorWS);
         topbar.init();
         window.topbar = topbar;
+        window.mountPluginTopbarChips();
     }
 
     if (window.BuildStamp) {
@@ -129,6 +145,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     _bootUpdatePanel(router);
     _bootConfigurationPanel(router);
     _bootDangerousPanel(router);
+    const pluginsRoot = document.getElementById('settings-plugins-panel');
+    if (pluginsRoot && window.PluginsPanelController) {
+        const plugins = new window.PluginsPanelController(pluginsRoot);
+        router.onRouteChange((route) => {
+            if (route === 'settings/plugins') plugins.refresh();
+        });
+    }
+    const themeRoot = document.getElementById('settings-themes-panel');
+    if (themeRoot && window.ThemeEditor) {
+        const editor = new window.ThemeEditor(themeRoot);
+        editor.bind();
+        router.onRouteChange((route) => {
+            if (route === 'settings/themes') editor.onActivated();
+            else if (editor.active) editor.onLeft();
+        });
+    }
 
     const nodeMap = new NodeMap('map');
     const packetFeed = new SimplePacketFeed('packet-tbody');
@@ -168,9 +200,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         else nodeMap.clearFocusLine();
     });
 
+    // Establish connection/status immediately. Hydrate the initial snapshot
+    // before subscribing the packet widgets so it cannot overwrite live data.
+    window.concentratorWS.connect();
     await _loadInitial(nodeMap, nodeCards, packetFeed);
-    await _updateStats();
-    _checkForUpdate();
 
     window.concentratorWS.on('packet', (packet) => {
         packetFeed.addPacket(packet);
@@ -179,7 +212,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         _incrementPacketCount();
     });
 
-    window.concentratorWS.connect();
+    await _updateStats();
+    _checkForUpdate();
 
     setInterval(() => {
         _refreshData(nodeMap, nodeCards, packetFeed);
@@ -392,7 +426,7 @@ async function _updateStats() {
 
         if (metricsRes.ok) {
             const metrics = await metricsRes.json();
-            _setText('stat-cpu-val', `${metrics.cpu_percent}%`);
+            _setText('stat-cpu-val', metrics.cpu_percent == null ? 'N/A' : `${metrics.cpu_percent}%`);
             _setText('stat-ram-val', `${metrics.memory_percent}%`);
             _setText('stat-ram-sub', `${metrics.memory_used_mb} / ${metrics.memory_total_mb} MB`);
             _setText('stat-disk-val', `${metrics.disk_percent}%`);
@@ -480,21 +514,6 @@ function _resolveDeviceLabel(device) {
     const long = (device.long_name || '').trim();
     const fallback = (device.device_name || '').trim();
     return long || fallback || 'Meshpoint';
-}
-
-async function _redirectIfSetupRequired() {
-    try {
-        const res = await fetch('/api/identity', { credentials: 'same-origin' });
-        if (!res.ok) return false;
-        const data = await res.json();
-        if (data.setup_required) {
-            location.replace('/setup');
-            return true;
-        }
-    } catch (_) {
-        /* silent: the dashboard handles its own auth via 401 interception */
-    }
-    return false;
 }
 
 function _bootCommandPaletteAndKeymap(router) {

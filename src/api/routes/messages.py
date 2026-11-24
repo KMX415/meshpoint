@@ -6,6 +6,7 @@ messages, contacts, and TX status endpoints for the local dashboard.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -93,16 +94,23 @@ async def send_message(
     )
     node_name = await _resolve_display_name(node_id, req.protocol)
 
+    row_id = None
+    feedback = {"heard_repeats": result.heard_repeats, "status": result.status}
     if result.success:
-        await _message_repo.save_sent(
+        row_id = await _message_repo.save_sent(
             text=req.text,
             node_id=node_id,
             node_name=node_name,
             protocol=req.protocol,
             channel=req.channel,
             packet_id=result.packet_id,
-            status="sent",
+            status=result.status,
+            heard_repeats=result.heard_repeats,
         )
+        if req.protocol == "meshcore" and _meshcore_tx and _meshcore_tx.repeat_tracker:
+            current = await _meshcore_tx.repeat_tracker.bind(result.packet_id, row_id, node_id)
+            if current is not None:
+                feedback = current
 
     return {
         "success": result.success,
@@ -111,6 +119,8 @@ async def send_message(
         "timestamp": result.timestamp,
         "airtime_ms": result.airtime_ms,
         "error": result.error,
+        "id": row_id,
+        **feedback,
     }
 
 
@@ -156,7 +166,9 @@ async def get_conversation(
 
 
 @router.post("/conversation/{node_id:path}/read")
-async def mark_conversation_read(node_id: str):
+async def mark_conversation_read(
+    node_id: str, _claims: SessionClaims = Depends(require_admin),
+):
     if _message_repo is None:
         raise HTTPException(503, "Message storage not available")
     await _message_repo.mark_read(node_id)
@@ -231,6 +243,23 @@ async def get_channels():
                     "name": name,
                     "node_id": f"{BROADCAST_NODE_MC}:{i}",
                 })
+
+    from src.radio.pimesh_runtime import provisioned
+
+    if _config is not None and provisioned(_config):
+        channels = [ch for ch in channels if ch['protocol'] != 'meshtastic']
+        if _config.device.radio_protocol == 'meshtastic':
+            from src.api.routes.config_routes import _pimesh_meshtastic_bridge
+
+            source = _pimesh_meshtastic_bridge()
+            if source is not None:
+                ok, rows = await asyncio.to_thread(source.request_read_channels)
+                if not ok:
+                    raise HTTPException(503, 'Radio channels unavailable')
+                channels = [{
+                    'protocol': 'meshtastic', 'channel': row['index'],
+                    'name': row['name'], 'node_id': f"{BROADCAST_NODE_MT}:{row['index']}",
+                } for row in rows if row.get('enabled')]
 
     return channels
 
@@ -328,3 +357,13 @@ async def _enrich_messages(messages: list[dict]) -> list[dict]:
         await _name_resolver.apply_to_message_dict(msg)
         for msg in messages
     ]
+
+
+@router.get("/{message_id}/heard-paths")
+async def get_heard_paths(message_id: int):
+    if _message_repo is None:
+        raise HTTPException(503, "Message storage not available")
+    result = await _message_repo.get_heard_paths(message_id)
+    if result is None:
+        raise HTTPException(404, "Sent MeshCore message not found")
+    return result

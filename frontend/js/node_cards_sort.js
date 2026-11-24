@@ -10,6 +10,7 @@
  *   last_heard -> descending; null/NaN at end
  *   signal     -> latest_rssi descending; null at end; tie-break by last_heard
  *   hops       -> latest_hops ascending (direct first); null at end; tie-break by last_heard
+ *   packets    -> packet_count descending; null/zero at end; tie-break by last_heard
  *   name       -> locale-aware case-insensitive ascending
  *
  * Filter modes (node list + map markers):
@@ -73,6 +74,18 @@ class MeshpointNodeCardsSort {
                     MeshpointNodeCardsSort._compareNum(
                         a.latest_hops ?? a.hop_count, b.latest_hops ?? b.hop_count, 'asc'
                     ) || heardDesc(a, b);
+            // Packet comparator adapted from yourasmit15-web, PR #128.
+            case 'packets':
+                return (a, b) => {
+                    const ap = Number(a.packet_count);
+                    const bp = Number(b.packet_count);
+                    const aMissing = !Number.isFinite(ap) || ap <= 0;
+                    const bMissing = !Number.isFinite(bp) || bp <= 0;
+                    if (aMissing && bMissing) return heardDesc(a, b);
+                    if (aMissing) return 1;
+                    if (bMissing) return -1;
+                    return bp - ap || heardDesc(a, b);
+                };
             case 'name':
                 return MeshpointNodeCardsSort._compareName;
             case 'last_heard':

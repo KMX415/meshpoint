@@ -34,6 +34,11 @@ class TestDefaultPresetResolution(unittest.TestCase):
             self.resolver.resolve(0, Protocol.MESHTASTIC), "LongFast"
         )
 
+    def test_longturbo_hash_118(self):
+        self.assertEqual(
+            self.resolver.resolve(118, Protocol.MESHTASTIC), "LongTurbo"
+        )
+
     def test_mediumfast(self):
         self.assertEqual(
             self.resolver.resolve(31, Protocol.MESHTASTIC), "MediumFast"
@@ -156,6 +161,12 @@ class TestGate2WithResolver(unittest.TestCase):
         allowed = {"longfast", "meshcore"}
         name = resolver.resolve(31, Protocol.MESHTASTIC)
         self.assertNotIn(name.lower(), allowed)
+
+    def test_longturbo_is_distinct_from_longfast_allowlist(self):
+        resolver = ChannelResolver()
+        name = resolver.resolve(118, Protocol.MESHTASTIC)
+        self.assertNotIn(name.lower(), {"longfast", "meshcore"})
+        self.assertIn(name.lower(), {"longturbo", "meshcore"})
 
 
 if __name__ == "__main__":

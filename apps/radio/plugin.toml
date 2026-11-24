@@ -1,0 +1,22 @@
+name = "radio"
+version = "1.0.0"
+meshpoint_api = 1
+provides = ["listener", "routes", "hook"]
+locked = false
+
+[deps]
+executables = ["rtl_fm", "ffmpeg"]
+
+
+
+[frontend]
+styles = ["frontend/listener.css"]
+scripts = ["frontend/radio_panel.js"]
+
+[hook]
+host = "rtlsdr"
+
+[meta]
+description = "FM/AM/SSB broadcast & utility radio listener via rtl_fm + ffmpeg, with RDS on FM via redsea -- Digital and Analogue display skins, a preset stations picker, and a Web Audio VU meter"
+homepage = "https://github.com/KMX415/meshpoint"
+author = "Einstein PD2EMC"

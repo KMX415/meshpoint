@@ -17,11 +17,13 @@ const UPDATE_CHANNEL_STORAGE_KEY = 'meshpoint_update_channel_id';
 const UPDATE_CUSTOM_BRANCH_STORAGE_KEY = 'meshpoint_update_custom_branch';
 /** Retired picker ids remapped when the dashboard reloads after a release. */
 const UPDATE_CHANNEL_ALIASES = {
-    'rc-074': 'rc-075',
-    'rc-075': 'rc-076',
-    'rc-076': 'rc-077',
-    'rc-077': 'rc-078',
-    'rc-078': 'rc-079',
+    'rc-074': 'rc-081',
+    'rc-075': 'rc-081',
+    'rc-076': 'rc-081',
+    'rc-077': 'rc-081',
+    'rc-078': 'rc-081',
+    'rc-079': 'rc-081',
+    'rc-080': 'rc-081',
 };
 
 class UpdatePanelController {

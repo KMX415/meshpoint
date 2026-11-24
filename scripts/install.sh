@@ -10,7 +10,12 @@
 #   5. systemd service installation
 #
 # Usage:
-#   sudo ./scripts/install.sh
+#   sudo ./scripts/install.sh [--platform gateway|node|pimesh|auto]
+#
+#   --platform auto   detect WisMesh HAT vs concentrator (default)
+#   --platform node   WisMesh Node: meshtasticd, skip SX1302 HAL
+#   --platform pimesh --board pimesh-v2 --band 915 --region US --protocol meshtastic
+#   --platform gateway  SX1302 concentrator path (RAK V2, SenseCap M1, DIY)
 #
 # After completion, reboot then run:  meshpoint setup
 #
@@ -44,6 +49,51 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 info "Source directory: ${SCRIPT_DIR}"
+
+# ── Platform selection ─────────────────────────────────────────────
+
+PLATFORM="auto"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --board) export PIMESH_BOARD="${2:?}"; shift 2 ;;
+        --band) export PIMESH_BAND="${2:?}"; shift 2 ;;
+        --region) export PIMESH_REGION="${2:?}"; shift 2 ;;
+        --protocol) export PIMESH_PROTOCOL="${2:?}"; shift 2 ;;
+        --platform)
+            PLATFORM="${2:-auto}"
+            shift 2
+            ;;
+        *)
+            warn "Unknown argument: $1 (ignored)"
+            shift
+            ;;
+    esac
+done
+
+_detect_install_platform() {
+    if [[ "$PLATFORM" != "auto" ]]; then
+        echo "$PLATFORM"
+        return
+    fi
+    if [ -f /etc/meshpoint/pimesh.json ]; then
+        echo "pimesh"
+        return
+    fi
+    if [ -f /proc/device-tree/hat/product ]; then
+        hat_product="$(tr -d '\0' < /proc/device-tree/hat/product 2>/dev/null || true)"
+        if [[ "$hat_product" == *"6421"* ]]; then
+            echo "node"
+            return
+        fi
+    fi
+    echo "gateway"
+}
+
+INSTALL_PLATFORM="$(_detect_install_platform)"
+if [[ "$INSTALL_PLATFORM" != "gateway" && "$INSTALL_PLATFORM" != "node" && "$INSTALL_PLATFORM" != "pimesh" ]]; then
+    fail "Invalid --platform ${INSTALL_PLATFORM}. Use gateway, node, pimesh, or auto."
+fi
+info "Install platform: ${INSTALL_PLATFORM}"
 
 # Detect upgrade vs fresh install for the post-install banner.
 # An existing local.yaml or an enabled meshpoint service is the
@@ -86,9 +136,19 @@ fi
 
 # ── 1. System packages ─────────────────────────────────────────────
 
-info "Updating system packages..."
-apt-get update -qq
-apt-get upgrade -y -qq
+# Dashboard Apply runs install.sh on every pull. Heal interrupted dpkg
+# before apt (common after a prior apply killed mid-upgrade) and skip
+# full dist-upgrade on existing installs to keep applies fast and reliable.
+if [ "$IS_UPGRADE" = "1" ]; then
+    info "Checking for interrupted dpkg state..."
+    dpkg --configure -a
+    info "Refreshing package index (upgrade mode: skipping dist-upgrade)..."
+    apt-get update -qq
+else
+    info "Updating system packages..."
+    apt-get update -qq
+    apt-get upgrade -y -qq
+fi
 
 info "Installing build tools and dependencies..."
 apt-get install -y -qq \
@@ -175,8 +235,9 @@ fi
 systemctl enable gpsd.socket 2>/dev/null || warn "Could not enable gpsd.socket"
 systemctl restart gpsd.socket 2>/dev/null || warn "Could not start gpsd.socket"
 
-# ── 4. Build SX1302 HAL ───────────────────────────────────────────
+# ── 4. Build SX1302 HAL (Gateway only) ─────────────────────────────
 
+if [ "$INSTALL_PLATFORM" = "gateway" ]; then
 if [ -f "/usr/local/lib/libloragw.so" ]; then
     info "libloragw.so already installed, skipping HAL build"
 else
@@ -434,6 +495,10 @@ if [ -f "$HAL_SRC" ]; then
     bash "${SCRIPT_DIR}/scripts/patch_hal.sh"
 fi
 
+else
+    info "Skipping SX1302 HAL build (Node platform uses meshtasticd)"
+fi
+
 # ── 5. Install Meshpoint application ──────────────────────────────
 
 info "Installing Meshpoint to ${MESHPOINT_DIR}..."
@@ -463,7 +528,11 @@ fi
 # ── 6. Python virtual environment ──────────────────────────────────
 
 info "Setting up Python virtual environment..."
-python3 -m venv "${MESHPOINT_DIR}/venv"
+if [ -d "${MESHPOINT_DIR}/venv" ]; then
+    info "Reusing existing venv at ${MESHPOINT_DIR}/venv"
+else
+    python3 -m venv "${MESHPOINT_DIR}/venv"
+fi
 source "${MESHPOINT_DIR}/venv/bin/activate"
 
 pip install --upgrade pip -q
@@ -479,6 +548,9 @@ pip install pyserial -q
 # Credit: javastraat/meshpoint (esptool install path adapted for venv).
 info "Ensuring esptool is installed in Meshpoint venv..."
 pip install --upgrade 'esptool>=4.7.0,<5' -q
+# nRF companion / Meshtastic DFU flash (Adafruit serial DFU + 1200 touch)
+info "Ensuring adafruit-nrfutil is installed in Meshpoint venv..."
+pip install --upgrade 'adafruit-nrfutil>=0.5.3.post16' -q
 
 deactivate
 
@@ -504,13 +576,16 @@ usermod -a -G systemd-journal,adm meshpoint 2>/dev/null || true
 chown -R meshpoint:meshpoint "${MESHPOINT_DIR}/data"
 chown -R meshpoint:meshpoint "${MESHPOINT_DIR}/config"
 
-# Espressif USB serial devices (Heltec V3/V4, T-Beam ESP32-S3) may not
-# default to dialout group on all Pi OS versions. Add a udev rule so
-# the meshpoint service user can access them for relay and MeshCore.
-UDEV_RULE='SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", MODE="0666"'
+# Espressif USB nodes need dialout access, not world-writable serial ports.
+UDEV_RULE='SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", MODE="0660", GROUP="dialout"'
+UDEV_RULE_OLD='SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", MODE="0666"'
 UDEV_FILE="/etc/udev/rules.d/99-meshpoint-esp.rules"
-if [ ! -f "$UDEV_FILE" ]; then
-    info "Installing udev rule for Espressif USB serial devices..."
+if [ ! -f "$UDEV_FILE" ] || [ "$(cat "$UDEV_FILE")" = "$UDEV_RULE_OLD" ]; then
+    # Verify group membership before tightening access on existing installs.
+    if ! id -nG meshpoint | grep -qw dialout; then
+        usermod -a -G dialout meshpoint
+    fi
+    info "Installing/updating udev rule for Espressif USB nodes..."
     echo "$UDEV_RULE" > "$UDEV_FILE"
     udevadm control --reload-rules 2>/dev/null || true
     udevadm trigger 2>/dev/null || true
@@ -530,10 +605,22 @@ systemctl restart systemd-journald 2>/dev/null || warn "Could not restart journa
 
 # ── 10. Install systemd service ────────────────────────────────────
 
+if [ "$INSTALL_PLATFORM" = "pimesh" ]; then
+    SERVICE_FILE="scripts/meshpoint-pimesh.service"
+    bash "${SCRIPT_DIR}/scripts/install_pimesh.sh"
+elif [ "$INSTALL_PLATFORM" = "node" ]; then
+    SERVICE_FILE="scripts/meshpoint-node.service"
+    info "Setting up meshtasticd for WisMesh Node..."
+    bash "${SCRIPT_DIR}/scripts/install_meshtasticd.sh"
+else
+    SERVICE_FILE="scripts/meshpoint.service"
+fi
+
 info "Installing systemd service..."
 cp "${MESHPOINT_DIR}/${SERVICE_FILE}" /etc/systemd/system/meshpoint.service
 systemctl daemon-reload
 systemctl enable meshpoint
+chown -R meshpoint:meshpoint "${MESHPOINT_DIR}/config" "${MESHPOINT_DIR}/data"
 info "Service enabled (will start after 'meshpoint setup')"
 
 # ── 11. Install network watchdog ───────────────────────────────────

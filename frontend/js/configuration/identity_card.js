@@ -82,24 +82,67 @@ class IdentityConfigCard {
     render(config) {
         const device = (config && config.device) || {};
         const tx = (config && config.transmit) || {};
-        const rawHex = tx.node_id_hex || '';
-        const displayHex = rawHex.startsWith('!') ? `0x${rawHex.slice(1)}` : rawHex;
+        const isMeshcore = window.PlatformContext?.isPimesh(config)
+            && device.radio_protocol === 'meshcore';
+        const isNode = window.PlatformContext
+            && window.PlatformContext.isNodePlatform(config);
+        const md = isNode
+            ? window.PlatformContext.meshtasticdRuntime(config)
+            : {};
+        const rawHex = isNode
+            ? (md.local_node_id_hex || '')
+            : (tx.node_id_hex || '');
+        const displayHex = rawHex.startsWith('!')
+            ? `0x${rawHex.slice(1)}`
+            : (rawHex.startsWith('0x') ? rawHex : rawHex);
         this._initial = {
             device_name: device.device_name || '',
-            long_name: tx.long_name || '',
-            short_name: tx.short_name || '',
+            long_name: isNode ? (md.long_name || tx.long_name || '') : (tx.long_name || ''),
+            short_name: isNode ? (md.short_name || tx.short_name || '') : (tx.short_name || ''),
             node_id: tx.node_id != null ? Number(tx.node_id) : null,
             node_id_hex: displayHex,
-            node_id_source: tx.node_id_source || '',
+            node_id_source: isNode ? 'meshtasticd' : (tx.node_id_source || ''),
         };
+        this._isNode = isNode;
+        this._isMeshcore = isMeshcore;
+        if (isMeshcore) {
+            this._initial.long_name = config.meshcore?.companion_name || '';
+            this._initial.short_name = '';
+            this._initial.node_id_hex = '';
+        }
+        this._bridgeConnected = isNode && Boolean(md.bridge_connected);
+
+        this._shortEl.closest('label').hidden = isMeshcore;
+        this._nodeIdEl.closest('label').hidden = isMeshcore;
+        const identityFieldset = this._longEl.closest('fieldset');
+        identityFieldset.querySelector('legend').textContent = isMeshcore ? 'MeshCore identity' : 'Meshtastic identity';
+        identityFieldset.querySelector('.cfg-field__hint').textContent = isMeshcore
+            ? 'This name is included in MeshCore adverts. Each protocol keeps its own identity.'
+            : 'Long and short names are saved to the active radio.';
+        this._root.querySelector('.cfg-card__hint').textContent =
+            'Device name identifies this dashboard. Radio identity is what other nodes see on the mesh.';
+
         if (this._deviceNameEl) this._deviceNameEl.value = this._initial.device_name;
         this._longEl.value = this._initial.long_name;
         this._shortEl.value = this._initial.short_name;
         this._nodeIdEl.value = this._initial.node_id_hex;
-        this._sourceHintEl.textContent = this._sourceHint(this._initial.node_id_source);
+        this._nodeIdEl.readOnly = isNode;
+        if (isMeshcore) {
+            this._sourceHintEl.textContent = config.meshcore?.connected
+                ? 'Connected to the PiMesh MeshCore backend.' : 'MeshCore backend disconnected.';
+        } else if (isNode) {
+            this._sourceHintEl.textContent = this._bridgeConnected
+                ? 'Node ID comes from meshtasticd. Pinning is not supported here.'
+                : 'Bridge disconnected. Restart meshtasticd, then meshpoint, or use the CLI.';
+        } else {
+            this._sourceHintEl.textContent = this._sourceHint(this._initial.node_id_source);
+        }
+        const submit = this._form && this._form.querySelector('[type="submit"]');
+        if (submit) submit.disabled = isMeshcore ? !config.meshcore?.connected : isNode && !this._bridgeConnected;
     }
 
     _sourceHint(source) {
+        if (source === 'meshtasticd') return '';
         if (source === 'config')  return 'Node ID is pinned in local.yaml.';
         if (source === 'derived') return 'Node ID is auto-derived from device ID. Pin a value to override.';
         if (source === 'random')  return 'Node ID is a random fallback (no device ID configured).';
@@ -169,9 +212,20 @@ class IdentityConfigCard {
 
         let identityResult = null;
         if (Object.keys(body).length > 0) {
-            identityResult = await this._api.put('/api/config/identity', body);
+            if (this._isMeshcore) {
+                identityResult = await this._api.put('/api/config/meshcore/companion-name', {
+                    name: longName,
+                });
+            } else if (this._isNode) {
+                identityResult = await this._api.put('/api/meshtasticd/identity', {
+                    long_name: body.long_name || this._initial.long_name,
+                    short_name: body.short_name || this._initial.short_name,
+                });
+            } else {
+                identityResult = await this._api.put('/api/config/identity', body);
+            }
             if (!identityResult) {
-                this._setStatus('error', 'Meshtastic identity save failed.');
+                this._setStatus('error', 'Radio identity save failed.');
                 return;
             }
         }

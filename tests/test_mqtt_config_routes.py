@@ -70,6 +70,19 @@ class TestBuildMqttStatus(unittest.TestCase):
         self.assertTrue(status["gateway_id"].startswith("!"))
         self.assertIn("/2/e/", status["topic_preview_meshtastic"])
 
+    def test_previews_follow_allowed_channels(self) -> None:
+        mqtt = MqttConfig(publish_channels=["LongTurbo", "MeshCore"])
+        status = mqtt_module.build_mqtt_status(mqtt, "My Meshpoint")
+        self.assertIn("/2/e/LongTurbo/", status["topic_preview_meshtastic"])
+        self.assertIn("/2/json/LongTurbo/", status["topic_preview_json"])
+        self.assertIn("/2/c/MeshCore/", status["topic_preview_meshcore"])
+
+    def test_meshcore_only_has_no_meshtastic_preview(self) -> None:
+        mqtt = MqttConfig(publish_channels=["MeshCore"])
+        status = mqtt_module.build_mqtt_status(mqtt, "My Meshpoint")
+        self.assertEqual(status["topic_preview_meshtastic"], "")
+        self.assertEqual(status["topic_preview_json"], "")
+
 
 class TestUpdateMqttRoute(unittest.TestCase):
     def setUp(self) -> None:

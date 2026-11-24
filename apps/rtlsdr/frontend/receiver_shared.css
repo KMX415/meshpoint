@@ -1,0 +1,196 @@
+/* RTL-SDR web listener panel */
+
+.section[data-section="listener"] {
+    overflow-y: auto;
+}
+
+.lsn-panel__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px clamp(16px, 3vw, 32px) 12px;
+}
+
+.lsn-panel__title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+/* ── Status pill ─────────────────────────────────────── */
+
+.lsn-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 400;
+    text-transform: none;
+    color: var(--text-secondary);
+}
+
+.lsn-status__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+    flex-shrink: 0;
+}
+
+.lsn-status__dot--on {
+    background: #34d399;
+    box-shadow: 0 0 6px rgba(52, 211, 153, 0.7);
+}
+
+/* Dongle held by a sibling tab -- distinct from the green "on air" dot. */
+.lsn-status__dot--busy {
+    background: #f87171;
+    box-shadow: 0 0 6px rgba(248, 113, 113, 0.7);
+}
+
+/* ── Radio / P2000 / Pagers tab bar ──────────────────── */
+
+.lsn-tabbar {
+    display: flex;
+    gap: 4px;
+    padding: 0 clamp(16px, 3vw, 32px) 12px;
+}
+
+.lsn-tabbar__btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    padding: 6px 14px;
+    cursor: pointer;
+}
+
+.lsn-tabbar__btn:hover {
+    color: var(--text-primary);
+}
+
+.lsn-tabbar__btn--active {
+    background: rgba(52, 211, 153, 0.12);
+    border-color: rgba(52, 211, 153, 0.4);
+    color: var(--accent-green);
+}
+
+/* ── P2000 / Pagers message log ───────────────────────── */
+
+.pager-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    /* Line the status light + action buttons up with the panel header
+       instead of hugging the card's left/right edges. */
+    padding: 10px 0.75rem;
+}
+
+/* Content in a listener panel's plain body lines up with the panel
+   header (inset 0.75rem) rather than sitting flush against the card
+   edge. Add alongside `panel__body` on a bare body div. */
+.lsn-panel-body {
+    padding: 12px 0.75rem;
+}
+
+.pager-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.pager-status__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+    flex-shrink: 0;
+}
+
+.pager-status__dot--on {
+    background: #34d399;
+    box-shadow: 0 0 6px rgba(52, 211, 153, 0.7);
+}
+
+/* Dongle held by a sibling tab -- distinct from the green "on air" dot. */
+.pager-status__dot--busy {
+    background: #f87171;
+    box-shadow: 0 0 6px rgba(248, 113, 113, 0.7);
+}
+
+.pager-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pager-idle-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    margin-right: 4px;
+}
+
+.pager-idle-toggle input[type="checkbox"] {
+    cursor: pointer;
+}
+
+.pager-count {
+    color: var(--text-muted);
+    font-weight: 400;
+    font-size: 12px;
+}
+
+.pager-log {
+    max-height: 60vh;
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+}
+
+.pager-log__empty {
+    color: var(--text-muted);
+    padding: 12px 0;   /* the panel body (.lsn-panel-body) supplies the horizontal inset */
+}
+
+.pager-row {
+    display: flex;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    align-items: baseline;
+}
+
+.pager-row__time {
+    color: var(--text-muted);
+    flex-shrink: 0;
+    width: 5.5em;
+    white-space: nowrap;
+}
+
+.pager-row__proto {
+    color: var(--accent-green);
+    flex-shrink: 0;
+    width: 9em;
+}
+
+.pager-row__capcode {
+    color: var(--text-muted);
+    flex-shrink: 0;
+    width: 5.5em;
+}
+
+.pager-row__msg {
+    color: var(--text-primary);
+    word-break: break-word;
+}
+
+/* ── Sections / controls ─────────────────────────────── */

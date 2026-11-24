@@ -23,6 +23,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Semtech HAL receive coding-rate enum, independent of the TX configuration.
+_RX_CODING_RATES = {1: "4/5", 2: "4/6", 3: "4/7", 4: "4/8"}
+
 
 class ConcentratorCaptureSource(CaptureSource):
     """Captures LoRa packets via the RAK2287 SX1302 concentrator."""
@@ -49,6 +52,7 @@ class ConcentratorCaptureSource(CaptureSource):
         self._syncword = syncword
         self._running = False
         self._restart_lock = asyncio.Lock()
+        self._restarting = False
 
     @staticmethod
     def _resolve_channel_plan(
@@ -105,21 +109,35 @@ class ConcentratorCaptureSource(CaptureSource):
         )
 
     async def stop(self) -> None:
-        self._running = False
-        self._wrapper.stop()
-        logger.info("Concentrator capture stopped")
+        async with self._restart_lock:
+            self._running = False
+            self._wrapper.stop()
+            logger.info("Concentrator capture stopped")
 
     async def restart_pipeline(self) -> None:
         """Stop RX, reset the SX1302, and restart without restarting meshpoint."""
         async with self._restart_lock:
+            self._restarting = True
             self._running = False
-            await asyncio.sleep(0.15)
-            self._wrapper.stop()
-            await self.start()
+            try:
+                # Keep the coordinator's existing iterator alive, but prevent
+                # receive calls while the HAL is stopped/reconfigured.
+                await asyncio.sleep(0.15)
+                self._wrapper.stop()
+                await self.start()
+            except BaseException:
+                self._running = False
+                self._wrapper.stop()
+                raise
+            finally:
+                self._restarting = False
 
     async def packets(self) -> AsyncIterator[RawCapture]:
         poll_count = 0
-        while self._running:
+        while self._running or self._restarting:
+            if self._restarting:
+                await asyncio.sleep(self._poll_interval)
+                continue
             raw_packets = self._wrapper.receive()
             poll_count += 1
             if poll_count == 1 or poll_count % 50000 == 0:
@@ -135,6 +153,7 @@ class ConcentratorCaptureSource(CaptureSource):
                     frequency_mhz=pkt.frequency_hz / 1_000_000.0,
                     spreading_factor=pkt.spreading_factor,
                     bandwidth_khz=BW_MAP.get(pkt.bandwidth, 125.0),
+                    coding_rate=_RX_CODING_RATES.get(pkt.coderate, "Unknown"),
                     timestamp=datetime.now(timezone.utc),
                 )
 

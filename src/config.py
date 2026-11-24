@@ -78,6 +78,7 @@ class MeshtasticConfig:
 
 @dataclass
 class MeshcoreConfig:
+    tx_enabled: bool = True
     default_key_b64: str = ""
     channel_keys: dict[str, str] = field(default_factory=dict)
     # Desired companion advert name. When set, the dashboard rename
@@ -95,6 +96,9 @@ class MeshcoreUsbConfig:
     serial_port: Optional[str] = None
     baud_rate: int = 115200
     auto_detect: bool = True
+    connection_type: str = "serial"
+    tcp_host: str = "127.0.0.1"
+    tcp_port: int = 5000
 
 
 @dataclass
@@ -129,6 +133,16 @@ def _coerce_serial_devices(value) -> list[SerialDeviceConfig]:
 
 
 @dataclass
+class MeshtasticdConfig:
+    """Local meshtasticd TCP bridge (WisMesh Node / PORTDUINO platforms)."""
+
+    host: str = "127.0.0.1"
+    port: int = 4403
+    mac_address_source: str = "eth0"
+    preset: str = "lora-RAK6421-13302-slot1.yaml"
+
+
+@dataclass
 class CaptureConfig:
     sources: list[str] = field(default_factory=lambda: ["mock"])
     serial_port: Optional[str] = None
@@ -136,6 +150,7 @@ class CaptureConfig:
     serial: list[SerialDeviceConfig] = field(default_factory=list)
     concentrator_spi_device: str = "/dev/spidev0.0"
     meshcore_usb: MeshcoreUsbConfig = field(default_factory=MeshcoreUsbConfig)
+    meshtasticd: MeshtasticdConfig = field(default_factory=MeshtasticdConfig)
 
 
 @dataclass
@@ -156,9 +171,13 @@ class MetricsConfig:
 
 @dataclass
 class DashboardConfig:
+    # Device-side opt-in; deliberately not writable through dashboard APIs.
+    web_terminal_enabled: bool = False
     host: str = "0.0.0.0"  # nosec B104 -- intentional for local device dashboard
     port: int = 8080
     static_dir: str = "frontend"
+    theme: str = "dark"
+    map_tile_url: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 
 
 @dataclass
@@ -172,8 +191,12 @@ class UpstreamConfig:
 
 @dataclass
 class DeviceConfig:
+    radio_hat: str = ""
+    radio_protocol: str = ""
     device_id: Optional[str] = None
     device_name: str = "Meshpoint"
+    # gateway = SX1302/SX1303 concentrator; node = WisMesh HAT + meshtasticd
+    platform: str = "gateway"
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     altitude: Optional[float] = None
@@ -210,8 +233,8 @@ class PositionConfig:
     # ``static`` uses ``device.{latitude,longitude,altitude}`` (wizard pin).
     # ``live`` reads the active ``LocationSource`` (gpsd/uart) when a fix exists.
     coordinate_source: str = "static"
-    # Privacy when ``coordinate_source`` is ``live``: exact, approximate
-    # (~1.1 km rounding), or none (skip position on mesh). Ignored for static.
+    # Privacy for both coordinate sources: exact, approximate
+    # (two-decimal grid rounding), or none (skip position on mesh).
     location_precision: str = "approximate"
 
 
@@ -344,6 +367,8 @@ class WebAuthConfig:
     # range-checked at the route layer (5 min .. 30 days).
     jwt_expiry_minutes: int = 480
     allow_read_only: bool = False
+    public_view_enabled: bool = False
+    public_view_pages: list[str] = field(default_factory=lambda: ["dashboard"])
     lockout_attempts: int = 5
     lockout_cooldown_minutes: int = 5
     session_version: int = 1
@@ -351,6 +376,8 @@ class WebAuthConfig:
 
 @dataclass
 class AppConfig:
+    plugin_sources_enabled: bool = False
+    plugins: dict = field(default_factory=dict)
     radio: RadioConfig = field(default_factory=RadioConfig)
     meshtastic: MeshtasticConfig = field(default_factory=MeshtasticConfig)
     meshcore: MeshcoreConfig = field(default_factory=MeshcoreConfig)
@@ -394,6 +421,9 @@ def _merge_dataclass(instance, overrides: dict):
         return
     for key, value in overrides.items():
         if not hasattr(instance, key):
+            continue
+        if isinstance(instance, DashboardConfig) and key == "web_terminal_enabled":
+            instance.web_terminal_enabled = value is True
             continue
         current = getattr(instance, key)
         if dataclasses.is_dataclass(current) and isinstance(value, dict):
@@ -459,6 +489,17 @@ def _apply_yaml(cfg: AppConfig, path: Path) -> None:
 
     unknown_keys: list[str] = []
     for section_name, section_value in raw.items():
+        if section_name == "plugin_sources_enabled":
+            cfg.plugin_sources_enabled = section_value is True
+            continue
+        if section_name == "plugins":
+            if not isinstance(section_value, dict):
+                raise ValueError("plugins must be a mapping")
+            for name, values in section_value.items():
+                if not isinstance(values, dict):
+                    raise ValueError("each plugin configuration must be a mapping")
+                cfg.plugins[name] = {**cfg.plugins.get(name, {}), **values}
+            continue
         section_instance = section_map.get(section_name)
         if section_instance is None:
             unknown_keys.append(section_name)
@@ -506,6 +547,8 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
     local = config_path or os.environ.get("CONCENTRATOR_CONFIG", "config/local.yaml")
     _apply_yaml(cfg, _validated_config_path(local))
     _resolve_radio_frequency(cfg.radio)
+    from src.radio.pimesh_runtime import configure_runtime
+    configure_runtime(cfg)
 
     return cfg
 
@@ -516,11 +559,12 @@ def _get_local_yaml_path() -> Path:
     return _validated_config_path(raw)
 
 
-def save_section_to_yaml(section: str, values: dict) -> None:
+def save_section_to_yaml(section: str, values: dict | bool) -> None:
     """Merge values into a section of local.yaml without destroying other sections.
 
     Reads the existing file (if any), updates only the specified section,
     and writes back. Creates the file if it doesn't exist.
+    A boolean replaces a top-level permission flag instead of merging a mapping.
     """
     path = _get_local_yaml_path()
     existing: dict = {}
@@ -530,7 +574,7 @@ def save_section_to_yaml(section: str, values: dict) -> None:
 
     if section not in existing:
         existing[section] = {}
-    if isinstance(existing[section], dict):
+    if isinstance(existing[section], dict) and isinstance(values, dict):
         existing[section].update(values)
     else:
         existing[section] = values

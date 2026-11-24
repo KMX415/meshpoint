@@ -14,8 +14,10 @@ import os
 from dataclasses import dataclass
 from typing import Optional
 
+from src.hal.sx1302_access import serialized_hal, send_immediate
 from src.hal.concentrator_config import ConcentratorChannelPlan
 from src.hal.sx1302_signatures import apply_signatures
+from src.hal.sx1302_preamble import configure_service_preamble
 from src.hal.sx1302_spectral_scan import (
     SpectralScanResult,
     SX1302SpectralScan,
@@ -104,6 +106,8 @@ class SX1302Wrapper:
         self._spi_path = spi_path
         self._sx1261_spi_path = sx1261_spi_path
         self._started = False
+        self._generation = 0
+        self._service_modem_enabled = False
         self._debug_rx = os.getenv("MESHPOINT_DEBUG_RX") == "1"
         self._crc_bad_count = 0
         self._no_crc_count = 0
@@ -111,6 +115,7 @@ class SX1302Wrapper:
         self._spectral_scan: Optional[SX1302SpectralScan] = None
         self._sx1261_configured = False
 
+    @serialized_hal
     def load(self) -> None:
         if not self._lib_path or not os.path.exists(self._lib_path):
             raise FileNotFoundError(
@@ -121,12 +126,15 @@ class SX1302Wrapper:
         self._setup_function_signatures()
         logger.info("Loaded libloragw from %s", self._lib_path)
 
+    @serialized_hal
     def reset(self, gpio_pins: list[int] | None = None) -> None:
         """Toggle the concentrator reset pins (required before lgw_start).
 
         Different carrier boards route SX1302 reset to different GPIOs
-        (pin 17 or 25). Both are toggled by default since asserting
-        reset on an unconnected pin is harmless.
+        (17/25 by default; 22 on the community-tested COTX X3).
+        RESET_GPIO selects space-separated pins, matching the systemd reset
+        script. Explicit gpio_pins take precedence. An invalid nonempty
+        override skips this fallback rather than toggling other pins.
         Delegated to systemd ExecStartPre for root access;
         this method is a best-effort fallback via pinctrl subprocess.
 
@@ -138,7 +146,19 @@ class SX1302Wrapper:
         import time
 
         if gpio_pins is None:
-            gpio_pins = [17, 25]
+            override = os.environ.get("RESET_GPIO")
+            if override:
+                tokens = override.split()
+                if not tokens or any(not token.isascii() or not token.isdecimal() for token in tokens):
+                    logger.warning("Invalid RESET_GPIO; skipping in-app reset")
+                    return
+                try:
+                    gpio_pins = [int(token) for token in tokens]
+                except ValueError:
+                    logger.warning("Invalid RESET_GPIO; skipping in-app reset")
+                    return
+            else:
+                gpio_pins = [17, 25]
 
         hold = float(os.environ.get("CONCENTRATOR_RESET_HOLD_SEC", "0.1"))
 
@@ -162,6 +182,7 @@ class SX1302Wrapper:
                 gpio_pins,
             )
 
+    @serialized_hal
     def configure(self, plan: ConcentratorChannelPlan) -> None:
         """Apply board, RF, and IF channel configuration before start."""
         if self._lib is None:
@@ -170,25 +191,40 @@ class SX1302Wrapper:
         self._configure_board()
         self._configure_rf_chains(plan)
         self._configure_if_channels(plan)
+        self._service_modem_enabled = bool(
+            plan.single_sf_channel and plan.single_sf_channel.enabled
+        )
         self._configure_sx1261_for_spectral_scan()
         logger.info("Concentrator configured with %d IF channels",
                      len(plan.multi_sf_channels) + (1 if plan.single_sf_channel else 0))
 
+    @serialized_hal
     def start(self) -> None:
         if self._lib is None:
             self.load()
         result = self._lib.lgw_start()
         if result != LGW_HAL_SUCCESS:
             raise RuntimeError("lgw_start() failed")
+        try:
+            if self._service_modem_enabled:
+                configure_service_preamble(self._lib)
+        except Exception:
+            self._lib.lgw_stop()
+            self._started = False
+            raise
         self._started = True
+        self._generation += 1
         logger.info("SX1302 concentrator started")
 
+    @serialized_hal
     def stop(self) -> None:
         if self._started and self._lib:
             self._lib.lgw_stop()
             self._started = False
+            self._generation += 1
             logger.info("SX1302 concentrator stopped")
 
+    @serialized_hal
     def receive(self) -> list[ConcentratorPacket]:
         """Poll for received packets. Non-blocking.
 
@@ -300,6 +336,7 @@ class SX1302Wrapper:
         """
         return self._unknown_status_count
 
+    @serialized_hal
     def set_syncword(self, syncword: int) -> None:
         """Configure custom sync word (requires patched HAL)."""
         if self._lib is None:
@@ -312,6 +349,7 @@ class SX1302Wrapper:
 
     # ── TX operations ───────────────────────────────────────────────
 
+    @serialized_hal
     def configure_tx_gain(
         self, rf_chain: int, lut_entries: list[dict]
     ) -> None:
@@ -343,44 +381,50 @@ class SX1302Wrapper:
         )
 
     def send(self, tx_pkt: LgwPktTxS) -> int:
-        """Schedule a packet for transmission via lgw_send.
+        """Send without overlapping another native packet; wait for completion.
 
         Returns LGW_HAL_SUCCESS (0) on success, negative on error.
         """
         if not self._started:
             raise RuntimeError("Concentrator not started, cannot transmit")
 
-        result = self._lib.lgw_send(ctypes.byref(tx_pkt))
+        result = send_immediate(self, tx_pkt)
         if result != LGW_HAL_SUCCESS:
             logger.error("lgw_send failed (code %d)", result)
         else:
             logger.info(
-                "TX queued: %d Hz, SF%d, %d bytes",
+                "TX completed: %d Hz, SF%d, %d bytes",
                 tx_pkt.freq_hz, tx_pkt.datarate, tx_pkt.size,
             )
         return result
 
+    @serialized_hal
     def get_tx_status(self, rf_chain: int = 0) -> int:
         """Check TX status: TX_STATUS_FREE=2, TX_STATUS_EMITTING=4."""
         if self._lib is None:
             raise RuntimeError("Library not loaded")
 
         status = ctypes.c_uint8(0)
-        self._lib.lgw_status(rf_chain, TX_STATUS, ctypes.byref(status))
+        result = self._lib.lgw_status(rf_chain, TX_STATUS, ctypes.byref(status))
+        if result != LGW_HAL_SUCCESS:
+            raise RuntimeError("lgw_status failed")
         return status.value
 
+    @serialized_hal
     def abort_tx(self, rf_chain: int = 0) -> int:
         """Cancel a scheduled transmission."""
         if self._lib is None:
             raise RuntimeError("Library not loaded")
         return self._lib.lgw_abort_tx(rf_chain)
 
+    @serialized_hal
     def get_time_on_air(self, tx_pkt: LgwPktTxS) -> int:
         """Compute airtime in milliseconds for a TX packet."""
         if self._lib is None:
             raise RuntimeError("Library not loaded")
         return self._lib.lgw_time_on_air(ctypes.byref(tx_pkt))
 
+    @serialized_hal
     def run_spectral_scan(
         self,
         frequency_hz: int,
@@ -401,9 +445,12 @@ class SX1302Wrapper:
         if not self._started:
             logger.debug("Skipping spectral scan: concentrator not started")
             return None
+        if self.get_tx_status() != TX_STATUS_FREE:
+            return None
         return self._spectral_scan.run(frequency_hz, nb_scan=nb_scan)
 
     @property
+    @serialized_hal
     def spectral_scan_supported(self) -> bool:
         """True if the HAL supports spectral scan AND the SX1261 was
         successfully configured for it during ``configure()``."""

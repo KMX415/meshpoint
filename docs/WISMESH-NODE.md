@@ -114,6 +114,7 @@ sudo systemctl start meshpoint
 ## Operator rules
 
 - **meshtasticd owns RF identity.** Meshpoint does not broadcast NodeInfo on the Node platform; meshtasticd advertises the HAT's node id.
+- **PKI / mesh participant is gateway-only.** v0.7.6 PKI keypairs, inbound traceroute/telemetry replies, and periodic telemetry/position broadcasts run on SX1302 gateway installs only. Node platform skips them; meshtasticd handles crypto and on-mesh responses. When merging `main` into this branch, follow `docs/plans/wismesh-branch-merge.md` and run `tests/test_node_platform_invariants.py`.
 - **Do not run** `meshtastic --host localhost:4403` while Meshpoint is running (steals the single client slot).
 - **Restart order:** `meshtasticd` first, then `meshpoint`.
 - **Direct messages** target meshtasticd's node id (derived from the HAT MAC), which may differ from `transmit.node_id` in `local.yaml`. Meshpoint routes DMs to both ids when they differ. Prefer removing a stale pinned `transmit.node_id` on Node installs unless you need it for upstream identity.

@@ -88,8 +88,9 @@ class MqttConfigCard {
                             <textarea class="cfg-field__input cfg-field__textarea"
                                       rows="4" data-mqtt-channels
                                       placeholder="One channel name per line"></textarea>
-                            <span class="cfg-field__hint">Default public presets only on
-                                community brokers. Add private names only on your own broker.</span>
+                            <span class="cfg-field__hint">List each public channel you want
+                                to publish (for example, LongTurbo). Add private names only on
+                                your own broker.</span>
                         </label>
                         <label class="cfg-field">
                             <span class="cfg-field__label">Location on MQTT</span>
@@ -149,7 +150,7 @@ class MqttConfigCard {
                         </div>
                     </fieldset>
                     <div class="cfg-preview" data-mqtt-previews>
-                        <span class="cfg-preview__label">Example topics (LongFast gateway)</span>
+                        <span class="cfg-preview__label">Topic preview for channels above</span>
                         <code class="cfg-preview__value" data-mqtt-preview-mt>--</code>
                         <code class="cfg-preview__value" data-mqtt-preview-mc>--</code>
                         <code class="cfg-preview__value" data-mqtt-preview-json style="display:none">--</code>
@@ -246,7 +247,7 @@ class MqttConfigCard {
         if (this._mapPrecision) {
             this._mapPrecision.value = mqtt.map_report_position_precision ?? 14;
         }
-        this._renderPreviews(mqtt);
+        this._renderPreviews();
         this._refreshRuntime();
         this._startRuntimePolling();
     }
@@ -322,20 +323,35 @@ class MqttConfigCard {
             `${host}:${port} · ${since} · ${prefix} · ${pub} published · ${disc} drops${lastPub}`;
     }
 
-    _renderPreviews(cached) {
-        const mqtt = cached || {};
-        const mt = mqtt.topic_preview_meshtastic
-            || this._exampleTopic('e', 'LongFast');
-        const mc = mqtt.topic_preview_meshcore
-            || this._exampleTopic('c', 'MeshCore');
-        if (this._previewMt) this._previewMt.textContent = mt;
-        if (this._previewMc) this._previewMc.textContent = mc;
+    _renderPreviews() {
+        const channels = this._parseChannels();
+        const meshtasticChannels = channels.filter(
+            (name) => name.toLowerCase() !== 'meshcore',
+        );
+        const meshcoreAllowed = channels.some(
+            (name) => name.toLowerCase() === 'meshcore',
+        );
+        if (this._previewMt) {
+            this._previewMt.style.display = meshtasticChannels.length ? '' : 'none';
+            this._previewMt.textContent = meshtasticChannels.map(
+                (name) => this._exampleTopic('e', name),
+            ).join('\n');
+        }
+        if (this._previewMc) {
+            this._previewMc.style.display = meshcoreAllowed ? '' : 'none';
+            this._previewMc.textContent = meshcoreAllowed
+                ? this._exampleTopic('c', 'MeshCore') : '';
+        }
         if (this._previewJson) {
-            const show = this._json && this._json.checked;
+            const show = this._json && this._json.checked
+                && meshtasticChannels.length > 0;
             this._previewJson.style.display = show ? '' : 'none';
             if (show) {
-                this._previewJson.textContent = mqtt.topic_preview_json
-                    || this._exampleTopic('json', 'LongFast');
+                this._previewJson.textContent = meshtasticChannels.map(
+                    (name) => this._exampleTopic('json', name),
+                ).join('\n');
+            } else {
+                this._previewJson.textContent = '';
             }
         }
     }
@@ -405,7 +421,7 @@ class MqttConfigCard {
             this._passwordDirty = false;
             if (this._pass) this._pass.value = '';
             this._api.signalRestart('MQTT settings updated.');
-            if (result.mqtt) this._renderPreviews(result.mqtt);
+            if (result.mqtt) this._renderPreviews();
         } else {
             this._setStatus('error', 'Save failed.');
         }

@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
+import uuid
 from dataclasses import dataclass
 from typing import Optional
 
@@ -42,6 +44,9 @@ class SendResult:
     event_type: str = ""
     error: str = ""
     timed_out: bool = False
+    packet_id: str = ""
+    heard_repeats: int | None = None
+    status: str = "sent"
 
 
 @dataclass
@@ -75,6 +80,9 @@ class MeshCoreTxClient:
         # on the shared meshcore handle races into send timeouts.
         self._cmd_lock = asyncio.Lock()
         self._contact_cache = MeshcoreContactCache()
+        self.tx_enabled_provider = lambda: True
+        self.repeat_tracker = None
+        self._last_channel_timestamp = 0
 
     @property
     def _mc(self):
@@ -95,6 +103,9 @@ class MeshCoreTxClient:
     def set_source(self, source) -> None:
         """Attach the capture source so we always see live connect state."""
         self._source = source
+        bind_lock = getattr(source, "set_command_lock", None)
+        if callable(bind_lock):
+            bind_lock(self._cmd_lock)
         logger.info("MeshCore TX client bound to live capture source")
 
     def set_connection(self, mc_instance) -> None:
@@ -277,24 +288,79 @@ class MeshCoreTxClient:
         self, channel: int, text: str
     ) -> SendResult:
         """Send a broadcast message on a MeshCore channel."""
-        return await self._run_tx_command(
-            lambda: self._mc.commands.send_chan_msg(channel, text),
+        if not self.tx_enabled_provider():
+            return SendResult(success=False, error='MeshCore TX disabled')
+        pending = None
+
+        async def send():
+            nonlocal pending
+            if self.repeat_tracker is None:
+                return await self._mc.commands.send_chan_msg(channel, text)
+            # Distinct on-air timestamps prevent identical rapid sends colliding.
+            delay = self._last_channel_timestamp + 1 - time.time()
+            if 0 < delay <= 1:
+                await asyncio.sleep(delay)
+            timestamp = max(int(time.time()), self._last_channel_timestamp + 1)
+            self._last_channel_timestamp = timestamp
+            try:
+                info = await asyncio.wait_for(self._mc.commands.get_channel(channel), timeout=3)
+                sender = self._mc.self_info.get("name", "")
+                if isinstance(info.payload, dict):
+                    pending = self.repeat_tracker.begin(info.payload, sender, text, timestamp)
+            except Exception:
+                logger.warning("Repeat tracking unavailable for this send")
+            return await self._mc.commands.send_chan_msg(channel, text, timestamp=timestamp)
+
+        result = await self._run_tx_command(
+            send,
             success_log=f"MeshCore channel {channel} message sent",
             timeout_label="Send timed out",
         )
+        result.packet_id = pending.packet_id if pending else "mc:" + uuid.uuid4().hex
+        if pending:
+            if result.success:
+                result.heard_repeats = pending.count
+            else:
+                self.repeat_tracker.discard(pending.packet_id)
+        return result
 
     async def send_direct_message(
         self, destination, text: str
     ) -> SendResult:
         """Send a direct message to a MeshCore contact."""
-        return await self._run_tx_command(
-            lambda: self._mc.commands.send_msg(destination, text),
+        if not self.tx_enabled_provider():
+            return SendResult(success=False, error='MeshCore TX disabled')
+        pending = None
+
+        async def send():
+            nonlocal pending
+            if self.repeat_tracker is None:
+                return await self._mc.commands.send_msg(destination, text)
+            timestamp = max(int(time.time()), self._last_channel_timestamp + 1)
+            self._last_channel_timestamp = timestamp
+            pending = self.repeat_tracker.begin_direct()
+            event = await self._mc.commands.send_msg(destination, text, timestamp=timestamp)
+            if event is not None and isinstance(event.payload, dict):
+                self.repeat_tracker.expect_ack(pending, event.payload)
+            return event
+
+        result = await self._run_tx_command(
+            send,
             success_log="MeshCore DM sent",
             timeout_label="Send timed out",
         )
+        result.packet_id = pending.packet_id if pending else "mc:" + uuid.uuid4().hex
+        if pending:
+            if result.success:
+                result.status = pending.status
+            else:
+                self.repeat_tracker.discard(pending.packet_id)
+        return result
 
     async def send_advert(self, flood: bool = False) -> SendResult:
         """Broadcast a node advertisement."""
+        if not self.tx_enabled_provider():
+            return SendResult(success=False, error='MeshCore TX disabled')
         return await self._run_tx_command(
             lambda: self._mc.commands.send_advert(flood=flood),
             success_log="MeshCore advert sent",
@@ -399,6 +465,7 @@ class MeshCoreTxClient:
         """
         if not self.connected:
             return None
+
         try:
             info = self._mc.self_info or {}
             if not info:
@@ -414,6 +481,29 @@ class MeshCoreTxClient:
         except Exception:
             logger.exception("Failed to read MeshCore radio info")
             return None
+
+    async def refresh_radio_info(self) -> RadioStatus | None:
+        """Request fresh SELF_INFO after a host-managed radio change."""
+        from meshcore import EventType
+
+        if not self.connected:
+            return None
+        async with self._cmd_lock:
+            await self._pause_auto_fetch()
+            try:
+                event = await self._mc.commands.send_appstart()
+                if event.type != EventType.SELF_INFO:
+                    return None
+            finally:
+                await self._resume_auto_fetch()
+        return await self.get_radio_info()
+
+    async def set_coordinates(self, latitude: float, longitude: float) -> SendResult:
+        return await self._run_tx_command(
+            lambda: self._mc.commands.set_coords(latitude, longitude),
+            success_log="MeshCore coordinates saved",
+            timeout_label="Coordinate update timed out",
+        )
 
     async def get_device_info(self) -> Optional[dict]:
         """Return companion DEVICE_INFO (firmware version / model / build).
@@ -469,20 +559,27 @@ class MeshCoreTxClient:
         except Exception:
             logger.debug("Could not store MeshCore DEVICE_INFO cache", exc_info=True)
 
-    async def sync_channels(self, channel_keys: dict) -> None:
+    async def sync_channels(self, channel_keys: dict, *, verify: bool = False) -> None:
         """Sync configured channels to the companion device."""
         if not self.connected:
+            if verify:
+                raise RuntimeError('MeshCore disconnected')
             logger.debug("sync_channels: not connected, skipping")
             return
         async with self._cmd_lock:
             if not self.connected or self._mc is None:
+                if verify:
+                    raise RuntimeError('MeshCore disconnected')
                 return
             await self._pause_auto_fetch()
             try:
-                await MeshcoreChannelSync(
+                sync = MeshcoreChannelSync(
                     self._mc,
                     post_command=None,
-                ).sync(channel_keys)
+                )
+                await sync.sync(channel_keys)
+                if verify:
+                    await sync.verify(channel_keys)
             finally:
                 await self._resume_auto_fetch()
             await self._run_post_command()

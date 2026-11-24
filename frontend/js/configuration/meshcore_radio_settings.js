@@ -43,9 +43,19 @@ class MeshcoreRadioSettings {
         if (this._root) this._root.innerHTML = '';
     }
 
-    render(mc) {
+    render(mc, config) {
         if (!this._root) return;
+        this._pimesh = window.PlatformContext?.isPimesh(config);
         const radio = (mc && mc.radio) || {};
+        this._radio = radio;
+        this._txEnabled = mc.tx_enabled !== false;
+        const region = config?.radio?.region;
+        const range = {US: [902, 928], EU_868: [863, 870], ANZ: [915, 928]}[region];
+        const presets = MeshcoreRadioSettings._RADIO_PRESETS.filter(p => {
+            if (!this._pimesh || !range) return true;
+            const freq = Number(p.label.match(/([\d.]+) MHz/)?.[1]);
+            return freq > range[0] && freq < range[1];
+        });
         const freq = radio.frequency_mhz;
         const hint = (freq != null && Number(freq) > 0)
             ? `<span class="cfg-field__hint">Currently ${this._fmtFreq(freq)} / ${this._fmtBw(radio.bandwidth_khz)} / ${this._fmtSf(radio.spreading_factor)}</span>`
@@ -57,20 +67,28 @@ class MeshcoreRadioSettings {
                     <h3 class="cfg-card__title">Radio settings</h3>
                     <p class="cfg-card__hint">
                         Community frequency/BW/SF/CR presets, applied over the
-                        live companion connection. Applying reboots the companion;
-                        it briefly shows disconnected while reconnecting.
+                        live companion connection. ${this._pimesh
+                            ? 'PiMesh verifies the hardware settings after applying them.'
+                            : 'Applying reboots the companion; it briefly shows disconnected while reconnecting.'}
                     </p>
                 </header>
                 <label class="cfg-field">
                     <span class="cfg-field__label">Preset</span>
                     <select class="cfg-field__input" data-mc-radio-input>
                         <option value="" disabled selected>-- select --</option>
-                        ${MeshcoreRadioSettings._RADIO_PRESETS.map((p) => `
+                        ${presets.map((p) => `
                             <option value="${p.value}">${this._esc(p.label)}</option>
                         `).join('')}
                     </select>
                     ${hint}
                 </label>
+                ${this._pimesh ? `<label class="cfg-field cfg-field--toggle">
+                    <input type="checkbox" data-mc-tx-enabled ${this._txEnabled ? 'checked' : ''}>
+                    <span class="cfg-field__label">Send messages and adverts from Meshpoint</span></label>
+                    <p class="cfg-field__hint">Radio protocol acknowledgements are managed by MeshCore.</p>
+                    <label class="cfg-field"><span class="cfg-field__label">TX power (dBm)</span>
+                    <input class="cfg-field__input" data-mc-tx-power type="number" min="2" max="22"
+                        step="1" value="${Number(radio.tx_power) || 18}"></label>` : ''}
                 <div class="cfg-card__actions">
                     <button class="terminal-button terminal-button--primary"
                             type="button" data-mc-radio-save>
@@ -93,27 +111,39 @@ class MeshcoreRadioSettings {
         if (!input || !status) return;
 
         const preset = input.value;
-        if (!preset) {
+        if (!preset && !this._pimesh) {
             status.dataset.kind = 'error';
             status.textContent = 'Pick a preset.';
             return;
         }
 
         if (button) button.disabled = true;
+        const body = preset ? {preset} : {};
+        if (this._pimesh) {
+            const power = Number(this._root.querySelector('[data-mc-tx-power]').value);
+            if (!Number.isInteger(power) || power < 2 || power > 22) {
+                status.dataset.kind = 'error';
+                status.textContent = 'TX power must be between 2 and 22 dBm.';
+                button.disabled = false;
+                return;
+            }
+            if (power !== this._radio.tx_power) body.tx_power_dbm = power;
+            body.tx_enabled = this._root.querySelector('[data-mc-tx-enabled]').checked;
+        }
         status.dataset.kind = 'pending';
         status.textContent =
             'Setting radio… (cross-band changes can take up to a minute)';
 
         const result = await this._api.put(
             '/api/config/meshcore/companion-radio',
-            { preset },
+            body,
         );
 
         if (result) {
             status.dataset.kind = 'success';
             status.textContent =
-                'Applied: companion is rebooting; this can take up to a minute.';
-            this._api.toast('MeshCore radio updated, companion rebooting');
+                this._pimesh ? 'Saved and verified on PiMesh.' : 'Applied: companion is rebooting; this can take up to a minute.';
+            this._api.toast(this._pimesh ? 'MeshCore radio saved' : 'MeshCore radio updated, companion rebooting');
             await this._api.refresh();
         } else {
             // _api.put toasts Save failed: <detail>; keep it on the card too.

@@ -66,6 +66,7 @@ class BroadcastIntervalController:
         self._interval_changed = asyncio.Event()
         self._started_at: Optional[datetime] = None
         self._last_sent_at: Optional[datetime] = None
+        self._last_attempt_at: Optional[datetime] = None
 
     @property
     def interval_seconds(self) -> int:
@@ -82,6 +83,14 @@ class BroadcastIntervalController:
     def mark_sent(self) -> None:
         self._last_sent_at = datetime.now(timezone.utc)
 
+    def mark_attempt(self) -> None:
+        """Defer the next attempt without claiming a successful transmission."""
+        self._last_attempt_at = datetime.now(timezone.utc)
+
+    def _schedule_anchor(self) -> Optional[datetime]:
+        times = [t for t in (self._last_sent_at, self._last_attempt_at) if t is not None]
+        return max(times) if times else None
+
     def begin(self) -> None:
         self._started_at = datetime.now(timezone.utc)
 
@@ -90,8 +99,9 @@ class BroadcastIntervalController:
             return None
         if self._interval == 0:
             return None
-        if self._last_sent_at is not None:
-            return self._last_sent_at + timedelta(seconds=self._interval)
+        anchor = self._schedule_anchor()
+        if anchor is not None:
+            return anchor + timedelta(seconds=self._interval)
         if self._started_at is not None:
             return self._started_at + timedelta(seconds=self._startup_delay)
         return None
@@ -165,16 +175,18 @@ class BroadcastIntervalController:
     def _is_due_now(self) -> bool:
         if self._interval == 0:
             return False
-        if self._last_sent_at is None:
+        anchor = self._schedule_anchor()
+        if anchor is None:
             return True
-        next_due = self._last_sent_at + timedelta(seconds=self._interval)
+        next_due = anchor + timedelta(seconds=self._interval)
         return datetime.now(timezone.utc) >= next_due
 
     def _sleep_until_next(self) -> float:
         if self._interval == 0:
             return 0.0
-        if self._last_sent_at is None:
+        anchor = self._schedule_anchor()
+        if anchor is None:
             return float(self._interval)
-        next_due = self._last_sent_at + timedelta(seconds=self._interval)
+        next_due = anchor + timedelta(seconds=self._interval)
         remaining = (next_due - datetime.now(timezone.utc)).total_seconds()
         return max(0.0, remaining)

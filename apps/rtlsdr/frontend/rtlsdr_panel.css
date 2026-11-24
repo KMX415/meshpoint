@@ -1,0 +1,18 @@
+/* RTL-SDR -- demonstrates plugin.toml's [frontend].styles working, same as
+   Hello World. Uses the app's own theme variables so it looks right in
+   every theme, light and dark, without any plugin-side theme handling. */
+
+/* Only rendered when a "hook" plugin (e.g. DAB+) actually targets this
+   page -- see rtlsdr_panel.js. A simple divider separates this page's own
+   placeholder text from whatever a hook plugin injects below it -- one
+   panel directly if there's a single hook, or a small tabbar (see
+   .page-hook-tabbar in dashboard.css) plus panels if there's more than
+   one, both built automatically by window.mountPageHooks(). */
+.rtlsdr-hooks {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}

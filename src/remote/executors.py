@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from src.system_metrics import cpu_sampler
 from src.version import __version__
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ def execute_get_metrics(_params: dict[str, Any]) -> dict[str, Any]:
     cpu_temp = _read_cpu_temp()
 
     return {
-        "cpu_percent": psutil.cpu_percent(interval=0.5),
+        "cpu_percent": cpu_sampler.value,
         "memory_percent": mem.percent,
         "memory_used_mb": round(mem.used / (1024 * 1024)),
         "memory_total_mb": round(mem.total / (1024 * 1024)),

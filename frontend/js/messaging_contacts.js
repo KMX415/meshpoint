@@ -54,14 +54,16 @@ class MessagingContacts {
      * we haven't designed yet.
      */
     async markConversationRead(nodeId) {
+        if (window.meshpointReadOnly) return;
         if (!nodeId || nodeId.startsWith('broadcast:')) return;
         const convo = this._conversations.find(c => c.node_id === nodeId);
         if (!convo || (convo.unread_count || 0) === 0) return;
         try {
-            await fetch(
+            const response = await fetch(
                 `/api/messages/conversation/${encodeURIComponent(nodeId)}/read`,
                 { method: 'POST' },
             );
+            if (!response.ok) return;
             convo.unread_count = 0;
             this.render();
             if (this._activeNodeId) this.setActive(this._activeNodeId);
@@ -319,6 +321,7 @@ class MessagingContacts {
     }
 
     async _deleteConversation(convo) {
+        if (window.meshpointReadOnly) return;
         try {
             const res = await fetch(`/api/messages/conversation/${encodeURIComponent(convo.node_id)}`, {
                 method: 'DELETE',

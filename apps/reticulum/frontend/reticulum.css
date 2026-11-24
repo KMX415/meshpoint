@@ -1,0 +1,602 @@
+/* Reticulum plugin -- the "Browse" (NomadNet) tab. Everything else on the
+ * page reuses the shared table, stat-card, badge and configuration classes. */
+
+.rt-nomad__bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.rt-nomad__search { flex: 1 1 130px; min-width: 0; }
+.rt-nomad__nodes {
+    flex: 0 1 260px;
+    min-width: 0;
+    max-width: 300px;
+    text-overflow: ellipsis;   /* collapsed state; the popup is capped in JS */
+}
+.rt-nomad__addr {
+    flex: 3 1 280px;
+    min-width: 0;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 13px;
+}
+
+.rt-nomad__bar .terminal-button { flex: 0 0 auto; }
+
+.rt-nomad__fav {
+    font-size: 15px;
+    line-height: 1;
+    padding-inline: 9px;
+}
+.rt-nomad__fav--on { color: var(--accent-amber, #f5b942); border-color: currentColor; }
+.rt-nomad__fav:disabled { opacity: 0.4; }
+
+.rt-nomad__page {
+    border: 1px solid var(--border, #333);
+    border-radius: 6px;
+    padding: 14px 16px;
+    min-height: 220px;
+    max-height: 60vh;
+    overflow: auto;
+    background: var(--bg-elevated, #1a1a1a);
+    /* Micron pages are written for a monospace BBS terminal. */
+    font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.rt-nomad__page a {
+    color: var(--accent, #4ea1ff);
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.rt-nomad__page hr {
+    border: 0;
+    border-top: 1px solid var(--border, #444);
+    margin: 6px 0;
+}
+
+.rt-nomad__page input[type="text"],
+.rt-nomad__page input[type="password"] {
+    background: var(--bg, #111);
+    color: inherit;
+    border: 1px solid var(--border, #444);
+    border-radius: 3px;
+    padding: 1px 4px;
+    font: inherit;
+}
+
+.rt-nomad__page label {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-right: 10px;
+}
+
+/* --- "Pages" tab: the .mu editor -------------------------------------- */
+
+.rt-pages {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+}
+
+.rt-pages__list {
+    flex: 0 0 200px;
+    border: 1px solid var(--border, #333);
+    border-radius: 6px;
+    padding: 8px;
+}
+
+.rt-pages__list-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-secondary, #999);
+    margin-bottom: 6px;
+}
+
+.rt-pages__new { padding: 1px 8px; font-size: 12px; }
+
+.rt-pages__list ul { list-style: none; margin: 0; padding: 0; }
+
+.rt-pages__item {
+    padding: 5px 7px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.rt-pages__item:hover { background: var(--overlay-weak, rgba(255, 255, 255, 0.05)); }
+.rt-pages__item--active { background: var(--overlay-med, rgba(255, 255, 255, 0.1)); }
+
+.rt-pages__tag {
+    font-family: var(--font-sans, sans-serif);
+    font-size: 10px;
+    color: var(--text-muted, #777);
+}
+
+.rt-pages__dir,
+.rt-pages__hint {
+    font-size: 11px;
+    color: var(--text-muted, #777);
+    margin: 8px 2px 0;
+    word-break: break-all;
+}
+
+.rt-pages__editor {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.rt-pages__editor-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+
+.rt-pages__name { flex: 0 1 200px; font-family: var(--font-mono, monospace); }
+.rt-pages__name-static {
+    font-family: var(--font-mono, monospace);
+    font-weight: 600;
+}
+.rt-pages__actions { margin-left: auto; display: flex; gap: 6px; }
+
+.rt-pages__toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin: 4px 0 6px;
+}
+
+.rt-pages__toolbar button {
+    min-width: 30px;
+    height: 28px;
+    padding: 0 7px;
+    background: var(--overlay-weak, rgba(255, 255, 255, 0.05));
+    color: inherit;
+    border: 1px solid var(--border-subtle, #333);
+    border-radius: 5px;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+}
+.rt-pages__toolbar button:hover { background: var(--overlay-med, rgba(255, 255, 255, 0.1)); }
+.rt-pages__toolbar button:disabled { opacity: 0.4; cursor: default; }
+
+.rt-pages__tb-color {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 28px;
+    padding: 0 4px 0 7px;
+    border: 1px solid var(--border-subtle, #333);
+    border-radius: 5px;
+    background: var(--overlay-weak, rgba(255, 255, 255, 0.05));
+    cursor: pointer;
+    font-size: 13px;
+}
+.rt-pages__tb-color input[type="color"] {
+    width: 22px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+}
+.rt-pages__toolbar--off .rt-pages__tb-color { opacity: 0.4; }
+
+.rt-pages__tb-sep {
+    width: 1px;
+    align-self: stretch;
+    margin: 2px 3px;
+    background: var(--border-subtle, #333);
+}
+
+.rt-pages__tb-emoji { position: relative; display: inline-flex; }
+
+.rt-pages__tb-emoji-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 20;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 2px;
+    padding: 5px;
+    background: var(--bg-inset, #10151f);
+    border: 1px solid var(--border-subtle, #333);
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+.rt-pages__tb-emoji-menu[hidden] { display: none; }
+.rt-pages__tb-emoji-menu button {
+    min-width: 30px;
+    height: 30px;
+    border: 0;
+    background: none;
+    border-radius: 5px;
+    font-size: 16px;
+    cursor: pointer;
+}
+.rt-pages__tb-emoji-menu button:hover { background: var(--overlay-med, rgba(255, 255, 255, 0.1)); }
+.rt-pages__tb-ascii-menu {
+    grid-template-columns: repeat(11, 1fr);
+}
+.rt-pages__tb-ascii-menu button {
+    min-width: 22px;
+    height: 24px;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 14px;
+}
+
+.rt-pages__help {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 20;
+    width: min(380px, 90vw);
+    padding: 12px 14px;
+    background: var(--bg-inset, #10151f);
+    border: 1px solid var(--border-subtle, #333);
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+    font-size: 12px;
+    line-height: 1.5;
+}
+.rt-pages__help[hidden] { display: none; }
+.rt-pages__help h4 { margin: 0 0 8px; font-size: 13px; }
+.rt-pages__help dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 3px 10px;
+    margin: 0;
+}
+.rt-pages__help dt { margin: 0; }
+.rt-pages__help dd { margin: 0; color: var(--text-secondary, #999); }
+.rt-pages__help code {
+    font-family: var(--font-mono, ui-monospace, monospace);
+    white-space: nowrap;
+    color: inherit;
+}
+.rt-pages__help-note {
+    margin: 10px 0 0;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-subtle, #333);
+    color: var(--text-muted, #777);
+}
+
+.rt-pages__split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+@media (max-width: 900px) {
+    .rt-pages { flex-direction: column; }
+    .rt-pages__list { flex-basis: auto; width: 100%; }
+    .rt-pages__split { grid-template-columns: 1fr; }
+}
+
+.rt-pages__src {
+    width: 100%;
+    min-height: 340px;
+    resize: vertical;
+    /* Matches the preview pane -- both are "terminal" surfaces. Colours are
+       explicit on purpose: --bg-elevated has no light-theme value, and a
+       bare `color: inherit` renders dark-on-dark (invisible) in light mode. */
+    background: var(--bg-elevated, #1a1a1a);
+    color: #d7dae0;
+    caret-color: #d7dae0;
+    border: 1px solid var(--border, #333);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.rt-pages__src::placeholder { color: #7a7f8a; }
+
+.rt-pages__preview {
+    min-height: 340px;
+    margin: 0;
+    overflow: auto;
+}
+
+/* ---- Peer drawer + Announce popup (reticulum_detail_panels.js) ----
+ * Deliberately reuses core's own node_drawer.css (.nd-drawer/.nd-header/
+ * .nd-section/.nd-row) and packet_detail_modal.css (.pdm-*) class names
+ * directly -- both already load globally on every page, same as this
+ * plugin already reuses lw-*/mt-badge/terminal-button/cfg-* elsewhere.
+ * Those classes are just layout/color rules with no protocol-specific
+ * behaviour baked in, so this gets pixel-identical styling to the
+ * Meshtastic/MeshCore node drawer and packet-detail modal for free,
+ * with zero risk of drifting out of sync with a hand-copied approximation.
+ * Only what's genuinely plugin-specific lives here: the recent-activity
+ * row is a <button> (needs its default browser chrome reset) and the
+ * "View peer" action needs a little top margin. */
+
+.rt-activity-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+}
+.rt-activity-row:hover { background: var(--overlay-med); }
+
+/* --- Contacts (petname address book) -------------------------------------
+ * The drawer header's "announced as ..." sub-line, the small ✓ shown next
+ * to a "known" contact in the Peers/Activity tables, and the editable
+ * Contact section's form (lives inside a core `.nd-section__content`). */
+
+.nd-header__sub {
+    font-size: 11px;
+    color: var(--text-muted, #777);
+    margin-top: 2px;
+}
+
+.rt-trust {
+    color: var(--accent-green, #3fb950);
+    font-weight: 700;
+}
+
+.rt-contact-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+}
+.rt-contact-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+/* Inputs reuse core's theme-aware .cfg-field__input; only trim its padding
+ * a touch for the tighter drawer context. */
+.rt-contact-form .cfg-field__input {
+    padding: 6px 8px;
+    font-size: 13px;
+}
+.rt-contact-form__check {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.4rem;
+}
+.rt-contact-form__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.rt-contact-form__status {
+    font-size: 11px;
+    color: var(--text-muted, #777);
+}
+
+/* Contacts tab: add-form row + inline-editable table cells. */
+.rt-contact-add {
+    display: flex;
+    flex-flow: row wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 14px;
+}
+.rt-contact-add > .cfg-field__input { flex: 0 1 auto; }
+.rt-contact-add #rt-contact-add-hash { width: 300px; max-width: 100%; }
+.rt-contact-add #rt-contact-add-name { width: 160px; }
+.lw-table--rt-contacts { table-layout: auto; }
+.lw-table--rt-contacts col.col-cdest { width: 18em; }
+.lw-table--rt-contacts col.col-cknown { width: 4.5em; }
+.lw-table--rt-contacts col.col-cactions { width: 12em; }
+.lw-table--rt-contacts th.lw-c,
+.lw-table--rt-contacts td.lw-c { text-align: center; }
+.lw-table--rt-contacts td.lw-r { text-align: right; }
+.lw-table--rt-contacts td { padding: 10px 12px; vertical-align: middle; }
+
+.rt-contact-cell {
+    padding: 5px 8px;
+    font-size: 13px;
+    width: 100%;
+    max-width: 220px;
+}
+.lw-table--rt-contacts td:nth-child(3) .rt-contact-cell { max-width: none; }
+.rt-contact-announced {
+    color: var(--text-muted, #777);
+    font-size: 11px;
+    margin-left: 6px;
+}
+.rt-contact-actions { white-space: nowrap; }
+.rt-contact-actions .lw-link-btn { margin-left: 10px; }
+
+/* Settings tab: one extra-interface editor row -- a distinct card so a
+   list of them reads as separate blocks, not one run-on form. */
+.rt-iface-row {
+    border: 1px solid var(--border, #333);
+    border-radius: 8px;
+    padding: 14px 16px 12px;
+    margin-bottom: 16px;
+    background: var(--overlay-weak, rgba(255, 255, 255, 0.03));
+}
+.rt-iface-row:last-of-type {
+    margin-bottom: 8px;
+}
+.rt-iface-row .cfg-card__actions {
+    margin-top: 4px;
+}
+
+.rt-iface-head,
+.rt-iface-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: flex-end;
+    margin-bottom: 12px;
+}
+.rt-iface-head__name { flex: 0 1 320px; }        /* a name, not a paragraph */
+.rt-iface-head__type { flex: 0 0 190px; }        /* fits "TCPClientInterface" */
+.rt-iface-head__enabled { flex: 0 0 auto; margin-bottom: 6px; }
+
+.rt-iface-field--host { flex: 1 1 200px; max-width: 260px; }
+.rt-iface-field--port { flex: 0 0 100px; }
+
+/* Settings tab: visual break before the propagation-client sub-block. */
+.rt-prop-divider {
+    border-top: 1px solid var(--border-subtle, #333);
+    padding-top: 0.6rem;
+    margin-top: 0.3rem;
+}
+
+/* Telemetry tab: the collector map (Leaflet, own markers). */
+.rt-telemetry-map {
+    height: 300px;
+    width: 100%;
+    border: 1px solid var(--border, #333);
+    border-radius: 6px;
+    margin-bottom: 0.75rem;
+}
+.rt-telemetry-map .leaflet-container { background: var(--bg, #111); }
+
+/* Telemetry map popup -- Leaflet's stock chrome is a plain white box with
+   generic sans-serif text, which looks foreign next to the rest of the
+   app. Re-skin the wrapper/tip to the app's own card look, and give the
+   content real structure (name + temp on one line, the info line split
+   into small tags) instead of one dense <br>-joined string. */
+.rt-telemetry-map .leaflet-popup-content-wrapper {
+    background: var(--bg-card, #1a1a1a);
+    color: var(--text-primary, #eee);
+    border: 1px solid var(--border, #333);
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+.rt-telemetry-map .leaflet-popup-content { margin: 10px 12px; }
+.rt-telemetry-map .leaflet-popup-tip { background: var(--bg-card, #1a1a1a); }
+.rt-telemetry-map .leaflet-popup-close-button { color: var(--text-muted, #888) !important; }
+
+.rt-tele-popup__head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 4px;
+}
+.rt-tele-popup__name {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--text-primary, #eee);
+}
+.rt-tele-popup__temp {
+    font-size: 0.78rem;
+    color: var(--accent-amber, #f59e0b);
+    white-space: nowrap;
+}
+.rt-tele-popup__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-width: 220px;
+}
+.rt-tele-popup__tag {
+    font-size: 0.68rem;
+    color: var(--text-secondary, #aaa);
+    background: var(--overlay-weak, rgba(255, 255, 255, 0.06));
+    border-radius: 5px;
+    padding: 2px 6px;
+    white-space: nowrap;
+}
+.rt-tele-popup__tag--open { color: var(--accent-green, #00e5a0); }
+.rt-tele-popup__tag--closed { color: var(--accent-red, #ef4444); }
+
+.rt-amodal__view-peer { width: 100%; margin-top: 0.75rem; }
+
+
+/* Reticulum workspace: clear hierarchy using the active Meshpoint palette. */
+.section.rt-workspace { padding: 28px clamp(18px, 3vw, 40px); }
+.section.rt-workspace [hidden] { display: none !important; }
+.section.rt-workspace > * { width: 100%; max-width: 1320px; margin-inline: auto; flex-shrink: 0; }
+.section.rt-workspace .lw-panel__head { align-items: flex-start; padding-bottom: 24px; gap: 24px; }
+.rt-heading { min-width: 0; }
+.rt-eyebrow { display: block; color: var(--accent-cyan); font: 600 10px var(--font-mono); letter-spacing: .16em; margin-bottom: 10px; }
+.section.rt-workspace .lw-panel__title { font-size: 30px; letter-spacing: -.035em; line-height: 1.15; margin: 0; }
+.rt-heading > p { color: var(--text-secondary); font-size: 14px; line-height: 1.6; margin: 10px 0 16px; }
+.rt-identity { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; font-size: 11px; color: var(--text-secondary); }
+.rt-identity code { font-size: 11px; overflow-wrap: anywhere; padding: 5px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-secondary); }
+.section.rt-workspace .lw-panel__actions { padding-top: 24px; gap: 8px; }
+.section.rt-workspace .lw-stats { display: grid; grid-template-columns: 1.25fr repeat(4, 1fr); gap: 0; margin-bottom: 26px; padding: 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.section.rt-workspace .lw-stats .stat-card { border: 0; border-right: 1px solid var(--border); border-radius: 0; box-shadow: none; background: transparent; padding: 16px 20px; min-width: 0; }
+.section.rt-workspace .lw-stats .stat-card:last-child { border-right: 0; }
+.section.rt-workspace .stat-card__label { font-size: 10px; letter-spacing: .07em; }
+.section.rt-workspace .stat-card__value { font: 600 24px var(--font-sans); color: var(--text-primary); }
+.section.rt-workspace #rt-stat-status { color: var(--accent-cyan); font-size: 20px; }
+.section.rt-workspace > .lw-section > .panel { overflow: hidden; border-radius: 14px; }
+.section.rt-workspace .panel__header--tabs { background: var(--bg-card); padding: 0 20px; border-bottom: 1px solid var(--border); }
+.section.rt-workspace .lw-tabs { gap: 4px; padding: 8px 0; }
+.section.rt-workspace .lw-tab { background: transparent; border: 1px solid transparent; border-radius: 7px; color: var(--text-secondary); font-size: 13px; padding: 10px 12px; }
+.section.rt-workspace .lw-tab--active { color: var(--accent-cyan); background: color-mix(in srgb, var(--accent-cyan) 10%, transparent); border-color: color-mix(in srgb, var(--accent-cyan) 25%, transparent); }
+.rt-view-heading { padding: 26px 28px 20px; }
+.rt-view-heading h3 { font-size: 19px; font-weight: 600; letter-spacing: -.02em; margin: 0 0 7px; }
+.rt-view-heading p { max-width: 65ch; color: var(--text-secondary); font-size: 13px; line-height: 1.7; margin: 0; }
+.section.rt-workspace [data-rt-view] > .panel__body { padding: 0 28px 28px; }
+.section.rt-workspace .lw-table { font-size: 12px; }
+.section.rt-workspace .lw-table th { font-size: 10px; letter-spacing: .06em; padding: 12px; }
+.section.rt-workspace .lw-table td { padding: 16px 12px; }
+.section.rt-workspace .lw-table tbody tr:hover { background: color-mix(in srgb, var(--accent-cyan) 4%, transparent); }
+.section.rt-workspace .lw-empty { margin-top: 12px; border: 1px dashed var(--border); border-radius: 10px; padding: 42px 24px; font-size: 13px; line-height: 1.8; }
+.section.rt-workspace .lw-panel__limit { display: block; margin: 0 0 16px; font-size: 12px; line-height: 1.7; }
+.section.rt-workspace #rt-send-form { max-width: 760px; display: grid; gap: 22px; }
+.section.rt-workspace #rt-send-text { width: 100%; resize: vertical; min-height: 160px; line-height: 1.7; font-family: var(--font-sans); }
+.section.rt-workspace #rt-send-peer { margin-top: 10px; }
+.section.rt-workspace #rt-send-form .lw-search-wrap { display: flex; width: 100%; margin-top: 8px; }
+.section.rt-workspace #rt-send-peer-search { width: 100%; }
+.section.rt-workspace .cfg-field__label { font-size: 11px; letter-spacing: .035em; line-height: 1.5; }
+.section.rt-workspace [data-rt-settings-root] { padding: 0; }
+.section.rt-workspace [data-rt-settings-root] > .cfg-card { border: 0; background: transparent; padding: 0; box-shadow: none; }
+.section.rt-workspace .cfg-card__head { margin-bottom: 24px; }
+.section.rt-workspace .cfg-card__hint { max-width: 75ch; }
+.section.rt-workspace [data-rt-form] { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; }
+.section.rt-workspace [data-rt-form] > :is(fieldset, .cfg-card__actions) { grid-column: 1 / -1; }
+.section.rt-workspace [data-rt-form] .cfg-field--narrow { width: auto; max-width: none; min-width: 0; }
+.section.rt-workspace [data-rt-form] .cfg-fieldset { margin: 0; padding: 24px; background: var(--bg-secondary); }
+.section.rt-workspace [data-rt-form] .cfg-fieldset__legend { color: var(--text-primary); font-size: 14px; letter-spacing: 0; text-transform: none; }
+.section.rt-workspace [data-rt-form] .cfg-field__hint { font-size: 12px; line-height: 1.65; }
+.section.rt-workspace [data-rt-form] .cfg-row { gap: 20px; }
+.section.rt-workspace [data-rt-form] .cfg-card__actions { gap: 10px; padding-top: 10px; }
+.section.rt-workspace .rt-contact-add { gap: 12px; padding: 18px; margin-bottom: 24px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; }
+@media (max-width: 760px) {
+    .section.rt-workspace .lw-panel__head { display: block; }
+    .section.rt-workspace .lw-panel__actions { padding-top: 18px; }
+    .section.rt-workspace .lw-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .section.rt-workspace .lw-stats .stat-card { border-bottom: 1px solid var(--border); padding: 14px 16px; }
+    .section.rt-workspace .lw-stats .stat-card:first-child { grid-column: 1 / -1; }
+    .section.rt-workspace .lw-stats .stat-card:nth-last-child(-n+2) { border-bottom: 0; }
+    .section.rt-workspace .panel__header--tabs { padding-inline: 10px; }
+    .section.rt-workspace .lw-tab { padding: 9px 10px; font-size: 12px; }
+    .rt-view-heading { padding: 22px 18px 18px; }
+    .section.rt-workspace [data-rt-view] > .panel__body { padding: 0 18px 22px; }
+    .section.rt-workspace [data-rt-form] { grid-template-columns: minmax(0, 1fr); }
+    .section.rt-workspace [data-rt-form] .cfg-fieldset { padding: 16px; }
+    .section.rt-workspace .rt-contact-add { flex-direction: column; }
+}

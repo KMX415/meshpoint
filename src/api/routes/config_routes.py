@@ -7,15 +7,18 @@ flag restart_required in the response.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
 import logging
 import subprocess
 from typing import Optional
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 
+from src.api.audit.dependencies import get_audit_writer
 from src.api.auth.dependencies import require_admin, require_auth
 from src.api.auth.jwt_session import ROLE_ADMIN, SessionClaims
 from src.api.routes import (
@@ -47,6 +50,47 @@ _tx_service = None
 _identity: DeviceIdentity | None = None
 _channel_hash_resolver = None
 _serial_sources: list = []
+_bridge_status_provider = None
+_meshcore_sources: list = []
+
+
+class DashboardUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    map_tile_url: StrictStr = Field(min_length=1, max_length=2048)
+
+    @field_validator("map_tile_url")
+    @classmethod
+    def validate_map_tile_url(cls, value: str) -> str:
+        if any(char.isspace() or ord(char) < 32 for char in value) or "\\" in value:
+            raise ValueError("Tile URL must not contain whitespace or backslashes")
+        if not all(token in value for token in ("{z}", "{x}", "{y}")):
+            raise ValueError("Tile URL must include {z}, {x}, and {y}")
+        parsed = urlsplit(value)
+        local = value.startswith("/") and not value.startswith("//")
+        remote = parsed.scheme in ("http", "https") and bool(parsed.hostname)
+        if not (local or remote) or parsed.username or parsed.password or parsed.fragment:
+            raise ValueError("Use a local path or HTTP(S) tile URL without credentials or fragments")
+        return value
+
+
+@router.put("/dashboard")
+async def update_dashboard(
+    req: DashboardUpdate,
+    claims: SessionClaims = Depends(require_admin),
+    audit=Depends(get_audit_writer),
+):
+    if _config is None:
+        raise HTTPException(503, "Config not loaded")
+    updates = {"map_tile_url": req.map_tile_url}
+    # Tile URLs may contain provider tokens; do not include the URL in the audit log.
+    with audit.timed_action(user=claims.subject, action="config.dashboard",
+                            params={"fields": list(updates)}):
+        try:
+            save_section_to_yaml("dashboard", updates)
+        except OSError as exc:
+            raise HTTPException(500, "Could not save map tile source") from exc
+        _config.dashboard.map_tile_url = req.map_tile_url
+    return {"saved": True, "restart_required": False, "updates": updates}
 
 
 def init_routes(
@@ -56,15 +100,19 @@ def init_routes(
     identity: DeviceIdentity | None = None,
     channel_hash_resolver=None,
     serial_sources: list | None = None,
+    bridge_status_provider=None,
+    meshcore_sources: list | None = None,
 ) -> None:
     global _config, _crypto, _tx_service, _identity, _channel_hash_resolver
-    global _serial_sources
+    global _serial_sources, _meshcore_sources, _bridge_status_provider
     _config = config
     _crypto = crypto
     _tx_service = tx_service
     _identity = identity
+    _bridge_status_provider = bridge_status_provider
     _channel_hash_resolver = channel_hash_resolver
     _serial_sources = serial_sources or []
+    _meshcore_sources = meshcore_sources or []
 
 
 def _serial_status_entry(src) -> dict:
@@ -73,6 +121,9 @@ def _serial_status_entry(src) -> dict:
 
     info = src.get_radio_info() if hasattr(src, "get_radio_info") else {}
     own_node_num = info.get("own_node_num")
+    link = src.link_status() if hasattr(src, "link_status") else {}
+    if not isinstance(link, dict):
+        link = {}
     return {
         "name": src.name,
         "connected": bool(getattr(src, "connected", False)),
@@ -90,6 +141,9 @@ def _serial_status_entry(src) -> dict:
         "own_node_id_hex": (
             f"{own_node_num:08x}" if own_node_num is not None else None
         ),
+        "reconnecting": bool(link.get("reconnecting")),
+        "link_phase": link.get("link_phase"),
+        "retry_in_s": int(link.get("retry_in_s") or 0),
     }
 
 
@@ -101,6 +155,28 @@ def _refresh_channel_hash_map() -> None:
         _crypto,
         _config.meshtastic.primary_channel_name,
         _config.meshtastic.channel_keys,
+    )
+
+
+def _is_node_platform() -> bool:
+    return _config is not None and _config.device.platform == "node"
+
+
+def _pimesh_meshtastic_bridge():
+    from src.radio.pimesh_runtime import provisioned
+
+    if _config is None or not provisioned(_config) or _config.device.radio_protocol != "meshtastic":
+        return None
+    source = _bridge_status_provider() if _bridge_status_provider else None
+    if source is None or not source.is_running:
+        raise HTTPException(503, "PiMesh Meshtastic radio is not connected")
+    return source
+
+
+def _node_gateway_only_detail() -> str:
+    return (
+        "On WisMesh Node, use Configuration → WisMesh radio or "
+        "PUT /api/meshtasticd/radio instead."
     )
 
 
@@ -127,6 +203,7 @@ async def get_config(claims: SessionClaims = Depends(require_auth)):
 
     mc_status = {
         "connected": False,
+        "capture_connected": any(bool(src.connected) for src in _meshcore_sources),
         "companion_name": "",
         "radio": {},
         "companion_expected": "meshcore_usb" in (_config.capture.sources or []),
@@ -154,6 +231,7 @@ async def get_config(claims: SessionClaims = Depends(require_auth)):
         {"name": name, "key_hex": _meshcore_key_hex_for_response(key)}
         for name, key in (_config.meshcore.channel_keys.items() if _config else [])
     ]
+    mc_status['tx_enabled'] = _config.meshcore.tx_enabled
 
     duty_info = {"used_percent": 0.0, "remaining_ms": 0}
     if _tx_service and hasattr(_tx_service, "_duty"):
@@ -229,7 +307,31 @@ async def get_config(claims: SessionClaims = Depends(require_auth)):
             for r, d in REGION_DEFAULTS.items()
         ],
     }
-    enriched = config_enrichment.enrich_config_payload(_config, payload)
+    enriched = await asyncio.to_thread(config_enrichment.enrich_config_payload, _config, payload, bridge_status_provider=_bridge_status_provider)
+    if enriched.get('platform_ui', {}).get('variant') == 'pimesh':
+        if _config.device.radio_protocol == 'meshtastic':
+            live = enriched.get('meshtasticd_runtime', {})
+            if live.get('bridge_connected'):
+                for field in ('frequency_mhz', 'spreading_factor', 'bandwidth_khz'):
+                    enriched['radio'][field] = live.get(field, 0)
+                enriched['radio']['current_preset'] = live.get('modem_preset', '')
+                enriched['transmit']['long_name'] = live.get('long_name', '')
+                enriched['transmit']['short_name'] = live.get('short_name', '')
+        elif mc_status.get('connected'):
+            enriched['radio'].update(mc_status.get('radio', {}))
+            enriched['radio']['current_preset'] = 'MESHCORE'
+    try:
+        source = _pimesh_meshtastic_bridge()
+        if source is not None:
+            ok, result = await asyncio.to_thread(source.request_read_channels)
+            if ok:
+                enriched["channels"] = result
+            else:
+                enriched["channels"] = []
+                enriched["channels_error"] = "Radio channel read failed"
+    except HTTPException:
+        enriched["channels"] = []
+        enriched["channels_error"] = "Radio is disconnected"
     if claims.role != ROLE_ADMIN:
         _redact_channel_secrets(enriched)
     return enriched
@@ -275,6 +377,8 @@ async def update_transmit(
     """Update TX settings. Some changes require a restart."""
     if _config is None:
         raise HTTPException(503, "Config not loaded")
+    if _is_node_platform():
+        raise HTTPException(409, _node_gateway_only_detail())
 
     updates: dict = {}
     relay_updates: dict = {}
@@ -350,6 +454,12 @@ async def update_identity(
     """Update node identity. node_id changes need restart."""
     if _config is None:
         raise HTTPException(503, "Config not loaded")
+    if _is_node_platform() and (req.long_name is not None or req.short_name is not None):
+        raise HTTPException(
+            409,
+            "On WisMesh Node, save Meshtastic long/short names via "
+            "PUT /api/meshtasticd/identity.",
+        )
 
     updates = {}
     tx = _config.transmit
@@ -400,6 +510,8 @@ async def update_radio(
     """Update radio settings. Flags restart_required for RX changes."""
     if _config is None:
         raise HTTPException(503, "Config not loaded")
+    if _is_node_platform():
+        raise HTTPException(409, _node_gateway_only_detail())
 
     updates = {}
     radio = _config.radio
@@ -483,6 +595,14 @@ async def update_channels(
     """Update channel keys. Applies to crypto at runtime (no restart)."""
     if _config is None:
         raise HTTPException(503, "Config not loaded")
+
+    source = _pimesh_meshtastic_bridge()
+    if source is not None:
+        ok, result = await asyncio.to_thread(
+            source.request_write_channels, [ch.model_dump() for ch in req.channels])
+        if not ok:
+            raise HTTPException(502, str(result))
+        return {"saved": True, "restart_required": False, "channel_count": len(result)}
 
     channel_keys = {}
     for ch in req.channels:
@@ -594,6 +714,16 @@ async def update_meshcore_channels(
         name, key_hex = normalized
         channel_keys[name] = key_hex
 
+    mc_tx = getattr(_tx_service, '_meshcore_tx', None)
+    from src.radio.pimesh_runtime import provisioned
+
+    if provisioned(_config) and (mc_tx is None or not mc_tx.connected):
+        raise HTTPException(503, 'Select MeshCore and connect the radio before saving channels')
+    if mc_tx and mc_tx.connected:
+        try:
+            await mc_tx.sync_channels(channel_keys, verify=True)
+        except (RuntimeError, ValueError, TimeoutError) as exc:
+            raise HTTPException(502, 'Channel save could not be verified; reload before retrying') from exc
     _config.meshcore.channel_keys = channel_keys
     try:
         save_section_to_yaml("meshcore", {"channel_keys": channel_keys})
@@ -604,12 +734,6 @@ async def update_meshcore_channels(
         len(channel_keys),
         ", ".join(channel_keys) or "none",
     )
-
-    if _tx_service and hasattr(_tx_service, "_meshcore_tx"):
-        mc_tx = _tx_service._meshcore_tx
-        if mc_tx and mc_tx.connected:
-            import asyncio
-            asyncio.create_task(mc_tx.sync_channels(channel_keys))
 
     if _crypto and hasattr(_crypto, "clear_channel_keys"):
         _crypto.clear_channel_keys()

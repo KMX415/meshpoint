@@ -7,7 +7,7 @@ from typing import Any, Optional
 
 from src.decode.crypto_service import CryptoService
 from src.decode.pki_crypto import PKC_OVERHEAD
-from src.decode.portnum_handlers import dispatch_portnum
+from src.decode.portnum_handlers import PORTNUM_ROUTING, dispatch_portnum
 from src.models.node import Node
 from src.models.packet import Packet, PacketType, Protocol
 from src.models.signal import SignalMetrics
@@ -188,6 +188,94 @@ class MeshtasticDecoder:
             timestamp=datetime.now(timezone.utc),
         )
 
+    def decode_from_api_packet(
+        self,
+        packet: dict[str, Any],
+        signal: Optional[SignalMetrics] = None,
+    ) -> Optional[Packet]:
+        """Decode a meshtastic-python receive dict (meshtasticd / TCP path).
+
+        meshtastic-python stores the live MeshPacket protobuf in ``raw`` and
+        often delivers only the decoded payload variant over TCP. This path
+        reuses the same Packet model without round-tripping through LoRa bytes.
+        """
+        decoded = packet.get("decoded")
+        if not isinstance(decoded, dict):
+            return None
+
+        source_id = int(packet.get("from", 0) or 0)
+        dest_id = int(packet.get("to", 0) or 0xFFFFFFFF)
+        packet_id = int(packet.get("id", 0) or 0)
+        hop_limit = int(packet.get("hopLimit", 3) or 3)
+        hop_start = int(packet.get("hopStart", hop_limit) or hop_limit)
+        if hop_limit > hop_start:
+            logger.debug(
+                "Dropping API packet with impossible hops hl=%d > hs=%d",
+                hop_limit,
+                hop_start,
+            )
+            return None
+
+        want_ack = bool(packet.get("wantAck", False))
+        via_mqtt = bool(packet.get("viaMqtt", False))
+        channel_hash = int(packet.get("channel", 0) or 0) & 0xFF
+        relay_node = int(
+            packet.get("relayNode", packet.get("relay_node", 0)) or 0
+        ) & 0xFF
+
+        portnum = _portnum_from_decoded(decoded)
+        inner = decoded.get("payload", b"")
+        if isinstance(inner, str):
+            try:
+                inner = bytes.fromhex(inner)
+            except ValueError:
+                inner = b""
+
+        decoded_payload = None
+        packet_type = PacketType.UNKNOWN
+        raw_app_payload: Optional[bytes] = None
+        request_id = int(decoded.get("requestId", decoded.get("request_id", 0)) or 0)
+
+        if inner:
+            decoded_payload, packet_type, raw_app_payload, inner_request_id = (
+                self._decode_payload(_build_data_bytes(portnum, inner))
+            )
+            request_id = inner_request_id or request_id
+
+        if decoded_payload is None:
+            decoded_payload, packet_type = _decoded_from_api_fields(decoded, portnum)
+            raw_app_payload = inner or None
+
+        if decoded_payload is None:
+            return None
+
+        # Decrypted Phone API packets report a local slot, not an OTA hash.
+        if 0 <= channel_hash < 8:
+            decoded_payload["channel_index"] = channel_hash
+        if request_id:
+            decoded_payload["request_id"] = request_id
+
+        return Packet(
+            packet_id=f"{packet_id:08x}",
+            source_id=f"{source_id:08x}",
+            destination_id=f"{dest_id:08x}",
+            protocol=Protocol.MESHTASTIC,
+            packet_type=packet_type,
+            hop_limit=hop_limit,
+            hop_start=hop_start,
+            channel_hash=channel_hash,
+            want_ack=want_ack,
+            via_mqtt=via_mqtt,
+            relay_node=relay_node,
+            decoded_payload=decoded_payload,
+            encrypted_payload=None,
+            raw_app_payload=raw_app_payload,
+            raw_radio_packet=None,
+            decrypted=True,
+            signal=signal,
+            timestamp=datetime.now(timezone.utc),
+        )
+
     @staticmethod
     def _parse_header(header_bytes: bytes) -> Optional[dict]:
         """Parse the 16-byte unencrypted Meshtastic radio header.
@@ -341,3 +429,65 @@ class MeshtasticDecoder:
             uptime_seconds=packet.decoded_payload.get("uptime_seconds"),
             timestamp=packet.timestamp,
         )
+
+
+def _portnum_from_decoded(decoded: dict[str, Any]) -> int:
+    raw = decoded.get("portnum", 0)
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, str):
+        try:
+            from meshtastic.protobuf import portnums_pb2
+
+            return int(portnums_pb2.PortNum.Value(raw))
+        except (ValueError, KeyError, ImportError):
+            return 0
+    return 0
+
+
+def _build_data_bytes(portnum: int, inner: bytes) -> bytes:
+    try:
+        from meshtastic.protobuf import mesh_pb2
+
+        data_msg = mesh_pb2.Data()
+        data_msg.portnum = portnum
+        data_msg.payload = inner
+        return data_msg.SerializeToString()
+    except ImportError:
+        return bytes([portnum & 0xFF]) + inner
+
+
+def _decoded_from_api_fields(
+    decoded: dict[str, Any], portnum: int
+) -> tuple[Optional[dict[str, Any]], PacketType]:
+    """Use meshtastic-python's pre-parsed sub-messages when payload is empty."""
+    if portnum == PORTNUM_ROUTING:
+        routing = decoded.get('routing') or {}
+        reason = routing.get('errorReason', routing.get('error_reason', 0))
+        result = {} if reason in (0, 'NONE', None) else {'error_reason': str(reason)}
+        return result, PacketType.ROUTING
+    if "text" in decoded:
+        return {"text": decoded["text"]}, PacketType.TEXT
+    if "user" in decoded and isinstance(decoded["user"], dict):
+        user = decoded["user"]
+        return (
+            {
+                "long_name": user.get("longName", user.get("long_name")),
+                "short_name": user.get("shortName", user.get("short_name")),
+                "hw_model": user.get("hwModel", user.get("hw_model")),
+            },
+            PacketType.NODEINFO,
+        )
+    if "position" in decoded and isinstance(decoded["position"], dict):
+        pos = decoded["position"]
+        return (
+            {
+                "latitude": pos.get("latitude"),
+                "longitude": pos.get("longitude"),
+                "altitude": pos.get("altitude"),
+            },
+            PacketType.POSITION,
+        )
+    if portnum:
+        return {"portnum": portnum}, PacketType.UNKNOWN
+    return None, PacketType.UNKNOWN

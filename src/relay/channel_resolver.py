@@ -27,6 +27,7 @@ _DEFAULT_PSK = bytes([
 
 STANDARD_PRESETS = [
     "LongFast",
+    "LongTurbo",
     "LongSlow",
     "LongModerate",
     "MediumFast",
@@ -66,7 +67,7 @@ def _xor_hash(channel_name: str, expanded_key: bytes) -> int:
 class ChannelResolver:
     """Maps channel_hash values to channel names for MQTT topic construction.
 
-    Pre-seeds mappings for all 8 standard Meshtastic presets using the
+    Pre-seeds mappings for standard Meshtastic presets using the
     default PSK. Accepts additional user-configured channel keys to extend
     the lookup table for private/custom channels.
     """
