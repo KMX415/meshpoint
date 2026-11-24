@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import socket
+import subprocess
 import sys
 import uuid
 from pathlib import Path
@@ -138,8 +139,25 @@ _REGION_LABELS = {
 def _step_hardware_detect() -> HardwareReport:
     """Probe for all available hardware."""
     print("  [1/8] Detecting hardware...")
+    if _is_systemd():
+        state = subprocess.run(
+            ["systemctl", "show", "meshpoint", "--property=ActiveState", "--value"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if state.returncode == 0 and state.stdout.strip() in {"active", "activating", "reloading", "deactivating"}:
+            print("  Hardware detection requires the Meshpoint service to be stopped.")
+            if not _confirm("Stop the service for setup?", default_yes=False):
+                raise SystemExit(1)
+            stopped = subprocess.run(["sudo", "systemctl", "stop", "meshpoint"], timeout=30)
+            if stopped.returncode != 0:
+                print("  Could not stop Meshpoint. Setup cancelled without probing hardware.")
+                raise SystemExit(1)
+            print("  Service stopped. Complete setup and reboot to start it again.")
     report = detect_all()
     print_report(report)
+    if report.concentrator_error:
+        print("  Setup stopped before changing capture configuration. Resolve the detection error and retry.")
+        raise SystemExit(1)
     return report
 
 
