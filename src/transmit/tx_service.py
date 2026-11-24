@@ -765,15 +765,10 @@ class TxService:
     async def send_raw_relay(
         self, raw_radio_bytes: bytes
     ) -> SendResult:
-        """Re-broadcast a captured Meshtastic radio frame verbatim.
+        """Forward a Meshtastic frame with one fewer hop remaining.
 
-        Identity-preserving relay: the original 16-byte radio header
-        (source_id, packet_id, channel_hash, …) and encrypted body
-        are kept intact. Only ``hop_limit`` (bits 0-2 of the flags
-        byte at offset 12) is decremented. Other Meshtastic nodes
-        recognise the frame as a relay and apply their own dedup,
-        rather than seeing a fresh broadcast originated by this
-        Meshpoint.
+        Stamp this node as the latest relay while preserving the source,
+        packet ID, channel, next hop and encrypted payload.
 
         Used by RelayManager when the onboard SX1302 is available;
         replaces the legacy USB-companion ``MeshtasticTransmitter``
@@ -805,6 +800,7 @@ class TxService:
         new_flags = (flags & ~0x07) | (hop_limit - 1)
         new_packet = bytearray(raw_radio_bytes)
         new_packet[12] = new_flags
+        new_packet[15] = self.source_node_id & 0xFF
         new_packet_bytes = bytes(new_packet)
 
         tx_pkt = self._build_hal_packet(new_packet_bytes)
