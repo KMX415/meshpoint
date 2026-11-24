@@ -4,7 +4,7 @@ import asyncio
 import logging
 from typing import Optional
 
-from src.models.packet import Packet, PacketType
+from src.models.packet import Packet, PacketType, Protocol
 from src.relay.dedup_filter import DeduplicationFilter
 from src.relay.rate_limiter import RateLimiter
 
@@ -64,7 +64,7 @@ class RelayManager:
         self._transmit_fn: Optional[callable] = None
 
     def set_local_node_id(self, node_hex: str) -> None:
-        """Skip relay for unicast packets addressed to this Meshpoint."""
+        """Identify packets originating from or addressed to this Meshpoint."""
         self._local_node_hex = node_hex.lower()
 
     @property
@@ -84,6 +84,13 @@ class RelayManager:
         """Decide whether a captured packet should be relayed."""
         if not self._enabled:
             return RelayDecision(False, "relay_disabled")
+
+        if (
+            packet.protocol == Protocol.MESHTASTIC
+            and self._local_node_hex
+            and packet.source_id.lower() == self._local_node_hex
+        ):
+            return RelayDecision(False, "own_packet")
 
         if self._dedup.is_duplicate(packet.source_id, packet.packet_id):
             return RelayDecision(False, "duplicate")
