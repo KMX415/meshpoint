@@ -16,6 +16,7 @@ from typing import Optional
 
 from src.hal.concentrator_config import ConcentratorChannelPlan
 from src.hal.sx1302_signatures import apply_signatures
+from src.hal.sx1302_preamble import configure_service_preamble
 from src.hal.sx1302_spectral_scan import (
     SpectralScanResult,
     SX1302SpectralScan,
@@ -104,6 +105,7 @@ class SX1302Wrapper:
         self._spi_path = spi_path
         self._sx1261_spi_path = sx1261_spi_path
         self._started = False
+        self._service_modem_enabled = False
         self._debug_rx = os.getenv("MESHPOINT_DEBUG_RX") == "1"
         self._crc_bad_count = 0
         self._no_crc_count = 0
@@ -184,6 +186,9 @@ class SX1302Wrapper:
         self._configure_board()
         self._configure_rf_chains(plan)
         self._configure_if_channels(plan)
+        self._service_modem_enabled = bool(
+            plan.single_sf_channel and plan.single_sf_channel.enabled
+        )
         self._configure_sx1261_for_spectral_scan()
         logger.info("Concentrator configured with %d IF channels",
                      len(plan.multi_sf_channels) + (1 if plan.single_sf_channel else 0))
@@ -194,6 +199,13 @@ class SX1302Wrapper:
         result = self._lib.lgw_start()
         if result != LGW_HAL_SUCCESS:
             raise RuntimeError("lgw_start() failed")
+        try:
+            if self._service_modem_enabled:
+                configure_service_preamble(self._lib)
+        except Exception:
+            self._lib.lgw_stop()
+            self._started = False
+            raise
         self._started = True
         logger.info("SX1302 concentrator started")
 
