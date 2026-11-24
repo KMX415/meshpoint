@@ -16,6 +16,7 @@ from typing import Literal, Optional
 
 from src.cli.hardware_probe import (
     ConcentratorChip,
+    HardwareProbeError,
     detect_wismesh_hat,
     probe_concentrator_chip,
 )
@@ -55,6 +56,7 @@ class HardwareReport:
     gps: GpsProbeResult = field(default_factory=GpsProbeResult)
     concentrator_chip: Optional[ConcentratorChip] = None
     concentrator_available: bool = False
+    concentrator_error: Optional[str] = None
     libloragw_installed: bool = False
     wismesh_hat_detected: bool = False
     platform: Literal["gateway", "node"] = PLATFORM_GATEWAY
@@ -71,8 +73,13 @@ def detect_all() -> HardwareReport:
     report.libloragw_installed = check_libloragw()
     report.wismesh_hat_detected = detect_wismesh_hat()
 
-    if report.spi_devices and report.libloragw_installed:
-        report.concentrator_chip = probe_concentrator_chip(report.spi_devices[0])
+    from src.radio.pimesh_supervisor import PROVISION, read_json
+    pimesh = read_json(PROVISION).get("board") in ("pimesh-v1", "pimesh-v2")
+    if report.spi_devices and not report.wismesh_hat_detected and not pimesh:
+        try:
+            report.concentrator_chip = probe_concentrator_chip(report.spi_devices[0])
+        except HardwareProbeError as exc:
+            report.concentrator_error = str(exc)
     report.concentrator_available = report.concentrator_chip is not None
 
     if report.concentrator_available:
@@ -248,6 +255,8 @@ def print_report(report: HardwareReport) -> None:
     print(f"  libloragw.so:    {'installed' if report.libloragw_installed else 'NOT found'}")
     if report.concentrator_chip:
         print(f"  Concentrator:    {report.concentrator_chip.upper()} detected")
+    elif report.concentrator_error:
+        print(f"  Concentrator:    detection failed: {report.concentrator_error}")
     elif report.libloragw_installed and report.spi_devices:
         print("  Concentrator:    SPI present but no SX1302/SX1303 response")
     else:
