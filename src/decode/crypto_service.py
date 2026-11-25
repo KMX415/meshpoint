@@ -27,7 +27,8 @@ class CryptoService:
     """AES-CTR encryption/decryption for Meshtastic and Meshcore packets."""
 
     def __init__(self, default_key_b64: str = MESHTASTIC_DEFAULT_KEY_B64):
-        self._keys: dict[str, bytes] = {}
+        self._keys: dict[str, bytes | None] = {}
+        self._meshcore_keys: dict[str, bytes] = {}
         self._private_key: bytes | None = None
         self._public_key: bytes | None = None
         self._public_keys: dict[int, bytes] = {}
@@ -40,12 +41,29 @@ class CryptoService:
             self._default_key = None
 
     def add_channel_key(self, channel_name: str, key_b64: str) -> None:
-        raw = base64.b64decode(key_b64)
+        try:
+            raw = self.decode_channel_psk(key_b64)
+        except ValueError:
+            # Reserve the dashboard slot so later channels keep their indices.
+            self._keys[channel_name] = None
+            logger.warning("Meshtastic channel %r unavailable: correct its Base64 PSK in Channels", channel_name)
+            return
         self._keys[channel_name] = self._expand_key(raw)
+
+    @staticmethod
+    def decode_channel_psk(value: str) -> bytes:
+        if not isinstance(value, str):
+            raise ValueError("Expected a Base64 PSK")
+        # Accept existing line-wrapped Base64, but never discard invalid symbols.
+        return base64.b64decode("".join(value.split()), validate=True)
+
+    def add_meshcore_channel_key(self, name: str, key_hex: str) -> None:
+        self._meshcore_keys[name] = self._expand_key(bytes.fromhex(key_hex))
 
     def clear_channel_keys(self) -> None:
         """Drop all non-default channel keys."""
         self._keys.clear()
+        self._meshcore_keys.clear()
 
     def get_channel_key(self, channel_name: str) -> bytes | None:
         """Return the expanded key for a named channel, if loaded."""
@@ -163,12 +181,10 @@ class CryptoService:
             and payload_len > PKC_OVERHEAD
         )
 
-    def get_all_keys(self) -> list[bytes]:
-        """Return all available keys, default first then channel keys."""
-        keys: list[bytes] = []
-        if self._default_key:
-            keys.append(self._default_key)
-        keys.extend(self._keys.values())
+    def get_all_keys(self) -> list[bytes | None]:
+        """Ordered key slots for RX. None reserves an unavailable channel index."""
+        keys = [self._default_key, *self._keys.values()]
+        keys.extend(self._meshcore_keys.values())
         return keys
 
     def decrypt_meshtastic(

@@ -295,6 +295,13 @@ class TxService:
         echo_hash: int | None = None,
     ) -> SendResult:
         """Transmit via USB stick when that stick last heard the dest, else SX1261."""
+        if channel > 0 and self._crypto is not None:
+            slots = list(self._crypto._keys.items())
+            if channel <= len(slots):
+                name, key = slots[channel - 1]
+                if key is None:
+                    return SendResult(success=False, protocol="meshtastic",
+                                      error=f"Channel {name!r} unavailable: correct its Base64 PSK")
         dest_int = self._resolve_destination(destination, Protocol.MESHTASTIC)
 
         if (
@@ -304,7 +311,10 @@ class TxService:
         ):
             serial_source = await self._resolve_serial_send_source(dest_int)
             if serial_source is not None:
-                channel_name = self._channel_name_for_index(channel)
+                try:
+                    channel_name = self._channel_name_for_index(channel)
+                except ValueError as exc:
+                    return SendResult(success=False, protocol="meshtastic", error=str(exc))
                 stick_channel_index = serial_source.resolve_channel_index(
                     channel_name
                 )
@@ -353,7 +363,10 @@ class TxService:
             )
 
         packet_id = self._next_packet_id()
-        channel_hash, channel_key = self._resolve_channel(channel)
+        try:
+            channel_hash, channel_key = self._resolve_channel(channel)
+        except ValueError as exc:
+            return SendResult(success=False, protocol="meshtastic", error=str(exc))
         if echo_hash is not None:
             channel_hash = echo_hash
         recipient_pubkey = None
@@ -443,6 +456,8 @@ class TxService:
         packet_id = self._next_packet_id()
         channel_hash = original.channel_hash
         _, channel_key = self._resolve_channel_by_hash(channel_hash)
+        if channel_hash != 0 and channel_key is None:
+            return SendResult(success=False, protocol="meshtastic", error="No usable key for reply channel")
         recipient_pubkey = self._recipient_pubkey_for_reply(
             original, dest, self._crypto
         )
@@ -498,6 +513,8 @@ class TxService:
         packet_id = self._next_packet_id()
         channel_hash = original.channel_hash
         _, channel_key = self._resolve_channel_by_hash(channel_hash)
+        if channel_hash != 0 and channel_key is None:
+            return SendResult(success=False, protocol="meshtastic", error="No usable key for reply channel")
         recipient_pubkey = self._recipient_pubkey_for_reply(
             original, requester, self._crypto
         )
@@ -601,6 +618,8 @@ class TxService:
         packet_id = self._next_packet_id()
         channel_hash = original.channel_hash
         _, channel_key = self._resolve_channel_by_hash(channel_hash)
+        if channel_hash != 0 and channel_key is None:
+            return SendResult(success=False, protocol="meshtastic", error="No usable key for reply channel")
         recipient_pubkey = self._recipient_pubkey_for_reply(
             original, requester, self._crypto
         )
@@ -1059,11 +1078,18 @@ class TxService:
         Used to map to a USB stick's independently numbered channel table.
         Credit: javastraat/meshpoint ``55950c8``.
         """
-        if channel != 0 and self._crypto is not None:
-            channel_keys = list(self._crypto._keys.items())
-            if channel - 1 < len(channel_keys):
-                return channel_keys[channel - 1][0]
+        if channel != 0:
+            return self._secondary_channel(channel)[0]
         return self._primary_channel_name or self._get_preset_name()
+
+    def _secondary_channel(self, channel: int) -> tuple[str, bytes]:
+        slots = list(self._crypto._keys.items()) if self._crypto is not None else []
+        if not 1 <= channel <= len(slots):
+            raise ValueError(f"Unknown Meshtastic channel {channel}")
+        name, key = slots[channel - 1]
+        if key is None:
+            raise ValueError(f"Channel {name!r} unavailable: correct its Base64 PSK")
+        return name, key
 
     def _resolve_channel(self, channel: int) -> tuple[int, bytes | None]:
         """Resolve channel index to (hash, encryption_key).
@@ -1071,28 +1097,16 @@ class TxService:
         Returns the correct hash and key for the given channel so TX
         packets are encrypted with the right PSK.
         """
+        if channel != 0:
+            name, key = self._secondary_channel(channel)
+            return self._crypto.compute_channel_hash(name, key), key
+
         if self._crypto is None:
             return 0x08, None
-        try:
-            keys = self._crypto.get_all_keys()
-            if channel == 0:
-                key = keys[0]
-                name = self._primary_channel_name
-            else:
-                channel_keys = list(self._crypto._keys.items())
-                if channel - 1 < len(channel_keys):
-                    ch_name, key = channel_keys[channel - 1]
-                    name = ch_name
-                else:
-                    key = keys[0]
-                    name = self._primary_channel_name
-
-            h = self._crypto.compute_channel_hash(name, key)
-            logger.info("Channel %d hash: 0x%02X (name=%s)", channel, h, name)
-            return h, key
-        except (IndexError, Exception):
-            logger.debug("Channel hash fallback to 0x08", exc_info=True)
+        keys = self._crypto.get_all_keys()
+        if not keys or keys[0] is None:
             return 0x08, None
+        return self._crypto.compute_channel_hash(self._primary_channel_name, keys[0]), keys[0]
 
     @staticmethod
     def _build_traceroute_reply_data(
@@ -1139,17 +1153,19 @@ class TxService:
         try:
             primary_name = self._primary_channel_name
             all_keys = self._crypto.get_all_keys()
-            if all_keys:
+            if all_keys and all_keys[0] is not None:
                 primary_hash = self._crypto.compute_channel_hash(
                     primary_name, all_keys[0]
                 )
                 if primary_hash == channel_hash:
                     return channel_hash, all_keys[0]
-            for i, (ch_name, key) in enumerate(self._crypto._keys.items(), start=1):
-                if i < len(all_keys):
-                    h = self._crypto.compute_channel_hash(ch_name, all_keys[i])
-                    if h == channel_hash:
-                        return channel_hash, all_keys[i]
+            for ch_name, key in self._crypto._keys.items():
+                if key is not None and self._crypto.compute_channel_hash(ch_name, key) == channel_hash:
+                    return channel_hash, key
+            # An unknown hash could belong to an unavailable private slot.
+            # A PKI reply (hash zero) is independently gated on a peer key.
+            if channel_hash and None in self._crypto._keys.values():
+                return channel_hash, None
             if all_keys:
                 return channel_hash, all_keys[0]
         except Exception:

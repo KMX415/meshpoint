@@ -44,8 +44,9 @@ class ChannelHashResolver:
             logger.warning("Channel hash map empty: no crypto keys loaded")
             return
 
-        primary_hash = crypto.compute_channel_hash(primary, all_keys[0])
-        self._hash_to_index[primary_hash] = 0
+        if all_keys[0] is not None:
+            primary_hash = crypto.compute_channel_hash(primary, all_keys[0])
+            self._hash_to_index[primary_hash] = 0
 
         for index, ch_name in enumerate(channel_keys.keys(), start=1):
             key = crypto.get_channel_key(ch_name)

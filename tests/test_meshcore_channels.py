@@ -299,12 +299,11 @@ class TestUpdateMeshcoreChannels(unittest.TestCase):
             )
         self.assertEqual(res.status_code, 403)
 
-    def test_crypto_receives_key_as_base64_not_hex(self):
+    def test_crypto_receives_meshcore_key_separately(self):
         config_module._config = _fake_config()
         crypto = MagicMock()
         config_module._crypto = crypto
         hex_key = "f708715569f4ee34c273f8f32d32e0e8"
-        expected_b64 = base64.b64encode(binascii.unhexlify(hex_key)).decode()
 
         with patch("src.api.routes.config_routes.save_section_to_yaml"):
             self.client.put(
@@ -313,7 +312,7 @@ class TestUpdateMeshcoreChannels(unittest.TestCase):
             )
 
         crypto.clear_channel_keys.assert_called_once()
-        crypto.add_channel_key.assert_any_call("orangecounty", expected_b64)
+        crypto.add_meshcore_channel_key.assert_called_once_with("orangecounty", hex_key)
 
     def test_existing_meshtastic_keys_preserved_after_meshcore_save(self):
         config_module._config = _fake_config(

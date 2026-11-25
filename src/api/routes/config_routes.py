@@ -8,7 +8,6 @@ flag restart_required in the response.
 from __future__ import annotations
 
 import asyncio
-import base64
 import binascii
 import logging
 import subprocess
@@ -29,6 +28,7 @@ from src.api.routes import (
     telemetry_broadcast_routes,
 )
 from src.config import AppConfig, save_section_to_yaml
+from src.decode.crypto_service import CryptoService
 from src.config_export import build_quick_deploy_export
 from src.models.device_identity import DeviceIdentity
 from src.radio.presets import (
@@ -605,30 +605,32 @@ async def update_channels(
         return {"saved": True, "restart_required": False, "channel_count": len(result)}
 
     channel_keys = {}
+    updates = {}
     for ch in req.channels:
         if ch.index == 0:
-            _config.meshtastic.primary_channel_name = ch.name
+            updates["primary_channel_name"] = ch.name
+        elif ch.enabled and ch.psk_b64:
             try:
-                save_section_to_yaml(
-                    "meshtastic", {"primary_channel_name": ch.name}
-                )
-            except PermissionError as exc:
-                raise HTTPException(403, str(exc))
-            continue
-
-        if ch.enabled and ch.psk_b64:
+                CryptoService.decode_channel_psk(ch.psk_b64)
+            except ValueError:
+                raise HTTPException(400, f"Invalid Base64 PSK for channel {ch.name!r}") from None
             channel_keys[ch.name] = ch.psk_b64
 
-    _config.meshtastic.channel_keys = channel_keys
+    updates["channel_keys"] = channel_keys
     try:
-        save_section_to_yaml("meshtastic", {"channel_keys": channel_keys})
+        save_section_to_yaml("meshtastic", updates)
     except PermissionError as exc:
         raise HTTPException(403, str(exc))
+    if "primary_channel_name" in updates:
+        _config.meshtastic.primary_channel_name = updates["primary_channel_name"]
+    _config.meshtastic.channel_keys = channel_keys
 
     if _crypto and hasattr(_crypto, "add_channel_key"):
         _crypto.clear_channel_keys()
         for name, key_b64 in channel_keys.items():
             _crypto.add_channel_key(name, key_b64)
+        for name, key_hex in _config.meshcore.channel_keys.items():
+            _crypto.add_meshcore_channel_key(name, key_hex)
 
     _refresh_channel_hash_map()
 
@@ -740,8 +742,7 @@ async def update_meshcore_channels(
         for name, key_b64 in _config.meshtastic.channel_keys.items():
             _crypto.add_channel_key(name, key_b64)
         for name, key_hex in channel_keys.items():
-            key_b64 = base64.b64encode(binascii.unhexlify(key_hex)).decode()
-            _crypto.add_channel_key(name, key_b64)
+            _crypto.add_meshcore_channel_key(name, key_hex)
 
     _refresh_channel_hash_map()
 
@@ -796,6 +797,7 @@ def _build_channel_list(mt_config) -> list[dict]:
             "name": name,
             "psk_b64": key_b64,
             "hash": _compute_hash_safe(name, key_b64),
+            "key_unavailable": _crypto is not None and _crypto.get_channel_key(name) is None,
             "enabled": True,
         })
 
@@ -806,8 +808,7 @@ def _compute_hash_safe(name: str, key_b64: str) -> str:
     """Compute channel hash, returning hex string or '--' on error."""
     if _crypto and hasattr(_crypto, "compute_channel_hash"):
         try:
-            import base64
-            expanded = _crypto._expand_key(base64.b64decode(key_b64))
+            expanded = _crypto._expand_key(CryptoService.decode_channel_psk(key_b64))
             h = _crypto.compute_channel_hash(name, expanded)
             return f"0x{h:02X}"
         except Exception:
